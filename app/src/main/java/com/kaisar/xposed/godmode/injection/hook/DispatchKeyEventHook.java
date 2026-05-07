@@ -275,6 +275,9 @@ public final class DispatchKeyEventHook extends XC_MethodHook implements Propert
             mPreviewView = view;
             mIsPreviewing = true;
             View btnPreview = mNodeSelectorPanel.findViewById(R.id.preview);
+            if (btnPreview instanceof android.widget.ImageButton) {
+                ((android.widget.ImageButton) btnPreview).setImageResource(android.R.drawable.ic_menu_close_clear_cancel);
+            }
             if (btnPreview != null) {
                 TooltipCompat.setTooltipText(btnPreview, GmResources.getText(R.string.accessibility_preview_exit));
             }
@@ -293,6 +296,9 @@ public final class DispatchKeyEventHook extends XC_MethodHook implements Propert
         }
         mIsPreviewing = false;
         View btnPreview = mNodeSelectorPanel != null ? mNodeSelectorPanel.findViewById(R.id.preview) : null;
+        if (btnPreview instanceof android.widget.ImageButton) {
+            ((android.widget.ImageButton) btnPreview).setImageResource(android.R.drawable.ic_menu_view);
+        }
         if (btnPreview != null) {
             TooltipCompat.setTooltipText(btnPreview, GmResources.getText(R.string.accessibility_preview));
         }
