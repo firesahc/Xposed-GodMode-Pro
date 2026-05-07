@@ -1,5 +1,7 @@
 package com.kaisar.xposed.godmode.injection;
 
+import static com.kaisar.xposed.godmode.GodModeApplication.TAG;
+
 import android.app.Activity;
 import android.util.Pair;
 import android.util.SparseArray;
@@ -14,8 +16,6 @@ import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-
-import static com.kaisar.xposed.godmode.GodModeApplication.TAG;
 
 /**
  * Created by jrsen on 17-10-15.

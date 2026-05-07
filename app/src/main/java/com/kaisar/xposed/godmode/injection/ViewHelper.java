@@ -1,5 +1,7 @@
 package com.kaisar.xposed.godmode.injection;
 
+import static com.kaisar.xposed.godmode.GodModeApplication.TAG;
+
 import android.app.Activity;
 import android.content.Context;
 import android.content.ContextWrapper;
@@ -28,8 +30,6 @@ import java.util.List;
 import java.util.Objects;
 
 import de.robv.android.xposed.XposedHelpers;
-
-import static com.kaisar.xposed.godmode.GodModeApplication.TAG;
 
 /**
  * Created by jrsen on 17-10-13.
@@ -233,10 +233,13 @@ public final class ViewHelper {
         if (context instanceof Activity) {
             return (Activity) context;
         } else if (context instanceof ContextWrapper) {
-            //这是不直接getBaseContext方法获取 因为撒比微信有个PluginContextWrapper getBaseContext返回的是this导致栈溢出
             Context baseContext = ((ContextWrapper) context).getBaseContext();
             if (baseContext == context) {
-                baseContext = (Context) XposedHelpers.getObjectField(context, "mBase");
+                try {
+                    baseContext = (Context) XposedHelpers.getObjectField(context, "mBase");
+                } catch (Exception e) {
+                    return null;
+                }
             }
             return getActivityFromViewContext(baseContext);
         } else {
@@ -245,18 +248,13 @@ public final class ViewHelper {
     }
 
     public static Bitmap snapshotView(View view) {
-        boolean enable = view.isDrawingCacheEnabled();
-        view.setDrawingCacheEnabled(true);
-        Bitmap b = view.getDrawingCache();
-        b = b == null ? snapshotViewCompat(view) : Bitmap.createBitmap(b);
-        view.setDrawingCacheEnabled(enable);
-        return b;
+        return snapshotViewCompat(view);
     }
 
     private static Bitmap snapshotViewCompat(View v) {
-        //有些view宽高为0神奇!!!
         Bitmap b = Bitmap.createBitmap(Math.max(v.getWidth(), 1), Math.max(v.getHeight(), 1), Bitmap.Config.ARGB_8888);
         Canvas c = new Canvas(b);
+        c.translate(-v.getScrollX(), -v.getScrollY());
         v.draw(c);
         return b;
     }

@@ -1,5 +1,7 @@
 package com.kaisar.xposed.godmode.injection.weiget;
 
+import static com.kaisar.xposed.godmode.injection.ViewHelper.TAG_GM_CMP;
+
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.graphics.Canvas;
@@ -16,8 +18,6 @@ import androidx.annotation.Nullable;
 
 import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.injection.util.GmResources;
-
-import static com.kaisar.xposed.godmode.injection.ViewHelper.TAG_GM_CMP;
 
 /**
  * Created by jrsen on 17-11-4.

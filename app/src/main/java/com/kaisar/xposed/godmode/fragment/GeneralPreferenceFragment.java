@@ -1,9 +1,8 @@
 package com.kaisar.xposed.godmode.fragment;
 
+import static com.kaisar.xposed.godmode.fragment.GeneralPreferenceFragmentDirections.actionGeneralPreferenceFragmentToGuideFragment;
 import static com.kaisar.xposed.godmode.fragment.GeneralPreferenceFragmentDirections.actionGeneralPreferenceFragmentToViewRuleListFragment;
 
-import android.Manifest;
-import android.app.ProgressDialog;
 import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.Intent;
@@ -12,6 +11,7 @@ import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.text.SpannableString;
 import android.text.TextUtils;
@@ -40,28 +40,14 @@ import com.kaisar.xposed.godmode.BuildConfig;
 import com.kaisar.xposed.godmode.CrashHandler;
 import com.kaisar.xposed.godmode.GodModeApplication;
 import com.kaisar.xposed.godmode.R;
-import com.kaisar.xposed.godmode.bean.GroupInfo;
 import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
 import com.kaisar.xposed.godmode.model.SharedViewModel;
 import com.kaisar.xposed.godmode.preference.ProgressPreference;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.AppRules;
-import com.kaisar.xposed.godmode.util.Clipboard;
-import com.kaisar.xposed.godmode.util.DonateHelper;
-import com.kaisar.xposed.godmode.util.PermissionHelper;
 
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
-import retrofit2.Call;
-import retrofit2.Callback;
-import retrofit2.Response;
-
-
-/**
- * Created by jrsen on 17-10-29.
- */
 
 public final class GeneralPreferenceFragment extends PreferenceFragmentCompat implements
         Preference.OnPreferenceClickListener, Preference.OnPreferenceChangeListener,
@@ -72,8 +58,6 @@ public final class GeneralPreferenceFragment extends PreferenceFragmentCompat im
 
     private ProgressPreference mProgressPreference;
     private SwitchPreferenceCompat mEditorSwitchPreference;
-    private Preference mJoinGroupPreference;
-    private Preference mDonatePreference;
 
     private ActivityResultLauncher<String[]> mRestoreLauncher;
     private SharedViewModel mSharedViewModel;
@@ -102,7 +86,7 @@ public final class GeneralPreferenceFragment extends PreferenceFragmentCompat im
             new AlertDialog.Builder(requireContext())
                     .setTitle(R.string.hey_guy)
                     .setMessage(message)
-                    .setPositiveButton(R.string.dialog_btn_copy, (dialog, which) -> Clipboard.putContent(requireContext(), crashInfo))
+                    .setPositiveButton(R.string.dialog_btn_copy, (dialog, which) -> com.kaisar.xposed.godmode.util.Clipboard.putContent(requireContext(), crashInfo))
                     .show();
             return true;
         }
@@ -160,19 +144,22 @@ public final class GeneralPreferenceFragment extends PreferenceFragmentCompat im
         setPreferencesFromResource(R.xml.pref_general, rootKey);
         mProgressPreference = (ProgressPreference) findPreference(getString(R.string.pref_key_progress_indicator));
         mProgressPreference.setVisible(false);
-        mEditorSwitchPreference = (SwitchPreferenceCompat) findPreference(getString(R.string.pref_key_editor));
-        mEditorSwitchPreference.setChecked(GodModeManager.getDefault().isInEditMode());
+        mEditorSwitchPreference = (SwitchPreferenceCompat) findPreference(getString(R.string.pref_key_master));
+        SharedPreferences sp = PreferenceManager.getDefaultSharedPreferences(requireContext());
+        boolean masterEnabled = sp.getBoolean(getString(R.string.pref_key_master), false);
+        mEditorSwitchPreference.setChecked(masterEnabled);
         mEditorSwitchPreference.setOnPreferenceClickListener(this);
         mEditorSwitchPreference.setOnPreferenceChangeListener(this);
-        mJoinGroupPreference = findPreference(getString(R.string.pref_key_join_group));
-        mJoinGroupPreference.setOnPreferenceClickListener(this);
-        mDonatePreference = findPreference(getString(R.string.pref_key_donate));
-        mDonatePreference.setOnPreferenceClickListener(this);
 
-        SharedPreferences sp = requireContext().getSharedPreferences(SETTING_PREFS, Context.MODE_PRIVATE);
-        int previousVersionCode = sp.getInt(KEY_VERSION_CODE, 0);
+        Preference guidePreference = findPreference(getString(R.string.pref_key_guide));
+        if (guidePreference != null) {
+            guidePreference.setOnPreferenceClickListener(this);
+        }
+
+        SharedPreferences settingsSp = requireContext().getSharedPreferences(SETTING_PREFS, Context.MODE_PRIVATE);
+        int previousVersionCode = settingsSp.getInt(KEY_VERSION_CODE, 0);
         if (previousVersionCode != BuildConfig.VERSION_CODE) {
-            sp.edit().putInt(KEY_VERSION_CODE, BuildConfig.VERSION_CODE).apply();
+            settingsSp.edit().putInt(KEY_VERSION_CODE, BuildConfig.VERSION_CODE).apply();
             showUpdatePolicyDialog();
         } else if (!GodModeManager.getDefault().hasLight()) {
             showEnableModuleDialog();
@@ -193,16 +180,17 @@ public final class GeneralPreferenceFragment extends PreferenceFragmentCompat im
 
     @Override
     public boolean onPreferenceClick(Preference preference) {
+        String key = preference.getKey();
         if (mEditorSwitchPreference == preference) {
             if (!GodModeManager.getDefault().hasLight()) {
                 Toast.makeText(requireContext(), R.string.not_active_module, Toast.LENGTH_SHORT).show();
                 return true;
             }
-            GodModeManager.getDefault().setEditMode(mEditorSwitchPreference.isChecked());
-        } else if (mJoinGroupPreference == preference) {
-            showGroupInfoDialog();
-        } else if (mDonatePreference == preference) {
-            DonateHelper.showDonateDialog(requireContext());
+            boolean masterOn = mEditorSwitchPreference.isChecked();
+            setMasterEnabled(masterOn);
+        } else if (TextUtils.equals(key, getString(R.string.pref_key_guide))) {
+            NavController navController = NavHostFragment.findNavController(this);
+            navController.navigate(actionGeneralPreferenceFragmentToGuideFragment());
         } else {
             String packageName = preference.getSummary().toString();
             mSharedViewModel.updateSelectedPackage(packageName);
@@ -212,9 +200,31 @@ public final class GeneralPreferenceFragment extends PreferenceFragmentCompat im
         return true;
     }
 
+    private void setMasterEnabled(boolean enable) {
+        SharedPreferences sp = PreferenceManager.getDefaultSharedPreferences(requireContext());
+        sp.edit().putBoolean(getString(R.string.pref_key_master), enable).commit();
+        if (!enable) {
+            GodModeManager.getDefault().setEditMode(false);
+            sp.edit().putBoolean(getString(R.string.pref_key_editor), false).commit();
+        }
+        startNotificationService();
+    }
+
+    private void startNotificationService() {
+        try {
+            Intent notificationService = new Intent(requireContext(), com.kaisar.xposed.godmode.NotificationService.class);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                requireContext().startForegroundService(notificationService);
+            } else {
+                requireContext().startService(notificationService);
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
     @Override
     public void onSharedPreferenceChanged(SharedPreferences sp, String key) {
-        if (TextUtils.equals(key, getString(R.string.pref_key_editor))) {
+        if (TextUtils.equals(key, getString(R.string.pref_key_master))) {
             mEditorSwitchPreference.setChecked(sp.getBoolean(key, false));
         }
     }
@@ -230,11 +240,6 @@ public final class GeneralPreferenceFragment extends PreferenceFragmentCompat im
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         if (item.getItemId() == R.id.menu_import_rules) {
-            PermissionHelper permissionHelper = new PermissionHelper(requireActivity());
-            if (!permissionHelper.checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)) {
-                permissionHelper.applyPermissions(Manifest.permission.WRITE_EXTERNAL_STORAGE);
-                return true;
-            }
             try {
                 mRestoreLauncher.launch(new String[]{"*/*"});
             } catch (ActivityNotFoundException e) {
@@ -260,63 +265,8 @@ public final class GeneralPreferenceFragment extends PreferenceFragmentCompat im
         new AlertDialog.Builder(requireContext())
                 .setTitle(R.string.welcome_title)
                 .setMessage(R.string.update_tips)
-                .setPositiveButton(R.string.dialog_btn_alipay, (dialog1, which) -> DonateHelper.startAliPayDonate(requireContext()))
-                .setNegativeButton(R.string.dialog_btn_wxpay, (dialog12, which) -> DonateHelper.startWxPayDonate(requireContext()))
+                .setPositiveButton(android.R.string.ok, null)
                 .show();
-    }
-
-    private void showGroupInfoDialog() {
-        final ProgressDialog progressDialog = new ProgressDialog(requireContext());
-        progressDialog.setProgressStyle(ProgressDialog.STYLE_SPINNER);
-        progressDialog.setMessage(getText(R.string.dialog_message_query_community));
-        progressDialog.show();
-        mSharedViewModel.getGroupInfo(new Callback<List<GroupInfo>>() {
-            @Override
-            public void onResponse(@NonNull Call<List<GroupInfo>> call, @NonNull Response<List<GroupInfo>> response) {
-                if (progressDialog.isShowing()) {
-                    progressDialog.dismiss();
-                }
-                if (response.isSuccessful()) {
-                    List<GroupInfo> groupInfoList = response.body();
-                    if (groupInfoList != null && !groupInfoList.isEmpty()) {
-                        final int N = groupInfoList.size();
-                        String[] names = new String[N];
-                        String[] links = new String[N];
-                        for (int i = 0; i < N; i++) {
-                            GroupInfo groupInfo = groupInfoList.get(i);
-                            names[i] = groupInfo.group_name;
-                            links[i] = groupInfo.group_link;
-                        }
-                        new AlertDialog.Builder(requireContext())
-                                .setItems(names, (dialog, which) -> {
-                                    try {
-                                        Intent intent = new Intent(Intent.ACTION_VIEW);
-                                        intent.setData(Uri.parse(links[which]));
-                                        startActivity(intent);
-                                    } catch (Exception ignore) {
-                                    }
-                                }).show();
-                    } else {
-                        Snackbar.make(requireView(), R.string.fetch_group_list_err1, Snackbar.LENGTH_LONG).show();
-                    }
-                } else {
-                    if (response.errorBody() == null) {
-                        Snackbar.make(requireView(), R.string.fetch_group_list_err2, Snackbar.LENGTH_LONG).show();
-                    } else {
-                        Snackbar.make(requireView(), getString(R.string.fetch_group_list_err3, response.errorBody().toString()), Snackbar.LENGTH_LONG).show();
-                    }
-                }
-            }
-
-            @Override
-            public void onFailure(@NonNull Call<List<GroupInfo>> call, @NonNull Throwable t) {
-                if (progressDialog.isShowing()) {
-                    progressDialog.dismiss();
-                }
-                Snackbar.make(requireView(), getString(R.string.fetch_group_list_err3, t.getMessage()), Snackbar.LENGTH_LONG).show();
-            }
-
-        });
     }
 
 }

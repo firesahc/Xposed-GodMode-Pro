@@ -2,7 +2,6 @@ package com.kaisar.xposed.godmode.fragment;
 
 import static com.kaisar.xposed.godmode.GodModeApplication.TAG;
 
-import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
@@ -13,6 +12,8 @@ import android.graphics.Paint;
 import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.ParcelFileDescriptor;
 import android.text.TextUtils;
 
@@ -20,9 +21,6 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.content.res.ResourcesCompat;
 import androidx.lifecycle.ViewModelProvider;
-import androidx.loader.app.LoaderManager;
-import androidx.loader.content.AsyncTaskLoader;
-import androidx.loader.content.Loader;
 import androidx.preference.DropDownPreference;
 import androidx.preference.EditTextPreference;
 import androidx.preference.Preference;
@@ -46,7 +44,7 @@ import java.util.Objects;
  * Created by jrsen on 17-10-29.
  */
 
-public final class ViewRuleDetailsFragment extends PreferenceFragmentCompat implements Preference.OnPreferenceChangeListener, LoaderManager.LoaderCallbacks<Bitmap> {
+public final class ViewRuleDetailsFragment extends PreferenceFragmentCompat implements Preference.OnPreferenceChangeListener {
 
     private ViewRule mViewRule;
 
@@ -147,7 +145,39 @@ public final class ViewRuleDetailsFragment extends PreferenceFragmentCompat impl
 
         mImagePreference = (ImageViewPreference) findPreference(getString(R.string.pref_key_detail_preview_image));
         if (!TextUtils.isEmpty(mViewRule.imagePath)) {
-            LoaderManager.getInstance(this).initLoader(0, null, this).forceLoad();
+            loadRuleImage();
+        }
+    }
+
+    private void loadRuleImage() {
+        Handler handler = new Handler(Looper.getMainLooper());
+        new Thread(() -> {
+            Bitmap bitmap = loadRuleImageBitmap(mViewRule);
+            handler.post(() -> {
+                if (bitmap != null && isAdded()) {
+                    mImagePreference.setImageBitmap(bitmap);
+                }
+            });
+        }).start();
+    }
+
+    @Nullable
+    private static Bitmap loadRuleImageBitmap(@NonNull ViewRule viewRule) {
+        try {
+            try (ParcelFileDescriptor parcelFileDescriptor = GodModeManager.getDefault().openImageFileDescriptor(viewRule.imagePath)) {
+                Objects.requireNonNull(parcelFileDescriptor, String.format("Can not open %s", viewRule.imagePath));
+                Bitmap bitmap = BitmapFactory.decodeFileDescriptor(parcelFileDescriptor.getFileDescriptor()).copy(Bitmap.Config.ARGB_8888, true);
+                Bitmap newBitmap = bitmap.copy(bitmap.getConfig(), true);
+                Paint markPaint = new Paint();
+                markPaint.setColor(Color.RED);
+                markPaint.setAlpha(100);
+                Canvas canvas = new Canvas(newBitmap);
+                canvas.drawRect(viewRule.x, viewRule.y, viewRule.x + viewRule.width, viewRule.y + viewRule.height, markPaint);
+                return newBitmap;
+            }
+        } catch (Exception e) {
+            Logger.w(TAG, e.getMessage());
+            return null;
         }
     }
 
@@ -165,54 +195,5 @@ public final class ViewRuleDetailsFragment extends PreferenceFragmentCompat impl
             }
         }
         return true;
-    }
-
-    @NonNull
-    @Override
-    public Loader<Bitmap> onCreateLoader(int id, @Nullable Bundle args) {
-        return new RuleImageLoader(requireContext(), mViewRule);
-    }
-
-    @Override
-    public void onLoadFinished(@NonNull Loader<Bitmap> loader, Bitmap bitmap) {
-        if (bitmap != null) {
-            mImagePreference.setImageBitmap(bitmap);
-        }
-        LoaderManager.getInstance(this).destroyLoader(0);
-    }
-
-    @Override
-    public void onLoaderReset(@NonNull Loader<Bitmap> loader) {
-    }
-
-    static final class RuleImageLoader extends AsyncTaskLoader<Bitmap> {
-
-        private final ViewRule mViewRule;
-
-        public RuleImageLoader(@NonNull Context context, ViewRule viewRule) {
-            super(context);
-            this.mViewRule = viewRule;
-        }
-
-        @Nullable
-        @Override
-        public Bitmap loadInBackground() {
-            try {
-                try (ParcelFileDescriptor parcelFileDescriptor = GodModeManager.getDefault().openImageFileDescriptor(mViewRule.imagePath)) {
-                    Objects.requireNonNull(parcelFileDescriptor, String.format("Can not open %s", mViewRule.imagePath));
-                    Bitmap bitmap = BitmapFactory.decodeFileDescriptor(parcelFileDescriptor.getFileDescriptor()).copy(Bitmap.Config.ARGB_8888, true);
-                    Bitmap newBitmap = bitmap.copy(bitmap.getConfig(), true);
-                    Paint markPaint = new Paint();
-                    markPaint.setColor(Color.RED);
-                    markPaint.setAlpha(100);
-                    Canvas canvas = new Canvas(newBitmap);
-                    canvas.drawRect(mViewRule.x, mViewRule.y, mViewRule.x + mViewRule.width, mViewRule.y + mViewRule.height, markPaint);
-                    return newBitmap;
-                }
-            } catch (Exception e) {
-                Logger.w(TAG, e.getMessage());
-                return null;
-            }
-        }
     }
 }

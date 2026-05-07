@@ -1,5 +1,7 @@
 package com.kaisar.xposed.godmode.injection.weiget;
 
+import static com.kaisar.xposed.godmode.injection.ViewHelper.TAG_GM_CMP;
+
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
@@ -16,8 +18,6 @@ import android.view.ViewGroup;
 import androidx.annotation.Nullable;
 
 import com.kaisar.xposed.godmode.injection.ViewHelper;
-
-import static com.kaisar.xposed.godmode.injection.ViewHelper.TAG_GM_CMP;
 
 /**
  * Created by jrsen on 17-10-13.
@@ -81,7 +81,8 @@ public final class MaskView extends View {
 
     public void setMarked(boolean enable) {
         if (isMarked != enable) {
-            if (isMarked = enable) {
+            isMarked = enable;
+            if (enable) {
                 mMaskDrawable.setColorFilter(mMarkColor, PorterDuff.Mode.SRC_ATOP);
             } else {
                 mMaskDrawable.clearColorFilter();

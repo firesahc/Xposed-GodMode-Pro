@@ -1,15 +1,17 @@
 package com.kaisar.xposed.godmode.injection.hook;
 
+import static com.kaisar.xposed.godmode.GodModeApplication.TAG;
+import static com.kaisar.xposed.godmode.injection.ViewHelper.TAG_GM_CMP;
+import static com.kaisar.xposed.godmode.injection.util.CommonUtils.recycleNullableBitmap;
+
 import android.animation.Animator;
 import android.app.Activity;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.Color;
-import android.graphics.Rect;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.HapticFeedbackConstants;
-import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewConfiguration;
@@ -30,27 +32,15 @@ import com.kaisar.xposed.godmode.rule.ViewRule;
 import com.kaisar.xposed.godmode.util.Preconditions;
 
 import java.lang.ref.WeakReference;
-import java.util.ArrayList;
-import java.util.List;
 
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedHelpers;
 
-import static com.kaisar.xposed.godmode.GodModeApplication.TAG;
-import static com.kaisar.xposed.godmode.injection.ViewHelper.TAG_GM_CMP;
-import static com.kaisar.xposed.godmode.injection.util.CommonUtils.recycleNullableBitmap;
-
-/**
- * Created by jrsen on 17-12-6.
- */
-
 public final class EventHandlerHook extends XC_MethodHook implements Property.OnPropertyChangeListener<Boolean> {
 
     private static final int MARK_COLOR = Color.argb(150, 139, 195, 75);
-    private static final int OVERLAY_COLOR = Color.argb(150, 255, 0, 0);
 
     private boolean mIsInEditMode;
-    private float mX, mY;
     private Bitmap mSnapshot;
     private ViewRule mViewRule;
     private MaskView mMaskView;
@@ -61,31 +51,15 @@ public final class EventHandlerHook extends XC_MethodHook implements Property.On
     private final Handler mHandler = new Handler(Looper.getMainLooper());
 
     private volatile boolean mMultiPointLock;
-    private volatile boolean mDragging;
-
-    private final List<WeakReference<View>> mViewNodes = new ArrayList<>();
-    private int mCurrentViewIndex = 0;
-    private volatile boolean mKeySelecting;
+    public static volatile boolean mDragging;
 
     @Override
     protected void beforeHookedMethod(MethodHookParam param) {
         if (!mIsInEditMode) return;
-        String methodName = param.method.getName();
-        if ("dispatchKeyEvent".equals(methodName)) {
-            if (!mDragging) {
-                Activity activity = (Activity) param.thisObject;
-                KeyEvent event = (KeyEvent) param.args[0];
-                param.setResult(dispatchKeyEvent(activity, event));
-            }
-        } else if ("dispatchTouchEvent".equals(methodName)) {
-            View view = (View) param.thisObject;
-            MotionEvent event = (MotionEvent) param.args[0];
-            if (mKeySelecting) {
-                View selectedView = mViewNodes.get(mCurrentViewIndex).get();
-                param.setResult(dispatchTouchEvent(selectedView, event));
-            } else if (!TAG_GM_CMP.equals(view.getTag())) {
-                param.setResult(dispatchTouchEvent(view, event));
-            }
+        View view = (View) param.thisObject;
+        MotionEvent event = (MotionEvent) param.args[0];
+        if (!TAG_GM_CMP.equals(view.getTag())) {
+            param.setResult(dispatchTouchEvent(view, event));
         }
     }
 
@@ -106,20 +80,16 @@ public final class EventHandlerHook extends XC_MethodHook implements Property.On
                 return false;
             }
             mDragging = true;
-            mMultiPointLock = true;//防止多个触点同时触发
-            //防止列表控件拦截事件传递
+            mMultiPointLock = true;
             ViewParent parent = v.getParent();
             if (parent != null) parent.requestDisallowInterceptTouchEvent(true);
-            Rect rect = ViewHelper.getLocationInWindow(v);
-            mDeltaX = event.getRawX() - rect.left;
-            mDeltaY = event.getRawY() - rect.top;
+            mDeltaX = event.getRawX() - ViewHelper.getLocationInWindow(v).left;
+            mDeltaY = event.getRawY() - ViewHelper.getLocationInWindow(v).top;
             mPendingCheckForLongPress = new CheckForLongPress(v);
             mHandler.postDelayed(mPendingCheckForLongPress, ViewConfiguration.getLongPressTimeout());
         } else if (action == MotionEvent.ACTION_MOVE) {
-            float x = event.getX();
-            float y = event.getY();
             if (mLongClick) {
-                mMaskView.updateOverlayBounds((int) (event.getRawX() - this.mDeltaX), (int) (event.getRawY() - this.mDeltaY), v.getWidth(), v.getHeight());
+                mMaskView.updateOverlayBounds((int) (event.getRawX() - mDeltaX), (int) (event.getRawY() - mDeltaY), v.getWidth(), v.getHeight());
                 mMaskView.setMarked(mCancelView.getRealBounds().intersect(mMaskView.getRealBounds()));
             }
         } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
@@ -129,6 +99,8 @@ public final class EventHandlerHook extends XC_MethodHook implements Property.On
             if (mLongClick) {
                 performDetachMirrorView(v);
                 mLongClick = false;
+            } else if (action == MotionEvent.ACTION_UP && DispatchKeyEventHook.mKeySelecting) {
+                DispatchKeyEventHook.selectViewByTap(v);
             }
             mHasBlockEvent = false;
             mMultiPointLock = false;
@@ -137,63 +109,30 @@ public final class EventHandlerHook extends XC_MethodHook implements Property.On
         return true;
     }
 
-    private boolean dispatchKeyEvent(final Activity activity, KeyEvent keyEvent) {
-        Logger.d(TAG, keyEvent.toString());
-        int action = keyEvent.getAction();
-        int keyCode = keyEvent.getKeyCode();
-        if (keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
-            if (!mKeySelecting && action == KeyEvent.ACTION_DOWN && keyEvent.getRepeatCount() == 0) {
-                //build view tree
-                ViewGroup decorView = (ViewGroup) activity.getWindow().getDecorView();
-                List<WeakReference<View>> viewNodes = ViewHelper.buildViewNodes(decorView);
-                mViewNodes.clear();
-                mViewNodes.addAll(viewNodes);
-                mCurrentViewIndex = 0;
-                mMaskView = MaskView.makeMaskView(activity);
-                mMaskView.setMaskOverlay(OVERLAY_COLOR);
-                View view = mViewNodes.get(mCurrentViewIndex).get();
-                mMaskView.updateOverlayBounds(ViewHelper.getLocationInWindow(view));
-                mMaskView.attachToContainer(decorView);
-                mKeySelecting = true;
-            } else if (action == KeyEvent.ACTION_DOWN) {
-                mCurrentViewIndex = (keyCode == KeyEvent.KEYCODE_VOLUME_UP)
-                        ? Math.max(--mCurrentViewIndex, 0) : Math.min(++mCurrentViewIndex, mViewNodes.size() - 1);
-                View view = mViewNodes.get(mCurrentViewIndex).get();
-                mMaskView.updateOverlayBounds(ViewHelper.getLocationInWindow(view));
-            }
-            Logger.d(TAG, "node size=" + mViewNodes.size() + " index=" + mCurrentViewIndex + " key selecting=" + mKeySelecting);
-        }
-        return true;
-    }
-
     private boolean isAttachedToActivity(View v) {
         Object viewRootImpl = ViewHelper.findViewRootImplByChildView(v.getParent());
         if (viewRootImpl == null) return false;
-        WindowManager.LayoutParams mWindowAttributes = (WindowManager.LayoutParams) XposedHelpers.getObjectField(viewRootImpl, "mWindowAttributes");
-        return mWindowAttributes != null && mWindowAttributes.type == WindowManager.LayoutParams.TYPE_BASE_APPLICATION;
+        try {
+            WindowManager.LayoutParams wl = (WindowManager.LayoutParams) XposedHelpers.getObjectField(viewRootImpl, "mWindowAttributes");
+            return wl != null && wl.type == WindowManager.LayoutParams.TYPE_BASE_APPLICATION;
+        } catch (Exception e) {
+            return v.getWindowToken() != null;
+        }
     }
 
     private void performAttachMirrorView(View v) {
         try {
-            //Create mirror view and attach top view hierarchy
             Activity activity = Preconditions.checkNotNull(ViewHelper.getAttachedActivityFromView(v));
-
             ViewGroup container = (ViewGroup) activity.getWindow().getDecorView();
 
             mCancelView = new CancelView(activity);
             mCancelView.attachToContainer(container);
 
-            if (mKeySelecting && mMaskView != null) {
-                mMaskView.setMaskOverlay(v);
-                mMaskView.setMarkColor(MARK_COLOR);
-                mMaskView.updateOverlayBounds(ViewHelper.getLocationInWindow(v));
-            } else {
-                mMaskView = MaskView.makeMaskView(activity);
-                mMaskView.setMaskOverlay(v);
-                mMaskView.setMarkColor(MARK_COLOR);
-                mMaskView.updateOverlayBounds(ViewHelper.getLocationInWindow(v));
-                mMaskView.attachToContainer(container);
-            }
+            mMaskView = MaskView.makeMaskView(activity);
+            mMaskView.setMaskOverlay(v);
+            mMaskView.setMarkColor(MARK_COLOR);
+            mMaskView.updateOverlayBounds(ViewHelper.getLocationInWindow(v));
+            mMaskView.attachToContainer(container);
 
             mSnapshot = ViewHelper.snapshotView(ViewHelper.findTopParentViewByChildView(v));
             mViewRule = ViewHelper.makeRule(v);
@@ -213,7 +152,6 @@ public final class EventHandlerHook extends XC_MethodHook implements Property.On
 
         mCancelView.detachFromContainer();
         if (mMaskView.isMarked()) {
-            //丢弃该条规则
             try {
                 mMaskView.detachFromContainer();
                 mViewRule.visibility = View.VISIBLE;
@@ -224,7 +162,6 @@ public final class EventHandlerHook extends XC_MethodHook implements Property.On
                 mMaskView = null;
                 mCancelView = null;
                 mViewRule = null;
-                mKeySelecting = false;
             }
         } else {
             ViewGroup container = (ViewGroup) activity.getWindow().getDecorView();
@@ -234,7 +171,6 @@ public final class EventHandlerHook extends XC_MethodHook implements Property.On
             particleView.setOnAnimationListener(new ParticleView.OnAnimationListener() {
                 @Override
                 public void onAnimationStart(View animView, Animator animation) {
-                    //Make original view gone
                     mViewRule.visibility = View.GONE;
                     ViewController.applyRule(v, mViewRule);
                     GodModeManager.getDefault().writeRule(v.getContext().getPackageName(), mViewRule, mSnapshot);
@@ -251,7 +187,6 @@ public final class EventHandlerHook extends XC_MethodHook implements Property.On
                         mMaskView = null;
                         mCancelView = null;
                         mViewRule = null;
-                        mKeySelecting = false;
                     }
                 }
             });
@@ -262,9 +197,6 @@ public final class EventHandlerHook extends XC_MethodHook implements Property.On
     @Override
     public void onPropertyChange(Boolean enable) {
         mIsInEditMode = enable;
-        if (!enable) {
-            mKeySelecting = false;
-        }
     }
 
     private class CheckForLongPress implements Runnable {

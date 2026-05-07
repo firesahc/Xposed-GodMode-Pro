@@ -1,5 +1,7 @@
 package com.kaisar.xposed.godmode.injection.weiget;
 
+import static com.kaisar.xposed.godmode.injection.ViewHelper.TAG_GM_CMP;
+
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
 import android.animation.ValueAnimator;
@@ -14,8 +16,6 @@ import android.view.View;
 import android.view.ViewGroup;
 
 import androidx.annotation.Nullable;
-
-import static com.kaisar.xposed.godmode.injection.ViewHelper.TAG_GM_CMP;
 
 /**
  * Created by jrsen on 17-10-13.
@@ -114,24 +114,13 @@ public final class ParticleView extends View {
         });
     }
 
-    /**
-     * 获取一个 View 的缓存视图
-     *
-     * @param view
-     * @return
-     */
     private Bitmap getCacheBitmapFromView(View view) {
-        final boolean drawingCacheEnabled = true;
-        view.setDrawingCacheEnabled(drawingCacheEnabled);
-        view.buildDrawingCache(drawingCacheEnabled);
-        final Bitmap drawingCache = view.getDrawingCache();
-        Bitmap bitmap;
-        if (drawingCache != null) {
-            bitmap = Bitmap.createBitmap(drawingCache);
-            view.setDrawingCacheEnabled(false);
-        } else {
-            bitmap = null;
-        }
+        int w = Math.max(view.getWidth(), 1);
+        int h = Math.max(view.getHeight(), 1);
+        Bitmap bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        canvas.translate(-view.getScrollX(), -view.getScrollY());
+        view.draw(canvas);
         return bitmap;
     }
 

@@ -1,8 +1,9 @@
 package com.kaisar.xposed.godmode.util;
 
 import android.graphics.Bitmap;
-import androidx.annotation.NonNull;
 import android.text.TextUtils;
+
+import androidx.annotation.NonNull;
 
 /**
  * Simple static methods to be called at the start of your own methods to verify

@@ -24,6 +24,7 @@ import android.view.ViewGroup;
 
 import androidx.annotation.RequiresApi;
 
+import com.kaisar.xposed.godmode.BuildConfig;
 import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
 import com.kaisar.xposed.godmode.injection.bridge.ManagerObserver;
@@ -44,7 +45,6 @@ import java.io.File;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.List;
-import java.util.Optional;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.IXposedHookZygoteInit;
@@ -76,6 +76,7 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
         if (state == State.UNKNOWN) {
             state = checkBlockList(loadPackageParam.packageName) ? State.BLOCKED : State.ALLOWED;
         }
+        Logger.i(TAG, "[GodMode] edit mode " + enable + " state=" + state + " pkg=" + loadPackageParam.packageName);
         if (state == State.ALLOWED) {
             switchProp.set(enable);
         }
@@ -99,7 +100,7 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
     @Override
     public void handleLoadPackage(XC_LoadPackage.LoadPackageParam loadPackageParam) {
         if (R.string.res_inject_success >>> 24 == 0x7f) {
-            XposedBridge.log("package id must NOT be 0x7f, reject loading...");
+            XposedBridge.log("[GodMode] package id must NOT be 0x7f, reject loading...");
             return;
         }
         if (!loadPackageParam.isFirstApplication) {
@@ -107,18 +108,21 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
         }
         GodModeInjector.loadPackageParam = loadPackageParam;
         final String packageName = loadPackageParam.packageName;
-        if ("android".equals(packageName)) {//Run in system process
-            Logger.d(TAG, "inject GodModeManagerService as system service.");
+        if ("android".equals(packageName)) {
+            Logger.i(TAG, "[GodMode] inject GodModeManagerService as system service.");
             XServiceManager.initForSystemServer();
             XServiceManager.registerService("godmode", (XServiceManager.ServiceFetcher<Binder>) GodModeManagerService::new);
-        } else {//Run in other application processes
+        } else {
+            Logger.i(TAG, "[GodMode] inject into app: " + packageName);
             XposedHelpers.findAndHookMethod(Activity.class, "onCreate", Bundle.class, new XC_MethodHook() {
                 @Override
                 protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                    //Volume key select old
                     Activity activity = (Activity) param.thisObject;
                     dispatchKeyEventHook.setactivity(activity);
                     injectModuleResources(activity.getResources());
+                    if (switchProp.get()) {
+                        dispatchKeyEventHook.setdisplay(true);
+                    }
                     super.afterHookedMethod(param);
                 }
             });
@@ -186,8 +190,10 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
         if (TextUtils.equals("com.android.systemui", packageName)) {
             return true;
         }
+        if (TextUtils.equals(BuildConfig.APPLICATION_ID, packageName)) {
+            return true;
+        }
         try {
-            //检查是否为launcher应用
             Intent homeIntent = new Intent(Intent.ACTION_MAIN);
             homeIntent.addCategory(Intent.CATEGORY_HOME);
             List<ResolveInfo> resolveInfos;
@@ -196,7 +202,6 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
             } else {
                 resolveInfos = PackageManagerUtils.queryIntentActivities(homeIntent, null, 0, 0);
             }
-//            Logger.d(TAG, "launcher apps:" + resolveInfos);
             if (resolveInfos != null) {
                 for (ResolveInfo resolveInfo : resolveInfos) {
                     if (!TextUtils.equals("com.android.settings", packageName) && TextUtils.equals(resolveInfo.activityInfo.packageName, packageName)) {
@@ -205,14 +210,12 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
                 }
             }
 
-            //检查是否为键盘应用
             Intent keyboardIntent = new Intent("android.view.InputMethod");
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 resolveInfos = PackageManagerUtils.queryIntentServices(keyboardIntent, null, PackageManager.MATCH_ALL, 0);
             } else {
                 resolveInfos = PackageManagerUtils.queryIntentServices(keyboardIntent, null, 0, 0);
             }
-//            Logger.d(TAG, "keyboard apps:" + resolveInfos);
             if (resolveInfos != null) {
                 for (ResolveInfo resolveInfo : resolveInfos) {
                     if (TextUtils.equals(resolveInfo.serviceInfo.packageName, packageName)) {
@@ -221,14 +224,12 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
                 }
             }
 
-            //检查是否为无界面应用
             PackageInfo packageInfo = PackageManagerUtils.getPackageInfo(packageName, PackageManager.GET_ACTIVITIES, 0);
             if (packageInfo != null && packageInfo.activities != null && packageInfo.activities.length == 0) {
-//                Logger.d(TAG, "no user interface app:" + resolveInfos);
                 return true;
             }
         } catch (Throwable t) {
-            Logger.e(TAG, "checkWhiteListPackage crash", t);
+            Logger.e(TAG, "[GodMode] checkBlockList failed, allowing all", t);
         }
         return false;
     }
@@ -239,10 +240,6 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
         actRuleProp.addOnPropertyChangeListener(lifecycleHook);
         XposedHelpers.findAndHookMethod(Activity.class, "onPostResume", lifecycleHook);
         XposedHelpers.findAndHookMethod(Activity.class, "onDestroy", lifecycleHook);
-
-//        DisplayPropertiesHook displayPropertiesHook = new DisplayPropertiesHook();
-//        switchProp.addOnPropertyChangeListener(displayPropertiesHook);
-//        XposedHelpers.findAndHookConstructor(View.class, Context.class, displayPropertiesHook);
 
         // Hook debug layout
         try {
@@ -282,10 +279,10 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
 
         EventHandlerHook eventHandlerHook = new EventHandlerHook();
         switchProp.addOnPropertyChangeListener(eventHandlerHook);
-        //Volume key select
-        //XposedHelpers.findAndHookMethod(Activity.class, "dispatchKeyEvent", KeyEvent.class, eventHandlerHook);
         //Drag view support
         XposedHelpers.findAndHookMethod(View.class, "dispatchTouchEvent", MotionEvent.class, eventHandlerHook);
+
+        switchProp.addOnPropertyChangeListener(dispatchKeyEventHook);
     }
 
 }

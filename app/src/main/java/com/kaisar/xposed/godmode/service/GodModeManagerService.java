@@ -56,7 +56,7 @@ import java.util.Map;
 public final class GodModeManagerService extends IGodModeManager.Stub implements Handler.Callback {
 
     // /data/system/godmode
-    private static final String BASE_DIR = String.format("%s/system/%s", Environment.getDataDirectory().getAbsolutePath(), "godmode");
+    private static final String BASE_DIR = String.format("%s/misc/%s", Environment.getDataDirectory().getAbsolutePath(), "godmode");
     // /data/system/godmode/conf
     private static final String CONFIG_FILE_NAME = "conf";
     // /data/system/godmode/{package}/package.rule
@@ -236,6 +236,7 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
     public void setEditMode(boolean enable) throws RemoteException {
         enforcePermission("set edit mode fail permission denied");
         if (!mStarted) return;
+        mLogger.i("[GodMode] setEditMode: " + enable);
         mInEditMode = enable;
         notifyObserverEditModeChanged(enable);
     }
@@ -262,6 +263,13 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
         if (!mStarted) return;
         synchronized (mRemoteCallbackList) {
             mRemoteCallbackList.register(new ObserverProxy(packageName, observer));
+        }
+        try {
+            observer.onEditModeChanged(mInEditMode);
+            ActRules rules = mAppRulesCache.containsKey(packageName) ? mAppRulesCache.get(packageName) : new ActRules();
+            observer.onViewRuleChanged(packageName, rules);
+        } catch (RemoteException e) {
+            mLogger.w("immediate notify observer failed", e);
         }
     }
 
@@ -450,13 +458,14 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
     }
 
     private void notifyObserverRuleChanged(String packageName, ActRules actRules) {
+        final ActRules copy = deepCopyActRules(actRules);
         synchronized (mRemoteCallbackList) {
             final int N = mRemoteCallbackList.beginBroadcast();
             for (int i = 0; i < N; i++) {
                 try {
                     ObserverProxy observerProxy = mRemoteCallbackList.getBroadcastItem(i);
                     if (TextUtils.equals(observerProxy.packageName, packageName) || TextUtils.equals(observerProxy.packageName, "*")) {
-                        observerProxy.observer.onViewRuleChanged(packageName, actRules);
+                        observerProxy.observer.onViewRuleChanged(packageName, copy);
                     }
                 } catch (Exception e) {
                     mLogger.w("notify rule changed fail", e);
@@ -464,6 +473,14 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
             }
             mRemoteCallbackList.finishBroadcast();
         }
+    }
+
+    private ActRules deepCopyActRules(ActRules source) {
+        ActRules copy = new ActRules();
+        for (Map.Entry<String, List<ViewRule>> entry : source.entrySet()) {
+            copy.put(entry.getKey(), new ArrayList<>(entry.getValue()));
+        }
+        return copy;
     }
 
     private void notifyObserverEditModeChanged(boolean enable) {

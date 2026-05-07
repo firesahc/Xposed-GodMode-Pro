@@ -1,5 +1,7 @@
 package com.kaisar.xposed.godmode.injection.hook;
 
+import static com.kaisar.xposed.godmode.GodModeApplication.TAG;
+
 import android.app.Activity;
 import android.text.TextUtils;
 import android.view.ViewGroup;
@@ -19,8 +21,6 @@ import java.util.Set;
 import java.util.WeakHashMap;
 
 import de.robv.android.xposed.XC_MethodHook;
-
-import static com.kaisar.xposed.godmode.GodModeApplication.TAG;
 
 /**
  * Created by jrsen on 17-10-15.

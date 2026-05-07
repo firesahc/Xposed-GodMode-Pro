@@ -13,6 +13,7 @@ import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewParent;
 import android.view.animation.AccelerateInterpolator;
 import android.view.animation.DecelerateInterpolator;
 
@@ -44,6 +45,7 @@ import de.robv.android.xposed.XposedHelpers;
 public final class DispatchKeyEventHook extends XC_MethodHook implements Property.OnPropertyChangeListener<Boolean>, SeekBar.OnSeekBarChangeListener {
 
     private static final int OVERLAY_COLOR = Color.argb(150, 255, 0, 0);
+    private static DispatchKeyEventHook sInstance;
     private final List<WeakReference<View>> mViewNodes = new ArrayList<>();
     private int mCurrentViewIndex = 0;
 
@@ -53,48 +55,61 @@ public final class DispatchKeyEventHook extends XC_MethodHook implements Propert
     private SeekBar seekbar = null;
     public static volatile boolean mKeySelecting = false;
 
+    private View mPreviewView;
+    private ViewRule mPreviewRule;
+    private boolean mIsPreviewing;
+
+    public DispatchKeyEventHook() {
+        sInstance = this;
+    }
+
     public void setactivity(final Activity a) {
+        if (activity != null && activity != a && mKeySelecting) {
+            dismissNodeSelectPanel();
+        }
         activity = a;
     }
 
     public void setdisplay(Boolean display) {
         if (activity == null) return;
+        if (display && !GodModeInjector.switchProp.get()) return;
         if (display) {
-            showNodeSelectPanel(activity);
+            if (!mKeySelecting) {
+                showNodeSelectPanel(activity);
+            }
         } else {
             dismissNodeSelectPanel();
         }
     }
 
-    @Override
-    protected void beforeHookedMethod(MethodHookParam param) {
-        if (GodModeInjector.switchProp.get() && !DispatchTouchEventHook.mDragging) {
-            Activity activity = (Activity) param.thisObject;
-            KeyEvent event = (KeyEvent) param.args[0];
-            param.setResult(dispatchKeyEvent(activity, event));
+    public static void selectViewByTap(View tappedView) {
+        DispatchKeyEventHook instance = sInstance;
+        if (instance == null || !instance.mKeySelecting || instance.seekbar == null) return;
+
+        for (int i = instance.mViewNodes.size() - 1; i >= 0; i--) {
+            View v = instance.mViewNodes.get(i).get();
+            if (v != null && isViewMatch(v, tappedView)) {
+                instance.mCurrentViewIndex = i;
+                instance.seekbar.setProgress(i);
+                return;
+            }
         }
     }
 
-    private boolean dispatchKeyEvent(final Activity activity, KeyEvent keyEvent) {
-        Logger.d(TAG, keyEvent.toString());
-        int action = keyEvent.getAction();
-        int keyCode = keyEvent.getKeyCode();
-        if (action == KeyEvent.ACTION_UP &&
-                (keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN)) {
-            if (!mKeySelecting) {
-                showNodeSelectPanel(activity);
-            } else {
-                //hide node select panel
-                dismissNodeSelectPanel();
-            }
+    private static boolean isViewMatch(View candidate, View tapped) {
+        if (candidate == tapped) return true;
+        ViewParent parent = tapped.getParent();
+        while (parent instanceof View) {
+            if (parent == candidate) return true;
+            parent = parent.getParent();
         }
-        return true;
+        return false;
     }
 
     private void showNodeSelectPanel(final Activity activity) {
+        Logger.i(TAG, "[GodMode] showNodeSelectPanel for " + activity.getPackageName());
         mViewNodes.clear();
         mCurrentViewIndex = 0;
-        //build view hierarchy tree
         mViewNodes.addAll(ViewHelper.buildViewNodes(activity.getWindow().getDecorView()));
         final ViewGroup container = (ViewGroup) activity.getWindow().getDecorView();
         mMaskView = MaskView.makeMaskView(activity);
@@ -105,51 +120,17 @@ public final class DispatchKeyEventHook extends XC_MethodHook implements Propert
             LayoutInflater layoutInflater = LayoutInflater.from(activity);
             mNodeSelectorPanel = layoutInflater.inflate(GodModeInjector.moduleRes.getLayout(R.layout.layout_node_selector), container, false);
             seekbar = mNodeSelectorPanel.findViewById(R.id.slider);
-            seekbar.setMax(mViewNodes.size() - 1);
+            seekbar.setMax(Math.max(mViewNodes.size() - 1, 0));
             seekbar.setOnSeekBarChangeListener(this);
+
             View btnBlock = mNodeSelectorPanel.findViewById(R.id.block);
             TooltipCompat.setTooltipText(btnBlock, GmResources.getText(R.string.accessibility_block));
-            btnBlock.setOnClickListener(v -> {
-                try {
-                    mNodeSelectorPanel.setAlpha(0f);
-                    final View view = mViewNodes.get(mCurrentViewIndex).get();
-                    Logger.d(TAG, "removed view = " + view);
-                    if (view != null) {
-                        //hide overlay
-                        mMaskView.updateOverlayBounds(new Rect());
-                        final Bitmap snapshot = ViewHelper.snapshotView(ViewHelper.findTopParentViewByChildView(view));
-                        final ViewRule viewRule = ViewHelper.makeRule(view);
-                        final ParticleView particleView = new ParticleView(activity);
-                        particleView.setDuration(1000);
-                        particleView.attachToContainer(container);
-                        particleView.setOnAnimationListener(new ParticleView.OnAnimationListener() {
-                            @Override
-                            public void onAnimationStart(View animView, Animator animation) {
-                                viewRule.visibility = View.GONE;
-                                ViewController.applyRule(view, viewRule);
-                            }
+            btnBlock.setOnClickListener(v -> performBlock(activity, container));
 
-                            @Override
-                            public void onAnimationEnd(View animView, Animator animation) {
-                                GodModeManager.getDefault().writeRule(activity.getPackageName(), viewRule, snapshot);
-                                recycleNullableBitmap(snapshot);
-                                particleView.detachFromContainer();
-                                mNodeSelectorPanel.animate()
-                                        .alpha(1.0f)
-                                        .setInterpolator(new DecelerateInterpolator(1.0f))
-                                        .setDuration(300)
-                                        .start();
-                            }
-                        });
-                        particleView.boom(view);
-                    }
-                    mViewNodes.remove(mCurrentViewIndex--);
-                    seekbar.setMax(mViewNodes.size() - 1);
-                } catch (Exception e) {
-                    Logger.e(TAG, "block fail", e);
-                    Toast.makeText(activity, GmResources.getString(R.string.block_fail, e.getMessage()), Toast.LENGTH_SHORT).show();
-                }
-            });
+            View btnPreview = mNodeSelectorPanel.findViewById(R.id.preview);
+            TooltipCompat.setTooltipText(btnPreview, GmResources.getText(R.string.accessibility_preview));
+            btnPreview.setOnClickListener(v -> togglePreview(activity));
+
             View exchange = mNodeSelectorPanel.findViewById(R.id.exchange);
             View topcentent = mNodeSelectorPanel.findViewById(R.id.topcentent);
             exchange.setOnClickListener(v -> {
@@ -180,45 +161,160 @@ public final class DispatchKeyEventHook extends XC_MethodHook implements Propert
             mKeySelecting = true;
             XposedHelpers.findAndHookMethod(Activity.class, "dispatchKeyEvent", KeyEvent.class, new XC_MethodHook() {
                 protected void beforeHookedMethod(MethodHookParam param) {
-                    if (GodModeInjector.switchProp.get() && !DispatchTouchEventHook.mDragging) {
-                        KeyEvent event = (KeyEvent) param.args[0];
-                        int action = event.getAction();
-                        int keyCode = event.getKeyCode();
-                        if (action == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
-                            seekbarreduce();
-                        }else if(action == KeyEvent.ACTION_UP && keyCode == KeyEvent.KEYCODE_VOLUME_UP){
+                    if (!GodModeInjector.switchProp.get() || EventHandlerHook.mDragging) return;
+                    KeyEvent event = (KeyEvent) param.args[0];
+                    int action = event.getAction();
+                    int keyCode = event.getKeyCode();
+                    if (action == KeyEvent.ACTION_UP &&
+                            (keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN)) {
+                        if (!mKeySelecting && activity != null) {
+                            showNodeSelectPanel(activity);
+                        } else if (mKeySelecting) {
+                            dismissNodeSelectPanel();
+                        }
+                        param.setResult(true);
+                    } else if (mKeySelecting && action == KeyEvent.ACTION_DOWN) {
+                        if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) {
                             seekbaradd();
+                        } else if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
+                            seekbarreduce();
                         }
                         param.setResult(true);
                     }
                 }
             });
         } catch (Exception e) {
-            //god mode package uninstalled?
             Logger.e(TAG, "showNodeSelectPanel fail", e);
             mKeySelecting = false;
         }
     }
 
+    private void performBlock(final Activity activity, final ViewGroup container) {
+        try {
+            if (mViewNodes.isEmpty()) return;
+            if (mIsPreviewing) {
+                restorePreview();
+            }
+            final View view = mViewNodes.get(Math.max(mCurrentViewIndex, 0)).get();
+            Logger.d(TAG, "block view = " + view);
+            if (view == null) return;
+            mMaskView.updateOverlayBounds(new Rect());
+            final Bitmap snapshot = ViewHelper.snapshotView(ViewHelper.findTopParentViewByChildView(view));
+            final ViewRule viewRule = ViewHelper.makeRule(view);
+            final ParticleView particleView = new ParticleView(activity);
+            particleView.setDuration(1000);
+            particleView.attachToContainer(container);
+            particleView.setOnAnimationListener(new ParticleView.OnAnimationListener() {
+                @Override
+                public void onAnimationStart(View animView, Animator animation) {
+                    viewRule.visibility = View.GONE;
+                    ViewController.applyRule(view, viewRule);
+                }
+
+                @Override
+                public void onAnimationEnd(View animView, Animator animation) {
+                    try {
+                        GodModeManager.getDefault().writeRule(activity.getPackageName(), viewRule, snapshot);
+                        recycleNullableBitmap(snapshot);
+                        particleView.detachFromContainer();
+                    } catch (Exception e) {
+                        Logger.e(TAG, "write rule fail", e);
+                    }
+                    restorePanelAlpha();
+                    updateViewNodesAfterRemove();
+                }
+            });
+            particleView.boom(view);
+        } catch (Exception e) {
+            Logger.e(TAG, "block fail", e);
+            restorePanelAlpha();
+            Toast.makeText(activity, GmResources.getString(R.string.block_fail, e.getMessage()), Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void updateViewNodesAfterRemove() {
+        if (mCurrentViewIndex >= mViewNodes.size()) {
+            mCurrentViewIndex = mViewNodes.size() - 1;
+        }
+        if (mCurrentViewIndex >= 0 && mCurrentViewIndex < mViewNodes.size()) {
+            mViewNodes.remove(mCurrentViewIndex);
+        }
+        seekbar.setMax(Math.max(mViewNodes.size() - 1, 0));
+        mCurrentViewIndex = Math.min(mCurrentViewIndex, Math.max(mViewNodes.size() - 1, 0));
+        if (mCurrentViewIndex >= 0 && seekbar != null) {
+            seekbar.setProgress(mCurrentViewIndex);
+        }
+    }
+
+    private void restorePanelAlpha() {
+        if (mNodeSelectorPanel != null) {
+            mNodeSelectorPanel.animate()
+                    .alpha(1.0f)
+                    .setInterpolator(new DecelerateInterpolator(1.0f))
+                    .setDuration(300)
+                    .start();
+        }
+    }
+
+    private void togglePreview(final Activity activity) {
+        if (mIsPreviewing) {
+            restorePreview();
+        } else {
+            startPreview(activity);
+        }
+    }
+
+    private void startPreview(final Activity activity) {
+        if (mViewNodes.isEmpty()) return;
+        View view = mViewNodes.get(Math.max(mCurrentViewIndex, 0)).get();
+        if (view == null) return;
+        try {
+            mPreviewRule = ViewHelper.makeRule(view);
+            mPreviewRule.visibility = View.GONE;
+            ViewController.applyRule(view, mPreviewRule);
+            mPreviewView = view;
+            mIsPreviewing = true;
+            View btnPreview = mNodeSelectorPanel.findViewById(R.id.preview);
+            if (btnPreview != null) {
+                TooltipCompat.setTooltipText(btnPreview, GmResources.getText(R.string.accessibility_preview_exit));
+            }
+            mMaskView.updateOverlayBounds(new Rect());
+        } catch (Exception e) {
+            Logger.e(TAG, "preview fail", e);
+        }
+    }
+
+    private void restorePreview() {
+        if (mPreviewView != null && mPreviewRule != null) {
+            mPreviewRule.visibility = View.VISIBLE;
+            ViewController.revokeRule(mPreviewView, mPreviewRule);
+            mPreviewView = null;
+            mPreviewRule = null;
+        }
+        mIsPreviewing = false;
+        View btnPreview = mNodeSelectorPanel != null ? mNodeSelectorPanel.findViewById(R.id.preview) : null;
+        if (btnPreview != null) {
+            TooltipCompat.setTooltipText(btnPreview, GmResources.getText(R.string.accessibility_preview));
+        }
+    }
+
     private void seekbaradd() {
-        if (seekbar.getProgress() == seekbar.getMax()) {
+        if (seekbar == null || seekbar.getProgress() >= seekbar.getMax()) {
             return;
         }
-        int Progress = seekbar.getProgress() + 1;
-        seekbar.setProgress(Progress);
-        onProgressChanged(seekbar, Progress, true);
+        seekbar.setProgress(seekbar.getProgress() + 1);
     }
 
     private void seekbarreduce() {
-        if (seekbar.getProgress() == 0) {
+        if (seekbar == null || seekbar.getProgress() <= 0) {
             return;
         }
-        int Progress = seekbar.getProgress() - 1;
-        seekbar.setProgress(Progress);
-        onProgressChanged(seekbar, Progress, true);
+        seekbar.setProgress(seekbar.getProgress() - 1);
     }
 
     private void dismissNodeSelectPanel() {
+        Logger.i(TAG, "[GodMode] dismissNodeSelectPanel");
+        restorePreview();
         if (mMaskView != null) mMaskView.detachFromContainer();
         mMaskView = null;
         if (mNodeSelectorPanel != null) {
@@ -242,18 +338,18 @@ public final class DispatchKeyEventHook extends XC_MethodHook implements Propert
 
     @Override
     public void onPropertyChange(Boolean enable) {
-        if (mMaskView != null) {
+        if (!enable && mMaskView != null) {
             dismissNodeSelectPanel();
         }
     }
 
     @Override
     public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-        if (fromUser) {
+        if (progress < mViewNodes.size()) {
             mCurrentViewIndex = progress;
             View view = mViewNodes.get(mCurrentViewIndex).get();
             Logger.d(TAG, String.format(Locale.getDefault(), "progress=%d selected view=%s", progress, view));
-            if (view != null) {
+            if (view != null && mMaskView != null) {
                 mMaskView.updateOverlayBounds(ViewHelper.getLocationInWindow(view));
             }
         }
@@ -261,11 +357,11 @@ public final class DispatchKeyEventHook extends XC_MethodHook implements Propert
 
     @Override
     public void onStartTrackingTouch(SeekBar seekBar) {
-        mNodeSelectorPanel.setAlpha(0.2f);
+        if (mNodeSelectorPanel != null) mNodeSelectorPanel.setAlpha(0.2f);
     }
 
     @Override
     public void onStopTrackingTouch(SeekBar seekBar) {
-        mNodeSelectorPanel.setAlpha(1f);
+        if (mNodeSelectorPanel != null) mNodeSelectorPanel.setAlpha(1f);
     }
 }

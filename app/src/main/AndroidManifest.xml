@@ -1,17 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-        xmlns:tools="http://schemas.android.com/tools"
-        package="com.kaisar.xposed.godmode">
+        xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission
             android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+            android:maxSdkVersion="32"
             tools:ignore="ScopedStorage" />
     <uses-permission
             android:name="android.permission.QUERY_ALL_PACKAGES"
             tools:ignore="QueryAllPackagesPermission" />
-
-    <uses-permission-sdk-23 android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <application
             android:name=".GodModeApplication"
@@ -58,8 +59,13 @@
         <service
                 android:name=".NotificationService"
                 android:exported="false"
+                android:foregroundServiceType="specialUse"
                 android:icon="@drawable/ic_angel_normal"
-                android:label="@string/app_name" />
+                android:label="@string/app_name">
+            <property
+                    android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                    android:value="persistent_notification_for_edit_mode_control" />
+        </service>
 
         <meta-data
                 android:name="xposedmodule"
@@ -69,7 +75,7 @@
                 android:value="@string/xposed_description" />
         <meta-data
                 android:name="xposedminversion"
-                android:value="53" />
+                android:value="89" />
         <meta-data
                 android:name="xposedscope"
                 android:resource="@array/need_module" />
