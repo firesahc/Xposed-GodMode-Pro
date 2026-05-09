@@ -12,9 +12,11 @@ import com.kaisar.xposed.godmode.rule.AppRules;
 import com.kaisar.xposed.godmode.rule.ViewRule;
 import com.kaisar.xservicemanager.XServiceManager;
 
+import de.robv.android.xposed.XposedBridge;
+
 public final class GodModeManager {
 
-    private static GodModeManager instance;
+    private static volatile GodModeManager instance;
     private final IGodModeManager mGMM;
 
     private GodModeManager(IGodModeManager gmm) {
@@ -22,24 +24,33 @@ public final class GodModeManager {
     }
 
     public static GodModeManager getDefault() {
-        synchronized (GodModeManager.class) {
-            if (instance == null) {
-                IBinder service = XServiceManager.getService("godmode");
-                if (service != null) {
-                    instance = new GodModeManager(IGodModeManager.Stub.asInterface(service));
-                } else {
-                    instance = new GodModeManager(new IGodModeManager.Default());
+        GodModeManager result = instance;
+        if (result == null) {
+            synchronized (GodModeManager.class) {
+                result = instance;
+                if (result == null) {
+                    IBinder service = XServiceManager.getService("godmode");
+                    if (service != null) {
+                        result = new GodModeManager(IGodModeManager.Stub.asInterface(service));
+                    } else {
+                        result = new GodModeManager(new IGodModeManager.Default());
+                    }
+                    instance = result;
                 }
             }
-            return instance;
         }
+        return result;
+    }
+
+    private static void logError(String method, RemoteException e) {
+        XposedBridge.log("[GodMode] GodModeManager#" + method + " failed: " + e.getMessage());
     }
 
     public boolean hasLight() {
         try {
             return mGMM.hasLight();
         } catch (RemoteException e) {
-            e.printStackTrace();
+            logError("hasLight", e);
             return false;
         }
     }
@@ -48,7 +59,7 @@ public final class GodModeManager {
         try {
             mGMM.setEditMode(enable);
         } catch (RemoteException e) {
-            e.printStackTrace();
+            logError("setEditMode", e);
         }
     }
 
@@ -56,7 +67,7 @@ public final class GodModeManager {
         try {
             return mGMM.isInEditMode();
         } catch (RemoteException e) {
-            e.printStackTrace();
+            logError("isInEditMode", e);
             return false;
         }
     }
@@ -65,7 +76,7 @@ public final class GodModeManager {
         try {
             mGMM.addObserver(packageName, observer);
         } catch (RemoteException e) {
-            e.printStackTrace();
+            logError("addObserver", e);
         }
     }
 
@@ -73,7 +84,7 @@ public final class GodModeManager {
         try {
             mGMM.removeObserver(packageName, observer);
         } catch (RemoteException e) {
-            e.printStackTrace();
+            logError("removeObserver", e);
         }
     }
 
@@ -81,7 +92,7 @@ public final class GodModeManager {
         try {
             return mGMM.getAllRules();
         } catch (RemoteException e) {
-            e.printStackTrace();
+            logError("getAllRules", e);
             return new AppRules();
         }
     }
@@ -90,7 +101,7 @@ public final class GodModeManager {
         try {
             return mGMM.getRules(packageName);
         } catch (RemoteException e) {
-            e.printStackTrace();
+            logError("getRules", e);
             return new ActRules();
         }
     }
@@ -99,7 +110,7 @@ public final class GodModeManager {
         try {
             return mGMM.writeRule(packageName, viewRule, bitmap);
         } catch (RemoteException e) {
-            e.printStackTrace();
+            logError("writeRule", e);
             return false;
         }
     }
@@ -108,7 +119,7 @@ public final class GodModeManager {
         try {
             return mGMM.updateRule(packageName, viewRule);
         } catch (RemoteException e) {
-            e.printStackTrace();
+            logError("updateRule", e);
             return false;
         }
     }
@@ -117,7 +128,7 @@ public final class GodModeManager {
         try {
             return mGMM.deleteRule(packageName, viewRule);
         } catch (RemoteException e) {
-            e.printStackTrace();
+            logError("deleteRule", e);
             return false;
         }
     }
@@ -126,7 +137,7 @@ public final class GodModeManager {
         try {
             return mGMM.deleteRules(packageName);
         } catch (RemoteException e) {
-            e.printStackTrace();
+            logError("deleteRules", e);
             return false;
         }
     }
@@ -135,7 +146,7 @@ public final class GodModeManager {
         try {
             return mGMM.openImageFileDescriptor(filePath);
         } catch (RemoteException e) {
-            e.printStackTrace();
+            logError("openImageFileDescriptor", e);
             return null;
         }
     }

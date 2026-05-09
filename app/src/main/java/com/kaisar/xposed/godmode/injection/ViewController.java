@@ -13,7 +13,6 @@ import com.kaisar.xposed.godmode.rule.ViewRule;
 import com.kaisar.xposed.godmode.util.Preconditions;
 
 import java.lang.ref.WeakReference;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
@@ -27,7 +26,7 @@ public final class ViewController {
 
     public static void applyRuleBatch(Activity activity, List<ViewRule> rules) {
         Logger.d(TAG, "[ApplyRuleBatch info start------------------------------------]");
-        for (ViewRule rule : new ArrayList<>(rules)) {
+        for (ViewRule rule : rules) {
             try {
                 Logger.d(TAG, "[Apply rule]:" + rule.toString());
                 int ruleHashCode = rule.hashCode();
@@ -83,7 +82,7 @@ public final class ViewController {
     }
 
     public static void revokeRuleBatch(Activity activity, List<ViewRule> rules) {
-        for (ViewRule rule : new ArrayList<>(rules)) {
+        for (ViewRule rule : rules) {
             try {
                 Logger.d(TAG, "revoke rule:" + rule.toString());
                 int ruleHashCode = rule.hashCode();
@@ -146,7 +145,7 @@ public final class ViewController {
 
         @Override
         public String toString() {
-            final StringBuffer sb = new StringBuffer("ViewProperty{");
+            final StringBuilder sb = new StringBuilder("ViewProperty{");
             sb.append("alpha=").append(alpha);
             sb.append(", clickable=").append(clickable);
             sb.append(", visibility=").append(visibility);
@@ -162,7 +161,7 @@ public final class ViewController {
             int visibility = view.getVisibility();
             ViewGroup.LayoutParams layoutParams = view.getLayoutParams();
             int width = layoutParams != null ? layoutParams.width : 0;
-            int height = layoutParams != null ? layoutParams.height : 1;
+            int height = layoutParams != null ? layoutParams.height : 0;
             return new ViewProperty(alpha, clickable, visibility, width, height);
         }
     }

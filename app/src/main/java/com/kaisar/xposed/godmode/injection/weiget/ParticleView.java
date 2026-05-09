@@ -20,7 +20,7 @@ import androidx.annotation.Nullable;
 /**
  * Created by jrsen on 17-10-13.
  */
-public final class ParticleView extends View {
+public final class ParticleView extends View implements OverlayWidget {
 
     private ValueAnimator mParticleAnimator;
     //动画持续时间
@@ -37,24 +37,22 @@ public final class ParticleView extends View {
     }
 
     public ParticleView(Context context) {
-        this(context, null);
+        super(context);
+        init();
     }
 
     public ParticleView(Context context, @Nullable AttributeSet attrs) {
-        this(context, attrs, 0);
+        super(context, attrs);
+        init();
     }
 
     public ParticleView(Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
-        this(context, attrs, defStyleAttr, 0);
+        super(context, attrs, defStyleAttr);
+        init();
     }
 
-    public ParticleView(Context context, @Nullable AttributeSet attrs, int defStyleAttr, int defStyleRes) {
-        super(context, attrs, defStyleAttr, defStyleRes);
+    private void init() {
         setTag(TAG_GM_CMP);
-        initWidget();
-    }
-
-    private void initWidget() {
         mPaint = new Paint();
     }
 
@@ -128,6 +126,10 @@ public final class ParticleView extends View {
         this.duration = duration;
     }
 
+    @Override
+    public View getView() { return this; }
+
+    @Override
     public void attachToContainer(ViewGroup container) {
         ViewGroup.LayoutParams lp = new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
@@ -136,7 +138,9 @@ public final class ParticleView extends View {
 
     public void detachFromContainer() {
         ViewGroup parent = (ViewGroup) getParent();
-        parent.removeView(this);
+        if (parent != null) {
+            parent.removeView(this);
+        }
     }
 
     public interface OnAnimationListener {

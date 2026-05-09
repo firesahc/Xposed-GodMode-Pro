@@ -23,7 +23,7 @@ import com.kaisar.xposed.godmode.injection.ViewHelper;
  * Created by jrsen on 17-10-13.
  */
 
-public final class MaskView extends View {
+public final class MaskView extends View implements OverlayWidget {
 
     private Drawable mMaskDrawable;
 
@@ -31,19 +31,17 @@ public final class MaskView extends View {
     private boolean isMarked;
 
     public MaskView(Context context) {
-        this(context, null);
+        super(context);
+        setTag(TAG_GM_CMP);
     }
 
     public MaskView(Context context, @Nullable AttributeSet attrs) {
-        this(context, attrs, 0);
+        super(context, attrs);
+        setTag(TAG_GM_CMP);
     }
 
     public MaskView(Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
-        this(context, attrs, defStyleAttr, 0);
-    }
-
-    public MaskView(Context context, @Nullable AttributeSet attrs, int defStyleAttr, int defStyleRes) {
-        super(context, attrs, defStyleAttr, defStyleRes);
+        super(context, attrs, defStyleAttr);
         setTag(TAG_GM_CMP);
     }
 
@@ -59,20 +57,14 @@ public final class MaskView extends View {
     }
 
     public void updateOverlayBounds(Rect bounds) {
-        mMaskDrawable.setBounds(bounds);
-        invalidate();
+        if (mMaskDrawable != null) {
+            mMaskDrawable.setBounds(bounds);
+            invalidate();
+        }
     }
 
     public Rect getRealBounds() {
-        return mMaskDrawable.getBounds();
-    }
-
-    private void setMaskDrawable(Drawable drawable) {
-        mMaskDrawable = drawable;
-    }
-
-    private Drawable getMaskDrawable() {
-        return mMaskDrawable;
+        return mMaskDrawable != null ? mMaskDrawable.getBounds() : new Rect();
     }
 
     public void setMarkColor(int color) {
@@ -80,7 +72,7 @@ public final class MaskView extends View {
     }
 
     public void setMarked(boolean enable) {
-        if (isMarked != enable) {
+        if (isMarked != enable && mMaskDrawable != null) {
             isMarked = enable;
             if (enable) {
                 mMaskDrawable.setColorFilter(mMarkColor, PorterDuff.Mode.SRC_ATOP);
@@ -94,24 +86,16 @@ public final class MaskView extends View {
         return isMarked;
     }
 
-    public void attachToContainer(ViewGroup container) {
-        container.addView(this);
-    }
-
-    public void detachFromContainer() {
-        ViewGroup parent = (ViewGroup) getParent();
-        if (parent != null) {
-            parent.removeView(this);
-        }
-    }
+    @Override
+    public View getView() { return this; }
 
     public void setMaskOverlay(View view) {
         Bitmap bitmap = ViewHelper.cloneViewAsBitmap(view);
-        setMaskDrawable(new BitmapDrawable(getResources(), bitmap));
+        mMaskDrawable = new BitmapDrawable(getResources(), bitmap);
     }
 
     public void setMaskOverlay(int color) {
-        setMaskDrawable(new ColorDrawable(color));
+        mMaskDrawable = new ColorDrawable(color);
     }
 
     public static MaskView makeMaskView(Context context) {

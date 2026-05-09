@@ -23,7 +23,7 @@
 
         <LinearLayout
             android:layout_width="64dp"
-            android:layout_height="430dp"
+            android:layout_height="wrap_content"
             android:layout_gravity="right"
             android:layout_marginTop="14dp"
             android:layout_marginBottom="14dp"
@@ -66,32 +66,114 @@
                 android:tag="@string/tag_gm_cmp" />
 
             <FrameLayout
+                android:id="@+id/remove_mode_toggle"
                 android:layout_width="match_parent"
-                android:layout_height="49dp"
-                android:background="@drawable/rounded_bg_bottom_background"
+                android:layout_height="48dp"
+                android:layout_marginTop="4dp"
                 android:tag="@string/tag_gm_cmp">
 
-                <ImageButton
-                    android:id="@+id/block"
-                    android:layout_width="48dp"
-                    android:layout_height="53dp"
+                <TextView
+                    android:id="@+id/remove_mode_btn"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
                     android:layout_gravity="center"
                     android:background="@drawable/ripple_drawable_20dp"
-                    android:contentDescription="@string/accessibility_block"
-                    android:src="@drawable/ic_block"
+                    android:gravity="center"
+                    android:text="@string/mode_remove"
+                    android:textColor="?android:textColorPrimary"
+                    android:textSize="11sp"
                     android:tag="@string/tag_gm_cmp" />
 
             </FrameLayout>
 
-            <ImageButton
-                android:id="@+id/preview"
-                android:layout_width="48dp"
+            <LinearLayout
+                android:id="@+id/remove_menu"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone"
+                android:tag="@string/tag_gm_cmp">
+
+                <FrameLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="49dp"
+                    android:background="@drawable/rounded_bg_bottom_background"
+                    android:tag="@string/tag_gm_cmp">
+
+                    <ImageButton
+                        android:id="@+id/block"
+                        android:layout_width="48dp"
+                        android:layout_height="53dp"
+                        android:layout_gravity="center"
+                        android:background="@drawable/ripple_drawable_20dp"
+                        android:contentDescription="@string/accessibility_block"
+                        android:src="@drawable/ic_block"
+                        android:tag="@string/tag_gm_cmp" />
+
+                </FrameLayout>
+
+                <ImageButton
+                    android:id="@+id/preview"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_gravity="center"
+                    android:background="@drawable/ripple_drawable_20dp"
+                    android:contentDescription="@string/accessibility_preview"
+                    android:src="@android:drawable/ic_menu_view"
+                    android:tag="@string/tag_gm_cmp" />
+
+            </LinearLayout>
+
+            <FrameLayout
+                android:id="@+id/modify_mode_toggle"
+                android:layout_width="match_parent"
                 android:layout_height="48dp"
-                android:layout_gravity="center"
-                android:background="@drawable/ripple_drawable_20dp"
-                android:contentDescription="@string/accessibility_preview"
-                android:src="@android:drawable/ic_menu_view"
-                android:tag="@string/tag_gm_cmp" />
+                android:layout_marginTop="4dp"
+                android:tag="@string/tag_gm_cmp">
+
+                <TextView
+                    android:id="@+id/modify_mode_btn"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:layout_gravity="center"
+                    android:background="@drawable/ripple_drawable_20dp"
+                    android:gravity="center"
+                    android:text="@string/mode_modify"
+                    android:textColor="?android:textColorPrimary"
+                    android:textSize="11sp"
+                    android:tag="@string/tag_gm_cmp" />
+
+            </FrameLayout>
+
+            <LinearLayout
+                android:id="@+id/modify_menu"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone"
+                android:tag="@string/tag_gm_cmp">
+
+                <ImageButton
+                    android:id="@+id/modify"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_gravity="center"
+                    android:background="@drawable/ripple_drawable_20dp"
+                    android:contentDescription="@string/accessibility_modify"
+                    android:src="@android:drawable/ic_menu_edit"
+                    android:tag="@string/tag_gm_cmp" />
+
+                <ImageButton
+                    android:id="@+id/save_modify"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_gravity="center"
+                    android:background="@drawable/ripple_drawable_20dp"
+                    android:contentDescription="@string/accessibility_save_modify"
+                    android:src="@android:drawable/ic_menu_save"
+                    android:tag="@string/tag_gm_cmp" />
+
+            </LinearLayout>
 
             <ImageButton
                 android:id="@+id/Up"
@@ -99,7 +181,7 @@
                 android:layout_height="48dp"
                 android:layout_gravity="center"
                 android:background="@drawable/ripple_drawable_20dp"
-                android:contentDescription="@string/accessibility_block"
+                android:contentDescription="@string/accessibility_up"
                 android:src="@drawable/up"
                 android:tag="@string/tag_gm_cmp" />
 
@@ -109,7 +191,7 @@
                 android:layout_height="48dp"
                 android:layout_gravity="center"
                 android:background="@drawable/ripple_drawable_20dp"
-                android:contentDescription="@string/accessibility_block"
+                android:contentDescription="@string/accessibility_down"
                 android:src="@drawable/down"
                 android:tag="@string/tag_gm_cmp" />
 

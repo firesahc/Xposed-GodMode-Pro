@@ -1,7 +1,6 @@
 package com.kaisar.xposed.godmode.fragment;
 
 import android.content.ActivityNotFoundException;
-import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Bundle;
@@ -19,7 +18,6 @@ import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.navigation.fragment.NavHostFragment;
-import androidx.preference.PreferenceFragmentCompat;
 import androidx.recyclerview.widget.DiffUtil;
 import androidx.viewpager2.adapter.FragmentStateAdapter;
 import androidx.viewpager2.widget.ViewPager2;
@@ -29,16 +27,13 @@ import com.google.android.material.snackbar.Snackbar;
 import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.model.SharedViewModel;
 import com.kaisar.xposed.godmode.rule.ViewRule;
-import com.kaisar.xposed.godmode.util.BackupUtils;
+import com.kaisar.xposed.godmode.util.AppInfoHelper;
 import com.kaisar.xposed.godmode.util.Preconditions;
 
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
-import java.util.Locale;
 
-public final class ViewRuleDetailsContainerFragment extends PreferenceFragmentCompat {
+public final class ViewRuleDetailsContainerFragment extends Fragment {
 
     private int mCurIndex;
 
@@ -79,8 +74,7 @@ public final class ViewRuleDetailsContainerFragment extends PreferenceFragmentCo
         }
     }
 
-    @Override
-    public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
+    public ViewRuleDetailsContainerFragment() {
     }
 
     private final OnPageChangeCallback mCallback = new OnPageChangeCallback() {
@@ -135,7 +129,7 @@ public final class ViewRuleDetailsContainerFragment extends PreferenceFragmentCo
 
                     @Override
                     public boolean areContentsTheSame(int oldItemPosition, int newItemPosition) {
-                        return oldData.get(oldItemPosition).equals(newData.get(newItemPosition));
+                        return oldData.get(oldItemPosition).toString().equals(newData.get(newItemPosition).toString());
                     }
                 });
                 adapter.setData(newData);
@@ -154,17 +148,12 @@ public final class ViewRuleDetailsContainerFragment extends PreferenceFragmentCo
                 NavHostFragment.findNavController(this).popBackStack();
             } else if (item.getItemId() == R.id.menu_backup_rule) {
                 try {
-                    SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd_HHmmss", Locale.getDefault());
-                    PackageManager packageManager = requireContext().getPackageManager();
                     String packageName = mSharedViewModel.selectedPackage.getValue();
                     if (packageName == null)
-                        throw new BackupUtils.BackupException("packageName should not be null.");
-                    ApplicationInfo applicationInfo = packageManager.getApplicationInfo(packageName, 0);
-                    String label = applicationInfo.loadLabel(packageManager).toString();
-                    String filename = String.format(Locale.getDefault(), "%s_%s.gzip", label, sdf.format(new Date()));
-                    mBackupLauncher.launch(filename);
+                        throw new PackageManager.NameNotFoundException("packageName should not be null.");
+                    mBackupLauncher.launch(AppInfoHelper.generateBackupFilename(requireContext(), packageName));
                     return true;
-                } catch (ActivityNotFoundException | PackageManager.NameNotFoundException | BackupUtils.BackupException e) {
+                } catch (ActivityNotFoundException | PackageManager.NameNotFoundException e) {
                     Snackbar.make(requireView(), R.string.snack_bar_msg_backup_rule_fail, Snackbar.LENGTH_SHORT).show();
                     return false;
                 }

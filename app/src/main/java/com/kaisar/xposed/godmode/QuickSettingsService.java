@@ -10,7 +10,7 @@ import android.text.TextUtils;
 
 import androidx.preference.PreferenceManager;
 
-import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
+
 
 /**
  * Created by jrsen on 17-10-26.
@@ -34,7 +34,7 @@ public final class QuickSettingsService extends TileService implements SharedPre
 
     @Override
     public void onClick() {
-        setEditModeEnable(!isEditMode());
+        GodModeHelper.setEditModeEnabled(this, !isEditMode());
         updateTile();
     }
 
@@ -56,15 +56,8 @@ public final class QuickSettingsService extends TileService implements SharedPre
         }
     }
 
-    private void setEditModeEnable(boolean enable) {
-        SharedPreferences sp = PreferenceManager.getDefaultSharedPreferences(this);
-        sp.edit().putBoolean("editor_switch", enable).apply();
-        GodModeManager.getDefault().setEditMode(enable);
-    }
-
     public boolean isEditMode() {
-        SharedPreferences sp = PreferenceManager.getDefaultSharedPreferences(this);
-        return sp.getBoolean("editor_switch", false);
+        return GodModeHelper.isEditModeEnabled(this);
     }
 
     @Override

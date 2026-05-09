@@ -37,7 +37,7 @@ public final class NotificationService extends Service implements SharedPreferen
         if (isMasterEnabled()) {
             handleEditToggle(intent);
         } else {
-            postNotification(false);
+            showNotification(false);
             new Handler(Looper.getMainLooper()).postDelayed(() -> {
                 stopForeground(STOP_FOREGROUND_REMOVE);
                 stopSelf();
@@ -47,14 +47,14 @@ public final class NotificationService extends Service implements SharedPreferen
     }
 
     private void handleEditToggle(Intent intent) {
-        boolean editMode = isEditMode();
+        boolean editMode = GodModeHelper.isEditModeEnabled(this);
         if (intent != null && TextUtils.equals(intent.getAction(), Intent.ACTION_EDIT)) {
             if (!GodModeManager.getDefault().hasLight()) {
                 Toast.makeText(this, R.string.not_active_module, Toast.LENGTH_SHORT).show();
                 return;
             }
             editMode = !editMode;
-            setEditModeEnable(editMode);
+            GodModeHelper.setEditModeEnabled(this, editMode);
         }
         showNotification(editMode);
     }
@@ -69,15 +69,6 @@ public final class NotificationService extends Service implements SharedPreferen
     }
 
     private void showNotification(boolean editMode) {
-        Notification notification = buildNotification(editMode);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(1, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
-        } else {
-            startForeground(1, notification);
-        }
-    }
-
-    private void postNotification(boolean editMode) {
         Notification notification = buildNotification(editMode);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             startForeground(1, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
@@ -119,19 +110,15 @@ public final class NotificationService extends Service implements SharedPreferen
     }
 
     private void setEditModeEnable(boolean enable) {
-        SharedPreferences sp = PreferenceManager.getDefaultSharedPreferences(this);
-        sp.edit().putBoolean("editor_switch", enable).commit();
-        GodModeManager.getDefault().setEditMode(enable);
+        GodModeHelper.setEditModeEnabled(this, enable);
     }
 
     public boolean isEditMode() {
-        SharedPreferences sp = PreferenceManager.getDefaultSharedPreferences(this);
-        return sp.getBoolean("editor_switch", false);
+        return GodModeHelper.isEditModeEnabled(this);
     }
 
     public boolean isMasterEnabled() {
-        SharedPreferences sp = PreferenceManager.getDefaultSharedPreferences(this);
-        return sp.getBoolean(getString(R.string.pref_key_master), false);
+        return GodModeHelper.isMasterEnabled(this, R.string.pref_key_master);
     }
 
     @Override

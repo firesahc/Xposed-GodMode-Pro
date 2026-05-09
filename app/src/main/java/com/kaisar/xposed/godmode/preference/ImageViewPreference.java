@@ -40,7 +40,6 @@ public final class ImageViewPreference extends androidx.preference.Preference {
         ImageView imageView = (ImageView) holder.itemView.findViewById(R.id.image);
         if (mBitmap != null) {
             imageView.setImageBitmap(mBitmap);
-            mBitmap = null;
         }
     }
 

@@ -11,7 +11,6 @@ import android.graphics.Rect;
 import android.util.AttributeSet;
 import android.util.TypedValue;
 import android.view.View;
-import android.view.ViewGroup;
 import android.widget.FrameLayout;
 
 import androidx.annotation.Nullable;
@@ -19,12 +18,8 @@ import androidx.annotation.Nullable;
 import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.injection.util.GmResources;
 
-/**
- * Created by jrsen on 17-11-4.
- */
-
 @SuppressLint("AppCompatCustomView")
-public final class CancelView extends View {
+public final class CancelView extends View implements OverlayWidget {
 
     private final Paint rectPaint = new Paint();
     private final Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -34,24 +29,22 @@ public final class CancelView extends View {
     private Rect textBounds = new Rect();
 
     public CancelView(Context context) {
-        this(context, null);
+        super(context);
+        init(context);
     }
 
     public CancelView(Context context, @Nullable AttributeSet attrs) {
-        this(context, attrs, 0);
+        super(context, attrs);
+        init(context);
     }
 
     public CancelView(Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
-        this(context, attrs, defStyleAttr, 0);
+        super(context, attrs, defStyleAttr);
+        init(context);
     }
 
-    public CancelView(Context context, @Nullable AttributeSet attrs, int defStyleAttr, int defStyleRes) {
-        super(context, attrs, defStyleAttr, defStyleRes);
+    private void init(Context context) {
         setTag(TAG_GM_CMP);
-        initWidget(context);
-    }
-
-    private void initWidget(Context context) {
         text = GmResources.getText(R.string.top_revert_tip);
         rectPaint.setStyle(Paint.Style.FILL);
         rectPaint.setColor(Color.argb(230, 139, 195, 75));
@@ -73,24 +66,16 @@ public final class CancelView extends View {
         return 0;
     }
 
-    public void attachToContainer(ViewGroup container) {
-        container.addView(this);
-    }
-
-    public void detachFromContainer() {
-        ViewGroup parent = (ViewGroup) getParent();
-        parent.removeView(this);
-    }
+    @Override
+    public View getView() { return this; }
 
     @Override
     protected void onDraw(Canvas canvas) {
         canvas.save();
-        //draw status bar rect
         canvas.drawRect(getStatusBarBounds(), rectPaint);
         Rect textLayoutBounds = getTextLayoutBounds();
         canvas.drawRect(textLayoutBounds, rectPaint);
 
-        //draw text
         float x = textLayoutBounds.centerX() - textBounds.centerX();
         float y = textLayoutBounds.centerY() + textBounds.centerY();
         canvas.drawText(text, 0, text.length(), x, y, textPaint);

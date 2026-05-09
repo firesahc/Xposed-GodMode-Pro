@@ -13,7 +13,6 @@ import androidx.lifecycle.ViewModel;
 
 import com.kaisar.xposed.godmode.IObserver;
 import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
-import com.kaisar.xposed.godmode.repository.LocalRepository;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.AppRules;
 import com.kaisar.xposed.godmode.rule.ViewRule;
@@ -34,14 +33,14 @@ public class SharedViewModel extends ViewModel {
     public final MutableLiveData<String> selectedPackage = new MutableLiveData<>();
 
     public SharedViewModel() {
-        LocalRepository.addObserver("*", new IObserver.Stub() {
+        GodModeManager.getDefault().addObserver("*", new IObserver.Stub() {
             @Override
             public void onEditModeChanged(boolean enable) {
             }
 
             @Override
             public void onViewRuleChanged(String packageName, ActRules actRules) {
-                appRules.postValue(LocalRepository.loadAppRules());
+                appRules.postValue(GodModeManager.getDefault().getAllRules());
                 if (TextUtils.equals(packageName, selectedPackage.getValue())) {
                     selectedPackage.postValue(packageName);
                 }
@@ -49,8 +48,15 @@ public class SharedViewModel extends ViewModel {
         });
     }
 
+    @Override
+    protected void onCleared() {
+        super.onCleared();
+        mExecutor.shutdownNow();
+        mMainHandler.removeCallbacksAndMessages(null);
+    }
+
     public void loadAppRules() {
-        mExecutor.execute(() -> appRules.postValue(LocalRepository.loadAppRules()));
+        mExecutor.execute(() -> appRules.postValue(GodModeManager.getDefault().getAllRules()));
     }
 
     public void updateSelectedPackage(String packageName) {
@@ -59,22 +65,17 @@ public class SharedViewModel extends ViewModel {
 
     public void updateViewRuleList(String packageName) {
         ArrayList<ViewRule> viewRules = new ArrayList<>();
-        AppRules appRules = this.appRules.getValue();
-        if (appRules != null && appRules.containsKey(packageName)) {
-            ActRules actRules = appRules.get(packageName);
+        AppRules rules = this.appRules.getValue();
+        if (rules != null && rules.containsKey(packageName)) {
+            ActRules actRules = rules.get(packageName);
             if (actRules != null && !actRules.isEmpty()) {
                 for (List<ViewRule> values : actRules.values()) {
                     viewRules.addAll(values);
                 }
-                //Sort with generate timestamp
                 Collections.sort(viewRules, (o1, o2) -> (int) (o1.timestamp - o2.timestamp));
             }
         }
         actRules.setValue(viewRules);
-    }
-
-    private boolean isMainThread() {
-        return Looper.myLooper() == Looper.getMainLooper();
     }
 
     public boolean deleteAppRules(String packageName) {
@@ -101,12 +102,6 @@ public class SharedViewModel extends ViewModel {
         return pm.getComponentEnabledSetting(cmp) == PackageManager.COMPONENT_ENABLED_STATE_DISABLED;
     }
 
-    public interface ResultCallback {
-        void onSuccess();
-
-        void onFailure(Exception e);
-    }
-
     public void restoreRules(Uri uri, ResultCallback callback) {
         mExecutor.execute(() -> {
             try {
@@ -129,4 +124,8 @@ public class SharedViewModel extends ViewModel {
         });
     }
 
+    public interface ResultCallback {
+        void onSuccess();
+        void onFailure(Exception e);
+    }
 }

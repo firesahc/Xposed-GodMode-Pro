@@ -1,17 +1,16 @@
 package com.kaisar.xposed.godmode.fragment;
 
+import static com.kaisar.xposed.godmode.fragment.GeneralPreferenceFragmentDirections.actionGeneralPreferenceFragmentToAboutFragment;
 import static com.kaisar.xposed.godmode.fragment.GeneralPreferenceFragmentDirections.actionGeneralPreferenceFragmentToGuideFragment;
 import static com.kaisar.xposed.godmode.fragment.GeneralPreferenceFragmentDirections.actionGeneralPreferenceFragmentToViewRuleListFragment;
 
 import android.content.ActivityNotFoundException;
 import android.content.Context;
-import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
-import android.os.Build;
 import android.os.Bundle;
 import android.text.SpannableString;
 import android.text.TextUtils;
@@ -39,6 +38,7 @@ import com.google.android.material.snackbar.Snackbar;
 import com.kaisar.xposed.godmode.BuildConfig;
 import com.kaisar.xposed.godmode.CrashHandler;
 import com.kaisar.xposed.godmode.GodModeApplication;
+import com.kaisar.xposed.godmode.GodModeHelper;
 import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
 import com.kaisar.xposed.godmode.model.SharedViewModel;
@@ -119,24 +119,28 @@ public final class GeneralPreferenceFragment extends PreferenceFragmentCompat im
         PackageManager pm = requireContext().getPackageManager();
         for (Map.Entry<String, ActRules> entry : entries) {
             String packageName = entry.getKey();
-            Drawable icon;
-            CharSequence label;
-            try {
-                ApplicationInfo aInfo = pm.getApplicationInfo(packageName, 0);
-                icon = aInfo.loadIcon(pm);
-                label = aInfo.loadLabel(pm);
-            } catch (PackageManager.NameNotFoundException ignore) {
-                icon = ResourcesCompat.getDrawable(getResources(), R.mipmap.ic_god, requireContext().getTheme());
-                label = packageName;
-            }
-            Preference preference = new Preference(category.getContext());
-            preference.setIcon(icon);
-            preference.setTitle(label);
-            preference.setSummary(packageName);
-            preference.setKey(packageName);
-            preference.setOnPreferenceClickListener(this);
-            category.addPreference(preference);
+            addAppRulePreference(category, pm, packageName);
         }
+    }
+
+    private void addAppRulePreference(PreferenceCategory category, PackageManager pm, String packageName) {
+        Drawable icon;
+        CharSequence label;
+        try {
+            ApplicationInfo aInfo = pm.getApplicationInfo(packageName, 0);
+            icon = aInfo.loadIcon(pm);
+            label = aInfo.loadLabel(pm);
+        } catch (PackageManager.NameNotFoundException ignore) {
+            icon = ResourcesCompat.getDrawable(getResources(), R.mipmap.ic_god, requireContext().getTheme());
+            label = packageName;
+        }
+        Preference preference = new Preference(category.getContext());
+        preference.setIcon(icon);
+        preference.setTitle(label);
+        preference.setSummary(packageName);
+        preference.setKey(packageName);
+        preference.setOnPreferenceClickListener(this);
+        category.addPreference(preference);
     }
 
     @Override
@@ -156,6 +160,11 @@ public final class GeneralPreferenceFragment extends PreferenceFragmentCompat im
             guidePreference.setOnPreferenceClickListener(this);
         }
 
+        Preference aboutPreference = findPreference(getString(R.string.pref_key_about));
+        if (aboutPreference != null) {
+            aboutPreference.setOnPreferenceClickListener(this);
+        }
+
         SharedPreferences settingsSp = requireContext().getSharedPreferences(SETTING_PREFS, Context.MODE_PRIVATE);
         int previousVersionCode = settingsSp.getInt(KEY_VERSION_CODE, 0);
         if (previousVersionCode != BuildConfig.VERSION_CODE) {
@@ -169,8 +178,7 @@ public final class GeneralPreferenceFragment extends PreferenceFragmentCompat im
     @Override
     public void onDestroy() {
         super.onDestroy();
-        PreferenceManager.getDefaultSharedPreferences(
-                mEditorSwitchPreference.getContext()).unregisterOnSharedPreferenceChangeListener(this);
+        PreferenceManager.getDefaultSharedPreferences(requireContext()).unregisterOnSharedPreferenceChangeListener(this);
     }
 
     @Override
@@ -187,12 +195,15 @@ public final class GeneralPreferenceFragment extends PreferenceFragmentCompat im
                 return true;
             }
             boolean masterOn = mEditorSwitchPreference.isChecked();
-            setMasterEnabled(masterOn);
+        setMasterEnabled(masterOn);
         } else if (TextUtils.equals(key, getString(R.string.pref_key_guide))) {
             NavController navController = NavHostFragment.findNavController(this);
             navController.navigate(actionGeneralPreferenceFragmentToGuideFragment());
+        } else if (TextUtils.equals(key, getString(R.string.pref_key_about))) {
+            NavController navController = NavHostFragment.findNavController(this);
+            navController.navigate(actionGeneralPreferenceFragmentToAboutFragment());
         } else {
-            String packageName = preference.getSummary().toString();
+            String packageName = preference.getKey();
             mSharedViewModel.updateSelectedPackage(packageName);
             NavController navController = NavHostFragment.findNavController(this);
             navController.navigate(actionGeneralPreferenceFragmentToViewRuleListFragment());
@@ -202,24 +213,12 @@ public final class GeneralPreferenceFragment extends PreferenceFragmentCompat im
 
     private void setMasterEnabled(boolean enable) {
         SharedPreferences sp = PreferenceManager.getDefaultSharedPreferences(requireContext());
-        sp.edit().putBoolean(getString(R.string.pref_key_master), enable).commit();
+        sp.edit().putBoolean(getString(R.string.pref_key_master), enable).apply();
         if (!enable) {
             GodModeManager.getDefault().setEditMode(false);
-            sp.edit().putBoolean(getString(R.string.pref_key_editor), false).commit();
+            sp.edit().putBoolean(getString(R.string.pref_key_editor), false).apply();
         }
-        startNotificationService();
-    }
-
-    private void startNotificationService() {
-        try {
-            Intent notificationService = new Intent(requireContext(), com.kaisar.xposed.godmode.NotificationService.class);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                requireContext().startForegroundService(notificationService);
-            } else {
-                requireContext().startService(notificationService);
-            }
-        } catch (Exception ignored) {
-        }
+        GodModeHelper.startNotificationService(requireContext());
     }
 
     @Override

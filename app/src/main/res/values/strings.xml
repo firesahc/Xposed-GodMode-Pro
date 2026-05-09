@@ -5,6 +5,7 @@
     <string name="pref_key_editor" translatable="false">editor_switch</string>
     <string name="pref_key_master" translatable="false">master_enabled</string>
     <string name="pref_key_guide" translatable="false">guide</string>
+    <string name="pref_key_about" translatable="false">about</string>
     <string name="pref_key_app_rules" translatable="false">app_rules</string>
 
     <string name="pref_header_general">通用</string>
@@ -14,13 +15,15 @@
     <string name="pref_description_god_mode">开启后可在通知栏控制编辑</string>
     <string name="pref_title_guide">操作指南</string>
     <string name="pref_description_guide">查看使用方法和操作模式</string>
+    <string name="pref_title_about">关于软件</string>
+    <string name="pref_description_about">版本信息与项目链接</string>
 
     <string name="menu_delete_rule">删除规则</string>
     <string name="menu_backup_rule">备份规则</string>
     <string name="enter_edit">退出编辑</string>
     <string name="exit_edit">开始编辑</string>
     <string name="manage">管理</string>
-    <string name="xposed_description">神说要有人，于是就有了伙计们。</string>
+    <string name="xposed_description">随心屏蔽与修改任何应用界面上不想要的元素</string>
 
     <string name="menu_delete_rules">删除全部规则</string>
     <string name="menu_backup_rules">备份全部规则</string>
@@ -33,44 +36,99 @@
     <string name="title_app_rule">应用规则</string>
     <string name="title_rule_details">规则详情</string>
     <string name="guide_title">操作指南</string>
+    <string name="about_title">关于软件</string>
+
+    <string name="menu_filter_all">全部规则</string>
+    <string name="menu_filter_remove">移除规则</string>
+    <string name="menu_filter_modify">修改规则</string>
+    <string name="rule_type_remove">移除</string>
+    <string name="rule_type_modify">修改</string>
 
     <string name="guide_content"><![CDATA[
-<b>一、概述</b><br>上帝模式是一个 Xposed 模块，可以屏蔽任意应用界面上不想要的元素（按钮、广告、文字等）。<br><br>
-<b>二、开启与关闭</b><br>
-  1. <b>主开关</b>：设置页「通用」→ 上帝模式开关。<br>
-     &nbsp;&nbsp;- 开启后通知栏显示「开始编辑」消息。<br>
-     &nbsp;&nbsp;- 关闭后强制退出编辑模式，通知消失。<br>
-  2. <b>通知栏切换</b>：主开关开启后，点击通知栏消息可在「开始编辑」和「退出编辑」之间切换。<br><br>
-<b>三、编辑模式操作</b><br>进入编辑模式后，目标应用界面右侧会出现编辑工具条，包含以下功能：<br><br>
-  1. <b>点击选择</b>：直接点击界面上的任意元素，工具条红色遮罩会跟随并选中该元素。<br>
-  2. <b>长按屏蔽</b>：长按某个元素 ~0.5 秒，元素变为绿色遮罩。<br>
-     &nbsp;&nbsp;- 拖拽绿色遮罩到顶部绿色区域松开 → 取消屏蔽。<br>
-     &nbsp;&nbsp;- 在非绿色区域松开 → 粒子动画后元素消失，规则自动保存。<br>
-  3. <b>音量键</b>：按音量上键/下键松开可打开/关闭工具条。工具条显示时，按音量键导航选择元素。<br>
-  4. <b>滑块选择</b>：拖动工具条上的 SeekBar 滑块选择不同层级的元素。<br>
-  5. <b>⬆⬇ 按钮</b>：手动切换上一个/下一个元素。<br>
-  6. <b>🔀 按钮</b>：切换工具条靠右/靠左显示。<br>
-  7. <b>👁 按钮</b>：预览屏蔽效果，点击后暂时隐藏当前选中元素，再次点击恢复。<br>
-  8. <b>🚫 按钮</b>：屏蔽当前选中的元素（同长按效果）。<br><br>
-<b>四、规则管理</b><br>
-  - 查看规则列表：设置页 → 应用规则 → 点击包名。<br>
-  - 查看规则详情：规则列表 → 点击条目，左右滑动翻页。<br>
-  - 删除单条规则：规则详情 → 菜单 → 删除规则。<br>
-  - 删除全部规则：规则列表 → 菜单 → 删除全部规则。<br>
-  - 备份规则：规则列表/详情 → 菜单 → 备份规则。<br>
-  - 恢复规则：设置页 → 菜单 → 恢复规则。<br><br>
-<b>五、注意事项</b><br>
-  - 编辑模式仅在 Xposed/LSPosed 已激活模块的第三方应用中生效。<br>
-  - 桌面启动器、系统界面、输入法、无界面应用和上帝模式自身不支持编辑。<br>
-  - 如遇崩溃，下次启动会弹出对话框可复制日志。
+<b>一、开启编辑</b><br>
+  1. <b>主开关</b>：设置页「通用」→ 上帝模式开关。开启后通知栏出现控制消息。<br>
+  2. <b>通知栏切换</b>：点击通知栏消息可在「开始编辑」和「退出编辑」之间切换。<br>
+  3. <b>快速开关</b>：通知栏快捷图块可一键切换编辑模式。<br>
+  &emsp;<i>关闭主开关会强制退出编辑并清除通知。</i><br><br>
+
+<b>二、工具面板</b><br>
+  进入编辑模式后，目标应用界面右侧出现工具面板（半透明圆角竖条），包含：<br><br>
+  <b>操作按钮（自上而下）：</b><br>
+  &bull; <b>垂直滑块</b> — 拖动选择不同层级深度的元素。<br>
+  &bull; <b>🔀 切换位置</b> — 面板靠右 / 靠左显示。<br>
+  &bull; <b>移除模式</b> 按钮 — 展开移除操作菜单（🚫 屏蔽、👁 预览）。<br>
+  &bull; <b>修改模式</b> 按钮 — 展开修改操作菜单（✏️ 属性、💾 保存）。<br>
+  &bull; <b>⬆ 上一个</b> / <b>⬇ 下一个</b> — 逐个切换元素。<br><br>
+  <b>面板开关：</b><br>
+  &bull; 按 <b>音量上键</b> 或 <b>音量下键</b> 并松开 → 打开/关闭工具面板。<br>
+  &bull; 面板打开时，音量键上下可导航选择元素。<br><br>
+
+<b>三、选择元素</b><br>
+  界面上的红色遮罩指示当前选中元素。切换方式：<br>
+  &bull; <b>点击选择</b>：直接点击界面上的任意元素。<br>
+  &bull; <b>滑块选择</b>：拖动面板上的垂直滑块切换层级深度。<br>
+  &bull; <b>上下按钮</b>：点击面板上的 ⬆⬇ 按钮逐个切换。<br>
+  &bull; <b>音量键导航</b>：面板打开时按音量键顺序切换。<br><br>
+
+<b>四、移除模式</b><br>
+  点击「移除模式」展开子菜单，可执行以下操作：<br><br>
+  <b>👁 预览</b><br>
+  点击预览按钮 → 当前选中元素暂时隐藏，观察屏蔽效果。再次点击恢复显示。<br><br>
+  <b>🚫 屏蔽（三种方式等效）：</b><br>
+  1. 工具条：选中元素 → 点击面板上的<b>屏蔽按钮</b>。<br>
+  2. 触摸：<b>长按</b>界面元素 ~0.5 秒 → 出现绿色遮罩和顶部取消区域 → 在非绿色区域松手 → 粒子动画后元素消失。<br>
+  3. 拖拽取消：长按后拖拽绿色遮罩到<b>顶部绿色区域</b>松手 → 取消本次操作。<br>
+  &emsp;<i>屏蔽后规则自动保存，截图同时存入。</i><br><br>
+
+<b>五、修改模式</b><br>
+  点击「修改模式」展开子菜单，可执行以下操作：<br><br>
+  <b>✏️ 属性修改面板</b><br>
+  1. 选中目标元素后，点击面板上的<b>修改按钮</b>。<br>
+  2. 弹出属性面板，可调整：<br>
+  &emsp;&bull; <b>宽度 / 高度</b> — SeekBar 拖动或手动输入。<br>
+  &emsp;&bull; <b>透明度</b> — 0~255 滑块调整。<br>
+  &emsp;&bull; <b>位置微调</b> — 上下左右箭头按键每次移动 10px。<br>
+  &emsp;&bull; <b>文本内容</b> — 对 TextView 直接修改文字。<br>
+  &emsp;&bull; <b>替换图片</b> — 对 ImageView 选择系统图库图片替换。<br>
+  3. 点击<b>确定</b>应用预览效果，点击<b>取消</b>回滚到修改前状态。<br><br>
+  <b>拖拽移动位置</b><br>
+  &emsp;在修改模式下，<b>长按界面任意位置</b>可拖拽<b>当前选中的元素</b>（而非手指下方的元素）。<br>
+  &emsp;&bull; <b>16dp 网格吸附</b>：移动时自动对齐网格。<br>
+  &emsp;&bull; <b>12dp 边缘吸附</b>：靠近相邻元素边缘时自动吸附。<br>
+  &emsp;&bull; 松手后位置自动保存为修改规则。<br><br>
+  <b>💾 保存修改</b><br>
+  &emsp;属性修改确认后，需点击面板上的<b>保存按钮</b>才会将修改写入规则文件。保存时会自动生成截图和红色遮罩标注。<br><br>
+
+<b>六、规则管理</b><br>
+  &bull; <b>查看列表</b>：设置页 → 应用规则 → 点击包名。菜单可切换「全部/移除/修改」视图，标题显示规则数量。<br>
+  &bull; <b>查看详情</b>：点击规则条目 → 左右滑动翻页，可查看截图、控件信息、布局深度等。<br>
+  &bull; <b>编辑别名</b>：规则详情中可自定义别名便于识别。<br>
+  &bull; <b>删除单条</b>：规则详情 → 菜单 → 删除规则。<br>
+  &bull; <b>清空全部</b>：规则列表 → 菜单 → 删除全部规则。<br>
+  &bull; <b>备份</b>：规则列表/详情 → 菜单 → 导出为 .gzip 文件。<br>
+  &bull; <b>恢复</b>：设置页 → 菜单 → 选择 .gzip 备份导入。<br><br>
+
+<b>七、注意事项</b><br>
+  &bull; 仅在 Xposed / LSPosed 中<b>已激活模块的第三方应用</b>内生效。<br>
+  &bull; 桌面启动器、系统界面、输入法、无界面应用、上帝模式自身<b>不可编辑</b>。<br>
+  &bull; 如遇崩溃，下次启动弹出对话框可复制日志。<br>
+  &bull; 功能按钮均有提示（长按或悬停查看）。
     ]]></string>
 
     <string name="field_rule_alias" translatable="false">[%1$s]\n</string>
     <string name="field_activity">依附界面:%1$s</string>
     <string name="field_view">控件类型:%1$s</string>
+    <string name="field_depth">布局深度:%1$s</string>
+
+    <string name="modify_detail_width">宽度:%1$d</string>
+    <string name="modify_detail_height">高度:%1$d</string>
+    <string name="modify_detail_alpha">透明度:%1$s</string>
+    <string name="modify_detail_position">位置(%1$d,%2$d)</string>
+    <string name="modify_detail_text">已修改文本</string>
+    <string name="modify_detail_image">已替换图片</string>
 
     <string name="hey_guy">嘿 伙计</string>
-    <string name="not_active_module">上帝模式还没有激活，呃… 我是说也许你应该到管理器中重新激活一下</string>
+    <string name="not_active_module">上帝模式还没有激活，请到 LSPosed 管理器中重新激活</string>
     <string name="notification_permission_denied">通知权限被拒绝，通知栏开关将无法显示</string>
     <string name="welcome_title">嘿！伙计，真高兴又见到你！</string>
 
@@ -78,8 +136,9 @@
     <string name="snack_bar_msg_backup_rule_fail">备份规则失败</string>
     <string name="snack_bar_msg_restore_rules_fail">恢复规则失败</string>
     <string name="dialog_btn_copy">复制给我的老伙计</string>
-    <string name="crash_tip">    我想你应该遇了些麻烦 天知道这该死的程序都干了些什么 我想你应该把下面这些奇奇怪怪的日志复制给老伙计 也许有用吧 是的 我是说也许 谁知道呢\n\n</string>
-    <string name="update_tips">\t我想你可以试试用上帝模式屏蔽一些令人烦恼的按钮。噢！没错这听起来很有趣。不过这个小家伙有时会像汤姆家那只该死的倔驴一样不听话，别担心伙计们，我会尽快修理好的！\n\n\t伙计们玩的开心记得支持一下你们的老伙计 非常感谢！噢 上帝啊 看看我到底在说些什么我想我应该安静一下…</string>
+    <string name="crash_tip">我想你应该遇了些麻烦，天知道这该死的程序都干了些什么。把下面这些奇奇怪怪的日志复制给老伙计吧，也许有用。\n\n</string>
+    <string name="update_tips">你可以试试用上帝模式屏蔽一些令人烦恼的按钮。噢！没错这听起来很有趣。不过这小家伙有时会像汤姆家那只倔驴一样不听话，别担心伙计们，我会尽快修理好的！\n\n伙计们玩的开心记得来 GitHub 点个 Star，非常感谢！</string>
+
     <string name="rule_details_field_create_time">创建日期</string>
     <string name="rule_details_field_generate_version">生成版本</string>
     <string name="rule_details_field_activity">依附界面</string>
@@ -100,8 +159,29 @@
     <string name="accessibility_preview">预览</string>
     <string name="accessibility_preview_exit">退出预览</string>
     <string name="accessibility_exchange">切换位置</string>
+    <string name="accessibility_modify">修改</string>
+    <string name="accessibility_save_modify">保存修改</string>
+    <string name="accessibility_up">上一个</string>
+    <string name="accessibility_down">下一个</string>
+    <string name="mode_remove">移除模式</string>
+    <string name="mode_modify">修改模式</string>
+    <string name="modify_title">属性修改</string>
+    <string name="modify_width">宽度</string>
+    <string name="modify_height">高度</string>
+    <string name="modify_alpha">透明度</string>
+    <string name="modify_position">位置微调</string>
+    <string name="modify_text">文本内容</string>
+    <string name="modify_image_pick">选择图片</string>
+    <string name="modify_cancel">取消</string>
+    <string name="modify_confirm">确定</string>
     <string name="block_fail">屏蔽失败:%1$s</string>
     <string name="tag_gm_cmp" translatable="false">gm_cmp</string>
+
+    <string name="about_version">版本</string>
+    <string name="about_description">一个 LSPosed 模块，可以在任意应用中屏蔽或修改你不喜欢的 UI 元素。</string>
+    <string name="about_github">GitHub 仓库</string>
+    <string name="about_issues">反馈问题</string>
+    <string name="about_thanks">感谢所有参与贡献和反馈的伙计们！</string>
 
     <string name="pref_key_detail_rule_info" translatable="false">rule_info</string>
     <string name="pref_key_detail_rule_created_time" translatable="false">created_time</string>
@@ -116,6 +196,12 @@
     <string name="pref_key_detail_view_description" translatable="false">view_description</string>
     <string name="pref_key_detail_view_visible" translatable="false">view_visibility</string>
     <string name="pref_key_detail_preview_image" translatable="false">preview_image</string>
+    <string name="pref_key_detail_mod_width" translatable="false">mod_width</string>
+    <string name="pref_key_detail_mod_height" translatable="false">mod_height</string>
+    <string name="pref_key_detail_mod_alpha" translatable="false">mod_alpha</string>
+    <string name="pref_key_detail_mod_position" translatable="false">mod_position</string>
+    <string name="pref_key_detail_mod_text" translatable="false">mod_text</string>
+    <string name="pref_key_detail_mod_image" translatable="false">mod_image</string>
     <string name="res_inject_success" translatable="false">Resources injection success</string>
 
 </resources>

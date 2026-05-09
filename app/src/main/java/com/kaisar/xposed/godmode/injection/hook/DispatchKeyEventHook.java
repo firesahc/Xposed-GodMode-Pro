@@ -16,7 +16,6 @@ import android.view.ViewGroup;
 import android.view.ViewParent;
 import android.view.animation.AccelerateInterpolator;
 import android.view.animation.DecelerateInterpolator;
-
 import android.widget.SeekBar;
 import android.widget.Toast;
 
@@ -42,60 +41,156 @@ import java.util.Locale;
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedHelpers;
 
-public final class DispatchKeyEventHook extends XC_MethodHook implements Property.OnPropertyChangeListener<Boolean>, SeekBar.OnSeekBarChangeListener {
+/**
+ * Hook {@link Activity#dispatchKeyEvent}，提供浮动的检查器面板，
+ * 用于在目标应用中选择、移除和修改视图。
+ * <p>
+ * 协调的子控制器：
+ * <ul>
+ *   <li>{@link ModifyPanelController} – 逐视图属性编辑面板</li>
+ * </ul>
+ */
+public final class DispatchKeyEventHook extends XC_MethodHook
+        implements Property.OnPropertyChangeListener<Boolean>, SeekBar.OnSeekBarChangeListener {
+
+    // =========================================================================
+    // 常量与交互模式
+    // =========================================================================
 
     private static final int OVERLAY_COLOR = Color.argb(150, 255, 0, 0);
     private static DispatchKeyEventHook sInstance;
+
+    public static final int MODE_INITIAL = 0;
+    public static final int MODE_REMOVE = 1;
+    public static final int MODE_MODIFY = 2;
+    private static volatile int sInteractionMode = MODE_INITIAL;
+
+    public static int getInteractionMode() { return sInteractionMode; }
+    public static void setInteractionMode(int mode) { sInteractionMode = mode; }
+    static boolean isKeySelecting() { return sInstance != null && sInstance.mKeySelecting; }
+
+    // =========================================================================
+    // 视图树状态（通过静态访问器与 EventHandlerHook 共享）
+    // =========================================================================
+
     private final List<WeakReference<View>> mViewNodes = new ArrayList<>();
     private int mCurrentViewIndex = 0;
+    private boolean mHasUserSelection;
+
+    // =========================================================================
+    // 覆盖层 UI 状态
+    // =========================================================================
 
     private MaskView mMaskView;
     private View mNodeSelectorPanel;
-    private Activity activity = null;
-    private SeekBar seekbar = null;
+    private Activity mCurrentActivity;
+    private SeekBar mNodeSeekbar;
     public static volatile boolean mKeySelecting = false;
+
+    // =========================================================================
+    // 预览状态（在确认移除前临时隐藏视图）
+    // =========================================================================
 
     private View mPreviewView;
     private ViewRule mPreviewRule;
     private boolean mIsPreviewing;
 
+    // =========================================================================
+    // 子控制器
+    // =========================================================================
+
+    final ModifyPanelController mModifyController = new ModifyPanelController();
+
+    // =========================================================================
+    // 构造器 — 注册音量键 Hook
+    // =========================================================================
+
     public DispatchKeyEventHook() {
         sInstance = this;
+        XposedHelpers.findAndHookMethod(Activity.class, "dispatchKeyEvent", KeyEvent.class, new XC_MethodHook() {
+            protected void beforeHookedMethod(MethodHookParam param) {
+                if (!GodModeInjector.switchProp.get() || EventHandlerHook.mDragging) return;
+                KeyEvent event = (KeyEvent) param.args[0];
+                int action = event.getAction();
+                int keyCode = event.getKeyCode();
+                if (action == KeyEvent.ACTION_UP &&
+                        (keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN)) {
+                    Activity currentActivity = sInstance.mCurrentActivity;
+                    if (!sInstance.mKeySelecting && currentActivity != null) {
+                        sInstance.showNodeSelectPanel(currentActivity);
+                    } else if (sInstance.mKeySelecting) {
+                        sInstance.dismissNodeSelectPanel();
+                    }
+                    param.setResult(true);
+                } else if (sInstance.mKeySelecting && action == KeyEvent.ACTION_DOWN) {
+                    if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) {
+                        sInstance.navigateNext();
+                        param.setResult(true);
+                    } else if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
+                        sInstance.navigatePrevious();
+                        param.setResult(true);
+                    }
+                }
+            }
+        });
     }
 
+    // =========================================================================
+    // Activity 生命周期（由 GodModeInjector 在 Activity.onCreate 中调用）
+    // =========================================================================
+
     public void setactivity(final Activity a) {
-        if (activity != null && activity != a && mKeySelecting) {
+        if (mCurrentActivity != null && mCurrentActivity != a && mKeySelecting) {
             dismissNodeSelectPanel();
         }
-        activity = a;
+        mCurrentActivity = a;
     }
 
     public void setdisplay(Boolean display) {
-        if (activity == null) return;
+        if (mCurrentActivity == null) return;
         if (display && !GodModeInjector.switchProp.get()) return;
         if (display) {
             if (!mKeySelecting) {
-                showNodeSelectPanel(activity);
+                showNodeSelectPanel(mCurrentActivity);
             }
         } else {
             dismissNodeSelectPanel();
         }
     }
 
+    // =========================================================================
+    // 视图选择 — 点击选中、获取选中视图、视图匹配
+    // =========================================================================
+
+    /** 通过点击事件选中视图（从 EventHandlerHook 调用） */
     public static void selectViewByTap(View tappedView) {
         DispatchKeyEventHook instance = sInstance;
-        if (instance == null || !instance.mKeySelecting || instance.seekbar == null) return;
+        if (instance == null || !instance.mKeySelecting || instance.mNodeSeekbar == null
+                || instance.mModifyController.isPanelShowing()) return;
 
         for (int i = instance.mViewNodes.size() - 1; i >= 0; i--) {
             View v = instance.mViewNodes.get(i).get();
             if (v != null && isViewMatch(v, tappedView)) {
                 instance.mCurrentViewIndex = i;
-                instance.seekbar.setProgress(i);
+                instance.mHasUserSelection = true;
+                instance.mNodeSeekbar.setProgress(i);
                 return;
             }
         }
     }
 
+    /** 获取当前选中的视图（由 EventHandlerHook 的修改模式拖拽调用） */
+    public static View getSelectedView() {
+        DispatchKeyEventHook instance = sInstance;
+        if (instance == null || instance.mViewNodes.isEmpty()) return null;
+        int idx = Math.max(instance.mCurrentViewIndex, 0);
+        if (idx < instance.mViewNodes.size()) {
+            return instance.mViewNodes.get(idx).get();
+        }
+        return null;
+    }
+
+    /** 判断 candidate 是否是 tapped 的同级或上级视图 */
     private static boolean isViewMatch(View candidate, View tapped) {
         if (candidate == tapped) return true;
         ViewParent parent = tapped.getParent();
@@ -106,10 +201,35 @@ public final class DispatchKeyEventHook extends XC_MethodHook implements Propert
         return false;
     }
 
+    // =========================================================================
+    // 视图导航 — SeekBar 按钮和音量键步进
+    // =========================================================================
+
+    private void navigateNext() {
+        if (mModifyController.isPanelShowing() || mNodeSeekbar == null
+                || mNodeSeekbar.getProgress() >= mNodeSeekbar.getMax()) {
+            return;
+        }
+        mNodeSeekbar.setProgress(mNodeSeekbar.getProgress() + 1);
+    }
+
+    private void navigatePrevious() {
+        if (mModifyController.isPanelShowing() || mNodeSeekbar == null
+                || mNodeSeekbar.getProgress() <= 0) {
+            return;
+        }
+        mNodeSeekbar.setProgress(mNodeSeekbar.getProgress() - 1);
+    }
+
+    // =========================================================================
+    // 节点选择器面板 — 显示、关闭、按钮绑定
+    // =========================================================================
+
     private void showNodeSelectPanel(final Activity activity) {
         Logger.i(TAG, "[GodMode] showNodeSelectPanel for " + activity.getPackageName());
         mViewNodes.clear();
         mCurrentViewIndex = 0;
+        mHasUserSelection = false;
         mViewNodes.addAll(ViewHelper.buildViewNodes(activity.getWindow().getDecorView()));
         final ViewGroup container = (ViewGroup) activity.getWindow().getDecorView();
         mMaskView = MaskView.makeMaskView(activity);
@@ -117,90 +237,145 @@ public final class DispatchKeyEventHook extends XC_MethodHook implements Propert
         mMaskView.attachToContainer(container);
         try {
             GodModeInjector.injectModuleResources(activity.getResources());
-            LayoutInflater layoutInflater = LayoutInflater.from(activity);
-            mNodeSelectorPanel = layoutInflater.inflate(GodModeInjector.moduleRes.getLayout(R.layout.layout_node_selector), container, false);
-            seekbar = mNodeSelectorPanel.findViewById(R.id.slider);
-            seekbar.setMax(Math.max(mViewNodes.size() - 1, 0));
-            seekbar.setOnSeekBarChangeListener(this);
+            LayoutInflater inflater = LayoutInflater.from(activity);
+            mNodeSelectorPanel = inflater.inflate(
+                    GodModeInjector.moduleRes.getLayout(R.layout.layout_node_selector), container, false);
+            mNodeSeekbar = mNodeSelectorPanel.findViewById(R.id.slider);
+            mNodeSeekbar.setMax(Math.max(mViewNodes.size() - 1, 0));
+            mNodeSeekbar.setOnSeekBarChangeListener(this);
 
-            View btnBlock = mNodeSelectorPanel.findViewById(R.id.block);
-            TooltipCompat.setTooltipText(btnBlock, GmResources.getText(R.string.accessibility_block));
-            btnBlock.setOnClickListener(v -> performBlock(activity, container));
-
-            View btnPreview = mNodeSelectorPanel.findViewById(R.id.preview);
-            TooltipCompat.setTooltipText(btnPreview, GmResources.getText(R.string.accessibility_preview));
-            btnPreview.setOnClickListener(v -> togglePreview(activity));
-
-            View exchange = mNodeSelectorPanel.findViewById(R.id.exchange);
-            View topcentent = mNodeSelectorPanel.findViewById(R.id.topcentent);
-            exchange.setOnClickListener(v -> {
-                Display display = activity.getWindowManager().getDefaultDisplay();
-                int width = display.getWidth();
-                int Targetwidth = width - (width / 6);
-                if (topcentent.getPaddingRight() == Targetwidth) {
-                    topcentent.setPadding(4, 4, 12, 4);
-                } else {
-                    topcentent.setPadding(4, 4, Targetwidth, 4);
-                }
-            });
-            View btnUp = mNodeSelectorPanel.findViewById(R.id.Up);
-            btnUp.setOnClickListener(v -> seekbaradd());
-            View btnDown = mNodeSelectorPanel.findViewById(R.id.Down);
-            btnDown.setOnClickListener(v -> seekbarreduce());
+            wireNodeSelectorButtons(activity, container);
             container.addView(mNodeSelectorPanel);
             mNodeSelectorPanel.setAlpha(0);
             mNodeSelectorPanel.post(() -> {
                 mNodeSelectorPanel.setTranslationX(mNodeSelectorPanel.getWidth() / 2.0f);
                 mNodeSelectorPanel.animate()
-                        .alpha(1)
-                        .translationX(0)
+                        .alpha(1).translationX(0)
                         .setDuration(300)
                         .setInterpolator(new DecelerateInterpolator(1.0f))
                         .start();
             });
             mKeySelecting = true;
-            XposedHelpers.findAndHookMethod(Activity.class, "dispatchKeyEvent", KeyEvent.class, new XC_MethodHook() {
-                protected void beforeHookedMethod(MethodHookParam param) {
-                    if (!GodModeInjector.switchProp.get() || EventHandlerHook.mDragging) return;
-                    KeyEvent event = (KeyEvent) param.args[0];
-                    int action = event.getAction();
-                    int keyCode = event.getKeyCode();
-                    if (action == KeyEvent.ACTION_UP &&
-                            (keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN)) {
-                        if (!mKeySelecting && activity != null) {
-                            showNodeSelectPanel(activity);
-                        } else if (mKeySelecting) {
-                            dismissNodeSelectPanel();
-                        }
-                        param.setResult(true);
-                    } else if (mKeySelecting && action == KeyEvent.ACTION_DOWN) {
-                        if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) {
-                            seekbaradd();
-                        } else if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
-                            seekbarreduce();
-                        }
-                        param.setResult(true);
-                    }
-                }
-            });
         } catch (Exception e) {
             Logger.e(TAG, "showNodeSelectPanel fail", e);
             mKeySelecting = false;
         }
     }
 
+    /** 绑定节点选择器面板所有按钮的点击监听 */
+    private void wireNodeSelectorButtons(final Activity activity, final ViewGroup container) {
+        View removeMenu = mNodeSelectorPanel.findViewById(R.id.remove_menu);
+        View modifyMenu = mNodeSelectorPanel.findViewById(R.id.modify_menu);
+
+        // 移除按钮
+        View btnBlock = mNodeSelectorPanel.findViewById(R.id.block);
+        TooltipCompat.setTooltipText(btnBlock, GmResources.getText(R.string.accessibility_block));
+        btnBlock.setOnClickListener(v -> performBlock(activity, container));
+
+        // 预览按钮
+        View btnPreview = mNodeSelectorPanel.findViewById(R.id.preview);
+        TooltipCompat.setTooltipText(btnPreview, GmResources.getText(R.string.accessibility_preview));
+        btnPreview.setOnClickListener(v -> togglePreview(activity));
+
+        // 修改按钮 — 打开属性编辑面板
+        View btnModify = mNodeSelectorPanel.findViewById(R.id.modify);
+        btnModify.setOnClickListener(v -> {
+            if (!mHasUserSelection) return;
+            View selectedView = mViewNodes.get(Math.max(mCurrentViewIndex, 0)).get();
+            if (selectedView != null) {
+                mModifyController.show(selectedView, activity, container);
+            }
+        });
+
+        // 保存修改按钮
+        View btnSaveModify = mNodeSelectorPanel.findViewById(R.id.save_modify);
+        btnSaveModify.setOnClickListener(v -> mModifyController.saveAll(
+                activity, mNodeSelectorPanel, mMaskView, mModifyController.getPanelView()));
+
+        // 模式切换：移除模式
+        View removeModeBtn = mNodeSelectorPanel.findViewById(R.id.remove_mode_btn);
+        View modifyModeBtn = mNodeSelectorPanel.findViewById(R.id.modify_mode_btn);
+
+        removeModeBtn.setOnClickListener(v -> {
+            boolean wasVisible = removeMenu.getVisibility() == View.VISIBLE;
+            removeMenu.setVisibility(wasVisible ? View.GONE : View.VISIBLE);
+            modifyMenu.setVisibility(View.GONE);
+            modifyModeBtn.setEnabled(wasVisible);
+            sInteractionMode = wasVisible ? MODE_INITIAL : MODE_REMOVE;
+        });
+
+        // 模式切换：修改模式
+        modifyModeBtn.setOnClickListener(v -> {
+            boolean wasVisible = modifyMenu.getVisibility() == View.VISIBLE;
+            modifyMenu.setVisibility(wasVisible ? View.GONE : View.VISIBLE);
+            removeMenu.setVisibility(View.GONE);
+            removeModeBtn.setEnabled(wasVisible);
+            sInteractionMode = wasVisible ? MODE_INITIAL : MODE_MODIFY;
+        });
+
+        // 面板位置切换按钮
+        View exchangeBtn = mNodeSelectorPanel.findViewById(R.id.exchange);
+        View topContent = mNodeSelectorPanel.findViewById(R.id.topcentent);
+        exchangeBtn.setOnClickListener(v -> {
+            Display display = activity.getWindowManager().getDefaultDisplay();
+            int width = display.getWidth();
+            int targetWidth = width - (width / 6);
+            topContent.setPadding(4, 4,
+                    topContent.getPaddingRight() == targetWidth ? 12 : targetWidth, 4);
+        });
+
+        // 上/下导航按钮
+        mNodeSelectorPanel.findViewById(R.id.Up).setOnClickListener(v -> navigatePrevious());
+        mNodeSelectorPanel.findViewById(R.id.Down).setOnClickListener(v -> navigateNext());
+    }
+
+    private void dismissNodeSelectPanel() {
+        Logger.i(TAG, "[GodMode] dismissNodeSelectPanel");
+        mModifyController.cancel();
+        restorePreview();
+        sInteractionMode = MODE_INITIAL;
+        if (mMaskView != null) mMaskView.detachFromContainer();
+        mMaskView = null;
+        if (mNodeSelectorPanel != null) {
+            final View panel = mNodeSelectorPanel;
+            panel.post(() -> panel.animate()
+                    .alpha(0)
+                    .translationX(panel.getWidth() / 2.0f)
+                    .setDuration(250)
+                    .setInterpolator(new AccelerateInterpolator(1.0f))
+                    .withEndAction(() -> {
+                        ViewGroup parent = (ViewGroup) panel.getParent();
+                        if (parent != null) parent.removeView(panel);
+                    })
+                    .start());
+        }
+        mNodeSelectorPanel = null;
+        mNodeSeekbar = null;
+        mViewNodes.clear();
+        mCurrentViewIndex = 0;
+        mHasUserSelection = false;
+        mKeySelecting = false;
+    }
+
+    // =========================================================================
+    // 移除（屏蔽）操作
+    // =========================================================================
+
     private void performBlock(final Activity activity, final ViewGroup container) {
         try {
             if (mViewNodes.isEmpty()) return;
-            if (mIsPreviewing) {
-                restorePreview();
-            }
+            if (mIsPreviewing) restorePreview();
             final View view = mViewNodes.get(Math.max(mCurrentViewIndex, 0)).get();
             Logger.d(TAG, "block view = " + view);
             if (view == null) return;
             mMaskView.updateOverlayBounds(new Rect());
+
+            // 隐藏 GM 覆盖层以获取干净截图
+            hideGmOverlays(View.INVISIBLE);
             final Bitmap snapshot = ViewHelper.snapshotView(ViewHelper.findTopParentViewByChildView(view));
-            final ViewRule viewRule = ViewHelper.makeRule(view);
+            hideGmOverlays(View.VISIBLE);
+
+            final ViewRule viewRule = ViewHelper.makeRemoveRule(view);
             final ParticleView particleView = new ParticleView(activity);
             particleView.setDuration(1000);
             particleView.attachToContainer(container);
@@ -214,6 +389,7 @@ public final class DispatchKeyEventHook extends XC_MethodHook implements Propert
                 @Override
                 public void onAnimationEnd(View animView, Animator animation) {
                     try {
+                        ViewHelper.drawRuleMask(snapshot, viewRule);
                         GodModeManager.getDefault().writeRule(activity.getPackageName(), viewRule, snapshot);
                         recycleNullableBitmap(snapshot);
                         particleView.detachFromContainer();
@@ -228,10 +404,20 @@ public final class DispatchKeyEventHook extends XC_MethodHook implements Propert
         } catch (Exception e) {
             Logger.e(TAG, "block fail", e);
             restorePanelAlpha();
-            Toast.makeText(activity, GmResources.getString(R.string.block_fail, e.getMessage()), Toast.LENGTH_SHORT).show();
+            Toast.makeText(activity, GmResources.getString(R.string.block_fail, e.getMessage()),
+                    Toast.LENGTH_SHORT).show();
         }
     }
 
+    /** 临时隐藏或显示所有 GodMode 覆盖层视图 */
+    private void hideGmOverlays(int visibility) {
+        if (mNodeSelectorPanel != null) mNodeSelectorPanel.setVisibility(visibility);
+        View modifyPanel = mModifyController.getPanelView();
+        if (modifyPanel != null) modifyPanel.setVisibility(visibility);
+        if (mMaskView != null) mMaskView.setVisibility(visibility);
+    }
+
+    /** 移除视图后更新节点列表 */
     private void updateViewNodesAfterRemove() {
         if (mCurrentViewIndex >= mViewNodes.size()) {
             mCurrentViewIndex = mViewNodes.size() - 1;
@@ -239,22 +425,26 @@ public final class DispatchKeyEventHook extends XC_MethodHook implements Propert
         if (mCurrentViewIndex >= 0 && mCurrentViewIndex < mViewNodes.size()) {
             mViewNodes.remove(mCurrentViewIndex);
         }
-        seekbar.setMax(Math.max(mViewNodes.size() - 1, 0));
-        mCurrentViewIndex = Math.min(mCurrentViewIndex, Math.max(mViewNodes.size() - 1, 0));
-        if (mCurrentViewIndex >= 0 && seekbar != null) {
-            seekbar.setProgress(mCurrentViewIndex);
+        if (mNodeSeekbar != null) {
+            mNodeSeekbar.setMax(Math.max(mViewNodes.size() - 1, 0));
+            mCurrentViewIndex = Math.min(mCurrentViewIndex, Math.max(mViewNodes.size() - 1, 0));
+            if (mCurrentViewIndex >= 0) {
+                mNodeSeekbar.setProgress(mCurrentViewIndex);
+            }
         }
     }
 
     private void restorePanelAlpha() {
         if (mNodeSelectorPanel != null) {
-            mNodeSelectorPanel.animate()
-                    .alpha(1.0f)
+            mNodeSelectorPanel.animate().alpha(1.0f)
                     .setInterpolator(new DecelerateInterpolator(1.0f))
-                    .setDuration(300)
-                    .start();
+                    .setDuration(300).start();
         }
     }
+
+    // =========================================================================
+    // 预览（在确认移除前临时隐藏视图）
+    // =========================================================================
 
     private void togglePreview(final Activity activity) {
         if (mIsPreviewing) {
@@ -269,18 +459,12 @@ public final class DispatchKeyEventHook extends XC_MethodHook implements Propert
         View view = mViewNodes.get(Math.max(mCurrentViewIndex, 0)).get();
         if (view == null) return;
         try {
-            mPreviewRule = ViewHelper.makeRule(view);
+            mPreviewRule = ViewHelper.makeRemoveRule(view);
             mPreviewRule.visibility = View.GONE;
             ViewController.applyRule(view, mPreviewRule);
             mPreviewView = view;
             mIsPreviewing = true;
-            View btnPreview = mNodeSelectorPanel.findViewById(R.id.preview);
-            if (btnPreview instanceof android.widget.ImageButton) {
-                ((android.widget.ImageButton) btnPreview).setImageResource(android.R.drawable.ic_menu_close_clear_cancel);
-            }
-            if (btnPreview != null) {
-                TooltipCompat.setTooltipText(btnPreview, GmResources.getText(R.string.accessibility_preview_exit));
-            }
+            updatePreviewButton(true);
             mMaskView.updateOverlayBounds(new Rect());
         } catch (Exception e) {
             Logger.e(TAG, "preview fail", e);
@@ -295,64 +479,41 @@ public final class DispatchKeyEventHook extends XC_MethodHook implements Propert
             mPreviewRule = null;
         }
         mIsPreviewing = false;
+        updatePreviewButton(false);
+    }
+
+    private void updatePreviewButton(boolean inPreview) {
         View btnPreview = mNodeSelectorPanel != null ? mNodeSelectorPanel.findViewById(R.id.preview) : null;
         if (btnPreview instanceof android.widget.ImageButton) {
-            ((android.widget.ImageButton) btnPreview).setImageResource(android.R.drawable.ic_menu_view);
+            ((android.widget.ImageButton) btnPreview).setImageResource(
+                    inPreview ? android.R.drawable.ic_menu_close_clear_cancel : android.R.drawable.ic_menu_view);
         }
         if (btnPreview != null) {
-            TooltipCompat.setTooltipText(btnPreview, GmResources.getText(R.string.accessibility_preview));
+            TooltipCompat.setTooltipText(btnPreview,
+                    GmResources.getText(inPreview ? R.string.accessibility_preview_exit : R.string.accessibility_preview));
         }
     }
 
-    private void seekbaradd() {
-        if (seekbar == null || seekbar.getProgress() >= seekbar.getMax()) {
-            return;
-        }
-        seekbar.setProgress(seekbar.getProgress() + 1);
-    }
-
-    private void seekbarreduce() {
-        if (seekbar == null || seekbar.getProgress() <= 0) {
-            return;
-        }
-        seekbar.setProgress(seekbar.getProgress() - 1);
-    }
-
-    private void dismissNodeSelectPanel() {
-        Logger.i(TAG, "[GodMode] dismissNodeSelectPanel");
-        restorePreview();
-        if (mMaskView != null) mMaskView.detachFromContainer();
-        mMaskView = null;
-        if (mNodeSelectorPanel != null) {
-            final View nodeSelectorPanel = mNodeSelectorPanel;
-            nodeSelectorPanel.post(() -> nodeSelectorPanel.animate()
-                    .alpha(0)
-                    .translationX(nodeSelectorPanel.getWidth() / 2.0f)
-                    .setDuration(250)
-                    .setInterpolator(new AccelerateInterpolator(1.0f))
-                    .withEndAction(() -> {
-                        ViewGroup parent = (ViewGroup) nodeSelectorPanel.getParent();
-                        if (parent != null) parent.removeView(nodeSelectorPanel);
-                    })
-                    .start());
-        }
-        mNodeSelectorPanel = null;
-        mViewNodes.clear();
-        mCurrentViewIndex = 0;
-        mKeySelecting = false;
-    }
+    // =========================================================================
+    // 属性变更 & SeekBar 回调
+    // =========================================================================
 
     @Override
     public void onPropertyChange(Boolean enable) {
-        if (!enable && mMaskView != null) {
-            dismissNodeSelectPanel();
+        if (!enable) {
+            sInteractionMode = MODE_INITIAL;
+            if (mMaskView != null) {
+                dismissNodeSelectPanel();
+            }
         }
     }
 
     @Override
     public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+        if (mModifyController.isPanelShowing()) return;
         if (progress < mViewNodes.size()) {
             mCurrentViewIndex = progress;
+            if (fromUser) mHasUserSelection = true;
             View view = mViewNodes.get(mCurrentViewIndex).get();
             Logger.d(TAG, String.format(Locale.getDefault(), "progress=%d selected view=%s", progress, view));
             if (view != null && mMaskView != null) {

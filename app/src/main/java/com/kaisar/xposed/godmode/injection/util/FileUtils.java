@@ -4,13 +4,10 @@ import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.nio.channels.FileChannel;
 
 /**
  * Created by jrsen on 17-10-21.
@@ -19,77 +16,8 @@ import java.nio.channels.FileChannel;
 public final class FileUtils {
 
     public static final int S_IRWXU = 00700;
-    public static final int S_IRUSR = 00400;
-    public static final int S_IWUSR = 00200;
-    public static final int S_IXUSR = 00100;
-
     public static final int S_IRWXG = 00070;
-    public static final int S_IRGRP = 00040;
-    public static final int S_IWGRP = 00020;
-    public static final int S_IXGRP = 00010;
-
     public static final int S_IRWXO = 00007;
-    public static final int S_IROTH = 00004;
-    public static final int S_IWOTH = 00002;
-    public static final int S_IXOTH = 00001;
-
-    public static boolean canRead(String filepath) {
-        return new File(filepath).canRead();
-    }
-
-    public static boolean canWrite(String filepath) {
-        return new File(filepath).canWrite();
-    }
-
-    public static boolean exists(String filepath) {
-        return new File(filepath).exists();
-    }
-
-    public static boolean createNewFile(String pathname, int mode) {
-        try {
-            File file = new File(pathname);
-            return file.createNewFile() && (setPermissions(file, mode, -1, -1) == 0);
-        } catch (IOException e) {
-            return false;
-        }
-    }
-
-    public static boolean mkdirs(String pathname, int mode) {
-        File dir = new File(pathname);
-        return dir.mkdirs() && (setPermissions(pathname, mode, -1, -1) == 0);
-    }
-
-    public static boolean copy(File src, File dst) {
-        return copy(src.getAbsolutePath(), dst.getAbsolutePath());
-    }
-
-    public static boolean copy(String src, String dst) {
-        FileChannel inChannel = null;
-        FileChannel outChannel = null;
-        try {
-            inChannel = new FileInputStream(src).getChannel();
-            outChannel = new FileOutputStream(dst).getChannel();
-            return inChannel.transferTo(0, inChannel.size(), outChannel) > 0;
-        } catch (IOException e) {
-            return false;
-        } finally {
-            try {
-                if (inChannel != null)
-                    inChannel.close();
-                if (outChannel != null)
-                    outChannel.close();
-            } catch (IOException ignore) {
-            }
-        }
-    }
-
-    public static boolean copy(InputStream in, File dst) {
-        try {
-            return copy(in, new FileOutputStream(dst));
-        } catch (FileNotFoundException e) {
-            return false;
-        }
-    }
 
     public static boolean copy(InputStream in, OutputStream out) {
         try {
@@ -120,25 +48,6 @@ public final class FileUtils {
             }
         }
         return file.delete();
-    }
-
-    public static boolean rmdir(String dirPath){
-        return delete(new File(dirPath));
-    }
-
-    public static boolean writeFile(InputStream in, File file) {
-        try {
-            FileOutputStream out = new FileOutputStream(file);
-            byte[] buffer = new byte[1024];
-            for (int len; (len = in.read(buffer)) != -1; ) {
-                out.write(buffer, 0, len);
-            }
-            out.flush();
-            out.close();
-            return true;
-        } catch (IOException e) {
-            return false;
-        }
     }
 
     /**

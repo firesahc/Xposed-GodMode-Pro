@@ -26,7 +26,6 @@ import com.google.gson.JsonSyntaxException;
 import com.kaisar.xposed.godmode.BuildConfig;
 import com.kaisar.xposed.godmode.IGodModeManager;
 import com.kaisar.xposed.godmode.IObserver;
-import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
 import com.kaisar.xposed.godmode.injection.util.FileUtils;
 import com.kaisar.xposed.godmode.injection.util.Logger;
 import com.kaisar.xposed.godmode.rule.ActRules;
@@ -57,8 +56,6 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
 
     // /data/system/godmode
     private static final String BASE_DIR = String.format("%s/misc/%s", Environment.getDataDirectory().getAbsolutePath(), "godmode");
-    // /data/system/godmode/conf
-    private static final String CONFIG_FILE_NAME = "conf";
     // /data/system/godmode/{package}/package.rule
     private static final String RULE_FILE_SUFFIX = ".rule";
     // /data/system/godmode/{package}/xxxxxxxxx.webp
@@ -76,6 +73,8 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
     private final Handler mHandle;
     private boolean mInEditMode;
     private boolean mStarted;
+
+    private final Gson mGson = new GsonBuilder().setPrettyPrinting().create();
 
     public GodModeManagerService(Context context) {
         mLogger = Logger.getLogger("GMMService");
@@ -102,8 +101,7 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
                     String packageName = packageDir.getName();
                     String appRuleFile = getAppRuleFilePath(packageName);
                     String json = FileUtils.readTextFile(appRuleFile, 0, null);
-                    Gson gson = new GsonBuilder().setPrettyPrinting().create();
-                    ActRules rules = gson.fromJson(json, ActRules.class);
+                    ActRules rules = mGson.fromJson(json, ActRules.class);
                     Preconditions.checkNotNull(rules, "rules is null");
                     //compact rule
                     Iterator<Map.Entry<String, List<ViewRule>>> iterator = rules.entrySet().iterator();
@@ -141,13 +139,20 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
                     String packageName = (String) args[1];
                     ViewRule viewRule = (ViewRule) args[2];
                     Bitmap snapshot = (Bitmap) args[3];
-                    String appDataDir = getAppDataDir(packageName);
-                    viewRule.imagePath = saveBitmap(snapshot, appDataDir);
-                    Gson gson = new GsonBuilder().setPrettyPrinting().create();
-                    String json = gson.toJson(actRules);
-                    String appRuleFilePath = getAppRuleFilePath(packageName);
-                    FileUtils.stringToFile(appRuleFilePath, json);
-                    notifyObserverRuleChanged(packageName, actRules);
+                    String oldImagePath = args.length > 4 ? (String) args[4] : null;
+                    if (snapshot != null) {
+                        if (oldImagePath != null && !TextUtils.isEmpty(oldImagePath)) {
+                            FileUtils.delete(oldImagePath);
+                        }
+                        List<ViewRule> rules = actRules.get(viewRule.activityClass);
+                        if (rules != null) {
+                            int idx = rules.indexOf(viewRule);
+                            if (idx >= 0) {
+                                rules.get(idx).imagePath = saveBitmap(snapshot, getAppDataDir(packageName));
+                            }
+                        }
+                    }
+                    persistAndNotify(packageName, actRules);
                 } catch (IOException e) {
                     mLogger.w("write rule failed", e);
                 }
@@ -160,10 +165,7 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
                     String packageName = (String) args[1];
                     ViewRule viewRule = (ViewRule) args[2];
                     FileUtils.delete(viewRule.imagePath);
-                    Gson gson = new GsonBuilder().setPrettyPrinting().create();
-                    String json = gson.toJson(actRules);
-                    FileUtils.stringToFile(getAppRuleFilePath(packageName), json);
-                    notifyObserverRuleChanged(packageName, actRules);
+                    persistAndNotify(packageName, actRules);
                 } catch (IOException e) {
                     mLogger.w("delete rule failed", e);
                 }
@@ -184,21 +186,22 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
                     Object[] args = (Object[]) msg.obj;
                     ActRules actRules = (ActRules) args[0];
                     String packageName = (String) args[1];
-                    Gson gson = new GsonBuilder().setPrettyPrinting().create();
-                    String json = gson.toJson(actRules);
-                    FileUtils.stringToFile(getAppRuleFilePath(packageName), json);
-                    notifyObserverRuleChanged(packageName, actRules);
+                    persistAndNotify(packageName, actRules);
                 } catch (IOException e) {
                     mLogger.w("update rule failed", e);
                 }
                 break;
             }
             default: {
-                //not implements
             }
             break;
         }
         return true;
+    }
+
+    private void persistAndNotify(String packageName, ActRules actRules) throws IOException {
+        FileUtils.stringToFile(getAppRuleFilePath(packageName), mGson.toJson(actRules));
+        notifyObserverRuleChanged(packageName, actRules);
     }
 
     private boolean checkPermission(@NonNull String permPackage) {
@@ -315,11 +318,7 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
     }
 
     /**
-     * Write rule
-     *
-     * @param packageName package name of the rule
-     * @param viewRule    rule object
-     * @param snapshot    snapshot image of the view
+     * Write or update a rule (remove or modify). Replaces existing rule for the same view.
      */
     @Override
     public boolean writeRule(String packageName, ViewRule viewRule, Bitmap snapshot) throws RemoteException {
@@ -334,11 +333,18 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
             if (viewRules == null) {
                 actRules.put(viewRule.activityClass, viewRules = new ArrayList<>());
             }
-            viewRules.add(viewRule);
-            mHandle.obtainMessage(WRITE_RULE, new Object[]{actRules, packageName, viewRule, snapshot}).sendToTarget();
+            int index = viewRules.indexOf(viewRule);
+            String oldImagePath = null;
+            if (index >= 0) {
+                oldImagePath = viewRules.get(index).imagePath;
+                viewRules.set(index, viewRule);
+            } else {
+                viewRules.add(viewRule);
+            }
+            mHandle.obtainMessage(WRITE_RULE, new Object[]{actRules, packageName, viewRule, snapshot, oldImagePath}).sendToTarget();
             return true;
         } catch (Exception e) {
-            e.printStackTrace();
+            mLogger.w("write rule failed", e);
             return false;
         }
     }
@@ -372,7 +378,7 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
             mHandle.obtainMessage(UPDATE_RULE, new Object[]{actRules, packageName}).sendToTarget();
             return true;
         } catch (Exception e) {
-            e.printStackTrace();
+            mLogger.w("update rule failed", e);
             return false;
         }
     }
@@ -452,7 +458,7 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
                 throw new FileNotFoundException("bitmap can't compress to " + file.getAbsolutePath());
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            mLogger.w("save bitmap fail", e);
             return null;
         }
     }
@@ -503,15 +509,6 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
         if (dir.exists() || dir.mkdirs()) {
             FileUtils.setPermissions(dir, S_IRWXU | S_IRWXG | S_IRWXO, -1, -1);
             return dir.getAbsolutePath();
-        }
-        throw new FileNotFoundException();
-    }
-
-    private String getConfigFilePath() throws IOException {
-        File file = new File(getBaseDir(), CONFIG_FILE_NAME);
-        if (file.exists() || file.createNewFile()) {
-            FileUtils.setPermissions(file, S_IRWXU | S_IRWXG | S_IRWXO, -1, -1);
-            return file.getAbsolutePath();
         }
         throw new FileNotFoundException();
     }
