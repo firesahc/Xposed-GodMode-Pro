@@ -7,6 +7,7 @@ import android.text.TextUtils;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
 
+import com.kaisar.xposed.godmode.injection.RuleModificationHelper;
 import com.kaisar.xposed.godmode.injection.ViewController;
 import com.kaisar.xposed.godmode.injection.util.Logger;
 import com.kaisar.xposed.godmode.injection.util.Property;
@@ -22,10 +23,6 @@ import java.util.WeakHashMap;
 
 import de.robv.android.xposed.XC_MethodHook;
 
-/**
- * Created by jrsen on 17-10-15.
- */
-
 public final class ActivityLifecycleHook extends XC_MethodHook implements Property.OnPropertyChangeListener<ActRules> {
 
     private static final WeakHashMap<Activity, OnLayoutChangeListener> sActivities = new WeakHashMap<>();
@@ -37,13 +34,12 @@ public final class ActivityLifecycleHook extends XC_MethodHook implements Proper
         Activity activity = (Activity) param.thisObject;
         String methodName = param.method.getName();
         ViewGroup decorView = (ViewGroup) activity.getWindow().getDecorView();
-        /*!!!这里有坑不要hook onCreate和onResume 因为getDecorView会执行installContentView的操作
-         所以在Activity的子类中有可能去requestFeature会导致异常所以尽量找一个很靠后的生命周期函数*/
         if ("onPostResume".equals(methodName)) {
             if (!sActivities.containsKey(activity)) {
                 OnLayoutChangeListener listener = new OnLayoutChangeListener(activity);
                 decorView.getViewTreeObserver().addOnGlobalLayoutListener(listener);
                 sActivities.put(activity, listener);
+                decorView.post(listener::applyRuleIfMatchCondition);
             }
             Logger.d(TAG, "resume:" + sActivities);
         } else if ("onDestroy".equals(methodName)) {
@@ -65,7 +61,7 @@ public final class ActivityLifecycleHook extends XC_MethodHook implements Proper
                 if (oldRules.isEmpty()) sActRules.remove(key);
             }
         }
-        //revoke old rules
+        // revoke old rules
         entries = sActRules.entrySet();
         for (Map.Entry<String, List<ViewRule>> entry : entries) {
             List<ViewRule> rules = entry.getValue();
@@ -75,7 +71,7 @@ public final class ActivityLifecycleHook extends XC_MethodHook implements Proper
                 }
             }
         }
-        //apply new rules
+        // apply new rules
         sActRules.clear();
         sActRules.putAll(newActRules);
         entries = sActRules.entrySet();
@@ -83,7 +79,20 @@ public final class ActivityLifecycleHook extends XC_MethodHook implements Proper
             List<ViewRule> rules = entry.getValue();
             for (Activity activity : sActivities.keySet()) {
                 if (TextUtils.equals(activity.getComponentName().getClassName(), entry.getKey())) {
-                    ViewController.applyRuleBatch(activity, rules);
+                    for (ViewRule rule : rules) {
+                        if (rule.isRemoveRule()) {
+                            // handled below in batch
+                        } else if (rule.isModifyRule()) {
+                            RuleModificationHelper.applyModificationRule(activity, rule);
+                        }
+                    }
+                    List<ViewRule> removeRules = new java.util.ArrayList<>();
+                    for (ViewRule r : rules) {
+                        if (r.isRemoveRule()) removeRules.add(r);
+                    }
+                    if (!removeRules.isEmpty()) {
+                        ViewController.applyRuleBatch(activity, removeRules);
+                    }
                 }
             }
         }
@@ -102,15 +111,21 @@ public final class ActivityLifecycleHook extends XC_MethodHook implements Proper
             applyRuleIfMatchCondition();
         }
 
-        private void applyRuleIfMatchCondition() {
+        void applyRuleIfMatchCondition() {
             try {
                 Activity activity = Preconditions.checkNotNull(activityReference.get());
-                List<ViewRule> rules = Preconditions.checkNotNull(sActRules.get(activity.getComponentName().getClassName()));
-                if (!rules.isEmpty()) {
-                    ViewController.applyRuleBatch(activity, rules);
+                List<ViewRule> rules = sActRules.get(activity.getComponentName().getClassName());
+                if (rules != null && !rules.isEmpty()) {
+                    List<ViewRule> removeRules = new java.util.ArrayList<>();
+                    for (ViewRule rule : rules) {
+                        if (rule.isRemoveRule()) removeRules.add(rule);
+                        else if (rule.isModifyRule()) RuleModificationHelper.applyModificationRule(activity, rule);
+                    }
+                    if (!removeRules.isEmpty()) {
+                        ViewController.applyRuleBatch(activity, removeRules);
+                    }
                 }
             } catch (Exception ignore) {
-//                ignore.printStackTrace();
             }
         }
 

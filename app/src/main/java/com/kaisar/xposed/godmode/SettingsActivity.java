@@ -2,7 +2,6 @@ package com.kaisar.xposed.godmode;
 
 
 import android.Manifest;
-import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
@@ -57,19 +56,7 @@ public class SettingsActivity extends AppCompatActivity {
     }
 
     private void startNotificationService() {
-        try {
-            Intent notificationService = new Intent(this, NotificationService.class);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                startForegroundService(notificationService);
-            } else {
-                startService(notificationService);
-            }
-        } catch (Exception e) {
-            try {
-                startService(new Intent(this, NotificationService.class));
-            } catch (Exception ignored) {
-            }
-        }
+        GodModeHelper.startNotificationService(this);
     }
 
 }

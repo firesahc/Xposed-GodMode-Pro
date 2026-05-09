@@ -53,6 +53,36 @@
             android:title="@string/rule_details_field_description"
             app:isPreferenceVisible="false" />
 
+    <Preference
+            android:key="@string/pref_key_detail_mod_width"
+            android:title="@string/modify_width"
+            app:isPreferenceVisible="false" />
+
+    <Preference
+            android:key="@string/pref_key_detail_mod_height"
+            android:title="@string/modify_height"
+            app:isPreferenceVisible="false" />
+
+    <Preference
+            android:key="@string/pref_key_detail_mod_alpha"
+            android:title="@string/modify_alpha"
+            app:isPreferenceVisible="false" />
+
+    <Preference
+            android:key="@string/pref_key_detail_mod_position"
+            android:title="@string/modify_position"
+            app:isPreferenceVisible="false" />
+
+    <Preference
+            android:key="@string/pref_key_detail_mod_text"
+            android:title="@string/modify_text"
+            app:isPreferenceVisible="false" />
+
+    <Preference
+            android:key="@string/pref_key_detail_mod_image"
+            android:title="@string/modify_image_pick"
+            app:isPreferenceVisible="false" />
+
     <DropDownPreference
             android:entries="@array/visible_entries"
             android:entryValues="@array/visible_values"

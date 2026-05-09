@@ -4,285 +4,225 @@ import static com.kaisar.xposed.godmode.GodModeApplication.TAG;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
-import android.content.Context;
-import android.content.Intent;
-import android.content.pm.PackageInfo;
-import android.content.pm.PackageManager;
-import android.content.pm.ResolveInfo;
 import android.content.res.AssetManager;
 import android.content.res.Resources;
 import android.content.res.XModuleResources;
-import android.graphics.Canvas;
-import android.graphics.Paint;
 import android.os.Binder;
-import android.os.Build;
 import android.os.Bundle;
-import android.text.TextUtils;
 import android.view.MotionEvent;
 import android.view.View;
-import android.view.ViewGroup;
 
-import androidx.annotation.RequiresApi;
-
-import com.kaisar.xposed.godmode.BuildConfig;
 import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
 import com.kaisar.xposed.godmode.injection.bridge.ManagerObserver;
 import com.kaisar.xposed.godmode.injection.hook.ActivityLifecycleHook;
+import com.kaisar.xposed.godmode.injection.hook.DebugLayoutHookInstaller;
 import com.kaisar.xposed.godmode.injection.hook.DispatchKeyEventHook;
-import com.kaisar.xposed.godmode.injection.hook.DisplayPropertiesHook;
 import com.kaisar.xposed.godmode.injection.hook.EventHandlerHook;
-import com.kaisar.xposed.godmode.injection.hook.SystemPropertiesHook;
-import com.kaisar.xposed.godmode.injection.hook.SystemPropertiesStringHook;
+import com.kaisar.xposed.godmode.injection.util.BlockListChecker;
 import com.kaisar.xposed.godmode.injection.util.Logger;
-import com.kaisar.xposed.godmode.injection.util.PackageManagerUtils;
 import com.kaisar.xposed.godmode.injection.util.Property;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.service.GodModeManagerService;
 import com.kaisar.xservicemanager.XServiceManager;
 
 import java.io.File;
-import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.util.List;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.IXposedHookZygoteInit;
 import de.robv.android.xposed.XC_MethodHook;
-import de.robv.android.xposed.XC_MethodReplacement;
 import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
 
 /**
- * Created by jrsen on 17-10-13.
+ * GodMode 的 Xposed 入口。
+ * <p>
+ * 在 {@link IXposedHookZygoteInit} 阶段加载模块自身资源以便注入到目标应用。
+ * 在 {@link IXposedHookLoadPackage} 阶段：
+ * <ul>
+ *   <li>对于 {@code "android"}（system_server）：通过剪贴板劫持将
+ *       {@link GodModeManagerService} 注册为系统服务。</li>
+ *   <li>对于目标应用：Hook Activity 生命周期、触摸事件、按键事件，
+ *       并注册 IPC 观察者以接收规则变更。</li>
+ * </ul>
  */
-
 public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHookZygoteInit {
+
+    // =========================================================================
+    // 可观察状态 — 将编辑模式和规则变更传播到各个 Hook
+    // =========================================================================
 
     public final static Property<Boolean> switchProp = new Property<>();
     public final static Property<ActRules> actRuleProp = new Property<>();
     public static XC_LoadPackage.LoadPackageParam loadPackageParam;
+
     private static State state = State.UNKNOWN;
-    private static DispatchKeyEventHook dispatchKeyEventHook = new DispatchKeyEventHook();
+    private static final DispatchKeyEventHook sDispatchKeyEventHook = new DispatchKeyEventHook();
 
-    enum State {
-        UNKNOWN,
-        ALLOWED,
-        BLOCKED
-    }
+    private enum State { UNKNOWN, ALLOWED, BLOCKED }
 
-    public static void notifyEditModeChanged(boolean enable) {
-        if (state == State.UNKNOWN) {
-            state = checkBlockList(loadPackageParam.packageName) ? State.BLOCKED : State.ALLOWED;
-        }
-        Logger.i(TAG, "[GodMode] edit mode " + enable + " state=" + state + " pkg=" + loadPackageParam.packageName);
-        if (state == State.ALLOWED) {
-            switchProp.set(enable);
-        }
-        dispatchKeyEventHook.setdisplay(enable);
-    }
-
-    public static void notifyViewRulesChanged(ActRules actRules) {
-        actRuleProp.set(actRules);
-    }
+    // =========================================================================
+    // 模块资源 — 在 initZygote 中加载，注入到目标应用的 AssetManager
+    // =========================================================================
 
     private static String modulePath;
     public static Resources moduleRes;
 
-    // Injector Res
+    // =========================================================================
+    // Zygote 初始化 — 加载模块资源
+    // =========================================================================
+
     @Override
     public void initZygote(StartupParam startupParam) {
         modulePath = startupParam.modulePath;
         moduleRes = XModuleResources.createInstance(modulePath, null);
     }
 
+    // =========================================================================
+    // 加载包 — 每个已加载应用的入口
+    // =========================================================================
+
     @Override
-    public void handleLoadPackage(XC_LoadPackage.LoadPackageParam loadPackageParam) {
+    public void handleLoadPackage(XC_LoadPackage.LoadPackageParam lpp) {
         if (R.string.res_inject_success >>> 24 == 0x7f) {
             XposedBridge.log("[GodMode] package id must NOT be 0x7f, reject loading...");
             return;
         }
-        if (!loadPackageParam.isFirstApplication) {
-            return;
-        }
-        GodModeInjector.loadPackageParam = loadPackageParam;
-        final String packageName = loadPackageParam.packageName;
+        if (!lpp.isFirstApplication) return;
+
+        GodModeInjector.loadPackageParam = lpp;
+        final String packageName = lpp.packageName;
+
         if ("android".equals(packageName)) {
-            Logger.i(TAG, "[GodMode] inject GodModeManagerService as system service.");
-            XServiceManager.initForSystemServer();
-            XServiceManager.registerService("godmode", (XServiceManager.ServiceFetcher<Binder>) GodModeManagerService::new);
+            bootstrapSystemService();
         } else {
-            Logger.i(TAG, "[GodMode] inject into app: " + packageName);
-            XposedHelpers.findAndHookMethod(Activity.class, "onCreate", Bundle.class, new XC_MethodHook() {
-                @Override
-                protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                    Activity activity = (Activity) param.thisObject;
-                    dispatchKeyEventHook.setactivity(activity);
-                    injectModuleResources(activity.getResources());
-                    if (switchProp.get()) {
-                        dispatchKeyEventHook.setdisplay(true);
-                    }
-                    super.afterHookedMethod(param);
-                }
-            });
-            registerHook();
-            GodModeManager gmManager = GodModeManager.getDefault();
-            gmManager.addObserver(loadPackageParam.packageName, new ManagerObserver());
-            switchProp.set(gmManager.isInEditMode());
-            actRuleProp.set(gmManager.getRules(loadPackageParam.packageName));
+            injectIntoTargetApp(lpp, packageName);
         }
     }
 
-    /**
-     * Inject resources into hook software - Code from qnotified
-     * @param res Inject software resources
-     */
-    public static void injectModuleResources(Resources res) {
-        if (res == null) {
-            return;
-        }
-        try {
-            res.getString(R.string.res_inject_success);
-            return;
-        } catch (Resources.NotFoundException ignored) {
-        }
-        try {
-            String sModulePath = modulePath;
-            if (sModulePath == null) {
-                throw new RuntimeException(
-                        "get module path failed, loader=" + GodModeInjector.class.getClassLoader());
-            }
-            AssetManager assets = res.getAssets();
-            @SuppressLint("DiscouragedPrivateApi")
-            Method addAssetPath = AssetManager.class
-                    .getDeclaredMethod("addAssetPath", String.class);
-            addAssetPath.setAccessible(true);
-            int cookie = (int) addAssetPath.invoke(assets, sModulePath);
-            try {
-                Logger.i(TAG, "injectModuleResources: " + res.getString(R.string.res_inject_success));
-            } catch (Resources.NotFoundException e) {
-                Logger.e(TAG, "Fatal: injectModuleResources: test injection failure!");
-                Logger.e(TAG, "injectModuleResources: cookie=" + cookie + ", path=" + sModulePath
-                        + ", loader=" + GodModeInjector.class.getClassLoader());
-                long length = -1;
-                boolean read = false;
-                boolean exist = false;
-                boolean isDir = false;
-                try {
-                    File f = new File(sModulePath);
-                    exist = f.exists();
-                    isDir = f.isDirectory();
-                    length = f.length();
-                    read = f.canRead();
-                } catch (Throwable e2) {
-                    Logger.e(TAG, "Open module error", e2);
-                }
-                Logger.e(TAG, "sModulePath: exists = " + exist + ", isDirectory = " + isDir + ", canRead = "
-                        + read + ", fileLength = " + length);
-            }
-        } catch (Exception e) {
-            Logger.e(TAG, "Inject module resources error", e);
-        }
+    /** 在 system_server 内部将 GodModeManagerService 注册为系统服务 */
+    private void bootstrapSystemService() {
+        Logger.i(TAG, "[GodMode] inject GodModeManagerService as system service.");
+        XServiceManager.initForSystemServer();
+        XServiceManager.registerService("godmode",
+                (XServiceManager.ServiceFetcher<Binder>) GodModeManagerService::new);
     }
 
-    private static boolean checkBlockList(String packageName) {
-        if (TextUtils.equals("com.android.systemui", packageName)) {
-            return true;
-        }
-        if (TextUtils.equals(BuildConfig.APPLICATION_ID, packageName)) {
-            return true;
-        }
-        try {
-            Intent homeIntent = new Intent(Intent.ACTION_MAIN);
-            homeIntent.addCategory(Intent.CATEGORY_HOME);
-            List<ResolveInfo> resolveInfos;
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-                resolveInfos = PackageManagerUtils.queryIntentActivities(homeIntent, null, PackageManager.MATCH_ALL, 0);
-            } else {
-                resolveInfos = PackageManagerUtils.queryIntentActivities(homeIntent, null, 0, 0);
-            }
-            if (resolveInfos != null) {
-                for (ResolveInfo resolveInfo : resolveInfos) {
-                    if (!TextUtils.equals("com.android.settings", packageName) && TextUtils.equals(resolveInfo.activityInfo.packageName, packageName)) {
-                        return true;
-                    }
-                }
-            }
+    /** 向目标应用注入 Hook：Activity 生命周期、触摸、按键事件、IPC 观察者 */
+    private void injectIntoTargetApp(XC_LoadPackage.LoadPackageParam lpp, String packageName) {
+        Logger.i(TAG, "[GodMode] inject into app: " + packageName);
 
-            Intent keyboardIntent = new Intent("android.view.InputMethod");
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                resolveInfos = PackageManagerUtils.queryIntentServices(keyboardIntent, null, PackageManager.MATCH_ALL, 0);
-            } else {
-                resolveInfos = PackageManagerUtils.queryIntentServices(keyboardIntent, null, 0, 0);
-            }
-            if (resolveInfos != null) {
-                for (ResolveInfo resolveInfo : resolveInfos) {
-                    if (TextUtils.equals(resolveInfo.serviceInfo.packageName, packageName)) {
-                        return true;
-                    }
+        // Hook Activity.onCreate 以跟踪 Activity 并注入模块资源
+        XposedHelpers.findAndHookMethod(Activity.class, "onCreate", Bundle.class, new XC_MethodHook() {
+            @Override
+            protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                Activity activity = (Activity) param.thisObject;
+                sDispatchKeyEventHook.setactivity(activity);
+                injectModuleResources(activity.getResources());
+                if (switchProp.get()) {
+                    sDispatchKeyEventHook.setdisplay(true);
                 }
+                super.afterHookedMethod(param);
             }
+        });
 
-            PackageInfo packageInfo = PackageManagerUtils.getPackageInfo(packageName, PackageManager.GET_ACTIVITIES, 0);
-            if (packageInfo != null && packageInfo.activities != null && packageInfo.activities.length == 0) {
-                return true;
-            }
-        } catch (Throwable t) {
-            Logger.e(TAG, "[GodMode] checkBlockList failed, allowing all", t);
-        }
-        return false;
+        registerHooks();
+        registerObserver(packageName);
     }
 
-    private void registerHook() {
-        //hook activity#lifecycle block view
+    /** 连接 ActivityLifecycleHook、EventHandlerHook、DispatchKeyEventHook 和调试布局 Hook */
+    private void registerHooks() {
+        // Activity 生命周期 Hook — 在 Activity 恢复/销毁时应用/撤销规则
         ActivityLifecycleHook lifecycleHook = new ActivityLifecycleHook();
         actRuleProp.addOnPropertyChangeListener(lifecycleHook);
         XposedHelpers.findAndHookMethod(Activity.class, "onPostResume", lifecycleHook);
         XposedHelpers.findAndHookMethod(Activity.class, "onDestroy", lifecycleHook);
 
-        // Hook debug layout
-        try {
-            if (Build.VERSION.SDK_INT < 29) {
-                SystemPropertiesHook systemPropertiesHook = new SystemPropertiesHook();
-                switchProp.addOnPropertyChangeListener(systemPropertiesHook);
-                XposedHelpers.findAndHookMethod("android.os.SystemProperties", ClassLoader.getSystemClassLoader(), "native_get_boolean", String.class, boolean.class, systemPropertiesHook);
-            } else {
-                SystemPropertiesStringHook systemPropertiesStringHook = new SystemPropertiesStringHook();
-                switchProp.addOnPropertyChangeListener(systemPropertiesStringHook);
-                XposedBridge.hookAllMethods(XposedHelpers.findClass("android.os.SystemProperties", ClassLoader.getSystemClassLoader()), "native_get", systemPropertiesStringHook);
+        // 调试布局 Hook — 编辑模式激活时显示视图边界
+        DebugLayoutHookInstaller.install(switchProp);
 
-                DisplayPropertiesHook displayPropertiesHook = new DisplayPropertiesHook();
-                switchProp.addOnPropertyChangeListener(displayPropertiesHook);
-                XposedHelpers.findAndHookMethod("android.sysprop.DisplayProperties", ClassLoader.getSystemClassLoader(), "debug_layout", displayPropertiesHook);
-            }
-
-            //Disable show layout margin bound
-            XposedHelpers.findAndHookMethod(ViewGroup.class, "onDebugDrawMargins", Canvas.class, Paint.class, XC_MethodReplacement.DO_NOTHING);
-
-            //Disable GM component show layout bounds
-            XC_MethodHook disableDebugDraw = new XC_MethodHook() {
-                @Override
-                protected void beforeHookedMethod(MethodHookParam param) {
-                    View view = (View) param.thisObject;
-                    if (ViewHelper.TAG_GM_CMP.equals(view.getTag())) {
-                        param.setResult(null);
-                    }
-                }
-            };
-            XposedHelpers.findAndHookMethod(ViewGroup.class, "onDebugDraw", Canvas.class, disableDebugDraw);
-            XposedHelpers.findAndHookMethod(View.class, "debugDrawFocus", Canvas.class, disableDebugDraw);
-        } catch (Throwable e) {
-            Logger.e(TAG, "Hook debug layout error", e);
-        }
-
-
+        // 触摸事件 Hook — 拦截点击/拖拽以进行移除和修改操作
         EventHandlerHook eventHandlerHook = new EventHandlerHook();
         switchProp.addOnPropertyChangeListener(eventHandlerHook);
-        //Drag view support
-        XposedHelpers.findAndHookMethod(View.class, "dispatchTouchEvent", MotionEvent.class, eventHandlerHook);
+        XposedHelpers.findAndHookMethod(View.class, "dispatchTouchEvent",
+                MotionEvent.class, eventHandlerHook);
 
-        switchProp.addOnPropertyChangeListener(dispatchKeyEventHook);
+        // 按键事件 Hook — 音量键切换节点选择器面板
+        switchProp.addOnPropertyChangeListener(sDispatchKeyEventHook);
     }
 
+    /** 注册 IPC 观察者，使服务端的规则更新能到达应用内 */
+    private void registerObserver(String packageName) {
+        GodModeManager gmManager = GodModeManager.getDefault();
+        gmManager.addObserver(packageName, new ManagerObserver());
+        switchProp.set(gmManager.isInEditMode());
+        actRuleProp.set(gmManager.getRules(packageName));
+    }
+
+    // =========================================================================
+    // 公开通知方法 — 由 ManagerObserver 在规则/编辑模式变更时调用
+    // =========================================================================
+
+    public static void notifyEditModeChanged(boolean enable) {
+        if (state == State.UNKNOWN) {
+            state = BlockListChecker.isBlocked(loadPackageParam.packageName)
+                    ? State.BLOCKED : State.ALLOWED;
+        }
+        Logger.i(TAG, "[GodMode] edit mode " + enable + " state=" + state
+                + " pkg=" + loadPackageParam.packageName);
+        if (state == State.ALLOWED) {
+            switchProp.set(enable);
+        }
+        sDispatchKeyEventHook.setdisplay(enable);
+    }
+
+    public static void notifyViewRulesChanged(ActRules actRules) {
+        actRuleProp.set(actRules);
+    }
+
+    // =========================================================================
+    // 资源注入 — 将模块资源注入目标应用的 AssetManager
+    // =========================================================================
+
+    /**
+     * 将 GodMode 模块资源注入目标应用的 {@link Resources}。
+     * 使得在目标应用中渲染覆盖层 UI 时可以使用模块的布局、字符串和图片资源。
+     */
+    public static void injectModuleResources(Resources res) {
+        if (res == null) return;
+        try {
+            res.getString(R.string.res_inject_success);
+            return; // 已注入，无需重复
+        } catch (Resources.NotFoundException ignored) {
+        }
+        try {
+            String path = modulePath;
+            if (path == null) {
+                throw new RuntimeException("get module path failed, loader="
+                        + GodModeInjector.class.getClassLoader());
+            }
+            AssetManager assets = res.getAssets();
+            @SuppressLint("DiscouragedPrivateApi")
+            Method addAssetPath = AssetManager.class.getDeclaredMethod("addAssetPath", String.class);
+            addAssetPath.setAccessible(true);
+            int cookie = (int) addAssetPath.invoke(assets, path);
+
+            try {
+                Logger.i(TAG, "injectModuleResources: " + res.getString(R.string.res_inject_success));
+            } catch (Resources.NotFoundException e) {
+                File f = new File(path);
+                Logger.e(TAG, "Fatal: injectModuleResources: test injection failure!");
+                Logger.e(TAG, "injectModuleResources: cookie=" + cookie + ", path=" + path
+                        + ", loader=" + GodModeInjector.class.getClassLoader());
+                Logger.e(TAG, "sModulePath: exists=" + f.exists()
+                        + ", isDirectory=" + f.isDirectory()
+                        + ", canRead=" + f.canRead()
+                        + ", fileLength=" + f.length());
+            }
+        } catch (Exception e) {
+            Logger.e(TAG, "Inject module resources error", e);
+        }
+    }
 }

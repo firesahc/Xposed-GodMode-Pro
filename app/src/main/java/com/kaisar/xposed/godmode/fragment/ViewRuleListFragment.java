@@ -1,7 +1,6 @@
 package com.kaisar.xposed.godmode.fragment;
 
 import android.content.ActivityNotFoundException;
-import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
@@ -33,30 +32,32 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.bumptech.glide.Glide;
-import com.bumptech.glide.load.engine.DiskCacheStrategy;
 import com.google.android.material.snackbar.Snackbar;
 import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.model.SharedViewModel;
 import com.kaisar.xposed.godmode.rule.ViewRule;
+import com.kaisar.xposed.godmode.util.AppInfoHelper;
 
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Date;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 
-/**
- * Created by jrsen on 17-10-29.
- */
-
 public final class ViewRuleListFragment extends Fragment {
 
+    private static final int FILTER_ALL = 0;
+    private static final int FILTER_REMOVE = 1;
+    private static final int FILTER_MODIFY = 2;
+
+    private int mRuleFilter = FILTER_ALL;
+    private Menu mMenu;
     private Drawable mIcon;
     private String mPackageName;
     private RecyclerView mRecyclerView;
     private SharedViewModel mSharedViewModel;
     private ActivityResultLauncher<String> mBackupLauncher;
+    private List<ViewRule> mAllRules = new ArrayList<>();
 
     public ViewRuleListFragment() {
         super(R.layout.fragment_rule_list);
@@ -78,25 +79,59 @@ public final class ViewRuleListFragment extends Fragment {
         mBackupLauncher = registerForActivityResult(new ActivityResultContracts.CreateDocument(), this::onBackupFileSelected);
         mSharedViewModel.selectedPackage.observe(this, packageName -> mSharedViewModel.updateViewRuleList(packageName));
         mSharedViewModel.actRules.observe(this, newData -> {
-            if (newData.isEmpty()) {
-                NavHostFragment.findNavController(this).popBackStack();
-            } else {
-                ListAdapter adapter = (ListAdapter) mRecyclerView.getAdapter();
-                if (adapter != null) {
-                    List<ViewRule> oldData = adapter.getData();
-                    DiffUtil.DiffResult diffResult = DiffUtil.calculateDiff(new Callback(oldData, newData));
-                    adapter.setData(newData);
-                    diffResult.dispatchUpdatesTo(adapter);
-                }
-            }
+            mAllRules = newData != null ? newData : new ArrayList<>();
+            updateFilteredList();
         });
+    }
+
+    private void updateFilteredList() {
+        List<ViewRule> items = buildFilteredItems();
+        if (items.isEmpty() && mAllRules.isEmpty()) {
+            NavHostFragment.findNavController(this).popBackStack();
+            return;
+        }
+        ListAdapter adapter = (ListAdapter) mRecyclerView.getAdapter();
+        if (adapter != null) {
+            List<ViewRule> oldData = new ArrayList<>(adapter.getItems());
+            adapter.setItems(items);
+            DiffUtil.DiffResult diffResult = DiffUtil.calculateDiff(new Callback(oldData, items));
+            diffResult.dispatchUpdatesTo(adapter);
+        }
+        updateTitle(items.size());
+    }
+
+    private List<ViewRule> buildFilteredItems() {
+        List<ViewRule> items = new ArrayList<>();
+        for (ViewRule rule : mAllRules) {
+            if (mRuleFilter == FILTER_ALL
+                    || (mRuleFilter == FILTER_REMOVE && rule.isRemoveRule())
+                    || (mRuleFilter == FILTER_MODIFY && rule.isModifyRule())) {
+                items.add(rule);
+            }
+        }
+        return items;
+    }
+
+    private void updateTitle(int count) {
+        int titleRes;
+        if (mRuleFilter == FILTER_REMOVE) {
+            titleRes = R.string.menu_filter_remove;
+        } else if (mRuleFilter == FILTER_MODIFY) {
+            titleRes = R.string.menu_filter_modify;
+        } else {
+            titleRes = R.string.menu_filter_all;
+        }
+        String fullTitle = getString(titleRes) + " (" + count + ")";
+        androidx.appcompat.widget.Toolbar toolbar = requireActivity().findViewById(R.id.main_toolbar);
+        if (toolbar != null) {
+            toolbar.setTitle(fullTitle);
+        }
     }
 
     private void onBackupFileSelected(Uri uri) {
         if (uri == null) return;
-        List<ViewRule> rules = mSharedViewModel.actRules.getValue();
-        if (rules != null && !rules.isEmpty()) {
-            mSharedViewModel.backupRules(uri, mPackageName, rules, new SharedViewModel.ResultCallback() {
+        if (!mAllRules.isEmpty()) {
+            mSharedViewModel.backupRules(uri, mPackageName, mAllRules, new SharedViewModel.ResultCallback() {
                 @Override
                 public void onSuccess() {
                 }
@@ -141,23 +176,19 @@ public final class ViewRuleListFragment extends Fragment {
         }
 
         @Override
-        public int getOldListSize() {
-            return mOldData.size();
-        }
+        public int getOldListSize() { return mOldData.size(); }
 
         @Override
-        public int getNewListSize() {
-            return mNewData.size();
-        }
+        public int getNewListSize() { return mNewData.size(); }
 
         @Override
         public boolean areItemsTheSame(int oldItemPosition, int newItemPosition) {
-            return mOldData.get(oldItemPosition).hashCode() == mNewData.get(newItemPosition).hashCode();
+            return mOldData.get(oldItemPosition).equals(mNewData.get(newItemPosition));
         }
 
         @Override
         public boolean areContentsTheSame(int oldItemPosition, int newItemPosition) {
-            return true;
+            return Objects.equals(mOldData.get(oldItemPosition), mNewData.get(newItemPosition));
         }
     }
 
@@ -167,12 +198,12 @@ public final class ViewRuleListFragment extends Fragment {
         private final int mLayoutResId = androidx.preference.R.layout.preference_material;
         private final List<ViewRule> mData = new ArrayList<>();
 
-        public void setData(List<ViewRule> newData) {
+        public void setItems(List<ViewRule> newData) {
             mData.clear();
             mData.addAll(newData);
         }
 
-        public List<ViewRule> getData() {
+        public List<ViewRule> getItems() {
             return mData;
         }
 
@@ -185,26 +216,62 @@ public final class ViewRuleListFragment extends Fragment {
 
         @Override
         public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
-            ViewRule viewRule = mData.get(position);
-            Glide.with(ViewRuleListFragment.this).load(viewRule).error(mIcon).diskCacheStrategy(DiskCacheStrategy.NONE).into(holder.imageView);
-            if (viewRule.activityClass != null && viewRule.activityClass.lastIndexOf('.') > -1) {
-                String activityName = viewRule.activityClass.substring(viewRule.activityClass.lastIndexOf('.') + 1);
-                holder.titleView.setText(getString(R.string.field_activity, activityName));
-                holder.titleView.setSingleLine();
-            }
-
-            SpannableStringBuilder summaryBuilder = new SpannableStringBuilder();
-            if (!TextUtils.isEmpty(viewRule.alias)) {
-                SpannableString ss = new SpannableString(getString(R.string.field_rule_alias, viewRule.alias));
-                ss.setSpan(new ForegroundColorSpan(getResources().getColor(R.color.prefsAliasColor)), 0, ss.length(), 0);
-                summaryBuilder.append(ss);
-            }
-            summaryBuilder.append(getString(R.string.field_view, viewRule.viewClass));
-            holder.summaryView.setText(summaryBuilder);
+            ViewRule rule = mData.get(position);
+            bindItem(holder, rule);
             holder.itemView.setFocusable(true);
             holder.itemView.setClickable(true);
             holder.itemView.setTag(position);
             holder.itemView.setOnClickListener(this);
+        }
+
+        private void bindItem(ViewHolder holder, ViewRule rule) {
+            if (rule.isRemoveRule()) {
+                Glide.with(ViewRuleListFragment.this).load(rule).error(mIcon).diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.NONE).into(holder.imageView);
+                bindTitle(holder, rule.activityClass, R.string.rule_type_remove);
+                SpannableStringBuilder summaryBuilder = new SpannableStringBuilder();
+                if (!TextUtils.isEmpty(rule.alias)) {
+                    SpannableString ss = new SpannableString(getString(R.string.field_rule_alias, rule.alias));
+                    ss.setSpan(new ForegroundColorSpan(getResources().getColor(R.color.prefsAliasColor)), 0, ss.length(), 0);
+                    summaryBuilder.append(ss);
+                }
+                summaryBuilder.append(getString(R.string.field_view, rule.viewClass));
+                holder.summaryView.setText(summaryBuilder);
+            } else {
+                if (!TextUtils.isEmpty(rule.imagePath)) {
+                    Glide.with(ViewRuleListFragment.this).load(rule).error(mIcon).diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.NONE).into(holder.imageView);
+                } else {
+                    holder.imageView.setImageDrawable(mIcon);
+                }
+                bindTitle(holder, rule.activityClass, R.string.rule_type_modify);
+                SpannableStringBuilder summaryBuilder = new SpannableStringBuilder();
+                if (!TextUtils.isEmpty(rule.alias)) {
+                    SpannableString ss = new SpannableString(getString(R.string.field_rule_alias, rule.alias));
+                    ss.setSpan(new ForegroundColorSpan(getResources().getColor(R.color.prefsAliasColor)), 0, ss.length(), 0);
+                    summaryBuilder.append(ss);
+                }
+                ArrayList<String> mods = new ArrayList<>();
+                if (rule.isWidthModified()) mods.add(getString(R.string.modify_detail_width, rule.modWidth));
+                if (rule.isHeightModified()) mods.add(getString(R.string.modify_detail_height, rule.modHeight));
+                if (rule.isAlphaModified()) mods.add(getString(R.string.modify_detail_alpha, String.format(Locale.getDefault(), "%.1f", rule.modAlpha)));
+                if (rule.isPositionModified()) mods.add(getString(R.string.modify_detail_position, rule.modXOffset, rule.modYOffset));
+                if (rule.isTextModified()) mods.add(getString(R.string.modify_detail_text));
+                if (rule.isImageModified()) mods.add(getString(R.string.modify_detail_image));
+                if (!mods.isEmpty()) {
+                    summaryBuilder.append(TextUtils.join("\n", mods));
+                }
+                summaryBuilder.append("\n").append(getString(R.string.field_view, rule.viewClass));
+                summaryBuilder.append(" ").append(getString(R.string.field_depth, Arrays.toString(rule.depth)));
+                holder.summaryView.setText(summaryBuilder);
+            }
+        }
+
+        private void bindTitle(ViewHolder holder, String activityClass, int ruleTypeResId) {
+            if (activityClass != null) {
+                String ruleType = getString(ruleTypeResId);
+                String activityName = activityClass.substring(activityClass.lastIndexOf('.') + 1);
+                holder.titleView.setText("[" + ruleType + "] " + getString(R.string.field_activity, activityName));
+                holder.titleView.setSingleLine();
+            }
         }
 
         @Override
@@ -215,7 +282,12 @@ public final class ViewRuleListFragment extends Fragment {
         @Override
         public void onClick(View view) {
             final int position = (Integer) view.getTag();
-            NavHostFragment.findNavController(ViewRuleListFragment.this).navigate(ViewRuleListFragmentDirections.actionViewRuleListFragmentToViewRuleDetailsContainerFragment(position));
+            ViewRule rule = mData.get(position);
+            int rulePos = mAllRules.indexOf(rule);
+            if (rulePos >= 0) {
+                NavHostFragment.findNavController(ViewRuleListFragment.this).navigate(
+                        ViewRuleListFragmentDirections.actionViewRuleListFragmentToViewRuleDetailsContainerFragment(rulePos));
+            }
         }
 
         class ViewHolder extends RecyclerView.ViewHolder {
@@ -237,22 +309,36 @@ public final class ViewRuleListFragment extends Fragment {
     public void onCreateOptionsMenu(@NonNull Menu menu, @NonNull MenuInflater inflater) {
         super.onCreateOptionsMenu(menu, inflater);
         inflater.inflate(R.menu.menu_app_rules, menu);
+        mMenu = menu;
+        restoreMenuCheck(menu);
     }
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
-        if (item.getItemId() == R.id.menu_delete_rules) {
+        int id = item.getItemId();
+        if (id == R.id.menu_filter_all) {
+            mRuleFilter = FILTER_ALL;
+            updateFilteredList();
+            restoreMenuCheck(mMenu);
+            return true;
+        } else if (id == R.id.menu_filter_remove) {
+            mRuleFilter = FILTER_REMOVE;
+            updateFilteredList();
+            restoreMenuCheck(mMenu);
+            return true;
+        } else if (id == R.id.menu_filter_modify) {
+            mRuleFilter = FILTER_MODIFY;
+            updateFilteredList();
+            restoreMenuCheck(mMenu);
+            return true;
+        } else if (id == R.id.menu_delete_rules) {
             if (!mSharedViewModel.deleteAppRules(mPackageName)) {
                 Snackbar.make(requireView(), R.string.snack_bar_msg_revert_rule_fail, Snackbar.LENGTH_SHORT).show();
             }
-        } else if (item.getItemId() == R.id.menu_backup_rules) {
+            return true;
+        } else if (id == R.id.menu_backup_rules) {
             try {
-                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd_HHmmss", Locale.getDefault());
-                PackageManager packageManager = requireContext().getPackageManager();
-                ApplicationInfo applicationInfo = packageManager.getApplicationInfo(mPackageName, 0);
-                String label = applicationInfo.loadLabel(packageManager).toString();
-                String filename = String.format(Locale.getDefault(), "%s_%s.gzip", label, sdf.format(new Date()));
-                mBackupLauncher.launch(filename);
+                mBackupLauncher.launch(AppInfoHelper.generateBackupFilename(requireContext(), mPackageName));
                 return true;
             } catch (ActivityNotFoundException | PackageManager.NameNotFoundException e) {
                 Snackbar.make(requireView(), R.string.snack_bar_msg_backup_rule_fail, Snackbar.LENGTH_SHORT).show();
@@ -262,4 +348,9 @@ public final class ViewRuleListFragment extends Fragment {
         return super.onOptionsItemSelected(item);
     }
 
+    private void restoreMenuCheck(Menu menu) {
+        menu.findItem(R.id.menu_filter_all).setChecked(mRuleFilter == FILTER_ALL);
+        menu.findItem(R.id.menu_filter_remove).setChecked(mRuleFilter == FILTER_REMOVE);
+        menu.findItem(R.id.menu_filter_modify).setChecked(mRuleFilter == FILTER_MODIFY);
+    }
 }

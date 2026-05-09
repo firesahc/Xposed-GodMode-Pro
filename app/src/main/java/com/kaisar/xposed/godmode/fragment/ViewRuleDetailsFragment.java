@@ -6,9 +6,6 @@ import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.graphics.Canvas;
-import android.graphics.Color;
-import android.graphics.Paint;
 import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
 import android.os.Bundle;
@@ -52,6 +49,7 @@ public final class ViewRuleDetailsFragment extends PreferenceFragmentCompat impl
     private EditTextPreference mAliasPreference;
     private DropDownPreference mVisiblePreference;
     private ImageViewPreference mImagePreference;
+    private Handler mHandler;
 
     public void setViewRule(ViewRule viewRule) {
         mViewRule = viewRule;
@@ -72,7 +70,6 @@ public final class ViewRuleDetailsFragment extends PreferenceFragmentCompat impl
             icon = applicationInfo.loadIcon(packageManager);
             label = applicationInfo.loadLabel(packageManager).toString();
         } catch (PackageManager.NameNotFoundException ignored) {
-//            ignored.printStackTrace();
         }
         Preference headerPreference = findPreference(getString(R.string.pref_key_detail_rule_info));
         headerPreference.setIcon(icon);
@@ -86,7 +83,11 @@ public final class ViewRuleDetailsFragment extends PreferenceFragmentCompat impl
 
         preference = findPreference(getString(R.string.pref_key_detail_rule_match_version));
         preference.setTitle(R.string.rule_details_field_generate_version);
-        preference.setSummary(String.format(Locale.getDefault(), "%s %s", label, mViewRule.matchVersionName));
+        if (!TextUtils.isEmpty(mViewRule.matchVersionName)) {
+            preference.setSummary(String.format(Locale.getDefault(), "%s %s", label, mViewRule.matchVersionName));
+        } else {
+            preference.setSummary(label);
+        }
 
         preference = findPreference(getString(R.string.pref_key_detail_rule_applied_activity));
         preference.setTitle(R.string.rule_details_field_activity);
@@ -104,9 +105,13 @@ public final class ViewRuleDetailsFragment extends PreferenceFragmentCompat impl
         });
 
         preference = findPreference(getString(R.string.pref_key_detail_view_bounds));
-        Rect bounds = new Rect(mViewRule.x, mViewRule.y, mViewRule.x + mViewRule.width, mViewRule.y + mViewRule.height);
-        preference.setTitle(R.string.rule_details_field_view_bounds);
-        preference.setSummary(bounds.toShortString());
+        if (mViewRule.x >= 0 && mViewRule.y >= 0) {
+            Rect bounds = new Rect(mViewRule.x, mViewRule.y, mViewRule.x + mViewRule.width, mViewRule.y + mViewRule.height);
+            preference.setTitle(R.string.rule_details_field_view_bounds);
+            preference.setSummary(bounds.toShortString());
+        } else {
+            preference.setVisible(false);
+        }
 
         preference = findPreference(getString(R.string.pref_key_detail_view_type));
         preference.setTitle(R.string.rule_details_field_view_type);
@@ -116,9 +121,12 @@ public final class ViewRuleDetailsFragment extends PreferenceFragmentCompat impl
         preference.setTitle(R.string.rule_details_field_view_depth);
         preference.setSummary(Arrays.toString(mViewRule.depth));
 
-        preference = findPreference(getString(R.string.pref_key_detail_view_res_name));
-        preference.setTitle(R.string.rule_details_field_res_name);
-        preference.setSummary(mViewRule.resourceName);
+        if (!TextUtils.isEmpty(mViewRule.resourceName)) {
+            preference = findPreference(getString(R.string.pref_key_detail_view_res_name));
+            preference.setTitle(R.string.rule_details_field_res_name);
+            preference.setSummary(mViewRule.resourceName);
+            preference.setVisible(true);
+        }
 
         if (!TextUtils.isEmpty(mViewRule.text)) {
             preference = findPreference(getString(R.string.pref_key_detail_view_text));
@@ -147,13 +155,55 @@ public final class ViewRuleDetailsFragment extends PreferenceFragmentCompat impl
         if (!TextUtils.isEmpty(mViewRule.imagePath)) {
             loadRuleImage();
         }
+
+        if (mViewRule.isModifyRule()) {
+            showModifyDetails();
+        }
+    }
+
+    private void showModifyDetails() {
+        Preference pref;
+
+        if (mViewRule.isWidthModified()) {
+            pref = findPreference(getString(R.string.pref_key_detail_mod_width));
+            pref.setVisible(true);
+            pref.setSummary(String.valueOf(mViewRule.modWidth));
+        }
+        if (mViewRule.isHeightModified()) {
+            pref = findPreference(getString(R.string.pref_key_detail_mod_height));
+            pref.setVisible(true);
+            pref.setSummary(String.valueOf(mViewRule.modHeight));
+        }
+        if (mViewRule.isAlphaModified()) {
+            pref = findPreference(getString(R.string.pref_key_detail_mod_alpha));
+            pref.setVisible(true);
+            pref.setSummary(String.format(Locale.getDefault(), "%.2f", mViewRule.modAlpha));
+        }
+        if (mViewRule.isPositionModified()) {
+            pref = findPreference(getString(R.string.pref_key_detail_mod_position));
+            pref.setVisible(true);
+            pref.setSummary(String.format(Locale.getDefault(), "(%d, %d)", mViewRule.modXOffset, mViewRule.modYOffset));
+        }
+        if (mViewRule.isTextModified() && !TextUtils.isEmpty(mViewRule.modText)) {
+            pref = findPreference(getString(R.string.pref_key_detail_mod_text));
+            pref.setVisible(true);
+            pref.setSummary(mViewRule.modText);
+        }
+        if (mViewRule.isImageModified() && !TextUtils.isEmpty(mViewRule.modImagePath)) {
+            pref = findPreference(getString(R.string.pref_key_detail_mod_image));
+            pref.setVisible(true);
+            pref.setSummary(mViewRule.modImagePath);
+        }
     }
 
     private void loadRuleImage() {
-        Handler handler = new Handler(Looper.getMainLooper());
+        if (mHandler == null) {
+            mHandler = new Handler(Looper.getMainLooper());
+        }
         new Thread(() -> {
+            if (!isAdded()) return;
             Bitmap bitmap = loadRuleImageBitmap(mViewRule);
-            handler.post(() -> {
+            mHandler.post(() -> {
                 if (bitmap != null && isAdded()) {
                     mImagePreference.setImageBitmap(bitmap);
                 }
@@ -163,18 +213,9 @@ public final class ViewRuleDetailsFragment extends PreferenceFragmentCompat impl
 
     @Nullable
     private static Bitmap loadRuleImageBitmap(@NonNull ViewRule viewRule) {
-        try {
-            try (ParcelFileDescriptor parcelFileDescriptor = GodModeManager.getDefault().openImageFileDescriptor(viewRule.imagePath)) {
-                Objects.requireNonNull(parcelFileDescriptor, String.format("Can not open %s", viewRule.imagePath));
-                Bitmap bitmap = BitmapFactory.decodeFileDescriptor(parcelFileDescriptor.getFileDescriptor()).copy(Bitmap.Config.ARGB_8888, true);
-                Bitmap newBitmap = bitmap.copy(bitmap.getConfig(), true);
-                Paint markPaint = new Paint();
-                markPaint.setColor(Color.RED);
-                markPaint.setAlpha(100);
-                Canvas canvas = new Canvas(newBitmap);
-                canvas.drawRect(viewRule.x, viewRule.y, viewRule.x + viewRule.width, viewRule.y + viewRule.height, markPaint);
-                return newBitmap;
-            }
+        try (ParcelFileDescriptor parcelFileDescriptor = GodModeManager.getDefault().openImageFileDescriptor(viewRule.imagePath)) {
+            Objects.requireNonNull(parcelFileDescriptor, String.format("Can not open %s", viewRule.imagePath));
+            return BitmapFactory.decodeFileDescriptor(parcelFileDescriptor.getFileDescriptor());
         } catch (Exception e) {
             Logger.w(TAG, e.getMessage());
             return null;

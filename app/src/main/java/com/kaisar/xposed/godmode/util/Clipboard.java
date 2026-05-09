@@ -19,8 +19,6 @@ public final class Clipboard {
             clipboard.setPrimaryClip(clip);
             return true;
         } catch (Throwable ignore) {
-            //因为堆栈溢出trace信息很大无法set到剪切板
-//            e.printStackTrace();
             return false;
         }
     }

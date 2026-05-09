@@ -9,13 +9,15 @@
     <string name="pref_description_god_mode">Enable to control editing from notification</string>
     <string name="pref_title_guide">Guide</string>
     <string name="pref_description_guide">View usage and operation modes</string>
+    <string name="pref_title_about">About</string>
+    <string name="pref_description_about">Version info and project links</string>
 
     <string name="menu_delete_rule">Delete rule</string>
     <string name="menu_backup_rule">Backup rule</string>
     <string name="enter_edit">Exit editor</string>
     <string name="exit_edit">Start editor</string>
     <string name="manage">Manager</string>
-    <string name="xposed_description">Like God, remove any elements on the interface that you don\'t like</string>
+    <string name="xposed_description">Block or modify any unwanted UI elements on any app</string>
 
     <string name="menu_delete_rules">Delete rules</string>
     <string name="menu_backup_rules">Backup rules</string>
@@ -28,52 +30,99 @@
     <string name="title_app_rule">App rules</string>
     <string name="title_rule_details">Details</string>
     <string name="guide_title">Guide</string>
+    <string name="about_title">About</string>
+
+    <string name="menu_filter_all">All rules</string>
+    <string name="menu_filter_remove">Remove rules</string>
+    <string name="menu_filter_modify">Modify rules</string>
+    <string name="rule_type_remove">Remove</string>
+    <string name="rule_type_modify">Modify</string>
 
     <string name="guide_content"><![CDATA[
-<b>1. Overview</b><br>GodMode is an Xposed module that can block unwanted elements (buttons, ads, text, etc.) on any app\'s interface.<br><br>
-<b>2. Enable/Disable</b><br>
-  1. <b>Master Switch</b>: Settings → General → GodMode switch.<br>
-     &nbsp;&nbsp;- When enabled, a notification appears showing "Start editor".<br>
-     &nbsp;&nbsp;- When disabled, edit mode is forced off and the notification disappears.<br>
-  2. <b>Notification Toggle</b>: With master switch on, tap the notification to toggle between "Start editor" and "Exit editor".<br><br>
-<b>3. Edit Mode Operations</b><br>When edit mode is active, a toolbar appears on the right side of the target app:<br><br>
-  1. <b>Tap to Select</b>: Tap any element on the screen to select it (red overlay follows).<br>
-  2. <b>Long Press to Block</b>: Long press an element (~0.5s), it turns green.<br>
-     &nbsp;&nbsp;- Drag the green overlay to the top green area and release → cancel.<br>
-     &nbsp;&nbsp;- Release elsewhere → particle animation plays, element disappears, rule saved.<br>
-  3. <b>Volume Keys</b>: Press and release volume up/down to show/hide the toolbar. When toolbar is visible, volume keys navigate between elements.<br>
-  4. <b>SeekBar Slider</b>: Drag the slider to select elements at different hierarchy levels.<br>
-  5. <b>⬆⬇ Buttons</b>: Manually switch to previous/next element.<br>
-  6. <b>🔀 Button</b>: Toggle toolbar position (right/left).<br>
-  7. <b>👁 Button</b>: Preview block effect — temporarily hides the selected element, tap again to restore.<br>
-  8. <b>🚫 Button</b>: Block the currently selected element (same as long press).<br><br>
-<b>4. Rule Management</b><br>
-  - View rules: Settings → App Rules → tap package name.<br>
-  - View details: Rule list → tap entry, swipe left/right.<br>
-  - Delete single rule: Rule details → menu → Delete rule.<br>
-  - Delete all rules: Rule list → menu → Delete rules.<br>
-  - Backup rules: Rule list/details → menu → Backup rules.<br>
-  - Restore rules: Settings → menu → Restore rules.<br><br>
-<b>5. Notes</b><br>
-  - Edit mode only works in third-party apps where the module is activated in Xposed/LSPosed.<br>
-  - Launcher, system UI, input methods, UI-less apps, and GodMode itself are not editable.<br>
-  - If a crash occurs, a dialog will appear on next launch to copy the crash log.
+<b>1. Getting Started</b><br>
+  1. <b>Master Switch</b>: Settings → General → GodMode switch. A notification appears when enabled.<br>
+  2. <b>Notification Toggle</b>: Tap the notification to toggle between "Start editor" and "Exit editor".<br>
+  3. <b>Quick Tile</b>: Use the Quick Settings tile to toggle edit mode with one tap.<br>
+  &emsp;<i>Disabling the master switch forces edit mode off and removes the notification.</i><br><br>
+
+<b>2. Tool Panel</b><br>
+  When edit mode is active, a semi-transparent rounded toolbar appears on the right side of the target app:<br><br>
+  <b>Buttons (top to bottom):</b><br>
+  &bull; <b>Vertical Slider</b> — Drag to select elements at different hierarchy depths.<br>
+  &bull; <b>🔀 Toggle Position</b> — Switch the panel between right and left side.<br>
+  &bull; <b>Remove Mode</b> button — Expands remove menu (🚫 Block, 👁 Preview).<br>
+  &bull; <b>Modify Mode</b> button — Expands modify menu (✏️ Properties, 💾 Save).<br>
+  &bull; <b>⬆ Previous</b> / <b>⬇ Next</b> — Navigate elements one by one.<br><br>
+  <b>Show / Hide:</b><br>
+  &bull; Press <b>Volume Up</b> or <b>Volume Down</b> and release → toggle the panel.<br>
+  &bull; When the panel is visible, volume keys navigate between elements.<br><br>
+
+<b>3. Selecting Elements</b><br>
+  A red overlay highlights the currently selected element. Switch selection via:<br>
+  &bull; <b>Tap to Select</b>: Tap any element on the screen.<br>
+  &bull; <b>Slider</b>: Drag the vertical slider on the panel.<br>
+  &bull; <b>⬆⬇ Buttons</b>: Tap Previous / Next on the panel.<br>
+  &bull; <b>Volume Keys</b>: When panel is visible, volume keys step through elements.<br><br>
+
+<b>4. Remove Mode</b><br>
+  Tap the "Remove Mode" button to expand the submenu:<br><br>
+  <b>👁 Preview</b><br>
+  Tap Preview → the selected element is temporarily hidden. Tap again to restore.<br><br>
+  <b>🚫 Block (three equivalent methods):</b><br>
+  1. Panel: Select element → tap the <b>Block button</b> on the panel.<br>
+  2. Touch: <b>Long-press</b> an element ~0.5s → green overlay appears with a cancel area at the top → release outside the green area → particle animation plays and the element disappears.<br>
+  3. Drag to Cancel: Long-press, then drag the green overlay to the <b>top green zone</b> and release → operation cancelled.<br>
+  &emsp;<i>After blocking, the rule and a screenshot are saved automatically.</i><br><br>
+
+<b>5. Modify Mode</b><br>
+  Tap the "Modify Mode" button to expand the submenu:<br><br>
+  <b>✏️ Property Panel</b><br>
+  1. Select the target element, then tap the <b>Modify button</b> on the panel.<br>
+  2. The property panel appears with controls for:<br>
+  &emsp;&bull; <b>Width / Height</b> — SeekBar drag or manual input.<br>
+  &emsp;&bull; <b>Alpha</b> — 0~255 slider.<br>
+  &emsp;&bull; <b>Position Nudge</b> — Arrow buttons move the element 10px per tap.<br>
+  &emsp;&bull; <b>Text</b> — Edit text content for TextViews.<br>
+  &emsp;&bull; <b>Replace Image</b> — Pick an image from the gallery for ImageViews.<br>
+  3. Tap <b>Confirm</b> to preview changes, or <b>Cancel</b> to revert.<br><br>
+  <b>Drag to Reposition</b><br>
+  &emsp;In modify mode, <b>long-press anywhere on the screen</b> to drag the <b>currently selected element</b> (not the element under your finger).<br>
+  &emsp;&bull; <b>16dp Grid Snap</b>: Moves align to a grid.<br>
+  &emsp;&bull; <b>12dp Edge Snap</b>: Automatically snaps to adjacent element edges.<br>
+  &emsp;&bull; Position is auto-saved on release as a modify rule.<br><br>
+  <b>💾 Save Modifications</b><br>
+  &emsp;After confirming changes in the property panel, tap the <b>Save button</b> to persist all modifications. A screenshot with red overlay is generated automatically.<br><br>
+
+<b>6. Rule Management</b><br>
+  &bull; <b>View List</b>: Settings → App Rules → tap package name. Use menu to filter All / Remove / Modify rules. Title shows rule count.<br>
+  &bull; <b>View Details</b>: Tap a rule entry → swipe left/right to browse. View screenshot, view info, layout depth, etc.<br>
+  &bull; <b>Edit Alias</b>: Customize alias from rule details for easy identification.<br>
+  &bull; <b>Delete Single</b>: Rule details → menu → Delete rule.<br>
+  &bull; <b>Delete All</b>: Rule list → menu → Delete rules.<br>
+  &bull; <b>Backup</b>: Rule list/details → menu → Export as .gzip file.<br>
+  &bull; <b>Restore</b>: Settings → menu → Choose a .gzip backup to import.<br><br>
+
+<b>7. Notes</b><br>
+  &bull; Edit mode only works in <b>third-party apps</b> where the module is activated in Xposed / LSPosed.<br>
+  &bull; Launcher, system UI, input methods, UI-less apps, and GodMode itself are <b>not editable</b>.<br>
+  &bull; If a crash occurs, a dialog appears on next launch to copy the crash log.<br>
+  &bull; All function buttons have tooltips (long-press or hover to view).
     ]]></string>
 
     <string name="field_activity">Activity: %1$s</string>
     <string name="field_view">View: %1$s</string>
 
     <string name="hey_guy">Hey guy</string>
-    <string name="not_active_module">GodMode module is not activated</string>
+    <string name="not_active_module">GodMode module is not activated. Please activate it in LSPosed manager</string>
     <string name="notification_permission_denied">Notification permission denied, notification switch will not be shown</string>
     <string name="welcome_title">Hey guys, Welcome</string>
 
-    <string name="snack_bar_msg_revert_rule_fail">Revoke rule failed</string>
+    <string name="snack_bar_msg_revert_rule_fail">Delete rule failed</string>
     <string name="snack_bar_msg_backup_rule_fail">Backup rules failed</string>
     <string name="snack_bar_msg_restore_rules_fail">Restore rules failed</string>
     <string name="dialog_btn_copy">COPY</string>
-    <string name="crash_tip">Crash detected\n</string>
-    <string name="update_tips">You can try using GodMode to block annoying buttons. If you encounter issues, don\'t worry, they will be fixed soon!</string>
+    <string name="crash_tip">Crash detected. Copy the log below for feedback.\n\n</string>
+    <string name="update_tips">Try using GodMode to block annoying buttons. If you encounter issues, please report them on GitHub!</string>
 
     <string name="rule_details_field_create_time">Create time</string>
     <string name="rule_details_field_generate_version">Match version</string>
@@ -95,5 +144,26 @@
     <string name="accessibility_preview">Preview</string>
     <string name="accessibility_preview_exit">Exit preview</string>
     <string name="accessibility_exchange">Toggle position</string>
+    <string name="accessibility_modify">Modify</string>
+    <string name="accessibility_save_modify">Save modify</string>
+    <string name="accessibility_up">Previous</string>
+    <string name="accessibility_down">Next</string>
+    <string name="mode_remove">Remove mode</string>
+    <string name="mode_modify">Modify mode</string>
+    <string name="modify_title">Properties</string>
+    <string name="modify_width">Width</string>
+    <string name="modify_height">Height</string>
+    <string name="modify_alpha">Alpha</string>
+    <string name="modify_position">Position</string>
+    <string name="modify_text">Text</string>
+    <string name="modify_image_pick">Pick image</string>
+    <string name="modify_cancel">Cancel</string>
+    <string name="modify_confirm">Confirm</string>
     <string name="block_fail">Failed to block: %1$s</string>
+
+    <string name="about_version">Version</string>
+    <string name="about_description">An LSPosed module that can block or modify any unwanted UI elements in any app.</string>
+    <string name="about_github">GitHub Repository</string>
+    <string name="about_issues">Report Issues</string>
+    <string name="about_thanks">Thanks to all contributors and friends for your support!</string>
 </resources>

@@ -13,6 +13,10 @@
                 android:key="@string/pref_key_guide"
                 android:summary="@string/pref_description_guide"
                 android:title="@string/pref_title_guide" />
+        <Preference
+                android:key="@string/pref_key_about"
+                android:summary="@string/pref_description_about"
+                android:title="@string/pref_title_about" />
     </PreferenceCategory>
 
     <PreferenceCategory

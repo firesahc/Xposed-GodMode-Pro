@@ -4,15 +4,9 @@ import android.os.Build;
 
 import androidx.annotation.RequiresApi;
 
-import com.kaisar.xposed.godmode.injection.util.Property;
-
 import java.util.Optional;
 
-import de.robv.android.xposed.XC_MethodHook;
-
-public final class DisplayPropertiesHook extends XC_MethodHook implements Property.OnPropertyChangeListener<Boolean> {
-
-    private boolean mDebugLayout;
+public final class DisplayPropertiesHook extends BaseDebugLayoutHook {
 
     @RequiresApi(api = Build.VERSION_CODES.N)
     @Override
@@ -20,10 +14,5 @@ public final class DisplayPropertiesHook extends XC_MethodHook implements Proper
         if (mDebugLayout) {
             param.setResult(Optional.of(true));
         }
-    }
-
-    @Override
-    public void onPropertyChange(Boolean debugLayout) {
-        mDebugLayout = debugLayout;
     }
 }

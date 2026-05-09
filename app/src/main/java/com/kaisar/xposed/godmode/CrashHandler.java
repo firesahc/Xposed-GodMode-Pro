@@ -43,7 +43,7 @@ public final class CrashHandler implements Thread.UncaughtExceptionHandler {
                     return new String(byteBuffer.array());
                 }
             } catch (IOException e) {
-                e.printStackTrace();
+                Logger.e(TAG, "read crash info fail", e);
             } finally {
                 //noinspection ResultOfMethodCallIgnored
                 logFile.delete();
@@ -70,7 +70,6 @@ public final class CrashHandler implements Thread.UncaughtExceptionHandler {
                 fileChannel.write(ByteBuffer.wrap(stackTraceString.getBytes()));
             }
         } catch (IOException ignore) {
-//            ignore.printStackTrace();
         }
         Logger.e(TAG, String.format("Crash on %s thread", t.getName()), e);
     }
@@ -82,10 +81,8 @@ public final class CrashHandler implements Thread.UncaughtExceptionHandler {
         PendingIntent restartIntent = PendingIntent.getActivity(mContext, 1, intent, PendingIntent.FLAG_CANCEL_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         AlarmManager mgr = (AlarmManager) mContext.getSystemService(Context.ALARM_SERVICE);
         if (mgr != null) {
-            mgr.set(AlarmManager.RTC, System.currentTimeMillis() + 5, restartIntent);
+            mgr.set(AlarmManager.RTC, System.currentTimeMillis() + 100, restartIntent);
         }
-        //结束进程
-        System.exit(1);
         android.os.Process.killProcess(android.os.Process.myPid());
     }
 

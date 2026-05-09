@@ -24,7 +24,7 @@ public final class Particle {
     //透明度
     public float alpha;
     //用于生成随机数
-    static Random random = new Random();
+    private static final Random random = new Random();
     //粒子所在的矩形区域
     public Rect mBound;
 
@@ -50,7 +50,6 @@ public final class Particle {
         cy = cy + factor * (mBound.height() / (random.nextInt(4) + 1));
 
         radius = radius - factor * random.nextInt(3);
-        ;
 
         if (radius <= 0)
             radius = 0;

@@ -6,10 +6,7 @@ import static com.kaisar.xposed.godmode.injection.util.CommonUtils.recycleNullab
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.net.Uri;
-import android.os.Build;
 import android.os.ParcelFileDescriptor;
-
-import androidx.annotation.RequiresApi;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -45,54 +42,24 @@ public final class BackupUtils {
     }
 
     public static class BackupException extends Exception {
-        public BackupException() {
-        }
-
-        public BackupException(String message) {
-            super(message);
-        }
-
-        public BackupException(String message, Throwable cause) {
-            super(message, cause);
-        }
-
-        public BackupException(Throwable cause) {
-            super(cause);
-        }
-
-        @RequiresApi(api = Build.VERSION_CODES.N)
-        public BackupException(String message, Throwable cause, boolean enableSuppression, boolean writableStackTrace) {
-            super(message, cause, enableSuppression, writableStackTrace);
-        }
+        public BackupException() { super(); }
+        public BackupException(String message) { super(message); }
+        public BackupException(String message, Throwable cause) { super(message, cause); }
+        public BackupException(Throwable cause) { super(cause); }
     }
 
     public static class RestoreException extends Exception {
-        public RestoreException() {
-        }
-
-        public RestoreException(String message) {
-            super(message);
-        }
-
-        public RestoreException(String message, Throwable cause) {
-            super(message, cause);
-        }
-
-        public RestoreException(Throwable cause) {
-            super(cause);
-        }
-
-        @RequiresApi(api = Build.VERSION_CODES.N)
-        public RestoreException(String message, Throwable cause, boolean enableSuppression, boolean writableStackTrace) {
-            super(message, cause, enableSuppression, writableStackTrace);
-        }
+        public RestoreException() { super(); }
+        public RestoreException(String message) { super(message); }
+        public RestoreException(String message, Throwable cause) { super(message, cause); }
+        public RestoreException(Throwable cause) { super(cause); }
     }
 
     public static void backupRules(Uri toUri, String packageName, List<ViewRule> viewRules) throws BackupException {
         ArrayList<String> backupFilePathList = new ArrayList<>();
         ArrayList<ViewRule> backupViewRuleList = new ArrayList<>(viewRules.size());
         File backupDir = new File(GodModeApplication.getApplication().getCacheDir(), "backup");
-        if (!backupDir.exists() || FileUtils.rmdir(backupDir.getPath())) {
+        if (!backupDir.exists() || FileUtils.delete(backupDir.getPath())) {
             boolean ok = backupDir.mkdirs();
             if (!ok) throw new BackupException("Create backup directory failed.");
             try {
@@ -125,14 +92,14 @@ public final class BackupUtils {
             } catch (IOException e) {
                 throw new BackupException(e);
             } finally {
-                FileUtils.rmdir(backupDir.getPath());
+                FileUtils.delete(backupDir.getPath());
             }
         }
     }
 
     public static void restoreRules(Uri fromUri) throws RestoreException {
         File restoreDir = new File(GodModeApplication.getApplication().getCacheDir(), "restore");
-        if (!restoreDir.exists() || FileUtils.rmdir(restoreDir.getPath())) {
+        if (!restoreDir.exists() || FileUtils.delete(restoreDir.getPath())) {
             boolean ok = restoreDir.mkdirs();
             if (!ok) throw new RestoreException("Create restore directory failed.");
             try {
@@ -157,7 +124,7 @@ public final class BackupUtils {
             } catch (IOException e) {
                 throw new RestoreException(e);
             } finally {
-                FileUtils.rmdir(restoreDir.getPath());
+                FileUtils.delete(restoreDir.getPath());
             }
         }
     }

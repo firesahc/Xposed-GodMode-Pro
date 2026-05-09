@@ -110,7 +110,6 @@ public final class ViewHelper {
 
             }
         } catch (Exception ignore) {
-//            ignore.printStackTrace();
         }
         return null;
     }
@@ -174,15 +173,16 @@ public final class ViewHelper {
     }
 
     public static int[] getViewHierarchyDepth(View view) {
-        int[] depth = new int[0];
+        ArrayList<Integer> depthList = new ArrayList<>();
         ViewParent parent = view.getParent();
         while (parent instanceof ViewGroup) {
-            int[] newDepth = new int[depth.length + 1];
-            System.arraycopy(depth, 0, newDepth, 1, depth.length);
-            newDepth[0] = ((ViewGroup) parent).indexOfChild(view);
-            depth = newDepth;
+            depthList.add(((ViewGroup) parent).indexOfChild(view));
             view = (View) parent;
             parent = parent.getParent();
+        }
+        int[] depth = new int[depthList.size()];
+        for (int i = 0; i < depth.length; i++) {
+            depth[i] = depthList.get(depth.length - 1 - i);
         }
         return depth;
     }
@@ -219,6 +219,36 @@ public final class ViewHelper {
         return new ViewRule(label, packageName, versionName, versionCode, BuildConfig.VERSION_CODE, "", alias, x, y, width, height, viewHierarchyDepth, activityClassName, viewClassName, resourceName, text, description, View.INVISIBLE, System.currentTimeMillis());
     }
 
+    public static ViewRule makeRemoveRule(View v) throws PackageManager.NameNotFoundException {
+        ViewRule rule = makeRule(v);
+        rule.type = ViewRule.TYPE_REMOVE;
+        return rule;
+    }
+
+    public static ViewRule makeModifyRule(View view) {
+        Activity act = getAttachedActivityFromView(view);
+        ViewRule rule = new ViewRule("",
+                act != null ? act.getPackageName() : "",
+                "", 0, 0, "", "", 0, 0, 0, 0,
+                getViewHierarchyDepth(view),
+                act != null ? act.getComponentName().getClassName() : "",
+                view.getClass().getName(), "", "", "",
+                View.VISIBLE, System.currentTimeMillis());
+        rule.type = ViewRule.TYPE_MODIFY;
+        rule.captureOriginals(view);
+        fillCoordinates(rule, view);
+        return rule;
+    }
+
+    public static void fillCoordinates(ViewRule rule, View v) {
+        int[] out = new int[2];
+        v.getLocationInWindow(out);
+        rule.x = out[0];
+        rule.y = out[1];
+        rule.width = v.getWidth();
+        rule.height = v.getHeight();
+    }
+
     public static Activity getAttachedActivityFromView(View view) {
         Activity activity = getActivityFromViewContext(view.getContext());
         if (activity != null) {
@@ -248,15 +278,19 @@ public final class ViewHelper {
     }
 
     public static Bitmap snapshotView(View view) {
-        return snapshotViewCompat(view);
+        Bitmap b = Bitmap.createBitmap(Math.max(view.getWidth(), 1), Math.max(view.getHeight(), 1), Bitmap.Config.ARGB_8888);
+        Canvas c = new Canvas(b);
+        c.translate(-view.getScrollX(), -view.getScrollY());
+        view.draw(c);
+        return b;
     }
 
-    private static Bitmap snapshotViewCompat(View v) {
-        Bitmap b = Bitmap.createBitmap(Math.max(v.getWidth(), 1), Math.max(v.getHeight(), 1), Bitmap.Config.ARGB_8888);
-        Canvas c = new Canvas(b);
-        c.translate(-v.getScrollX(), -v.getScrollY());
-        v.draw(c);
-        return b;
+    public static void drawRuleMask(Bitmap bitmap, ViewRule rule) {
+        Paint markPaint = new Paint();
+        markPaint.setColor(Color.RED);
+        markPaint.setAlpha(100);
+        Canvas canvas = new Canvas(bitmap);
+        canvas.drawRect(rule.x, rule.y, rule.x + rule.width, rule.y + rule.height, markPaint);
     }
 
     public static Bitmap cloneViewAsBitmap(View view) {
@@ -271,14 +305,6 @@ public final class ViewHelper {
 
         Canvas canvas = new Canvas(bitmap);
         drawRect(canvas, paint, 0, 0, canvas.getWidth() - 1, canvas.getHeight() - 1);
-
-//        // Draw margins
-//        {
-//            paint.setColor(Color.argb(63, 255, 0, 255));
-//            paint.setStyle(Paint.Style.FILL);
-//
-//            onDebugDrawMargins(canvas, paint);
-//        }
 
         // Draw clip bounds
         paint.setColor(Color.rgb(63, 127, 255));
@@ -381,14 +407,13 @@ public final class ViewHelper {
         return new Rect(l, t, r, b);
     }
 
-    public static Rect getLocationOnScreen(View v) {
-        int[] out = new int[2];
-        v.getLocationOnScreen(out);
-        int l = out[0];
-        int t = out[1];
-        int r = l + v.getWidth();
-        int b = t + v.getHeight();
-        return new Rect(l, t, r, b);
+    public static String getViewKey(View view) {
+        Activity act = getAttachedActivityFromView(view);
+        String actName = act != null ? act.getComponentName().getClassName() : "unknown";
+        int[] depth = getViewHierarchyDepth(view);
+        StringBuilder sb = new StringBuilder(actName);
+        for (int d : depth) sb.append('_').append(d);
+        return sb.toString();
     }
 
 }

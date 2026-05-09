@@ -3,6 +3,9 @@ package com.kaisar.xposed.godmode.util;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
 import android.os.ParcelFileDescriptor;
 
 import androidx.annotation.NonNull;
@@ -72,10 +75,27 @@ public class GmGlideModule extends AppGlideModule {
             if (pfd != null) {
                 Bitmap bitmap = BitmapFactory.decodeFileDescriptor(pfd.getFileDescriptor());
                 try {
-                    Bitmap croppedBitmap = Bitmap.createBitmap(bitmap, mViewRule.x, mViewRule.y, mViewRule.width, mViewRule.height);
-                    callback.onDataReady(croppedBitmap);
-                } finally {
+                    if (mViewRule.x >= 0 && mViewRule.y >= 0 && mViewRule.width > 0 && mViewRule.height > 0
+                            && bitmap != null
+                            && mViewRule.x + mViewRule.width <= bitmap.getWidth()
+                            && mViewRule.y + mViewRule.height <= bitmap.getHeight()) {
+                        Bitmap croppedBitmap = Bitmap.createBitmap(bitmap, mViewRule.x, mViewRule.y, mViewRule.width, mViewRule.height);
+                        Bitmap markedBitmap = Bitmap.createBitmap(croppedBitmap.getWidth(), croppedBitmap.getHeight(), croppedBitmap.getConfig());
+                        Canvas canvas = new Canvas(markedBitmap);
+                        canvas.drawBitmap(croppedBitmap, 0, 0, null);
+                        Paint borderPaint = new Paint();
+                        borderPaint.setStyle(Paint.Style.STROKE);
+                        borderPaint.setColor(Color.RED);
+                        borderPaint.setStrokeWidth(3);
+                        canvas.drawRect(1, 1, markedBitmap.getWidth() - 1, markedBitmap.getHeight() - 1, borderPaint);
+                        callback.onDataReady(markedBitmap);
+                        croppedBitmap.recycle();
+                    } else {
+                        callback.onDataReady(bitmap);
+                    }
+                } catch (Exception e) {
                     bitmap.recycle();
+                    callback.onLoadFailed(e);
                 }
             } else {
                 callback.onLoadFailed(new FileNotFoundException(mViewRule.imagePath));

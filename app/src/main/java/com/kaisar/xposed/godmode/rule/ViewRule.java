@@ -5,6 +5,8 @@ import android.os.Parcel;
 import android.os.Parcelable;
 import android.text.TextUtils;
 import android.view.View;
+import android.view.ViewGroup;
+import android.widget.TextView;
 
 import androidx.annotation.Keep;
 import androidx.annotation.NonNull;
@@ -13,70 +15,95 @@ import com.google.gson.annotations.SerializedName;
 
 import java.util.Arrays;
 
-/**
- * Created by jrsen on 17-10-14.
- */
 @Keep
 public final class ViewRule implements Parcelable, Cloneable {
 
-    //生成规则的应用名称
+    public static final String TYPE_REMOVE = "remove";
+    public static final String TYPE_MODIFY = "modify";
+    public static final String TYPE_UNKNOWN = "unknown";
+
+    // 规则类型: remove / modify / unknown (旧版本无此字段时默认)
+    @SerializedName("type")
+    public String type = TYPE_UNKNOWN;
+
+    // --- 移除规则字段 ---
     @SerializedName("label")
-    public final String label;
-    //生成规则的应用包名
+    public String label;
     @SerializedName("package_name")
-    public final String packageName;
+    public String packageName;
     @SerializedName("match_version_name")
-    public final String matchVersionName;
-    //生成规则的应用版本号
+    public String matchVersionName;
     @SerializedName("match_version_code")
-    public final int matchVersionCode;
-    //规则版本
+    public int matchVersionCode;
     @SerializedName("version_code")
-    public final int versionCode;
-    //规则图片
+    public int versionCode;
     @SerializedName("img_path")
     public String imagePath;
-    //规则别名
     @SerializedName("alias")
     public String alias;
-    //相对于window的x坐标
     @SerializedName("x")
-    public final int x;
-    //相对于window的y坐标
+    public int x;
     @SerializedName("y")
-    public final int y;
-    //控件宽度
+    public int y;
     @SerializedName("width")
-    public final int width;
-    //控件高度
+    public int width;
     @SerializedName("height")
-    public final int height;
-    //布局深度
+    public int height;
     @SerializedName("depth")
-    public final int[] depth;
-    //控件所属activity
+    public int[] depth;
     @SerializedName("act_class")
-    public final String activityClass;
-    //控件类型
+    public String activityClass;
     @SerializedName("view_class")
-    public final String viewClass;
-    //资源id
+    public String viewClass;
     @SerializedName("res_name")
-    public final String resourceName;
-    //控件文字
+    public String resourceName;
     @SerializedName("text")
-    public final String text;
-    //控件描述
+    public String text;
     @SerializedName("description")
-    public final String description;
-    //View可见性
+    public String description;
     @SerializedName("visibility")
     public int visibility;
-    //规则记录时间
     @SerializedName("timestamp")
-    public final long timestamp;
+    public long timestamp;
 
-    public ViewRule(String label, String packageName, String matchVersionName, int matchVersionCode, int versionCode, String imagePath, String alias, int x, int y, int width, int height, int[] depth, String activityClass, String viewClass, String resourceName, String text, String description, int visibility, long timestamp) {
+    // --- 修改规则字段 ---
+    @SerializedName("mod_width")
+    public int modWidth = -1;
+    @SerializedName("mod_height")
+    public int modHeight = -1;
+    @SerializedName("mod_alpha")
+    public float modAlpha = -1f;
+    @SerializedName("mod_x_offset")
+    public int modXOffset;
+    @SerializedName("mod_y_offset")
+    public int modYOffset;
+    @SerializedName("mod_text")
+    public String modText;
+    @SerializedName("mod_img_path")
+    public String modImagePath;
+
+    // --- 原始值 (用于应用修改时计算) ---
+    @SerializedName("orig_width")
+    public int origWidth;
+    @SerializedName("orig_height")
+    public int origHeight;
+    @SerializedName("orig_alpha")
+    public float origAlpha = 1f;
+    @SerializedName("orig_text")
+    public String origText;
+    @SerializedName("orig_left_margin")
+    public int origLeftMargin;
+    @SerializedName("orig_top_margin")
+    public int origTopMargin;
+
+    @SuppressWarnings("unused")
+    private ViewRule() {
+    }
+
+    public ViewRule(String label, String packageName, String matchVersionName, int matchVersionCode,
+                    int versionCode, String imagePath, String alias, int x, int y, int width, int height,
+                    int[] depth, String activityClass, String viewClass, String resourceName,
+                    String text, String description, int visibility, long timestamp) {
         this.label = label;
         this.packageName = packageName;
         this.matchVersionName = matchVersionName;
@@ -99,6 +126,8 @@ public final class ViewRule implements Parcelable, Cloneable {
     }
 
     protected ViewRule(Parcel in) {
+        type = in.readString();
+        if (type == null) type = TYPE_UNKNOWN;
         label = in.readString();
         packageName = in.readString();
         matchVersionName = in.readString();
@@ -118,10 +147,24 @@ public final class ViewRule implements Parcelable, Cloneable {
         description = in.readString();
         visibility = in.readInt();
         timestamp = in.readLong();
+        modWidth = in.readInt();
+        modHeight = in.readInt();
+        modAlpha = in.readFloat();
+        modXOffset = in.readInt();
+        modYOffset = in.readInt();
+        modText = in.readString();
+        modImagePath = in.readString();
+        origWidth = in.readInt();
+        origHeight = in.readInt();
+        origAlpha = in.readFloat();
+        origText = in.readString();
+        origLeftMargin = in.readInt();
+        origTopMargin = in.readInt();
     }
 
     @Override
     public void writeToParcel(Parcel dest, int flags) {
+        dest.writeString(type);
         dest.writeString(label);
         dest.writeString(packageName);
         dest.writeString(matchVersionName);
@@ -141,6 +184,19 @@ public final class ViewRule implements Parcelable, Cloneable {
         dest.writeString(description);
         dest.writeInt(visibility);
         dest.writeLong(timestamp);
+        dest.writeInt(modWidth);
+        dest.writeInt(modHeight);
+        dest.writeFloat(modAlpha);
+        dest.writeInt(modXOffset);
+        dest.writeInt(modYOffset);
+        dest.writeString(modText);
+        dest.writeString(modImagePath);
+        dest.writeInt(origWidth);
+        dest.writeInt(origHeight);
+        dest.writeFloat(origAlpha);
+        dest.writeString(origText);
+        dest.writeInt(origLeftMargin);
+        dest.writeInt(origTopMargin);
     }
 
     @Override
@@ -163,53 +219,78 @@ public final class ViewRule implements Parcelable, Cloneable {
     @NonNull
     @Override
     public ViewRule clone() {
-        ViewRule viewRule = new ViewRule(
-                label,
-                packageName,
-                matchVersionName,
-                matchVersionCode,
-                versionCode,
-                imagePath,
-                alias,
-                x,
-                y,
-                width,
-                height,
-                depth,
-                activityClass,
-                viewClass,
-                resourceName,
-                text,
-                description,
-                visibility,
-                timestamp);
-        return viewRule;
+        ViewRule v = new ViewRule(label, packageName, matchVersionName, matchVersionCode, versionCode,
+                imagePath, alias, x, y, width, height, depth, activityClass, viewClass,
+                resourceName, text, description, visibility, timestamp);
+        v.type = type;
+        v.modWidth = modWidth;
+        v.modHeight = modHeight;
+        v.modAlpha = modAlpha;
+        v.modXOffset = modXOffset;
+        v.modYOffset = modYOffset;
+        v.modText = modText;
+        v.modImagePath = modImagePath;
+        v.origWidth = origWidth;
+        v.origHeight = origHeight;
+        v.origAlpha = origAlpha;
+        v.origText = origText;
+        v.origLeftMargin = origLeftMargin;
+        v.origTopMargin = origTopMargin;
+        return v;
     }
 
     public int getViewId(Resources res) {
         if (!TextUtils.isEmpty(resourceName)) {
             String[] start = resourceName.split(":");
             String[] end = start[1].split("/");
-            String resourcePackageName = start[0];
-            String resourceTypeName = end[0];
-            String resourceEntryName = end[1];
-            return res.getIdentifier(resourceEntryName, resourceTypeName, resourcePackageName);
-        } else {
-            return View.NO_ID;
+            return res.getIdentifier(end[1], end[0], start[0]);
         }
+        return View.NO_ID;
+    }
+
+    public void captureOriginals(View view) {
+        ViewGroup.LayoutParams lp = view.getLayoutParams();
+        if (lp != null) {
+            origWidth = lp.width;
+            origHeight = lp.height;
+            if (lp instanceof ViewGroup.MarginLayoutParams) {
+                ViewGroup.MarginLayoutParams mlp = (ViewGroup.MarginLayoutParams) lp;
+                origLeftMargin = mlp.leftMargin;
+                origTopMargin = mlp.topMargin;
+            }
+        }
+        if (lp == null || origWidth <= 0) origWidth = view.getWidth();
+        if (lp == null || origHeight <= 0) origHeight = view.getHeight();
+        origAlpha = view.getAlpha();
+        if (view instanceof TextView) {
+            CharSequence t = ((TextView) view).getText();
+            origText = t != null ? t.toString() : "";
+        }
+    }
+
+    public boolean isRemoveRule() { return TYPE_REMOVE.equals(type); }
+    public boolean isModifyRule() { return TYPE_MODIFY.equals(type); }
+
+    public boolean isWidthModified() { return modWidth >= 0; }
+    public boolean isHeightModified() { return modHeight >= 0; }
+    public boolean isAlphaModified() { return modAlpha >= 0f; }
+    public boolean isPositionModified() { return modXOffset != 0 || modYOffset != 0; }
+    public boolean isTextModified() { return modText != null; }
+    public boolean isImageModified() { return modImagePath != null; }
+
+    public boolean hasModifications() {
+        return isWidthModified() || isHeightModified() || isAlphaModified()
+                || isPositionModified() || isTextModified() || isImageModified();
     }
 
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-
-        ViewRule viewRule = (ViewRule) o;
-
-        if (!activityClass.equals(viewRule.activityClass)) return false;
-        if (!viewClass.equals(viewRule.viewClass)) return false;
-        return Arrays.equals(depth, viewRule.depth);
-
+        ViewRule that = (ViewRule) o;
+        if (!activityClass.equals(that.activityClass)) return false;
+        if (!viewClass.equals(that.viewClass)) return false;
+        return Arrays.equals(depth, that.depth);
     }
 
     @Override
@@ -222,31 +303,26 @@ public final class ViewRule implements Parcelable, Cloneable {
 
     @Override
     public String toString() {
-        final StringBuffer sb = new StringBuffer("ViewRule{");
-        sb.append("label='").append(label).append('\'');
+        final StringBuilder sb = new StringBuilder("ViewRule{");
+        sb.append("type='").append(type).append('\'');
+        sb.append(", label='").append(label).append('\'');
         sb.append(", packageName='").append(packageName).append('\'');
-        sb.append(", matchVersionName='").append(matchVersionName).append('\'');
-        sb.append(", matchVersionCode=").append(matchVersionCode);
-        sb.append(", versionCode=").append(versionCode);
-        sb.append(", imagePath='").append(imagePath).append('\'');
-        sb.append(", alias='").append(alias).append('\'');
-        sb.append(", x=").append(x);
-        sb.append(", y=").append(y);
-        sb.append(", width=").append(width);
-        sb.append(", height=").append(height);
-        sb.append(", depth=");
-        if (depth == null) sb.append("null");
-        else {
-            sb.append('[');
-            for (int i = 0; i < depth.length; ++i)
-                sb.append(i == 0 ? "" : ", ").append(depth[i]);
-            sb.append(']');
-        }
         sb.append(", activityClass='").append(activityClass).append('\'');
         sb.append(", viewClass='").append(viewClass).append('\'');
-        sb.append(", resourceName='").append(resourceName).append('\'');
-        sb.append(", text='").append(text).append('\'');
-        sb.append(", description='").append(description).append('\'');
+        sb.append(", depth=").append(Arrays.toString(depth));
+        sb.append(", alias='").append(alias).append('\'');
+        if (isRemoveRule()) {
+            sb.append(", x=").append(x).append(", y=").append(y);
+            sb.append(", width=").append(width).append(", height=").append(height);
+        }
+        if (isModifyRule()) {
+            if (isWidthModified()) sb.append(", modWidth=").append(modWidth);
+            if (isHeightModified()) sb.append(", modHeight=").append(modHeight);
+            if (isAlphaModified()) sb.append(", modAlpha=").append(modAlpha);
+            if (isPositionModified()) sb.append(", pos=(").append(modXOffset).append(",").append(modYOffset).append(")");
+            if (isTextModified()) sb.append(", modText='").append(modText).append('\'');
+            if (isImageModified()) sb.append(", modImagePath='").append(modImagePath).append('\'');
+        }
         sb.append(", visibility=").append(visibility);
         sb.append(", timestamp=").append(timestamp);
         sb.append('}');

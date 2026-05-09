@@ -57,14 +57,6 @@ public final class PackageManagerUtils {
         }
     }
 
-    public static ResolveInfo resolveIntent(Intent intent, String type, int flags, int userId) {
-        return (ResolveInfo) XposedHelpers.callMethod(getIPackageManager(), "resolveIntent", intent, type, flags, userId);
-    }
-
-    public static ResolveInfo resolveService(Intent intent, String type, int flags, int userId) {
-        return (ResolveInfo) XposedHelpers.callMethod(getIPackageManager(), "resolveService", intent, type, flags, userId);
-    }
-
     public static PackageInfo getPackageInfo(String packageName, int flags, int userId) {
         return (PackageInfo) XposedHelpers.callMethod(getIPackageManager(), "getPackageInfo", packageName, flags, userId);
     }
