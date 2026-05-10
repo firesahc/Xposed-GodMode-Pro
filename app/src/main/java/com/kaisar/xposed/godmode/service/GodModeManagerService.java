@@ -69,6 +69,7 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
     private static final int CLEAN_OBSERVERS = 0x000032;
     private static final int LOAD_RULES = 0x00001;
     private static final int CLEAN_ORPHANS = 0x000064;
+    private static final int UPDATE_IMAGE_PATH = 0x000128;
     private static final long OBSERVER_CLEAN_INTERVAL = 60_000L;
     private static final long ORPHAN_CLEAN_INTERVAL = 120_000L;
 
@@ -139,48 +140,74 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
             case WRITE_RULE: {
                 try {
                     Object[] args = (Object[]) msg.obj;
-                    ActRules actRules = (ActRules) args[0];
-                    String packageName = (String) args[1];
-                    ViewRule viewRule = (ViewRule) args[2];
-                    Bitmap snapshot = (Bitmap) args[3];
-                    String oldImagePath = args.length > 4 ? (String) args[4] : null;
-                    String newImagePath = null;
+                    String packageName = (String) args[0];
+                    ViewRule viewRule = (ViewRule) args[1];
+                    Bitmap snapshot = (Bitmap) args[2];
+                    String oldImagePath = args.length > 3 ? (String) args[3] : null;
                     if (snapshot != null) {
                         if (oldImagePath != null && !TextUtils.isEmpty(oldImagePath)) {
                             FileUtils.delete(oldImagePath);
                         }
-                        newImagePath = saveBitmap(snapshot, getAppDataDir(packageName));
+                        String newImagePath = saveBitmap(snapshot, getAppDataDir(packageName));
                         if (newImagePath == null) {
                             mLogger.w("write rule aborted: save snapshot failed", (Throwable) null);
                             break;
                         }
-                        List<ViewRule> rules = actRules.get(viewRule.activityClass);
-                        if (rules != null) {
-                            int idx = rules.indexOf(viewRule);
-                            if (idx >= 0) {
-                                rules.get(idx).imagePath = newImagePath;
-                            }
-                        }
+                        mHandle.obtainMessage(UPDATE_IMAGE_PATH,
+                                new Object[]{packageName, viewRule, newImagePath}).sendToTarget();
+                    } else {
+                        String json = (String) args[4];
+                        ActRules snapshotRules = (ActRules) args[5];
+                        safePersistRules(packageName, json);
+                        scheduleOrphanCleanup();
+                        notifyObserverRuleChanged(packageName, snapshotRules);
                     }
-                    String json = mGson.toJson(actRules);
-                    safePersistRules(packageName, json);
-                    scheduleOrphanCleanup();
-                    notifyObserverRuleChanged(packageName, actRules);
                 } catch (IOException e) {
                     mLogger.w("write rule failed", e);
+                }
+            }
+            break;
+            case UPDATE_IMAGE_PATH: {
+                try {
+                    Object[] args = (Object[]) msg.obj;
+                    String packageName = (String) args[0];
+                    ViewRule viewRule = (ViewRule) args[1];
+                    String newImagePath = (String) args[2];
+                    String json;
+                    ActRules snapshotRules;
+                    synchronized (mAppRulesCache) {
+                        ActRules actRules = mAppRulesCache.get(packageName);
+                        if (actRules != null) {
+                            List<ViewRule> rules = actRules.get(viewRule.activityClass);
+                            if (rules != null) {
+                                int idx = rules.indexOf(viewRule);
+                                if (idx >= 0) {
+                                    rules.get(idx).imagePath = newImagePath;
+                                }
+                            }
+                        }
+                        json = mGson.toJson(actRules);
+                        snapshotRules = snapshotActRules(actRules);
+                    }
+                    safePersistRules(packageName, json);
+                    scheduleOrphanCleanup();
+                    notifyObserverRuleChanged(packageName, snapshotRules);
+                } catch (IOException e) {
+                    mLogger.w("update image path failed", e);
                 }
             }
             break;
             case DELETE_RULE: {
                 try {
                     Object[] args = (Object[]) msg.obj;
-                    ActRules actRules = (ActRules) args[0];
-                    String packageName = (String) args[1];
-                    ViewRule viewRule = (ViewRule) args[2];
-                    FileUtils.delete(viewRule.imagePath);
-                    safePersistRules(packageName, mGson.toJson(actRules));
+                    String packageName = (String) args[0];
+                    String json = (String) args[1];
+                    ActRules snapshotRules = (ActRules) args[2];
+                    String imagePath = (String) args[3];
+                    FileUtils.delete(imagePath);
+                    safePersistRules(packageName, json);
                     scheduleOrphanCleanup();
-                    notifyObserverRuleChanged(packageName, actRules);
+                    notifyObserverRuleChanged(packageName, snapshotRules);
                 } catch (IOException e) {
                     mLogger.w("delete rule failed", e);
                 }
@@ -199,10 +226,11 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
             case UPDATE_RULE: {
                 try {
                     Object[] args = (Object[]) msg.obj;
-                    ActRules actRules = (ActRules) args[0];
-                    String packageName = (String) args[1];
-                    safePersistRules(packageName, mGson.toJson(actRules));
-                    notifyObserverRuleChanged(packageName, actRules);
+                    String packageName = (String) args[0];
+                    String json = (String) args[1];
+                    ActRules snapshotRules = (ActRules) args[2];
+                    safePersistRules(packageName, json);
+                    notifyObserverRuleChanged(packageName, snapshotRules);
                 } catch (IOException e) {
                     mLogger.w("update rule failed", e);
                 }
@@ -260,6 +288,15 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
             mOrphanCleanPending = true;
             mHandle.sendEmptyMessageDelayed(CLEAN_ORPHANS, ORPHAN_CLEAN_INTERVAL);
         }
+    }
+
+    private ActRules snapshotActRules(ActRules source) {
+        if (source == null) return new ActRules();
+        ActRules copy = new ActRules();
+        for (Map.Entry<String, List<ViewRule>> entry : source.entrySet()) {
+            copy.put(entry.getKey(), new ArrayList<>(entry.getValue()));
+        }
+        return copy;
     }
 
     private void cleanAllOrphanImages() {
@@ -473,7 +510,15 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
                 } else {
                     viewRules.add(viewRule);
                 }
-                mHandle.obtainMessage(WRITE_RULE, new Object[]{actRules, packageName, viewRule, snapshot, oldImagePath}).sendToTarget();
+                if (snapshot != null) {
+                    mHandle.obtainMessage(WRITE_RULE,
+                            new Object[]{packageName, viewRule, snapshot, oldImagePath}).sendToTarget();
+                } else {
+                    String json = mGson.toJson(actRules);
+                    ActRules snapshotRules = snapshotActRules(actRules);
+                    mHandle.obtainMessage(WRITE_RULE,
+                            new Object[]{packageName, viewRule, null, null, json, snapshotRules}).sendToTarget();
+                }
                 return true;
             } catch (Exception e) {
                 mLogger.w("write rule failed", e);
@@ -506,7 +551,10 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
                 } else {
                     viewRules.add(viewRule);
                 }
-                mHandle.obtainMessage(UPDATE_RULE, new Object[]{actRules, packageName}).sendToTarget();
+                String json = mGson.toJson(actRules);
+                ActRules snapshotRules = snapshotActRules(actRules);
+                mHandle.obtainMessage(UPDATE_RULE,
+                        new Object[]{packageName, json, snapshotRules}).sendToTarget();
                 return true;
             } catch (Exception e) {
                 mLogger.w("update rule failed", e);
@@ -538,7 +586,10 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
                             mAppRulesCache.remove(packageName);
                         }
                     }
-                    mHandle.obtainMessage(DELETE_RULE, new Object[]{actRules, packageName, viewRule}).sendToTarget();
+                    String json = mGson.toJson(actRules);
+                    ActRules snapshotRules = snapshotActRules(actRules);
+                    mHandle.obtainMessage(DELETE_RULE,
+                            new Object[]{packageName, json, snapshotRules, viewRule.imagePath}).sendToTarget();
                 }
                 return removed;
             } catch (Exception e) {
