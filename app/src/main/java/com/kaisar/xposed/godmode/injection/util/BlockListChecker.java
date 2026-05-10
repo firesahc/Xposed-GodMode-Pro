@@ -6,7 +6,6 @@ import android.content.Intent;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
-import android.os.Build;
 import android.text.TextUtils;
 
 import com.kaisar.xposed.godmode.BuildConfig;
@@ -37,15 +36,11 @@ public final class BlockListChecker {
     private static boolean isLauncher(String packageName) {
         Intent homeIntent = new Intent(Intent.ACTION_MAIN);
         homeIntent.addCategory(Intent.CATEGORY_HOME);
-        List<ResolveInfo> resolveInfos;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            resolveInfos = PackageManagerUtils.queryIntentActivities(homeIntent, null, PackageManager.MATCH_ALL, 0);
-        } else {
-            resolveInfos = PackageManagerUtils.queryIntentActivities(homeIntent, null, 0, 0);
-        }
+        List<ResolveInfo> resolveInfos = PackageManagerUtils.queryIntentActivities(homeIntent, null, PackageManager.MATCH_ALL, 0);
         if (resolveInfos != null) {
             for (ResolveInfo resolveInfo : resolveInfos) {
-                if (!TextUtils.equals("com.android.settings", packageName)
+                if (resolveInfo.activityInfo != null
+                        && !TextUtils.equals("com.android.settings", packageName)
                         && TextUtils.equals(resolveInfo.activityInfo.packageName, packageName)) {
                     return true;
                 }
@@ -56,15 +51,11 @@ public final class BlockListChecker {
 
     private static boolean isInputMethod(String packageName) {
         Intent keyboardIntent = new Intent("android.view.InputMethod");
-        List<ResolveInfo> resolveInfos;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            resolveInfos = PackageManagerUtils.queryIntentServices(keyboardIntent, null, PackageManager.MATCH_ALL, 0);
-        } else {
-            resolveInfos = PackageManagerUtils.queryIntentServices(keyboardIntent, null, 0, 0);
-        }
+        List<ResolveInfo> resolveInfos = PackageManagerUtils.queryIntentServices(keyboardIntent, null, PackageManager.MATCH_ALL, 0);
         if (resolveInfos != null) {
             for (ResolveInfo resolveInfo : resolveInfos) {
-                if (TextUtils.equals(resolveInfo.serviceInfo.packageName, packageName)) {
+                if (resolveInfo.serviceInfo != null
+                        && TextUtils.equals(resolveInfo.serviceInfo.packageName, packageName)) {
                     return true;
                 }
             }

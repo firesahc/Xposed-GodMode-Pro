@@ -80,9 +80,7 @@ public final class ActivityLifecycleHook extends XC_MethodHook implements Proper
             for (Activity activity : sActivities.keySet()) {
                 if (TextUtils.equals(activity.getComponentName().getClassName(), entry.getKey())) {
                     for (ViewRule rule : rules) {
-                        if (rule.isRemoveRule()) {
-                            // handled below in batch
-                        } else if (rule.isModifyRule()) {
+                        if (rule.isModifyRule()) {
                             RuleModificationHelper.applyModificationRule(activity, rule);
                         }
                     }
@@ -125,7 +123,8 @@ public final class ActivityLifecycleHook extends XC_MethodHook implements Proper
                         ViewController.applyRuleBatch(activity, removeRules);
                     }
                 }
-            } catch (Exception ignore) {
+            } catch (Exception e) {
+                Logger.w(TAG, "[OnLayoutChange] applyRuleIfMatchCondition failed: " + e.getMessage());
             }
         }
 

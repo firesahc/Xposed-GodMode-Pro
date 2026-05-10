@@ -166,6 +166,10 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
     // =========================================================================
 
     public static void notifyEditModeChanged(boolean enable) {
+        if (loadPackageParam == null) {
+            Logger.w(TAG, "[GodMode] edit mode change ignored: loadPackageParam not ready");
+            return;
+        }
         if (state == State.UNKNOWN) {
             state = BlockListChecker.isBlocked(loadPackageParam.packageName)
                     ? State.BLOCKED : State.ALLOWED;

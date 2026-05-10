@@ -4,12 +4,15 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Build;
+import android.util.Log;
 
 import androidx.preference.PreferenceManager;
 
 import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
 
 public final class GodModeHelper {
+
+    private static final String TAG = "GodMode";
 
     public static void startNotificationService(Context context) {
         try {
@@ -19,7 +22,8 @@ public final class GodModeHelper {
             } else {
                 context.startService(intent);
             }
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            Log.w(TAG, "[GodModeHelper] startNotificationService failed", e);
         }
     }
 

@@ -1,5 +1,6 @@
 package com.kaisar.xposed.godmode.injection;
 
+import android.util.Log;
 import android.view.View;
 
 public final class ViewCompat {
@@ -10,7 +11,8 @@ public final class ViewCompat {
         } catch (Exception e) {
             try {
                 view.setAlpha(visibility == View.VISIBLE ? 1f : 0f);
-            } catch (Exception ignored) {
+            } catch (Exception inner) {
+                Log.w("GodMode", "[ViewCompat] setVisibility fallback also failed", inner);
             }
         }
     }

@@ -4,7 +4,6 @@ import android.annotation.SuppressLint;
 import android.content.Intent;
 import android.content.pm.PackageInfo;
 import android.content.pm.ResolveInfo;
-import android.os.Build;
 import android.os.IBinder;
 import android.os.IInterface;
 
@@ -37,11 +36,7 @@ public final class PackageManagerUtils {
         if (list == null) {
             return Collections.emptyList();
         }
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
-            return (List<ResolveInfo>) list;
-        } else {
-            return (List<ResolveInfo>) XposedHelpers.callMethod(list, "getList");
-        }
+        return (List<ResolveInfo>) XposedHelpers.callMethod(list, "getList");
     }
 
     @SuppressWarnings("unchecked")
@@ -50,11 +45,7 @@ public final class PackageManagerUtils {
         if (list == null) {
             return Collections.emptyList();
         }
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
-            return (List<ResolveInfo>) list;
-        } else {
-            return (List<ResolveInfo>) XposedHelpers.callMethod(list, "getList");
-        }
+        return (List<ResolveInfo>) XposedHelpers.callMethod(list, "getList");
     }
 
     public static PackageInfo getPackageInfo(String packageName, int flags, int userId) {

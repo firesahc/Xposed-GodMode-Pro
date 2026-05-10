@@ -69,7 +69,8 @@ public final class CrashHandler implements Thread.UncaughtExceptionHandler {
                 String stackTraceString = Logger.getStackTraceString(e);
                 fileChannel.write(ByteBuffer.wrap(stackTraceString.getBytes()));
             }
-        } catch (IOException ignore) {
+        } catch (IOException ioe) {
+            Logger.w(TAG, "Failed to write crash log to file", ioe);
         }
         Logger.e(TAG, String.format("Crash on %s thread", t.getName()), e);
     }

@@ -18,13 +18,9 @@ import java.util.Arrays;
 @Keep
 public final class ViewRule implements Parcelable, Cloneable {
 
-    public static final String TYPE_REMOVE = "remove";
-    public static final String TYPE_MODIFY = "modify";
-    public static final String TYPE_UNKNOWN = "unknown";
-
-    // 规则类型: remove / modify / unknown (旧版本无此字段时默认)
-    @SerializedName("type")
-    public String type = TYPE_UNKNOWN;
+    // 规则标识字段: 非空=修改规则，null/空=移除规则
+    @SerializedName("rule_tag")
+    public String ruleTag;
 
     // --- 移除规则字段 ---
     @SerializedName("label")
@@ -126,8 +122,7 @@ public final class ViewRule implements Parcelable, Cloneable {
     }
 
     protected ViewRule(Parcel in) {
-        type = in.readString();
-        if (type == null) type = TYPE_UNKNOWN;
+        ruleTag = in.readString();
         label = in.readString();
         packageName = in.readString();
         matchVersionName = in.readString();
@@ -164,7 +159,7 @@ public final class ViewRule implements Parcelable, Cloneable {
 
     @Override
     public void writeToParcel(Parcel dest, int flags) {
-        dest.writeString(type);
+        dest.writeString(ruleTag);
         dest.writeString(label);
         dest.writeString(packageName);
         dest.writeString(matchVersionName);
@@ -222,7 +217,7 @@ public final class ViewRule implements Parcelable, Cloneable {
         ViewRule v = new ViewRule(label, packageName, matchVersionName, matchVersionCode, versionCode,
                 imagePath, alias, x, y, width, height, depth, activityClass, viewClass,
                 resourceName, text, description, visibility, timestamp);
-        v.type = type;
+        v.ruleTag = ruleTag;
         v.modWidth = modWidth;
         v.modHeight = modHeight;
         v.modAlpha = modAlpha;
@@ -268,8 +263,13 @@ public final class ViewRule implements Parcelable, Cloneable {
         }
     }
 
-    public boolean isRemoveRule() { return TYPE_REMOVE.equals(type); }
-    public boolean isModifyRule() { return TYPE_MODIFY.equals(type); }
+    public boolean isRemoveRule() {
+        return ruleTag == null || ruleTag.isEmpty();
+    }
+
+    public boolean isModifyRule() {
+        return ruleTag != null && !ruleTag.isEmpty();
+    }
 
     public boolean isWidthModified() { return modWidth >= 0; }
     public boolean isHeightModified() { return modHeight >= 0; }
@@ -301,10 +301,11 @@ public final class ViewRule implements Parcelable, Cloneable {
         return result;
     }
 
+    @NonNull
     @Override
     public String toString() {
         final StringBuilder sb = new StringBuilder("ViewRule{");
-        sb.append("type='").append(type).append('\'');
+        sb.append("ruleTag='").append(ruleTag).append('\'');
         sb.append(", label='").append(label).append('\'');
         sb.append(", packageName='").append(packageName).append('\'');
         sb.append(", activityClass='").append(activityClass).append('\'');

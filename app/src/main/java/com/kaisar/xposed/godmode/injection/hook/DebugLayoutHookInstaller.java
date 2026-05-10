@@ -28,58 +28,89 @@ public final class DebugLayoutHookInstaller {
     private DebugLayoutHookInstaller() {}
 
     public static void install(Property<Boolean> switchProp) {
+        boolean legacyOk = false, modernOk = false, suppressOk = false;
         try {
             if (Build.VERSION.SDK_INT < 29) {
-                installLegacyHooks(switchProp);
+                legacyOk = installLegacyHooksSafe(switchProp);
             } else {
-                installModernHooks(switchProp);
+                modernOk = installModernHooksSafe(switchProp);
             }
-            // 抑制 GM 覆盖层视图（Tag = TAG_GM_CMP）的调试绘制
-            suppressGmOverlayDebugDraw();
         } catch (Throwable e) {
-            Logger.e(TAG, "Hook debug layout error", e);
+            Logger.e(TAG, "Hook debug layout properties error (non-fatal)", e);
+        }
+        try {
+            suppressOk = suppressGmOverlayDebugDrawSafe();
+        } catch (Throwable e) {
+            Logger.e(TAG, "Hook debug draw suppression error (non-fatal)", e);
+        }
+        Logger.i(TAG, String.format("[DebugLayout] install result: legacy=%b modern=%b suppress=%b",
+                legacyOk, modernOk, suppressOk));
+    }
+
+    private static boolean installLegacyHooksSafe(Property<Boolean> switchProp) {
+        try {
+            SystemPropertiesHook hook = new SystemPropertiesHook();
+            switchProp.addOnPropertyChangeListener(hook);
+            XposedHelpers.findAndHookMethod("android.os.SystemProperties",
+                    ClassLoader.getSystemClassLoader(),
+                    "native_get_boolean", String.class, boolean.class, hook);
+            return true;
+        } catch (Throwable t) {
+            Logger.w(TAG, "[DebugLayout] legacy hook failed (non-fatal): " + t.getMessage());
+            return false;
         }
     }
 
-    /** API < 29：Hook SystemProperties.native_get_boolean */
-    private static void installLegacyHooks(Property<Boolean> switchProp) {
-        SystemPropertiesHook hook = new SystemPropertiesHook();
-        switchProp.addOnPropertyChangeListener(hook);
-        XposedHelpers.findAndHookMethod("android.os.SystemProperties",
-                ClassLoader.getSystemClassLoader(),
-                "native_get_boolean", String.class, boolean.class, hook);
+    private static boolean installModernHooksSafe(Property<Boolean> switchProp) {
+        boolean ok = false;
+        try {
+            SystemPropertiesStringHook stringHook = new SystemPropertiesStringHook();
+            switchProp.addOnPropertyChangeListener(stringHook);
+            XposedBridge.hookAllMethods(
+                    XposedHelpers.findClass("android.os.SystemProperties", ClassLoader.getSystemClassLoader()),
+                    "native_get", stringHook);
+            ok = true;
+        } catch (Throwable t) {
+            Logger.w(TAG, "[DebugLayout] native_get hook failed: " + t.getMessage());
+        }
+        try {
+            DisplayPropertiesHook displayHook = new DisplayPropertiesHook();
+            switchProp.addOnPropertyChangeListener(displayHook);
+            XposedHelpers.findAndHookMethod("android.sysprop.DisplayProperties",
+                    ClassLoader.getSystemClassLoader(),
+                    "debug_layout", displayHook);
+            ok = true;
+        } catch (Throwable t) {
+            Logger.w(TAG, "[DebugLayout] DisplayProperties hook failed: " + t.getMessage());
+        }
+        return ok;
     }
 
-    /** API >= 29：Hook SystemProperties.native_get + DisplayProperties.debug_layout */
-    private static void installModernHooks(Property<Boolean> switchProp) {
-        SystemPropertiesStringHook stringHook = new SystemPropertiesStringHook();
-        switchProp.addOnPropertyChangeListener(stringHook);
-        XposedBridge.hookAllMethods(
-                XposedHelpers.findClass("android.os.SystemProperties", ClassLoader.getSystemClassLoader()),
-                "native_get", stringHook);
-
-        DisplayPropertiesHook displayHook = new DisplayPropertiesHook();
-        switchProp.addOnPropertyChangeListener(displayHook);
-        XposedHelpers.findAndHookMethod("android.sysprop.DisplayProperties",
-                ClassLoader.getSystemClassLoader(),
-                "debug_layout", displayHook);
-    }
-
-    /** 禁用 GM 覆盖层视图的调试绘制 */
-    private static void suppressGmOverlayDebugDraw() {
-        XposedHelpers.findAndHookMethod(ViewGroup.class, "onDebugDrawMargins",
-                Canvas.class, Paint.class, XC_MethodReplacement.DO_NOTHING);
-
-        XC_MethodHook disableDebugDraw = new XC_MethodHook() {
-            @Override
-            protected void beforeHookedMethod(MethodHookParam param) {
-                View view = (View) param.thisObject;
-                if (ViewHelper.TAG_GM_CMP.equals(view.getTag())) {
-                    param.setResult(null);
+    private static boolean suppressGmOverlayDebugDrawSafe() {
+        boolean ok = false;
+        try {
+            XposedHelpers.findAndHookMethod(ViewGroup.class, "onDebugDrawMargins",
+                    Canvas.class, Paint.class, XC_MethodReplacement.DO_NOTHING);
+            ok = true;
+        } catch (Throwable t) {
+            Logger.w(TAG, "[DebugLayout] onDebugDrawMargins hook failed: " + t.getMessage());
+        }
+        try {
+            XC_MethodHook disableDebugDraw = new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) {
+                    View view = (View) param.thisObject;
+                    if (ViewHelper.TAG_GM_CMP.equals(view.getTag())) {
+                        param.setResult(null);
+                    }
                 }
-            }
-        };
-        XposedHelpers.findAndHookMethod(ViewGroup.class, "onDebugDraw", Canvas.class, disableDebugDraw);
-        XposedHelpers.findAndHookMethod(View.class, "debugDrawFocus", Canvas.class, disableDebugDraw);
+            };
+            XposedHelpers.findAndHookMethod(ViewGroup.class, "onDebugDraw", Canvas.class, disableDebugDraw);
+            XposedHelpers.findAndHookMethod(View.class, "debugDrawFocus", Canvas.class, disableDebugDraw);
+            ok = true;
+        } catch (Throwable t) {
+            Logger.w(TAG, "[DebugLayout] debug draw suppression failed: " + t.getMessage());
+        }
+        return ok;
     }
 }
