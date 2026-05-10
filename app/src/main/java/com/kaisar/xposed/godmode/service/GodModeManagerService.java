@@ -7,6 +7,7 @@ import static com.kaisar.xposed.godmode.injection.util.FileUtils.S_IRWXU;
 
 import android.content.Context;
 import android.graphics.Bitmap;
+import android.graphics.Canvas;
 import android.os.Binder;
 import android.os.Environment;
 import android.os.Handler;
@@ -277,7 +278,9 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
         File tmpFile = new File(appDataDir, packageName + RULE_FILE_SUFFIX + ".tmp");
         FileUtils.stringToFile(tmpFile, json);
         if (!tmpFile.renameTo(ruleFile)) {
-            if (tmpFile.exists()) tmpFile.delete();
+            if (tmpFile.exists() && !tmpFile.delete()) {
+                mLogger.w("Failed to delete tmp file: " + tmpFile, (Throwable) null);
+            }
             throw new IOException("Failed to atomically rename rule file: " + ruleFile);
         }
         FileUtils.setPermissions(ruleFile, S_IRWXU | S_IRWXG | S_IRWXO, -1, -1);
@@ -621,10 +624,26 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
     }
 
     @Override
+    public String saveImageFile(String packageName, Bitmap bitmap) throws RemoteException {
+        enforcePermission(new String[]{packageName, BuildConfig.APPLICATION_ID}, "save image fail permission denied");
+        if (!mStarted || bitmap == null || bitmap.isRecycled()) return null;
+        synchronized (mAppRulesCache) {
+            try {
+                return saveBitmap(bitmap, getAppDataDir(packageName));
+            } catch (FileNotFoundException e) {
+                throw new RemoteException("Cannot access package data dir: " + e.getMessage());
+            }
+        }
+    }
+
+    @Override
     public ParcelFileDescriptor openImageFileDescriptor(String filePath) throws RemoteException {
-        enforcePermission("open fd fail permission denied");
         if (!filePath.startsWith(BASE_DIR) || !filePath.endsWith(IMAGE_FILE_SUFFIX))
             throw new RemoteException(String.format("unauthorized access %s", filePath));
+        File parentFile = new File(filePath).getParentFile();
+        String packageFromPath = parentFile != null ? parentFile.getName() : "";
+        enforcePermission(new String[]{packageFromPath, BuildConfig.APPLICATION_ID},
+                "open fd fail permission denied");
         File file = new File(filePath);
         if (!file.exists() || !file.isFile()) {
             throw new RemoteException("File not found: " + filePath);
@@ -643,13 +662,22 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
 
     private String saveBitmap(Bitmap bitmap, String dir) {
         try {
+            Bitmap bitmapToSave = bitmap;
+            if (bitmap.getConfig() == Bitmap.Config.HARDWARE) {
+                bitmapToSave = Bitmap.createBitmap(bitmap.getWidth(), bitmap.getHeight(), Bitmap.Config.ARGB_8888);
+                new Canvas(bitmapToSave).drawBitmap(bitmap, 0, 0, null);
+            }
             File file = new File(dir, System.currentTimeMillis() + IMAGE_FILE_SUFFIX);
             try (FileOutputStream out = new FileOutputStream(file)) {
-                if (bitmap.compress(Bitmap.CompressFormat.WEBP, 80, out)) {
+                if (bitmapToSave.compress(Bitmap.CompressFormat.WEBP, 80, out)) {
                     FileUtils.setPermissions(file, S_IRWXU | S_IRWXG | S_IRWXO, -1, -1);
                     return file.getAbsolutePath();
                 }
                 throw new FileNotFoundException("bitmap can't compress to " + file.getAbsolutePath());
+            } finally {
+                if (bitmapToSave != bitmap && !bitmapToSave.isRecycled()) {
+                    bitmapToSave.recycle();
+                }
             }
         } catch (IOException e) {
             mLogger.w("save bitmap fail", e);
@@ -658,40 +686,36 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
     }
 
     private void notifyObserverRuleChanged(String packageName, ActRules actRules) {
-        synchronized (mRemoteCallbackList) {
-            final int N = mRemoteCallbackList.beginBroadcast();
-            for (int i = 0; i < N; i++) {
-                try {
-                    ObserverProxy observerProxy = mRemoteCallbackList.getBroadcastItem(i);
-                    if (observerProxy == null) continue;
-                    if (TextUtils.equals(observerProxy.packageName, packageName) || TextUtils.equals(observerProxy.packageName, "*")) {
-                        if (observerProxy.observer.asBinder().pingBinder()) {
-                            observerProxy.observer.onViewRuleChanged(packageName, actRules);
-                        }
-                    }
-                } catch (Exception e) {
-                    mLogger.w("notify rule changed fail", e);
-                }
+        forEachLiveObserver((proxy) -> {
+            if (TextUtils.equals(proxy.packageName, packageName) || TextUtils.equals(proxy.packageName, "*")) {
+                proxy.observer.onViewRuleChanged(packageName, actRules);
             }
-            mRemoteCallbackList.finishBroadcast();
-        }
+        });
     }
 
     private void notifyObserverEditModeChanged(boolean enable) {
+        forEachLiveObserver((proxy) -> proxy.onEditModeChanged(enable));
+    }
+
+    private void forEachLiveObserver(ObserverAction action) {
         synchronized (mRemoteCallbackList) {
             final int N = mRemoteCallbackList.beginBroadcast();
             for (int i = 0; i < N; i++) {
                 try {
                     ObserverProxy proxy = mRemoteCallbackList.getBroadcastItem(i);
                     if (proxy != null && proxy.observer.asBinder().pingBinder()) {
-                        proxy.onEditModeChanged(enable);
+                        action.execute(proxy);
                     }
                 } catch (Exception e) {
-                    mLogger.w("notify edit mode changed fail", e);
+                    mLogger.w("notify observer failed", e);
                 }
             }
             mRemoteCallbackList.finishBroadcast();
         }
+    }
+
+    private interface ObserverAction {
+        void execute(ObserverProxy proxy) throws RemoteException;
     }
 
     private String getBaseDir() throws FileNotFoundException {

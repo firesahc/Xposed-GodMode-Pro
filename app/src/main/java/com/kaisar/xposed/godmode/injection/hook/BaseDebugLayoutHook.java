@@ -6,7 +6,7 @@ import de.robv.android.xposed.XC_MethodHook;
 
 abstract class BaseDebugLayoutHook extends XC_MethodHook implements Property.OnPropertyChangeListener<Boolean> {
 
-    protected boolean mDebugLayout;
+    protected volatile boolean mDebugLayout;
 
     @Override
     public void onPropertyChange(Boolean debugLayout) {

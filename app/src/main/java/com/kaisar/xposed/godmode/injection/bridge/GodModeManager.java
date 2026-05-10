@@ -150,4 +150,13 @@ public final class GodModeManager {
             return null;
         }
     }
+
+    public String saveImageFile(String packageName, Bitmap bitmap) {
+        try {
+            return mGMM.saveImageFile(packageName, bitmap);
+        } catch (RemoteException e) {
+            logError("saveImageFile", e);
+            return null;
+        }
+    }
 }

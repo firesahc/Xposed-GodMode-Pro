@@ -31,6 +31,8 @@ import com.kaisar.xposed.godmode.preference.ImageViewPreference;
 import com.kaisar.xposed.godmode.rule.ViewRule;
 import com.kaisar.xposed.godmode.util.Preconditions;
 
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.Date;
@@ -213,9 +215,21 @@ public final class ViewRuleDetailsFragment extends PreferenceFragmentCompat impl
 
     @Nullable
     private static Bitmap loadRuleImageBitmap(@NonNull ViewRule viewRule) {
-        try (ParcelFileDescriptor parcelFileDescriptor = GodModeManager.getDefault().openImageFileDescriptor(viewRule.imagePath)) {
-            Objects.requireNonNull(parcelFileDescriptor, String.format("Can not open %s", viewRule.imagePath));
-            return BitmapFactory.decodeFileDescriptor(parcelFileDescriptor.getFileDescriptor());
+        try {
+            ParcelFileDescriptor pfd = GodModeManager.getDefault().openImageFileDescriptor(viewRule.imagePath);
+            Objects.requireNonNull(pfd, String.format("Can not open %s", viewRule.imagePath));
+            try {
+                InputStream in = new ParcelFileDescriptor.AutoCloseInputStream(pfd);
+                ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+                byte[] temp = new byte[8192];
+                int n;
+                while ((n = in.read(temp)) != -1) {
+                    buffer.write(temp, 0, n);
+                }
+                return BitmapFactory.decodeByteArray(buffer.toByteArray(), 0, buffer.size());
+            } finally {
+                try { pfd.close(); } catch (Exception ignored) {}
+            }
         } catch (Exception e) {
             Logger.w(TAG, e.getMessage());
             return null;

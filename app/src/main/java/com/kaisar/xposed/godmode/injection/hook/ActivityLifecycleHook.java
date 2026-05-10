@@ -51,6 +51,7 @@ public final class ActivityLifecycleHook extends XC_MethodHook implements Proper
 
     @Override
     public void onPropertyChange(ActRules newActRules) {
+        RuleModificationHelper.clearAppliedCache();
         Set<Map.Entry<String, List<ViewRule>>> entries = newActRules.entrySet();
         for (Map.Entry<String, List<ViewRule>> entry : entries) {
             String key = entry.getKey();

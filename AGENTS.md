@@ -1,54 +1,111 @@
 # AGENTS.md
 
-## Build
+## 构建与项目指南
 
-```bash
-# First clone — submodule is REQUIRED, build fails without it
-git submodule update --init --recursive
-./gradlew assembleDebug
-```
+- `./gradlew build` 执行完整构建（CI 使用此命令）。
 
-- `./gradlew build` runs the full build (CI uses this).
-- Java 8 target; CI uses JDK 11 on Ubuntu.
+### 模块结构
 
-## Modules
+| 模块 | 类型 | 用途 |
+|------|------|------|
+| `:app` | Android 应用 | Xposed 模块的 APK |
+| `:libxservicemanager` | Git 子模块，Android 库 | 系统服务注入 |
 
-| Module | Type | Purpose |
-|---|---|---|
-| `:app` | Android application | The Xposed module APK |
-| `:libxservicemanager` | Git submodule, Android library | System service injection (clipboard hijack) |
+- `app/build.gradle` 中声明 `applicationId "com.viewblocker.jrsen"`，但命名空间是 `com.kaisar.xposed.godmode`，两者不同——请勿假定它们一致。
 
-`app/build.gradle` declares `applicationId "com.viewblocker.jrsen"`, but the namespace is `com.kaisar.xposed.godmode`. These differ — do not assume they match.
+### Xposed 入口点
 
-## Critical: Custom Resource Package ID
+在 `app/src/main/assets/xposed_init` 中声明：
 
-`app/build.gradle` sets `--package-id 0x95` on `androidResources`. This is NOT the Android default (`0x7f`). The code at `GodModeInjector.java` checks `R.string.res_inject_success >>> 24 == 0x7f` and **refuses to load** if the ID equals the default. Do not remove or change the `additionalParameters` block, and do not change the resource-id check in the injector.
+com.kaisar.xposed.godmode.injection.GodModeInjector实现了 `IXposedHookLoadPackage` 与 `IXposedHookZygoteInit`。
 
-## Xposed Entry Point
+- `xposed-api-89.jar` 依赖为 `compileOnly`（运行时由框架提供，不打包进 APK）。
 
-Declared in `app/src/main/assets/xposed_init`:
-```
-com.kaisar.xposed.godmode.injection.GodModeInjector
-```
+### 代码生成
 
-- Implements `IXposedHookLoadPackage` + `IXposedHookZygoteInit`.
-- `xposed-api-89.jar` is `compileOnly` (not bundled — provided by the framework at runtime).
-- The injector registers `GodModeManagerService` into `system_server` when the package is `"android"`.
+- **AIDL**：`buildFeatures { aidl = true }`，AIDL 源文件位于 `app/src/main/aidl/`，会自动生成 IPC 桩代码。
+- **Safe Args**：`androidx.navigation:navigation-safe-args-gradle-plugin` 生成导航用的 `*Directions` 类。
+- **Glide**：`annotationProcessor 'com.github.bumptech.glide:compiler'` 生成 `GlideModule`。
 
-## Code Generation
+### 仓库镜像
 
-- **AIDL**: `buildFeatures { aidl = true }`. AIDL sources in `app/src/main/aidl/` generate IPC stubs automatically.
-- **Safe Args**: The `androidx.navigation:navigation-safe-args-gradle-plugin` generates `*Directions` classes for navigation.
-- **Glide**: `annotationProcessor 'com.github.bumptech.glide:compiler'` generates a `GlideModule`.
+构建脚本在 Maven Central / Google 之前使用了阿里云镜像（`maven.aliyun.com`）。在中国大陆以外地区可能会导致依赖下载问题。如果出现依赖解析失败，请调换仓库顺序或移除阿里云条目。
 
-## Testing
+### 运行时数据存储
 
-No unit or instrumented tests exist despite `AndroidJUnitRunner` and `espresso-core` being declared. Adding tests is fine, but there is nothing to run today.
+规则以 JSON 文件形式持久化在 `/data/misc/godmode/{包名}/` 路径下。备份采用 `.gzip` 格式，并包含一个 `manifest.json` 清单文件。被修改和被移除视图的截图以 `.webp` 格式与规则文件一同存放。
 
-## Repositories
+---
 
-Build scripts use Alibaba mirrors (`maven.aliyun.com`) before Maven Central / Google. This may cause resolution issues outside China. If dependency downloads fail, swap the repo order or remove the Alibaba entries.
+## 内置审查技能：代码健康与架构防衰变审查
 
-## Data Storage (at runtime)
+当用户请求对代码进行审查、重构或分析时，你必须作为一名资深软件工程师，严格按照以下技能框架执行，并用中文输出结构化报告。在收到任何代码变更或项目代码时，均按此要求执行审查与重构。
 
-Rules are persisted as JSON files at `/data/system/godmode/{package}/`. Backups use `.gzip` format with a `manifest.json` manifest. Screenshots of removed views are stored as `.webp` files alongside rules.
+### 审查原则
+
+- 每次修改都必须显式化依赖，绝不引入或容忍隐式耦合。
+- 模块只通过稳定的公开接口交互，各自独立可测。
+- 遵循开闭原则：优先扩展而非修改既有稳定接口。
+- 零容忍全局状态、隐式协议、时序耦合等隐性知识。
+
+### 执行任务（按顺序完成，缺一不可）
+
+#### 1. 缺陷排查与修复
+
+找出因本次改动引入或可能引发的问题，包括：
+
+- 边界条件遗漏、空值/异常处理缺失
+- 状态不一致、资源泄漏、并发安全隐患
+- 逻辑死区、不可达代码、错误返回值忽略
+
+解释每个 bug 的触发条件与修复方法，并给出修复后的代码片段。
+
+#### 2. 冗余清理
+
+- 移除无用的变量、函数、类、导入、注释掉的代码、重复逻辑。
+- 若存在可合并的相似实现，重构为单一、可配置、可复用的组件。
+- 若某个抽象仅有一个实现且无扩展前景，则内联回调用方。
+
+#### 3. 解耦与依赖优化
+
+- 绘制或描述本次改动涉及的模块依赖图，标记出：
+  - 循环依赖、不合理跨层调用、直接访问内部实现
+- 将紧耦合改为松耦合，手段包括：
+  - 引入接口/抽象类、依赖注入、事件/消息机制等
+- 消除基于“A 必须在 B 之后调用”但无显式保证的时序耦合。
+- 确保每个模块：单一职责、可独立编译、可独立单元测试。
+
+#### 4. 逻辑统一与清晰化
+
+- 检查全局业务逻辑或数据流中是否存在冲突，如同一概念在不同模块中命名/实现不一致。
+- 统一命名规范、错误处理模式（异常或错误码）、返回值模型（空集合 vs null）。
+- 确保同一种类的操作在所有模块中遵循相同的调用序列和约定。
+
+#### 5. 增强模块独立性，防止隐性关系腐化
+
+- **接口纯净化**：禁止任何模块绕过公开接口访问其他模块的内部实现、私有变量或副作用。
+- **隐式知识显式化**：找出所有未经正式约定的假设，例如：
+  - 全局变量、环境变量依赖、约定常量、未文档化的数据结构格式
+  - 依赖执行顺序但不校验状态，或依赖某操作开启的隐式副作用
+  - 基于时序、执行顺序、环境状态或其他隐式假设的耦合，将其改写为显式的前置条件、后置条件或明确的依赖注入。
+- **变更隔离分析**：对本次修改，逐一检查是否可能打破既有模块的“隐性契约”。若是，则重构为扩展式修改（如通过新增扩展点、策略模式等），避免修改稳定接口。
+- **依赖声明**：本次改动新增的所有模块间依赖，必须在接口定义或构造函数参数中显式声明。
+- **测试独立性**：验证每个模块的测试不依赖其他模块的实现细节、全局状态或外部环境的特定顺序。
+- **彻底消除跨模块共享的隐式知识**：将所有未文档化的约定、全局变量等封装在单一职责的模块内，或通过明确的配置/参数传递。
+- **确保每个模块可以独立理解、独立编译、独立测试**，不依赖其他模块的实现细节或测试环境中的特殊状态。
+
+#### 6. 输出要求
+
+- 所有对话输出使用中文，包括中间对话。
+- 按上述各方面，分点列出发现的问题、修改内容及修改理由。
+- 每项修改需注明涉及的文件及关键代码片段。
+- 若某方面未发现问题，直接说明“未发现”。
+
+请严格按照以下结构输出审查报告：
+
+1.  **发现的隐藏 Bug 及修复**（每条包含：位置、问题描述、修复代码）
+2.  **冗余代码清理**（每条包含：位置、为何冗余、处理方式）
+3.  **耦合问题与解耦方案**（每条包含：涉及模块、耦合类型、重构建议/代码）
+4.  **逻辑冲突与统一建议**（每条包含：冲突描述、统一方案）
+5.  **独立性风险与防衰变改造**（按第 5 点的各个子项逐一报告，无问题则写“未发现”）
+6.  **整体影响评估**（本次改动对系统长期可维护性的影响总结，以及是否建议合入）

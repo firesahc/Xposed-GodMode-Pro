@@ -25,7 +25,9 @@ import com.bumptech.glide.signature.ObjectKey;
 import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
 import com.kaisar.xposed.godmode.rule.ViewRule;
 
+import java.io.ByteArrayOutputStream;
 import java.io.FileNotFoundException;
+import java.io.InputStream;
 
 @GlideModule
 public class GmGlideModule extends AppGlideModule {
@@ -73,28 +75,34 @@ public class GmGlideModule extends AppGlideModule {
         public void loadData(@NonNull Priority priority, @NonNull DataCallback<? super Bitmap> callback) {
             ParcelFileDescriptor pfd = GodModeManager.getDefault().openImageFileDescriptor(mViewRule.imagePath);
             if (pfd != null) {
-                Bitmap bitmap = BitmapFactory.decodeFileDescriptor(pfd.getFileDescriptor());
                 try {
-                    if (mViewRule.x >= 0 && mViewRule.y >= 0 && mViewRule.width > 0 && mViewRule.height > 0
-                            && bitmap != null
-                            && mViewRule.x + mViewRule.width <= bitmap.getWidth()
-                            && mViewRule.y + mViewRule.height <= bitmap.getHeight()) {
-                        Bitmap croppedBitmap = Bitmap.createBitmap(bitmap, mViewRule.x, mViewRule.y, mViewRule.width, mViewRule.height);
-                        Bitmap markedBitmap = Bitmap.createBitmap(croppedBitmap.getWidth(), croppedBitmap.getHeight(), croppedBitmap.getConfig());
-                        Canvas canvas = new Canvas(markedBitmap);
-                        canvas.drawBitmap(croppedBitmap, 0, 0, null);
-                        Paint borderPaint = new Paint();
-                        borderPaint.setStyle(Paint.Style.STROKE);
-                        borderPaint.setColor(Color.RED);
-                        borderPaint.setStrokeWidth(3);
-                        canvas.drawRect(1, 1, markedBitmap.getWidth() - 1, markedBitmap.getHeight() - 1, borderPaint);
-                        callback.onDataReady(markedBitmap);
-                        croppedBitmap.recycle();
-                    } else {
-                        callback.onDataReady(bitmap);
+                    InputStream in = new ParcelFileDescriptor.AutoCloseInputStream(pfd);
+                    ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+                    byte[] temp = new byte[8192];
+                    int n;
+                    while ((n = in.read(temp)) != -1) {
+                        buffer.write(temp, 0, n);
                     }
+                    Bitmap bitmap = BitmapFactory.decodeByteArray(buffer.toByteArray(), 0, buffer.size());
+                if (mViewRule.x >= 0 && mViewRule.y >= 0 && mViewRule.width > 0 && mViewRule.height > 0
+                        && bitmap != null
+                        && mViewRule.x + mViewRule.width <= bitmap.getWidth()
+                        && mViewRule.y + mViewRule.height <= bitmap.getHeight()) {
+                    Bitmap croppedBitmap = Bitmap.createBitmap(bitmap, mViewRule.x, mViewRule.y, mViewRule.width, mViewRule.height);
+                    Bitmap markedBitmap = Bitmap.createBitmap(croppedBitmap.getWidth(), croppedBitmap.getHeight(), Bitmap.Config.ARGB_8888);
+                    Canvas canvas = new Canvas(markedBitmap);
+                    canvas.drawBitmap(croppedBitmap, 0, 0, null);
+                    Paint borderPaint = new Paint();
+                    borderPaint.setStyle(Paint.Style.STROKE);
+                    borderPaint.setColor(Color.RED);
+                    borderPaint.setStrokeWidth(3);
+                    canvas.drawRect(1, 1, markedBitmap.getWidth() - 1, markedBitmap.getHeight() - 1, borderPaint);
+                    callback.onDataReady(markedBitmap);
+                    croppedBitmap.recycle();
+                } else {
+                    callback.onDataReady(bitmap);
+                }
                 } catch (Exception e) {
-                    bitmap.recycle();
                     callback.onLoadFailed(e);
                 }
             } else {

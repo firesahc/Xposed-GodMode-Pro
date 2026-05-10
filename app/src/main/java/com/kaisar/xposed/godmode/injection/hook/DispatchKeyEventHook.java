@@ -66,7 +66,6 @@ public final class DispatchKeyEventHook extends XC_MethodHook
     private static volatile int sInteractionMode = MODE_INITIAL;
 
     public static int getInteractionMode() { return sInteractionMode; }
-    public static void setInteractionMode(int mode) { sInteractionMode = mode; }
     static boolean isKeySelecting() { return sInstance != null && sInstance.mKeySelecting; }
 
     // =========================================================================
@@ -232,10 +231,10 @@ public final class DispatchKeyEventHook extends XC_MethodHook
         mHasUserSelection = false;
         mViewNodes.addAll(ViewHelper.buildViewNodes(activity.getWindow().getDecorView()));
         final ViewGroup container = (ViewGroup) activity.getWindow().getDecorView();
-        mMaskView = MaskView.makeMaskView(activity);
-        mMaskView.setMaskOverlay(OVERLAY_COLOR);
-        mMaskView.attachToContainer(container);
         try {
+            mMaskView = MaskView.makeMaskView(activity);
+            mMaskView.setMaskOverlay(OVERLAY_COLOR);
+            mMaskView.attachToContainer(container);
             GodModeInjector.injectModuleResources(activity.getResources());
             LayoutInflater inflater = LayoutInflater.from(activity);
             mNodeSelectorPanel = inflater.inflate(
@@ -258,6 +257,10 @@ public final class DispatchKeyEventHook extends XC_MethodHook
             mKeySelecting = true;
         } catch (Exception e) {
             Logger.e(TAG, "showNodeSelectPanel fail", e);
+            if (mMaskView != null) {
+                mMaskView.detachFromContainer();
+                mMaskView = null;
+            }
             mKeySelecting = false;
         }
     }
@@ -422,7 +425,7 @@ public final class DispatchKeyEventHook extends XC_MethodHook
         if (mCurrentViewIndex >= mViewNodes.size()) {
             mCurrentViewIndex = mViewNodes.size() - 1;
         }
-        if (mCurrentViewIndex >= 0 && mCurrentViewIndex < mViewNodes.size()) {
+        if (mCurrentViewIndex >= 0) {
             mViewNodes.remove(mCurrentViewIndex);
         }
         if (mNodeSeekbar != null) {
@@ -450,11 +453,11 @@ public final class DispatchKeyEventHook extends XC_MethodHook
         if (mIsPreviewing) {
             restorePreview();
         } else {
-            startPreview(activity);
+            startPreview();
         }
     }
 
-    private void startPreview(final Activity activity) {
+    private void startPreview() {
         if (mViewNodes.isEmpty()) return;
         View view = mViewNodes.get(Math.max(mCurrentViewIndex, 0)).get();
         if (view == null) return;

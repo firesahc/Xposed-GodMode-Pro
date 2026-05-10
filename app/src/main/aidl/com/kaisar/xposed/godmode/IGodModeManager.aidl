@@ -33,4 +33,5 @@ interface IGodModeManager {
 
     ParcelFileDescriptor openImageFileDescriptor(String filePath);
 
+    String saveImageFile(String packageName, in Bitmap bitmap);
 }
