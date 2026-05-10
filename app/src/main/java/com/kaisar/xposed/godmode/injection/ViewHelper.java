@@ -63,7 +63,7 @@ public final class ViewHelper {
             if (viewByDepth != null) {
                 if (isDepthMatch(viewByDepth, rule, strictMode))
                     return viewByDepth;
-                View anchored = matchByAnchoredStrategy(activity, rule, strictMode, viewByDepth);
+                View anchored = matchByAnchoredStrategy(rule, strictMode, viewByDepth);
                 if (anchored != null) return anchored;
             }
         }
@@ -121,7 +121,7 @@ public final class ViewHelper {
         }
     }
 
-    private static View matchByAnchoredStrategy(Activity activity, ViewRule rule, boolean strictMode, View depthView) {
+    private static View matchByAnchoredStrategy(ViewRule rule, boolean strictMode, View depthView) {
         // 主锚点匹配失败时，尝试在同级视图组中按 resourceName 或 text 匹配
         ViewParent parent = depthView.getParent();
         if (!(parent instanceof ViewGroup)) return null;
@@ -166,35 +166,32 @@ public final class ViewHelper {
     }
 
     public static View findViewByText(View view, String text) {
-        if (view instanceof TextView && TextUtils.equals(((TextView) view).getText(), text)) {
-            return view;
-        }
-        if (view instanceof ViewGroup) {
-            final int N = ((ViewGroup) view).getChildCount();
-            for (int i = 0; i < N; i++) {
-                View childView = findViewByText(((ViewGroup) view).getChildAt(i), text);
-                if (childView != null) {
-                    return childView;
+        return findViewByCondition(view, v -> v instanceof TextView
+                && TextUtils.equals(((TextView) v).getText(), text));
+    }
+
+    public static View findViewByDescription(View view, String description) {
+        return findViewByCondition(view, v -> TextUtils.equals(v.getContentDescription(), description));
+    }
+
+    private static View findViewByCondition(View view, ViewPredicate predicate) {
+        try {
+            if (predicate.test(view)) return view;
+            if (view instanceof ViewGroup) {
+                ViewGroup vg = (ViewGroup) view;
+                for (int i = 0; i < vg.getChildCount(); i++) {
+                    View result = findViewByCondition(vg.getChildAt(i), predicate);
+                    if (result != null) return result;
                 }
             }
+        } catch (Exception e) {
+            Logger.w(TAG, "[findViewByCondition] traversal error: " + e.getMessage());
         }
         return null;
     }
 
-    public static View findViewByDescription(View view, String description) {
-        if (TextUtils.equals(view.getContentDescription(), description)) {
-            return view;
-        }
-        if (view instanceof ViewGroup) {
-            final int N = ((ViewGroup) view).getChildCount();
-            for (int i = 0; i < N; i++) {
-                View childView = findViewByDescription(((ViewGroup) view).getChildAt(i), description);
-                if (childView != null) {
-                    return childView;
-                }
-            }
-        }
-        return null;
+    private interface ViewPredicate {
+        boolean test(View view);
     }
 
     public static View findViewByDepth(Activity activity, int[] depths) {

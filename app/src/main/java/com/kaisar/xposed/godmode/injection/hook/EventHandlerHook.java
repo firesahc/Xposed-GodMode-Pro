@@ -111,27 +111,22 @@ public final class EventHandlerHook extends XC_MethodHook implements Property.On
     }
 
     private boolean isEditableWindow(View v) {
-        if (!isAttachedToActivity(v)) return false;
+        WindowManager.LayoutParams wl = getWindowLayoutParams(v);
+        if (wl == null) return false;
+        int type = wl.type;
+        if (type < WindowManager.LayoutParams.FIRST_SYSTEM_WINDOW) return true;
+        return type > WindowManager.LayoutParams.LAST_SYSTEM_WINDOW;
+    }
+
+    private WindowManager.LayoutParams getWindowLayoutParams(View v) {
+        Object viewRootImpl = ViewHelper.findViewRootImplByChildView(v.getParent());
+        if (viewRootImpl == null) return null;
         try {
-            Object viewRootImpl = ViewHelper.findViewRootImplByChildView(v.getParent());
-            if (viewRootImpl == null) return false;
-            WindowManager.LayoutParams wl = (WindowManager.LayoutParams)
+            return (WindowManager.LayoutParams)
                     XposedHelpers.getObjectField(viewRootImpl, "mWindowAttributes");
-            if (wl == null) return false;
-            int type = wl.type;
-            if (type >= WindowManager.LayoutParams.FIRST_SYSTEM_WINDOW
-                    && type <= WindowManager.LayoutParams.LAST_SYSTEM_WINDOW) {
-                return false;
-            }
-            if (type == WindowManager.LayoutParams.TYPE_INPUT_METHOD
-                    || type == WindowManager.LayoutParams.TYPE_INPUT_METHOD_DIALOG
-                    || type == WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY) {
-                return false;
-            }
         } catch (Exception e) {
-            return v.getWindowToken() == null;
+            return null;
         }
-        return true;
     }
 
     private boolean dispatchTouchEvent(View v, MotionEvent event) {
@@ -399,7 +394,7 @@ public final class EventHandlerHook extends XC_MethodHook implements Property.On
             }
             return false;
         }
-        if (!isAttachedToActivity(v)) {
+        if (getWindowLayoutParams(v) == null) {
             if (!isModifyMode && !mHasBlockEvent) {
                 Toast.makeText(v.getContext(), "该控件属于悬浮窗暂不支持编辑", Toast.LENGTH_SHORT).show();
                 mHasBlockEvent = true;
@@ -447,22 +442,6 @@ public final class EventHandlerHook extends XC_MethodHook implements Property.On
             }
             view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
             mLongClick = true;
-        }
-    }
-
-    // =========================================================================
-    // 窗口附加状态检查
-    // =========================================================================
-
-    private boolean isAttachedToActivity(View v) {
-        Object viewRootImpl = ViewHelper.findViewRootImplByChildView(v.getParent());
-        if (viewRootImpl == null) return false;
-        try {
-            WindowManager.LayoutParams wl = (WindowManager.LayoutParams)
-                    XposedHelpers.getObjectField(viewRootImpl, "mWindowAttributes");
-            return wl != null && wl.type == WindowManager.LayoutParams.TYPE_BASE_APPLICATION;
-        } catch (Exception e) {
-            return v.getWindowToken() != null;
         }
     }
 

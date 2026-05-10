@@ -28,7 +28,6 @@ import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.model.SharedViewModel;
 import com.kaisar.xposed.godmode.rule.ViewRule;
 import com.kaisar.xposed.godmode.util.AppInfoHelper;
-import com.kaisar.xposed.godmode.util.Preconditions;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -91,7 +90,8 @@ public final class ViewRuleDetailsContainerFragment extends Fragment {
         mViewPager = (ViewPager2) inflater.inflate(R.layout.fragment_rule_details_container, container, false);
         mViewPager.setAdapter(detailFragmentStateAdapter);
         mViewPager.registerOnPageChangeCallback(mCallback);
-        mViewPager.setCurrentItem(mCurIndex);
+        int safeIndex = Math.min(mCurIndex, Math.max(0, detailFragmentStateAdapter.getItemCount() - 1));
+        mViewPager.setCurrentItem(safeIndex);
         return mViewPager;
     }
 
@@ -109,24 +109,15 @@ public final class ViewRuleDetailsContainerFragment extends Fragment {
                 NavHostFragment.findNavController(this).popBackStack();
             } else {
                 DetailFragmentStateAdapter adapter = (DetailFragmentStateAdapter) mViewPager.getAdapter();
-                Preconditions.checkNotNull(adapter, "This object should not be null.");
+                if (adapter == null) return;
                 List<ViewRule> oldData = adapter.getData();
                 DiffUtil.DiffResult diffResult = DiffUtil.calculateDiff(new DiffUtil.Callback() {
-                    @Override
-                    public int getOldListSize() {
-                        return oldData.size();
-                    }
-
-                    @Override
-                    public int getNewListSize() {
-                        return newData.size();
-                    }
-
+                    @Override public int getOldListSize() { return oldData.size(); }
+                    @Override public int getNewListSize() { return newData.size(); }
                     @Override
                     public boolean areItemsTheSame(int oldItemPosition, int newItemPosition) {
                         return oldData.get(oldItemPosition).hashCode() == newData.get(newItemPosition).hashCode();
                     }
-
                     @Override
                     public boolean areContentsTheSame(int oldItemPosition, int newItemPosition) {
                         return oldData.get(oldItemPosition).toString().equals(newData.get(newItemPosition).toString());
@@ -134,6 +125,10 @@ public final class ViewRuleDetailsContainerFragment extends Fragment {
                 });
                 adapter.setData(newData);
                 diffResult.dispatchUpdatesTo(adapter);
+                if (mCurIndex >= newData.size() && newData.size() > 0) {
+                    mCurIndex = newData.size() - 1;
+                    mViewPager.setCurrentItem(mCurIndex, false);
+                }
             }
         });
     }
@@ -141,7 +136,7 @@ public final class ViewRuleDetailsContainerFragment extends Fragment {
     @Override
     public boolean onOptionsItemSelected(@NonNull MenuItem item) {
         List<ViewRule> viewRules = mSharedViewModel.actRules.getValue();
-        if (viewRules != null) {
+        if (viewRules != null && !viewRules.isEmpty() && mCurIndex < viewRules.size()) {
             ViewRule viewRule = viewRules.get(mCurIndex);
             if (item.getItemId() == R.id.menu_delete_rule) {
                 mSharedViewModel.deleteRule(viewRule);

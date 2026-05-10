@@ -6,7 +6,6 @@ import android.app.Activity;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.os.Environment;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.LayoutInflater;
@@ -26,11 +25,10 @@ import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
 import com.kaisar.xposed.godmode.injection.util.Logger;
 import com.kaisar.xposed.godmode.rule.ViewRule;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
 import java.io.InputStream;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedHelpers;
@@ -58,6 +56,7 @@ final class ModifyPanelController {
     private View mCurrentlyModifyingView;
     private ImageView mPendingImageView;
     final HashMap<String, ViewRule> mTempModifications = new HashMap<>();
+    private final HashMap<String, Bitmap> mPendingModBitmaps = new HashMap<>();
 
     // 在实时预览修改前捕获的视图原始状态
     private ViewGroup.MarginLayoutParams mSavedLayoutParams;
@@ -87,6 +86,14 @@ final class ModifyPanelController {
     /** 取消修改：还原视图状态并关闭面板 */
     void cancel() {
         revertViewState();
+        for (Bitmap bmp : mPendingModBitmaps.values()) {
+            if (bmp != null && !bmp.isRecycled()) bmp.recycle();
+        }
+        mPendingModBitmaps.clear();
+        if (mPendingImageBitmap != null && !mPendingImageBitmap.isRecycled()) {
+            mPendingImageBitmap.recycle();
+        }
+        mPendingImageBitmap = null;
         dismiss();
     }
 
@@ -127,7 +134,6 @@ final class ModifyPanelController {
         mModifyPanel = null;
         mCurrentlyModifyingView = null;
         mPendingImageView = null;
-        mPendingImageBitmap = null;
         mOriginalImageBitmap = null;
         mModifyingViewDepth = null;
         mModifyingViewActClass = null;
@@ -328,9 +334,90 @@ final class ModifyPanelController {
         if (!rule.hasModifications()) {
             mTempModifications.remove(viewKey);
         }
+    }
 
-        mPendingImageBitmap = null;
-        mOriginalImageBitmap = null;
+    /**
+     * 持久化所有待保存的修改并通知系统服务。
+     */
+    void saveAll(Activity activity, View nodeSelectorPanel, View maskView, View modifyPanel) {
+        if (mTempModifications.isEmpty()) {
+            Toast.makeText(activity, "没有需要保存的修改", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        String pkg = activity.getPackageName();
+        for (ViewRule rule : mTempModifications.values()) {
+            if ("pending".equals(rule.modImagePath)) {
+                StringBuilder sb = new StringBuilder(rule.activityClass);
+                if (rule.depth != null) {
+                    for (int d : rule.depth) sb.append('_').append(d);
+                }
+                String viewKey = sb.toString();
+                Bitmap bmp = mPendingModBitmaps.get(viewKey);
+                if (bmp != null && !bmp.isRecycled()) {
+                    String savedPath = GodModeManager.getDefault().saveImageFile(pkg, bmp);
+                    if (savedPath != null) {
+                        rule.modImagePath = savedPath;
+                    } else {
+                        rule.modImagePath = null;
+                        Logger.w(TAG, "[saveAll] save modification image failed via IPC");
+                    }
+                } else {
+                    rule.modImagePath = null;
+                }
+            }
+        }
+        for (Bitmap bmp : mPendingModBitmaps.values()) {
+            if (bmp != null && !bmp.isRecycled()) bmp.recycle();
+        }
+        mPendingModBitmaps.clear();
+        mTempModifications.entrySet().removeIf(entry -> !entry.getValue().hasModifications());
+        if (mTempModifications.isEmpty()) {
+            Toast.makeText(activity, "没有需要保存的修改", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (nodeSelectorPanel != null) nodeSelectorPanel.setVisibility(View.INVISIBLE);
+        if (modifyPanel != null) modifyPanel.setVisibility(View.INVISIBLE);
+        if (maskView != null) maskView.setVisibility(View.INVISIBLE);
+
+        final List<ViewRule> rulesToSave = new ArrayList<>(mTempModifications.values());
+        final HashMap<ViewRule, Bitmap> snapshots = new HashMap<>();
+        for (ViewRule rule : rulesToSave) {
+            try {
+                View view = ViewHelper.findViewByDepth(activity, rule.depth);
+                if (view != null) {
+                    Bitmap snapshot = ViewHelper.snapshotView(ViewHelper.findTopParentViewByChildView(view));
+                    ViewHelper.drawRuleMask(snapshot, rule);
+                    snapshots.put(rule, snapshot);
+                }
+            } catch (Exception e) {
+                Logger.w(TAG, "[saveAll] snapshot failed for rule", e);
+            }
+        }
+        mTempModifications.clear();
+        android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+        new Thread(() -> {
+            boolean allOk = true;
+            for (ViewRule rule : rulesToSave) {
+                try {
+                    Bitmap snapshot = snapshots.get(rule);
+                    if (!GodModeManager.getDefault().writeRule(pkg, rule, snapshot)) {
+                        allOk = false;
+                    }
+                    if (snapshot != null && !snapshot.isRecycled()) snapshot.recycle();
+                } catch (Exception e) {
+                    Logger.e(TAG, "[saveAll] writeRule failed", e);
+                    allOk = false;
+                }
+            }
+            boolean finalAllOk = allOk;
+            mainHandler.post(() -> {
+                if (nodeSelectorPanel != null) nodeSelectorPanel.setVisibility(View.VISIBLE);
+                if (modifyPanel != null) modifyPanel.setVisibility(View.VISIBLE);
+                if (maskView != null) maskView.setVisibility(View.VISIBLE);
+                Toast.makeText(activity,
+                        finalAllOk ? "修改已保存" : "部分修改保存失败", Toast.LENGTH_SHORT).show();
+            });
+        }, "gm-save-thread").start();
     }
 
     /** 在显示面板前保存视图原始状态，用于取消还原 */
@@ -400,8 +487,12 @@ final class ModifyPanelController {
             ((TextView) mCurrentlyModifyingView).setText(mSavedText);
         }
 
-        if (mCurrentlyModifyingView instanceof ImageView && mOriginalImageBitmap != null) {
-            ((ImageView) mCurrentlyModifyingView).setImageBitmap(mOriginalImageBitmap);
+        if (mCurrentlyModifyingView instanceof ImageView) {
+            if (mOriginalImageBitmap != null) {
+                ((ImageView) mCurrentlyModifyingView).setImageBitmap(mOriginalImageBitmap);
+            } else {
+                ((ImageView) mCurrentlyModifyingView).setImageDrawable(null);
+            }
         }
 
         String viewKey = ViewHelper.getViewKey(mCurrentlyModifyingView);
@@ -417,63 +508,6 @@ final class ModifyPanelController {
         int[] currentDepth = ViewHelper.getViewHierarchyDepth(view);
         return java.util.Arrays.equals(mModifyingViewDepth, currentDepth);
     }
-
-    private String saveModificationImage(String packageName, Bitmap bitmap) {
-        String baseDir = Environment.getDataDirectory().getAbsolutePath() + "/misc/godmode/" + packageName;
-        File dir = new File(baseDir);
-        if (!dir.exists()) dir.mkdirs();
-        File file = new File(dir, "mod_img_" + System.currentTimeMillis() + ".webp");
-        try (FileOutputStream out = new FileOutputStream(file)) {
-            bitmap.compress(Bitmap.CompressFormat.WEBP, 90, out);
-            return file.getAbsolutePath();
-        } catch (IOException e) {
-            Logger.e(TAG, "saveModificationImage fail", e);
-            return null;
-        }
-    }
-
-    /**
-     * 持久化所有待保存的修改并通知系统服务。
-     *
-     * @param activity          当前 Activity
-     * @param nodeSelectorPanel 选择器面板（截图时隐藏）
-     * @param maskView          遮罩覆盖层（截图时隐藏）
-     * @param modifyPanel       修改面板（截图时隐藏）
-     */
-    void saveAll(Activity activity, View nodeSelectorPanel, View maskView, View modifyPanel) {
-        if (mTempModifications.isEmpty()) {
-            Toast.makeText(activity, "没有需要保存的修改", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        String pkg = activity.getPackageName();
-        // 隐藏 GM 覆盖层以获取干净的截图
-        if (nodeSelectorPanel != null) nodeSelectorPanel.setVisibility(View.INVISIBLE);
-        if (modifyPanel != null) modifyPanel.setVisibility(View.INVISIBLE);
-        if (maskView != null) maskView.setVisibility(View.INVISIBLE);
-
-        for (ViewRule rule : mTempModifications.values()) {
-            Bitmap snapshot = null;
-            try {
-                View view = ViewHelper.findViewByDepth(activity, rule.depth);
-                if (view != null) {
-                    snapshot = ViewHelper.snapshotView(ViewHelper.findTopParentViewByChildView(view));
-                    ViewHelper.drawRuleMask(snapshot, rule);
-                }
-            } catch (Exception e) {
-                Logger.w(TAG, "[saveAll] snapshot failed for rule", e);
-            }
-            GodModeManager.getDefault().writeRule(pkg, rule, snapshot);
-        }
-        // 恢复 GM 覆盖层
-        if (nodeSelectorPanel != null) nodeSelectorPanel.setVisibility(View.VISIBLE);
-        if (modifyPanel != null) modifyPanel.setVisibility(View.VISIBLE);
-        if (maskView != null) maskView.setVisibility(View.VISIBLE);
-
-        mTempModifications.clear();
-        Toast.makeText(activity, "修改已保存", Toast.LENGTH_SHORT).show();
-    }
-
-    // ---- ActivityResult Hook：图片替换 ----
 
     private void hookActivityResult(Activity activity) {
         if (mActivityResultHooked) return;
@@ -492,44 +526,38 @@ final class ModifyPanelController {
                                 android.net.Uri uri = data.getData();
                                 if (uri == null) return;
                                 Activity currentActivity = (Activity) param.thisObject;
-                                InputStream is = currentActivity.getContentResolver().openInputStream(uri);
-                                Bitmap bitmap = BitmapFactory.decodeStream(is);
-                                if (is != null) is.close();
-                                if (bitmap == null) return;
+                                try (InputStream is = currentActivity.getContentResolver().openInputStream(uri)) {
+                                    Bitmap bitmap = BitmapFactory.decodeStream(is);
+                                    if (bitmap == null) return;
 
-                                // 优先通过深度信息在当前 Activity 中重新查找 ImageView，
-                                // 解决系统图片选择器打开期间调用方 Activity 被重建导致
-                                // mPendingImageView 引用为旧视图实例（已不可见）的问题
-                                View targetView = null;
-                                if (mModifyingViewDepth != null && mModifyingViewActClass != null
-                                        && mModifyingViewActClass.equals(currentActivity.getComponentName().getClassName())) {
-                                    targetView = ViewHelper.findViewByDepth(currentActivity, mModifyingViewDepth);
-                                    if (targetView instanceof ImageView) {
-                                        // 找到了当前 Activity 中的新视图实例，更新所有引用
-                                        mPendingImageView = (ImageView) targetView;
-                                        mCurrentlyModifyingView = targetView;
-                                        // 重新保存视图原始状态，使取消/还原功能在当前实例上正常工作
-                                        saveViewState(targetView);
-                                    } else {
-                                        targetView = null;
+                                    View targetView = null;
+                                    if (mModifyingViewDepth != null && mModifyingViewActClass != null
+                                            && mModifyingViewActClass.equals(currentActivity.getComponentName().getClassName())) {
+                                        targetView = ViewHelper.findViewByDepth(currentActivity, mModifyingViewDepth);
+                                        if (targetView instanceof ImageView) {
+                                            mPendingImageView = (ImageView) targetView;
+                                            mCurrentlyModifyingView = targetView;
+                                            saveViewState(targetView);
+                                        } else {
+                                            targetView = null;
+                                        }
                                     }
-                                }
-                                // 降级：深度查找失败时，仍尝试使用原 mPendingImageView
-                                if (targetView == null) {
-                                    targetView = mPendingImageView;
-                                    if (targetView == null || !targetView.isAttachedToWindow()) return;
-                                }
+                                    if (targetView == null) {
+                                        targetView = mPendingImageView;
+                                        if (targetView == null || !targetView.isAttachedToWindow()) return;
+                                    }
 
-                                mPendingImageBitmap = bitmap;
-                                ((ImageView) targetView).setImageBitmap(bitmap);
-                                String imagePath = saveModificationImage(currentActivity.getPackageName(), bitmap);
-                                String viewKey = ViewHelper.getViewKey(targetView);
-                                ViewRule rule = mTempModifications.get(viewKey);
-                                if (rule == null) {
-                                    rule = ViewHelper.makeModifyRule(targetView);
-                                    mTempModifications.put(viewKey, rule);
+                                    mPendingImageBitmap = bitmap;
+                                    ((ImageView) targetView).setImageBitmap(bitmap);
+                                    String viewKey = ViewHelper.getViewKey(targetView);
+                                    ViewRule rule = mTempModifications.get(viewKey);
+                                    if (rule == null) {
+                                        rule = ViewHelper.makeModifyRule(targetView);
+                                        mTempModifications.put(viewKey, rule);
+                                    }
+                                    rule.modImagePath = "pending";
+                                    mPendingModBitmaps.put(viewKey, bitmap);
                                 }
-                                rule.modImagePath = imagePath;
                             } catch (Exception e) {
                                 Logger.e(TAG, "handle image pick fail", e);
                             }

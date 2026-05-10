@@ -168,6 +168,15 @@ public final class ViewRuleListFragment extends Fragment {
     }
 
     @Override
+    public void onResume() {
+        super.onResume();
+        ListAdapter adapter = (ListAdapter) mRecyclerView.getAdapter();
+        if (adapter != null) {
+            updateTitle(adapter.getItemCount());
+        }
+    }
+
+    @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         RecyclerView recyclerView = (RecyclerView) view;
         ListAdapter adapter = (ListAdapter) recyclerView.getAdapter();
@@ -243,7 +252,7 @@ public final class ViewRuleListFragment extends Fragment {
                 SpannableStringBuilder summaryBuilder = new SpannableStringBuilder();
                 if (!TextUtils.isEmpty(rule.alias)) {
                     SpannableString ss = new SpannableString(getString(R.string.field_rule_alias, rule.alias));
-                    ss.setSpan(new ForegroundColorSpan(getResources().getColor(R.color.prefsAliasColor)), 0, ss.length(), 0);
+                    ss.setSpan(new ForegroundColorSpan(requireContext().getResources().getColor(R.color.prefsAliasColor, requireContext().getTheme())), 0, ss.length(), 0);
                     summaryBuilder.append(ss);
                 }
                 summaryBuilder.append(getString(R.string.field_view, rule.viewClass));
@@ -258,7 +267,7 @@ public final class ViewRuleListFragment extends Fragment {
                 SpannableStringBuilder summaryBuilder = new SpannableStringBuilder();
                 if (!TextUtils.isEmpty(rule.alias)) {
                     SpannableString ss = new SpannableString(getString(R.string.field_rule_alias, rule.alias));
-                    ss.setSpan(new ForegroundColorSpan(getResources().getColor(R.color.prefsAliasColor)), 0, ss.length(), 0);
+                    ss.setSpan(new ForegroundColorSpan(requireContext().getResources().getColor(R.color.prefsAliasColor, requireContext().getTheme())), 0, ss.length(), 0);
                     summaryBuilder.append(ss);
                 }
                 ArrayList<String> mods = new ArrayList<>();
