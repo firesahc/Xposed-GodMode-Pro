@@ -6,7 +6,7 @@
     <string name="pref_header_app_rules">APP RULES</string>
 
     <string name="pref_title_god_mode">GodMode</string>
-    <string name="pref_description_god_mode">Enable to control editing from notification</string>
+    <string name="pref_description_god_mode">Enable to control edit mode via notification or Quick Settings tile</string>
     <string name="pref_title_guide">Guide</string>
     <string name="pref_description_guide">View usage and operation modes</string>
     <string name="pref_title_about">About</string>
@@ -14,45 +14,45 @@
 
     <string name="menu_delete_rule">Delete rule</string>
     <string name="menu_backup_rule">Backup rule</string>
-    <string name="enter_edit">Exit editor</string>
-    <string name="exit_edit">Start editor</string>
-    <string name="manage">Manager</string>
+    <string name="notification_edit_exit">Exit Editor</string>
+    <string name="notification_edit_start">Start Editor</string>
+    <string name="manage">Manage</string>
     <string name="xposed_description">Block or modify any unwanted UI elements on any app</string>
 
     <string name="menu_delete_rules">Delete rules</string>
     <string name="menu_backup_rules">Backup rules</string>
     <string name="menu_title_restore_rules">Restore rules</string>
-    <string name="menu_title_restore_rules_description">Restore rules from external storage</string>
+    <string name="menu_title_restore_rules_description">Restore rules from backup file</string>
     <string name="menu_icon_switch_show">Show icon</string>
     <string name="menu_icon_switch_hide">Hide icon</string>
     <string name="menu_icon_switch_description">Show or hide app icon from launcher</string>
 
-    <string name="title_app_rule">App rules</string>
+    <string name="title_app_rule">App Rules</string>
     <string name="title_rule_details">Details</string>
     <string name="guide_title">Guide</string>
     <string name="about_title">About</string>
 
-    <string name="menu_filter_all">All rules</string>
-    <string name="menu_filter_remove">Remove rules</string>
-    <string name="menu_filter_modify">Modify rules</string>
+    <string name="menu_filter_all">All Rules</string>
+    <string name="menu_filter_remove">Remove Rules</string>
+    <string name="menu_filter_modify">Modify Rules</string>
     <string name="rule_type_remove">Remove</string>
     <string name="rule_type_modify">Modify</string>
 
     <string name="guide_content"><![CDATA[
 <b>1. Getting Started</b><br>
   1. <b>Master Switch</b>: Settings → General → GodMode switch. A notification appears when enabled.<br>
-  2. <b>Notification Toggle</b>: Tap the notification to toggle between "Start editor" and "Exit editor".<br>
-  3. <b>Quick Tile</b>: Use the Quick Settings tile to toggle edit mode with one tap.<br>
+  2. <b>Notification Toggle</b>: Tap the notification to toggle between "Start Editor" and "Exit Editor".<br>
+  3. <b>Quick Settings Tile</b>: Use the Quick Settings tile to toggle edit mode with one tap (alternative when notifications are disabled).<br>
   &emsp;<i>Disabling the master switch forces edit mode off and removes the notification.</i><br><br>
 
 <b>2. Tool Panel</b><br>
   When edit mode is active, a semi-transparent rounded toolbar appears on the right side of the target app:<br><br>
   <b>Buttons (top to bottom):</b><br>
   &bull; <b>Vertical Slider</b> — Drag to select elements at different hierarchy depths.<br>
-  &bull; <b>🔀 Toggle Position</b> — Switch the panel between right and left side.<br>
-  &bull; <b>Remove Mode</b> button — Expands remove menu (🚫 Block, 👁 Preview).<br>
-  &bull; <b>Modify Mode</b> button — Expands modify menu (✏️ Properties, 💾 Save).<br>
-  &bull; <b>⬆ Previous</b> / <b>⬇ Next</b> — Navigate elements one by one.<br><br>
+  &bull; <b>Toggle Position</b> — Switch the panel between right and left side.<br>
+  &bull; <b>Remove Mode</b> button — Expands remove menu (Block, Preview).<br>
+  &bull; <b>Modify Mode</b> button — Expands modify menu (Properties, Save).<br>
+  &bull; <b>Previous</b> / <b>Next</b> — Navigate elements one by one.<br><br>
   <b>Show / Hide:</b><br>
   &bull; Press <b>Volume Up</b> or <b>Volume Down</b> and release → toggle the panel.<br>
   &bull; When the panel is visible, volume keys navigate between elements.<br><br>
@@ -60,15 +60,15 @@
 <b>3. Selecting Elements</b><br>
   A red overlay highlights the currently selected element. Switch selection via:<br>
   &bull; <b>Tap to Select</b>: Tap any element on the screen.<br>
-  &bull; <b>Slider</b>: Drag the vertical slider on the panel.<br>
-  &bull; <b>⬆⬇ Buttons</b>: Tap Previous / Next on the panel.<br>
+  &bull; <b>Slider</b>: Drag the vertical slider on the panel to navigate by depth.<br>
+  &bull; <b>Arrow Buttons</b>: Tap Previous / Next on the panel.<br>
   &bull; <b>Volume Keys</b>: When panel is visible, volume keys step through elements.<br><br>
 
 <b>4. Remove Mode</b><br>
   Tap the "Remove Mode" button to expand the submenu:<br><br>
-  <b>👁 Preview</b><br>
+  <b>Preview</b><br>
   Tap Preview → the selected element is temporarily hidden. Tap again to restore.<br><br>
-  <b>🚫 Block (three equivalent methods):</b><br>
+  <b>Block (three equivalent methods):</b><br>
   1. Panel: Select element → tap the <b>Block button</b> on the panel.<br>
   2. Touch: <b>Long-press</b> an element ~0.5s → green overlay appears with a cancel area at the top → release outside the green area → particle animation plays and the element disappears.<br>
   3. Drag to Cancel: Long-press, then drag the green overlay to the <b>top green zone</b> and release → operation cancelled.<br>
@@ -76,37 +76,41 @@
 
 <b>5. Modify Mode</b><br>
   Tap the "Modify Mode" button to expand the submenu:<br><br>
-  <b>✏️ Property Panel</b><br>
+  <b>Property Panel</b><br>
   1. Select the target element, then tap the <b>Modify button</b> on the panel.<br>
   2. The property panel appears with controls for:<br>
-  &emsp;&bull; <b>Width / Height</b> — SeekBar drag or manual input.<br>
+  &emsp;&bull; <b>Width / Height</b> — SeekBar drag or manual input (0~2000).<br>
   &emsp;&bull; <b>Alpha</b> — 0~255 slider.<br>
   &emsp;&bull; <b>Position Nudge</b> — Arrow buttons move the element 10px per tap.<br>
   &emsp;&bull; <b>Text</b> — Edit text content for TextViews.<br>
   &emsp;&bull; <b>Replace Image</b> — Pick an image from the gallery for ImageViews.<br>
-  3. Tap <b>Confirm</b> to preview changes, or <b>Cancel</b> to revert.<br><br>
+  3. Tap <b>Confirm</b> to preview changes, or <b>Cancel</b> to revert.<br>
+  4. After confirming all changes, tap the <b>Save button</b> on the panel to persist.<br>
+  &emsp;<i>Supports modifying multiple elements and saving them all at once.</i><br><br>
   <b>Drag to Reposition</b><br>
-  &emsp;In modify mode, <b>long-press anywhere on the screen</b> to drag the <b>currently selected element</b> (not the element under your finger).<br>
+  In modify mode, <b>long-press anywhere on the screen</b> to drag the <b>currently selected element</b> (not the element under your finger).<br>
   &emsp;&bull; <b>16dp Grid Snap</b>: Moves align to a grid.<br>
   &emsp;&bull; <b>12dp Edge Snap</b>: Automatically snaps to adjacent element edges.<br>
   &emsp;&bull; Position is auto-saved on release as a modify rule.<br><br>
-  <b>💾 Save Modifications</b><br>
-  &emsp;After confirming changes in the property panel, tap the <b>Save button</b> to persist all modifications. A screenshot with red overlay is generated automatically.<br><br>
 
 <b>6. Rule Management</b><br>
-  &bull; <b>View List</b>: Settings → App Rules → tap package name. Use menu to filter All / Remove / Modify rules. Title shows rule count.<br>
+  &bull; <b>View List</b>: Settings → App Rules → tap package name. Menu filters All / Remove / Modify views. Title shows rule count.<br>
   &bull; <b>View Details</b>: Tap a rule entry → swipe left/right to browse. View screenshot, view info, layout depth, etc.<br>
   &bull; <b>Edit Alias</b>: Customize alias from rule details for easy identification.<br>
-  &bull; <b>Delete Single</b>: Rule details → menu → Delete rule.<br>
-  &bull; <b>Delete All</b>: Rule list → menu → Delete rules.<br>
-  &bull; <b>Backup</b>: Rule list/details → menu → Export as .gzip file.<br>
-  &bull; <b>Restore</b>: Settings → menu → Choose a .gzip backup to import.<br><br>
+  &bull; <b>Delete Single</b>: Rule details page → menu → Delete rule.<br>
+  &bull; <b>Delete Filtered</b>: Switch to "Remove Rules" or "Modify Rules" view first, then delete only the filtered rules.<br>
+  &bull; <b>Delete All</b>: Under "All Rules" view → menu → Delete rules (with confirmation dialog).<br>
+  &bull; <b>Backup Filtered</b>: Under filtered view, backup exports only current filtered rules; "All Rules" view exports all.<br>
+  &bull; <b>Backup Single</b>: Rule details page → menu → Backup rule.<br>
+  &bull; <b>Restore</b>: Settings → menu → Select .gzip backup file to import.<br>
+  &emsp;<i>Backups include screenshots and replacement images; rules take effect immediately after restore.</i><br><br>
 
 <b>7. Notes</b><br>
   &bull; Edit mode only works in <b>third-party apps</b> where the module is activated in Xposed / LSPosed.<br>
   &bull; Launcher, system UI, input methods, UI-less apps, and GodMode itself are <b>not editable</b>.<br>
   &bull; If a crash occurs, a dialog appears on next launch to copy the crash log.<br>
-  &bull; All function buttons have tooltips (long-press or hover to view).
+  &bull; All function buttons have tooltips (long-press or hover to view).<br>
+  &bull; When notifications are disabled, the Quick Settings tile still works as an alternative.
     ]]></string>
 
     <string name="field_activity">Activity: %1$s</string>
@@ -116,14 +120,14 @@
     <string name="modify_detail_width">Width: %1$d</string>
     <string name="modify_detail_height">Height: %1$d</string>
     <string name="modify_detail_alpha">Opacity: %1$s</string>
-    <string name="modify_detail_position">Position: (%1$d,%2$d)</string>
+    <string name="modify_detail_position">Position: (%1$d, %2$d)</string>
     <string name="modify_detail_text">Modified text</string>
     <string name="modify_detail_image">Replaced image</string>
 
     <string name="hey_guy">Hey guy</string>
-    <string name="not_active_module">GodMode module is not activated. Please activate it in LSPosed manager</string>
-    <string name="notification_permission_denied">Notification permission denied, notification switch will not be shown</string>
-    <string name="welcome_title">Hey guys, Welcome</string>
+    <string name="not_active_module">GodMode module is not activated. Please activate it in LSPosed Manager</string>
+    <string name="notification_permission_denied">Notification permission denied. You can still use the Quick Settings tile</string>
+    <string name="welcome_title">Hey guys, Welcome!</string>
 
     <string name="snack_bar_msg_revert_rule_fail">Delete rule failed</string>
     <string name="snack_bar_msg_backup_rule_fail">Backup rules failed</string>
@@ -133,39 +137,39 @@
     <string name="crash_tip">Crash detected. Copy the log below for feedback.\n\n</string>
     <string name="update_tips">Try using GodMode to block annoying buttons. If you encounter issues, please report them on GitHub!</string>
 
-    <string name="rule_details_field_create_time">Create time</string>
-    <string name="rule_details_field_generate_version">Match version</string>
+    <string name="rule_details_field_create_time">Created</string>
+    <string name="rule_details_field_generate_version">Match Version</string>
     <string name="rule_details_field_activity">Activity</string>
     <string name="rule_details_field_alias">Alias</string>
     <string name="rule_details_field_view_bounds">Bounds</string>
     <string name="rule_details_field_view_type">Type</string>
     <string name="rule_details_field_view_depth">Depth</string>
-    <string name="rule_details_field_res_name">Resource name</string>
+    <string name="rule_details_field_res_name">Resource Name</string>
     <string name="rule_details_field_text">Text</string>
     <string name="rule_details_field_description">Description</string>
     <string name="rule_details_field_visible">Visibility</string>
-    <string name="rule_details_invisible">Invisible</string>
-    <string name="rule_details_gone">Gone</string>
+    <string name="rule_details_invisible">Invisible (occupy space)</string>
+    <string name="rule_details_gone">Gone (no space)</string>
     <string name="rule_details_set_alias">Set alias</string>
 
-    <string name="top_revert_tip">Move here to cancel</string>
+    <string name="top_revert_tip">Release here to cancel</string>
     <string name="accessibility_block">Block</string>
     <string name="accessibility_preview">Preview</string>
     <string name="accessibility_preview_exit">Exit preview</string>
     <string name="accessibility_exchange">Toggle position</string>
-    <string name="accessibility_modify">Modify</string>
-    <string name="accessibility_save_modify">Save modify</string>
+    <string name="accessibility_modify">Modify properties</string>
+    <string name="accessibility_save_modify">Save modifications</string>
     <string name="accessibility_up">Previous</string>
     <string name="accessibility_down">Next</string>
-    <string name="mode_remove">Remove mode</string>
-    <string name="mode_modify">Modify mode</string>
+    <string name="mode_remove">Remove Mode</string>
+    <string name="mode_modify">Modify Mode</string>
     <string name="modify_title">Properties</string>
     <string name="modify_width">Width</string>
     <string name="modify_height">Height</string>
     <string name="modify_alpha">Alpha</string>
     <string name="modify_position">Position</string>
     <string name="modify_text">Text</string>
-    <string name="modify_image_pick">Pick image</string>
+    <string name="modify_image_pick">Pick Image</string>
     <string name="modify_cancel">Cancel</string>
     <string name="modify_confirm">Confirm</string>
     <string name="block_fail">Failed to block: %1$s</string>

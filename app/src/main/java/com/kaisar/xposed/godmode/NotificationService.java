@@ -89,7 +89,7 @@ public final class NotificationService extends Service implements SharedPreferen
                 .setSmallIcon(R.drawable.ic_angel_small)
                 .setLargeIcon(BitmapFactory.decodeResource(getResources(), R.drawable.ic_angel_normal))
                 .setContentTitle(getText(R.string.app_name))
-                .setContentText(editMode ? getString(R.string.enter_edit) : getString(R.string.exit_edit))
+                .setContentText(editMode ? getString(R.string.notification_edit_exit) : getString(R.string.notification_edit_start))
                 .setContentIntent(pendingIntent)
                 .addAction(android.R.drawable.ic_menu_manage, getString(R.string.manage), managerPendingIntent)
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT)
