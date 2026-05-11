@@ -238,7 +238,7 @@ public final class DispatchKeyEventHook extends XC_MethodHook
             GodModeInjector.injectModuleResources(activity.getResources());
             LayoutInflater inflater = LayoutInflater.from(activity);
             mNodeSelectorPanel = inflater.inflate(
-                    GodModeInjector.moduleRes.getLayout(R.layout.layout_node_selector), container, false);
+                    GmResources.getLayout(R.layout.layout_node_selector), container, false);
             mNodeSeekbar = mNodeSelectorPanel.findViewById(R.id.slider);
             mNodeSeekbar.setMax(Math.max(mViewNodes.size() - 1, 0));
             mNodeSeekbar.setOnSeekBarChangeListener(this);

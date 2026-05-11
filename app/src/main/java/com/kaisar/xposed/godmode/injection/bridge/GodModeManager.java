@@ -80,14 +80,6 @@ public final class GodModeManager {
         }
     }
 
-    public void removeObserver(String packageName, IObserver observer) {
-        try {
-            mGMM.removeObserver(packageName, observer);
-        } catch (RemoteException e) {
-            logError("removeObserver", e);
-        }
-    }
-
     public AppRules getAllRules() {
         try {
             return mGMM.getAllRules();

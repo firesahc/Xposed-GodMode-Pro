@@ -24,7 +24,7 @@ public final class ParticleView extends View implements OverlayWidget {
 
     private ValueAnimator mParticleAnimator;
     //动画持续时间
-    public int duration = 4000;
+    private int duration = 4000;
     //动画监听
     private OnAnimationListener mOnAnimationListener;
     //画笔
@@ -85,7 +85,9 @@ public final class ParticleView extends View implements OverlayWidget {
                 view.getLocationInWindow(location);
                 Rect rect = new Rect(location[0], location[1], location[0] + view.getMeasuredWidth(), location[1] + view.getMeasuredHeight());
 
-                mParticles = Particle.generateParticles(getCacheBitmapFromView(view), rect);
+                Bitmap cacheBitmap = getCacheBitmapFromView(view);
+                mParticles = Particle.generateParticles(cacheBitmap, rect);
+                cacheBitmap.recycle();
                 mParticleAnimator = ValueAnimator.ofFloat(0.0f, 1.0f);
                 mParticleAnimator.setDuration(duration);
                 mParticleAnimator.addListener(new AnimatorListenerAdapter() {
