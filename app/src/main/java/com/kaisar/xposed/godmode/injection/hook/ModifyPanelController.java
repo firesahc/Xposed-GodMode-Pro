@@ -22,6 +22,7 @@ import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.injection.GodModeInjector;
 import com.kaisar.xposed.godmode.injection.ViewHelper;
 import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
+import com.kaisar.xposed.godmode.injection.util.GmResources;
 import com.kaisar.xposed.godmode.injection.util.Logger;
 import com.kaisar.xposed.godmode.rule.ViewRule;
 
@@ -110,7 +111,7 @@ final class ModifyPanelController {
             GodModeInjector.injectModuleResources(activity.getResources());
             LayoutInflater inflater = LayoutInflater.from(activity);
             mModifyPanel = inflater.inflate(
-                    GodModeInjector.moduleRes.getLayout(R.layout.layout_modify_panel), container, false);
+                    GmResources.getLayout(R.layout.layout_modify_panel), container, false);
 
             setupWidthHeightAlpha(mModifyPanel, selectedView);
             setupTextEditing(mModifyPanel, selectedView);

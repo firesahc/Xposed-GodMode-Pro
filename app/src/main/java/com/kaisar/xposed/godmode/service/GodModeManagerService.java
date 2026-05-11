@@ -632,12 +632,10 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
     public String saveImageFile(String packageName, Bitmap bitmap) throws RemoteException {
         enforcePermission(new String[]{packageName, BuildConfig.APPLICATION_ID}, "save image fail permission denied");
         if (!mStarted || bitmap == null || bitmap.isRecycled()) return null;
-        synchronized (mAppRulesCache) {
-            try {
-                return saveBitmap(bitmap, getAppDataDir(packageName));
-            } catch (FileNotFoundException e) {
-                throw new RemoteException("Cannot access package data dir: " + e.getMessage());
-            }
+        try {
+            return saveBitmap(bitmap, getAppDataDir(packageName));
+        } catch (FileNotFoundException e) {
+            throw new RemoteException("Cannot access package data dir: " + e.getMessage());
         }
     }
 

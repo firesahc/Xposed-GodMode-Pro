@@ -380,6 +380,7 @@ public final class EventHandlerHook extends XC_MethodHook implements Property.On
             Bitmap snapshot = ViewHelper.snapshotView(ViewHelper.findTopParentViewByChildView(mDragTarget));
             ViewHelper.drawRuleMask(snapshot, rule);
             GodModeManager.getDefault().writeRule(packageName, rule, snapshot);
+            recycleNullableBitmap(snapshot);
         }
     }
 

@@ -20,6 +20,7 @@ import com.kaisar.xposed.godmode.injection.hook.DebugLayoutHookInstaller;
 import com.kaisar.xposed.godmode.injection.hook.DispatchKeyEventHook;
 import com.kaisar.xposed.godmode.injection.hook.EventHandlerHook;
 import com.kaisar.xposed.godmode.injection.util.BlockListChecker;
+import com.kaisar.xposed.godmode.injection.util.GmResources;
 import com.kaisar.xposed.godmode.injection.util.Logger;
 import com.kaisar.xposed.godmode.injection.util.Property;
 import com.kaisar.xposed.godmode.rule.ActRules;
@@ -68,16 +69,13 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
     // =========================================================================
 
     private static String modulePath;
-    public static Resources moduleRes;
-
-    // =========================================================================
-    // Zygote 初始化 — 加载模块资源
-    // =========================================================================
+    private static Resources moduleRes;
 
     @Override
     public void initZygote(StartupParam startupParam) {
         modulePath = startupParam.modulePath;
         moduleRes = XModuleResources.createInstance(modulePath, null);
+        GmResources.init(moduleRes);
     }
 
     // =========================================================================
