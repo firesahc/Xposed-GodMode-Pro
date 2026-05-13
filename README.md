@@ -24,4 +24,4 @@
 ## 伙计们我想我应该跟你说些什么
 vibe coding的价格有些超出预期🫠，如果觉得软件好用可以赞助作者。
 
-![捐赠](Donate.jpg)
+![https://www.ifdian.net/a/firesahc](Donate.jpg)
