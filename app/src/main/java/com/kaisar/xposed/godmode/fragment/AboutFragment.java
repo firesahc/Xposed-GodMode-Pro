@@ -36,6 +36,13 @@ public final class AboutFragment extends Fragment {
             githubLink.setOnClickListener(v -> openUrl(GITHUB_URL));
         }
 
+        TextView originalLink = view.findViewById(R.id.about_original);
+        if (originalLink != null) {
+            String originalUrl = "https://github.com/kaisar945/Xposed-GodMode";
+            originalLink.setText(getString(R.string.about_original) + "\n" + originalUrl);
+            originalLink.setOnClickListener(v -> openUrl(originalUrl));
+        }
+
         TextView issuesLink = view.findViewById(R.id.about_issues);
         if (issuesLink != null) {
             String issuesUrl = GITHUB_URL + "/issues";

@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">GodMode</string>
+    <string name="app_name">GodMode Pro</string>
 
     <string name="pref_header_general">GENERAL</string>
     <string name="pref_header_app_rules">APP RULES</string>
 
-    <string name="pref_title_god_mode">GodMode</string>
+    <string name="pref_title_god_mode">GodMode Pro</string>
     <string name="pref_description_god_mode">Enable to control edit mode via notification or Quick Settings tile</string>
     <string name="pref_title_guide">Guide</string>
     <string name="pref_description_guide">View usage and operation modes</string>
@@ -17,7 +17,7 @@
     <string name="notification_edit_exit">Exit Editor</string>
     <string name="notification_edit_start">Start Editor</string>
     <string name="manage">Manage</string>
-    <string name="xposed_description">Block or modify any unwanted UI elements on any app</string>
+    <string name="xposed_description">Block or modify any unwanted UI elements on any app - GodMode Pro</string>
 
     <string name="menu_delete_rules">Delete rules</string>
     <string name="menu_backup_rules">Backup rules</string>
@@ -40,7 +40,7 @@
 
     <string name="guide_content"><![CDATA[
 <b>1. Getting Started</b><br>
-  1. <b>Master Switch</b>: Settings → General → GodMode switch. A notification appears when enabled.<br>
+  1. <b>Master Switch</b>: Settings → General → GodMode Pro switch. A notification appears when enabled.<br>
   2. <b>Notification Toggle</b>: Tap the notification to toggle between "Start Editor" and "Exit Editor".<br>
   3. <b>Quick Settings Tile</b>: Use the Quick Settings tile to toggle edit mode with one tap (alternative when notifications are disabled).<br>
   &emsp;<i>Disabling the master switch forces edit mode off and removes the notification.</i><br><br>
@@ -107,7 +107,7 @@
 
 <b>7. Notes</b><br>
   &bull; Edit mode only works in <b>third-party apps</b> where the module is activated in Xposed / LSPosed.<br>
-  &bull; Launcher, system UI, input methods, UI-less apps, and GodMode itself are <b>not editable</b>.<br>
+   &bull; Launcher, system UI, input methods, UI-less apps, and GodMode Pro itself are <b>not editable</b>.<br>
   &bull; If a crash occurs, a dialog appears on next launch to copy the crash log.<br>
   &bull; All function buttons have tooltips (long-press or hover to view).<br>
   &bull; When notifications are disabled, the Quick Settings tile still works as an alternative.
@@ -125,7 +125,8 @@
     <string name="modify_detail_image">Replaced image</string>
 
     <string name="hey_guy">Hey guy</string>
-    <string name="not_active_module">GodMode module is not activated. Please activate it in LSPosed Manager</string>
+    <string name="not_active_module">GodMode Pro module is not activated. Please activate it in LSPosed Manager</string>
+    <string name="master_not_enabled">Please enable the GodMode Pro master switch in Settings first</string>
     <string name="notification_permission_denied">Notification permission denied. You can still use the Quick Settings tile</string>
     <string name="welcome_title">Hey guys, Welcome!</string>
 
@@ -135,7 +136,7 @@
     <string name="confirm_delete_rules">Confirm delete %d rules?</string>
     <string name="dialog_btn_copy">COPY</string>
     <string name="crash_tip">Crash detected. Copy the log below for feedback.\n\n</string>
-    <string name="update_tips">Try using GodMode to block annoying buttons. If you encounter issues, please report them on GitHub!</string>
+    <string name="update_tips">Try using GodMode Pro to block annoying buttons. If you encounter issues, please report them on GitHub!</string>
 
     <string name="rule_details_field_create_time">Created</string>
     <string name="rule_details_field_generate_version">Match Version</string>
@@ -177,6 +178,7 @@
     <string name="about_version">Version</string>
     <string name="about_description">An LSPosed module that can block or modify any unwanted UI elements in any app.</string>
     <string name="about_github">GitHub Repository</string>
+    <string name="about_original">Original Project (GodMode)</string>
     <string name="about_issues">Report Issues</string>
     <string name="about_thanks">Thanks to all contributors and friends for your support!</string>
 </resources>

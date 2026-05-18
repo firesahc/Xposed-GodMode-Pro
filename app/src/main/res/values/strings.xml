@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">上帝模式</string>
+    <string name="app_name">上帝模式Pro</string>
 
     <string name="pref_key_progress_indicator" translatable="false">progress_indicator</string>
     <string name="pref_key_editor" translatable="false">editor_switch</string>
@@ -11,7 +11,7 @@
     <string name="pref_header_general">通用</string>
     <string name="pref_header_app_rules">应用规则</string>
 
-    <string name="pref_title_god_mode">上帝模式</string>
+    <string name="pref_title_god_mode">上帝模式Pro</string>
     <string name="pref_description_god_mode">开启后可在通知栏或快捷磁贴控制编辑模式</string>
     <string name="pref_title_guide">操作指南</string>
     <string name="pref_description_guide">查看使用方法和操作模式</string>
@@ -23,7 +23,7 @@
     <string name="notification_edit_exit">退出编辑</string>
     <string name="notification_edit_start">开始编辑</string>
     <string name="manage">管理</string>
-    <string name="xposed_description">随心屏蔽与修改任何应用界面上不想要的元素</string>
+    <string name="xposed_description">随心屏蔽与修改任何应用界面上不想要的元素 - 上帝模式Pro</string>
 
     <string name="menu_delete_rules">删除全部规则</string>
     <string name="menu_backup_rules">备份全部规则</string>
@@ -46,7 +46,7 @@
 
     <string name="guide_content"><![CDATA[
 <b>一、开启编辑</b><br>
-  1. <b>主开关</b>：设置页「通用」→ 上帝模式开关。开启后通知栏出现控制消息。<br>
+  1. <b>主开关</b>：设置页「通用」→ 上帝模式Pro开关。开启后通知栏出现控制消息。<br>
   2. <b>通知栏切换</b>：点击通知栏消息在「开始编辑」与「退出编辑」之间切换。<br>
   3. <b>快捷磁贴</b>：通知栏快捷磁贴可一键切换编辑模式（禁止通知时替代入口）。<br>
   &emsp;<i>关闭主开关会强制退出编辑并关闭通知。</i><br><br>
@@ -113,7 +113,7 @@
 
 <b>七、注意事项</b><br>
   &bull; 仅在 Xposed / LSPosed 中<b>已激活模块的第三方应用</b>内生效。<br>
-  &bull; 桌面启动器、系统界面、输入法、无界面应用、上帝模式自身<b>不可编辑</b>。<br>
+   &bull; 桌面启动器、系统界面、输入法、无界面应用、上帝模式Pro自身<b>不可编辑</b>。<br>
   &bull; 如遇崩溃，下次启动弹出对话框可复制日志。<br>
   &bull; 功能按钮均有提示（长按或悬停查看）。<br>
   &bull; 禁止通知时仍可通过快捷磁贴控制编辑模式。
@@ -132,9 +132,10 @@
     <string name="modify_detail_image">已替换图片</string>
 
     <string name="hey_guy">嘿 伙计</string>
-    <string name="not_active_module">上帝模式尚未激活，请到 LSPosed 管理器中重新激活</string>
+    <string name="not_active_module">上帝模式Pro尚未激活，请到 LSPosed 管理器中重新激活</string>
+    <string name="master_not_enabled">请先在设置中开启上帝模式Pro主开关</string>
     <string name="notification_permission_denied">通知权限被拒绝，通知栏开关将无法显示。可通过快捷磁贴控制编辑模式</string>
-    <string name="welcome_title">嘿！伙计，真高兴又见到你！</string>
+    <string name="welcome_title">嘿！伙计，真高兴又见到你！欢迎使用上帝模式Pro！</string>
 
     <string name="snack_bar_msg_revert_rule_fail">删除规则失败</string>
     <string name="snack_bar_msg_backup_rule_fail">备份规则失败</string>
@@ -142,7 +143,7 @@
     <string name="confirm_delete_rules">确认删除 %d 条规则？</string>
     <string name="dialog_btn_copy">复制给我的老伙计</string>
     <string name="crash_tip">我想你应该遇了些麻烦，天知道这该死的程序都干了些什么。把下面这些奇奇怪怪的日志复制给老伙计吧，也许有用。\n\n</string>
-    <string name="update_tips">你可以试试用上帝模式屏蔽一些令人烦恼的按钮。噢！没错这听起来很有趣。不过这小家伙有时会像汤姆家那只倔驴一样不听话，别担心伙计们，我会尽快修理好的！\n\n伙计们玩的开心记得来 GitHub 点个 Star，非常感谢！</string>
+    <string name="update_tips">你可以试试用上帝模式Pro屏蔽一些令人烦恼的按钮。噢！没错这听起来很有趣。不过这小家伙有时会像汤姆家那只倔驴一样不听话，别担心伙计们，我会尽快修理好的！\n\n伙计们玩的开心记得来 GitHub 点个 Star，非常感谢！</string>
 
     <string name="rule_details_field_create_time">创建日期</string>
     <string name="rule_details_field_generate_version">生成版本</string>
@@ -185,6 +186,7 @@
     <string name="about_version">版本</string>
     <string name="about_description">一个 LSPosed 模块，可以在任意应用中屏蔽或修改你不喜欢的 UI 元素。</string>
     <string name="about_github">GitHub 仓库</string>
+    <string name="about_original">原项目 (GodMode)</string>
     <string name="about_issues">反馈问题</string>
     <string name="about_thanks">感谢所有参与贡献和反馈的伙计们！</string>
 
