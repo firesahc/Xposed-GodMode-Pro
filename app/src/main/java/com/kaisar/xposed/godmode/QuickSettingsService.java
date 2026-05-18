@@ -5,6 +5,7 @@ import android.graphics.drawable.Icon;
 import android.service.quicksettings.Tile;
 import android.service.quicksettings.TileService;
 import android.text.TextUtils;
+import android.widget.Toast;
 
 import androidx.preference.PreferenceManager;
 
@@ -26,6 +27,7 @@ public final class QuickSettingsService extends TileService implements SharedPre
     @Override
     public void onClick() {
         if (!GodModeHelper.isMasterEnabled(this, R.string.pref_key_master)) {
+            Toast.makeText(this, R.string.master_not_enabled, Toast.LENGTH_SHORT).show();
             return;
         }
         boolean current = GodModeHelper.isEditModeEnabled(this);
