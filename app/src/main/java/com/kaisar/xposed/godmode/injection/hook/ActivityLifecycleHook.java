@@ -3,6 +3,8 @@ package com.kaisar.xposed.godmode.injection.hook;
 import static com.kaisar.xposed.godmode.GodModeApplication.TAG;
 
 import android.app.Activity;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.TextUtils;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
@@ -22,11 +24,15 @@ import java.util.Set;
 import java.util.WeakHashMap;
 
 import de.robv.android.xposed.XC_MethodHook;
+import de.robv.android.xposed.XposedHelpers;
 
 public final class ActivityLifecycleHook extends XC_MethodHook implements Property.OnPropertyChangeListener<ActRules> {
 
     private static final WeakHashMap<Activity, OnLayoutChangeListener> sActivities = new WeakHashMap<>();
     private static final ActRules sActRules = new ActRules();
+    private static final Handler sDebounceHandler = new Handler(Looper.getMainLooper());
+    private static final java.util.Map<Activity, Runnable> sPendingReapply = new java.util.WeakHashMap<>();
+    private static boolean sRecyclerViewHooksInstalled;
 
     @Override
     protected void afterHookedMethod(MethodHookParam param) throws Throwable {
@@ -41,10 +47,15 @@ public final class ActivityLifecycleHook extends XC_MethodHook implements Proper
                 sActivities.put(activity, listener);
                 decorView.post(listener::applyRuleIfMatchCondition);
             }
+            installRecyclerViewHooks(activity);
             Logger.d(TAG, "resume:" + sActivities);
         } else if ("onDestroy".equals(methodName)) {
             OnLayoutChangeListener listener = sActivities.remove(activity);
             decorView.getViewTreeObserver().removeOnGlobalLayoutListener(listener);
+            synchronized (sPendingReapply) {
+                Runnable r = sPendingReapply.remove(activity);
+                if (r != null) sDebounceHandler.removeCallbacks(r);
+            }
             Logger.d(TAG, "destroy:" + sActivities);
         }
     }
@@ -63,12 +74,21 @@ public final class ActivityLifecycleHook extends XC_MethodHook implements Proper
             }
         }
         // revoke old rules
-        entries = sActRules.entrySet();
-        for (Map.Entry<String, List<ViewRule>> entry : entries) {
-            List<ViewRule> rules = entry.getValue();
-            for (Activity activity : sActivities.keySet()) {
-                if (TextUtils.equals(activity.getComponentName().getClassName(), entry.getKey())) {
-                    ViewController.revokeRuleBatch(activity, rules);
+        if (!sActRules.isEmpty()) {
+            entries = sActRules.entrySet();
+            for (Map.Entry<String, List<ViewRule>> entry : entries) {
+                List<ViewRule> rules = entry.getValue();
+                List<ViewRule> revRemove = new java.util.ArrayList<>();
+                List<ViewRule> revModify = new java.util.ArrayList<>();
+                for (ViewRule r : rules) {
+                    if (r.isModifyRule()) revModify.add(r);
+                    else revRemove.add(r);
+                }
+                for (Activity activity : sActivities.keySet()) {
+                    if (TextUtils.equals(activity.getComponentName().getClassName(), entry.getKey())) {
+                        if (!revRemove.isEmpty()) ViewController.revokeRuleBatch(activity, revRemove);
+                        for (ViewRule r : revModify) RuleModificationHelper.revokeModificationRule(activity, r);
+                    }
                 }
             }
         }
@@ -94,6 +114,41 @@ public final class ActivityLifecycleHook extends XC_MethodHook implements Proper
                     }
                 }
             }
+        }
+    }
+
+    private static void scheduleRuleReapplication(final Activity activity) {
+        synchronized (sPendingReapply) {
+            Runnable existing = sPendingReapply.get(activity);
+            if (existing != null) sDebounceHandler.removeCallbacks(existing);
+            Runnable r = () -> {
+                synchronized (sPendingReapply) { sPendingReapply.remove(activity); }
+                RuleModificationHelper.clearAppliedCache();
+                ViewController.clearBlockedCache();
+                OnLayoutChangeListener listener = sActivities.get(activity);
+                if (listener != null) listener.applyRuleIfMatchCondition();
+            };
+            sPendingReapply.put(activity, r);
+            sDebounceHandler.postDelayed(r, 200);
+        }
+    }
+
+    private static void installRecyclerViewHooks(Activity activity) {
+        if (sRecyclerViewHooksInstalled) return;
+        try {
+            Class<?> adapterClass = XposedHelpers.findClass("androidx.recyclerview.widget.RecyclerView$Adapter", activity.getClassLoader());
+            XposedHelpers.findAndHookMethod(adapterClass, "notifyDataSetChanged", new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) {
+                    for (Activity act : sActivities.keySet()) {
+                        if (act != null && !act.isFinishing()) scheduleRuleReapplication(act);
+                    }
+                }
+            });
+            sRecyclerViewHooksInstalled = true;
+            Logger.i(TAG, "[DynamicContent] RecyclerView adapter hook installed");
+        } catch (Throwable t) {
+            Logger.d(TAG, "[DynamicContent] RecyclerView hook skipped: " + t.getMessage());
         }
     }
 

@@ -201,9 +201,12 @@ public final class EventHandlerHook extends XC_MethodHook implements Property.On
                     mViewRule.visibility = View.GONE;
                     ViewController.applyRule(v, mViewRule);
                     ViewHelper.drawRuleMask(mSnapshot, mViewRule);
-                    GodModeManager.getDefault().writeRule(v.getContext().getPackageName(), mViewRule, mSnapshot);
-                    recycleNullableBitmap(mSnapshot);
                     mMaskView.detachFromContainer();
+                    new Thread(() -> {
+                        try { GodModeManager.getDefault().writeRule(v.getContext().getPackageName(), mViewRule, mSnapshot); }
+                        catch (Exception e) { Logger.e(TAG, "write rule fail", e); }
+                        recycleNullableBitmap(mSnapshot);
+                    }, "gm-write").start();
                 }
                 @Override
                 public void onAnimationEnd(View animView, Animator animation) {

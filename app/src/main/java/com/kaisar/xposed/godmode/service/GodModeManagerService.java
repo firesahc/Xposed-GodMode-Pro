@@ -79,7 +79,7 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
     private final AppRules mAppRulesCache = new AppRules();
     private final Context mContext;
     private final Handler mHandle;
-    private boolean mInEditMode;
+    private volatile boolean mInEditMode;
     private boolean mStarted;
     private volatile boolean mDataLoaded;
     private volatile boolean mOrphanCleanPending;
@@ -130,7 +130,9 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
                     FileUtils.delete(packageDir);
                 }
             }
-            mAppRulesCache.putAll(appRules);
+            synchronized (mAppRulesCache) {
+                mAppRulesCache.putAll(appRules);
+            }
             mLogger.d("app rules cache=" + mAppRulesCache.size());
         }
     }
@@ -147,7 +149,9 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
                     String oldImagePath = args.length > 3 ? (String) args[3] : null;
                     if (snapshot != null) {
                         if (oldImagePath != null && !TextUtils.isEmpty(oldImagePath)) {
-                            FileUtils.delete(oldImagePath);
+                            if (!FileUtils.delete(oldImagePath)) {
+                                mLogger.w("Failed to delete old snapshot: " + oldImagePath, (Throwable) null);
+                            }
                         }
                         String newImagePath = saveBitmap(snapshot, getAppDataDir(packageName));
                         if (newImagePath == null) {
@@ -159,9 +163,9 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
                     } else {
                         String json = (String) args[4];
                         ActRules snapshotRules = (ActRules) args[5];
+                        notifyObserverRuleChanged(packageName, snapshotRules);
                         safePersistRules(packageName, json);
                         scheduleOrphanCleanup();
-                        notifyObserverRuleChanged(packageName, snapshotRules);
                     }
                 } catch (IOException e) {
                     mLogger.w("write rule failed", e);
@@ -190,9 +194,9 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
                         json = mGson.toJson(actRules);
                         snapshotRules = snapshotActRules(actRules);
                     }
+                    notifyObserverRuleChanged(packageName, snapshotRules);
                     safePersistRules(packageName, json);
                     scheduleOrphanCleanup();
-                    notifyObserverRuleChanged(packageName, snapshotRules);
                 } catch (IOException e) {
                     mLogger.w("update image path failed", e);
                 }
@@ -205,10 +209,12 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
                     String json = (String) args[1];
                     ActRules snapshotRules = (ActRules) args[2];
                     String imagePath = (String) args[3];
-                    FileUtils.delete(imagePath);
+                    if (!FileUtils.delete(imagePath)) {
+                        mLogger.w("Failed to delete rule image: " + imagePath, (Throwable) null);
+                    }
+                    notifyObserverRuleChanged(packageName, snapshotRules);
                     safePersistRules(packageName, json);
                     scheduleOrphanCleanup();
-                    notifyObserverRuleChanged(packageName, snapshotRules);
                 } catch (IOException e) {
                     mLogger.w("delete rule failed", e);
                 }
@@ -217,7 +223,9 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
             case DELETE_RULES: {
                 try {
                     String packageName = (String) msg.obj;
-                    FileUtils.delete(getAppDataDir(packageName));
+                    if (!FileUtils.delete(getAppDataDir(packageName))) {
+                        mLogger.w("Failed to delete app data dir: " + packageName, (Throwable) null);
+                    }
                     notifyObserverRuleChanged(packageName, new ActRules());
                 } catch (FileNotFoundException e) {
                     mLogger.w("delete rules failed", e);

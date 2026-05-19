@@ -14,8 +14,8 @@ android {
         applicationId "com.viewblocker.jrsen"
         minSdkVersion 24
         targetSdkVersion 35
-        versionCode 32
-        versionName "4.6.0"
+        versionCode 33
+        versionName "5.0.0"
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
         vectorDrawables.useSupportLibrary = true
     }

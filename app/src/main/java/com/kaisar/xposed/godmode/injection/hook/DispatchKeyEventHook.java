@@ -17,6 +17,7 @@ import android.view.ViewParent;
 import android.view.animation.AccelerateInterpolator;
 import android.view.animation.DecelerateInterpolator;
 import android.widget.SeekBar;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.widget.TooltipCompat;
@@ -58,6 +59,7 @@ public final class DispatchKeyEventHook extends XC_MethodHook
     // =========================================================================
 
     private static final int OVERLAY_COLOR = Color.argb(150, 255, 0, 0);
+    private static final int OVERLAY_COLOR_REPEATABLE = Color.argb(150, 255, 165, 0);
     private static DispatchKeyEventHook sInstance;
 
     public static final int MODE_INITIAL = 0;
@@ -67,6 +69,9 @@ public final class DispatchKeyEventHook extends XC_MethodHook
 
     public static int getInteractionMode() { return sInteractionMode; }
     static boolean isKeySelecting() { return sInstance != null && sInstance.mKeySelecting; }
+
+    private static volatile boolean sInfoFlowMode = true;
+    public static boolean isInfoFlowMode() { return sInfoFlowMode; }
 
     // =========================================================================
     // 视图树状态（通过静态访问器与 EventHandlerHook 共享）
@@ -123,10 +128,10 @@ public final class DispatchKeyEventHook extends XC_MethodHook
                     param.setResult(true);
                 } else if (sInstance.mKeySelecting && action == KeyEvent.ACTION_DOWN) {
                     if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) {
-                        sInstance.navigateNext();
+                        sInstance.navigatePrevious();
                         param.setResult(true);
                     } else if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
-                        sInstance.navigatePrevious();
+                        sInstance.navigateNext();
                         param.setResult(true);
                     }
                 }
@@ -204,21 +209,34 @@ public final class DispatchKeyEventHook extends XC_MethodHook
     // 视图导航 — SeekBar 按钮和音量键步进
     // =========================================================================
 
-    private void navigateNext() {
-        if (mModifyController.isPanelShowing() || mNodeSeekbar == null
-                || mNodeSeekbar.getProgress() >= mNodeSeekbar.getMax()) {
-            return;
+    private void toggleInfoFlowMode() {
+        sInfoFlowMode = !sInfoFlowMode;
+        updateInfoFlowModeButton();
+        Toast.makeText(mCurrentActivity, GmResources.getString(sInfoFlowMode ? R.string.accessibility_info_flow_on : R.string.accessibility_info_flow_off), Toast.LENGTH_SHORT).show();
+    }
+    private void updateInfoFlowModeButton() {
+        if (mNodeSelectorPanel == null) return;
+        TextView btn = mNodeSelectorPanel.findViewById(R.id.info_flow_mode_btn);
+        if (btn == null) return;
+        if (sInfoFlowMode) {
+            btn.setText(GmResources.getText(R.string.mode_info_flow_on));
+            btn.setTextColor(android.graphics.Color.parseColor("#FFA500"));
+        } else {
+            btn.setText(GmResources.getText(R.string.mode_info_flow_off));
+            btn.setTextColor(android.graphics.Color.GRAY);
         }
-        mNodeSeekbar.setProgress(mNodeSeekbar.getProgress() + 1);
     }
 
-    private void navigatePrevious() {
-        if (mModifyController.isPanelShowing() || mNodeSeekbar == null
-                || mNodeSeekbar.getProgress() <= 0) {
-            return;
-        }
-        mNodeSeekbar.setProgress(mNodeSeekbar.getProgress() - 1);
+    private void navigate(int delta) {
+        if (mModifyController.isPanelShowing() || mNodeSeekbar == null) return;
+        int next = mNodeSeekbar.getProgress() + delta;
+        if (next < 0 || next > mNodeSeekbar.getMax()) return;
+        mNodeSeekbar.setProgress(next);
     }
+
+    private void navigateNext() { navigate(+1); }
+
+    private void navigatePrevious() { navigate(-1); }
 
     // =========================================================================
     // 节点选择器面板 — 显示、关闭、按钮绑定
@@ -327,6 +345,12 @@ public final class DispatchKeyEventHook extends XC_MethodHook
                     topContent.getPaddingRight() == targetWidth ? 12 : targetWidth, 4);
         });
 
+        TextView infoFlowBtn = mNodeSelectorPanel.findViewById(R.id.info_flow_mode_btn);
+        if (infoFlowBtn != null) {
+            infoFlowBtn.setOnClickListener(v -> toggleInfoFlowMode());
+            updateInfoFlowModeButton();
+        }
+
         // 上/下导航按钮
         mNodeSelectorPanel.findViewById(R.id.Up).setOnClickListener(v -> navigatePrevious());
         mNodeSelectorPanel.findViewById(R.id.Down).setOnClickListener(v -> navigateNext());
@@ -373,6 +397,8 @@ public final class DispatchKeyEventHook extends XC_MethodHook
             if (view == null) return;
             mMaskView.updateOverlayBounds(new Rect());
 
+            final int blockedViewIndex = mCurrentViewIndex;
+
             // 隐藏 GM 覆盖层以获取干净截图
             hideGmOverlays(View.INVISIBLE);
             final Bitmap snapshot = ViewHelper.snapshotView(ViewHelper.findTopParentViewByChildView(view));
@@ -393,14 +419,15 @@ public final class DispatchKeyEventHook extends XC_MethodHook
                 public void onAnimationEnd(View animView, Animator animation) {
                     try {
                         ViewHelper.drawRuleMask(snapshot, viewRule);
-                        GodModeManager.getDefault().writeRule(activity.getPackageName(), viewRule, snapshot);
-                        recycleNullableBitmap(snapshot);
                         particleView.detachFromContainer();
-                    } catch (Exception e) {
-                        Logger.e(TAG, "write rule fail", e);
-                    }
+                    } catch (Exception e) { Logger.e(TAG, "write rule fail", e); }
                     restorePanelAlpha();
-                    updateViewNodesAfterRemove();
+                    updateViewNodesAfterRemove(blockedViewIndex);
+                    new Thread(() -> {
+                        try { GodModeManager.getDefault().writeRule(activity.getPackageName(), viewRule, snapshot); }
+                        catch (Exception e) { Logger.e(TAG, "write rule fail", e); }
+                        recycleNullableBitmap(snapshot);
+                    }, "gm-write").start();
                 }
             });
             particleView.boom(view);
@@ -421,16 +448,13 @@ public final class DispatchKeyEventHook extends XC_MethodHook
     }
 
     /** 移除视图后更新节点列表 */
-    private void updateViewNodesAfterRemove() {
-        if (mCurrentViewIndex >= mViewNodes.size()) {
-            mCurrentViewIndex = mViewNodes.size() - 1;
-        }
-        if (mCurrentViewIndex >= 0) {
-            mViewNodes.remove(mCurrentViewIndex);
+    private void updateViewNodesAfterRemove(int removedIndex) {
+        if (removedIndex >= 0 && removedIndex < mViewNodes.size()) {
+            mViewNodes.remove(removedIndex);
         }
         if (mNodeSeekbar != null) {
             mNodeSeekbar.setMax(Math.max(mViewNodes.size() - 1, 0));
-            mCurrentViewIndex = Math.min(mCurrentViewIndex, Math.max(mViewNodes.size() - 1, 0));
+            mCurrentViewIndex = Math.min(removedIndex, Math.max(mViewNodes.size() - 1, 0));
             if (mCurrentViewIndex >= 0) {
                 mNodeSeekbar.setProgress(mCurrentViewIndex);
             }
@@ -520,6 +544,11 @@ public final class DispatchKeyEventHook extends XC_MethodHook
             View view = mViewNodes.get(mCurrentViewIndex).get();
             Logger.d(TAG, String.format(Locale.getDefault(), "progress=%d selected view=%s", progress, view));
             if (view != null && mMaskView != null) {
+                if (ViewHelper.isInRecyclerView(view)) {
+                    mMaskView.setMaskOverlay(OVERLAY_COLOR_REPEATABLE);
+                } else {
+                    mMaskView.setMaskOverlay(OVERLAY_COLOR);
+                }
                 mMaskView.updateOverlayBounds(ViewHelper.getLocationInWindow(view));
             }
         }

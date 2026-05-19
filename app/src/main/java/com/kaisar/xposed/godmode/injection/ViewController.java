@@ -25,9 +25,30 @@ public final class ViewController {
 
     private final static SparseArray<Pair<WeakReference<View>, ViewProperty>> blockedViewCache = new SparseArray<>();
 
+    public static void clearBlockedCache() {
+        blockedViewCache.clear();
+    }
+
+    private static int identityKey(ViewRule rule) {
+        int result = rule.activityClass.hashCode();
+        result = 31 * result + rule.viewClass.hashCode();
+        result = 31 * result + java.util.Objects.hashCode(rule.resourceName);
+        result = 31 * result + java.util.Objects.hashCode(rule.text);
+        return result;
+    }
+
     public static void applyRuleBatch(Activity activity, List<ViewRule> rules) {
         for (ViewRule rule : rules) {
             try {
+                if (rule.isRepeatable()) {
+                    List<View> views = ViewHelper.findAllViewsBestMatch(activity, rule);
+                    if (views != null) {
+                        for (View v : views) {
+                            if (v != null) applyRule(v, rule);
+                        }
+                    }
+                    continue;
+                }
                 int ruleHashCode = rule.hashCode();
                 Pair<WeakReference<View>, ViewProperty> viewInfo = blockedViewCache.get(ruleHashCode);
                 View view = viewInfo != null ? viewInfo.first.get() : null;
@@ -47,8 +68,9 @@ public final class ViewController {
     }
 
     public static boolean applyRule(View v, ViewRule viewRule) {
-        int ruleHashCode = viewRule.hashCode();
-        Pair<WeakReference<View>, ViewProperty> viewInfo = blockedViewCache.get(ruleHashCode);
+        if (v == null || viewRule == null) return false;
+        int cacheKey = viewRule.isRepeatable() ? identityKey(viewRule) : viewRule.hashCode();
+        Pair<WeakReference<View>, ViewProperty> viewInfo = blockedViewCache.get(cacheKey);
         View blockedView = viewInfo != null ? viewInfo.first.get() : null;
         if (blockedView == v && v.getVisibility() == viewRule.visibility) {
             return false;
@@ -71,13 +93,22 @@ public final class ViewController {
             v.requestLayout();
         }
         ViewCompat.setVisibility(v, viewRule.visibility);
-        blockedViewCache.put(ruleHashCode, Pair.create(new WeakReference<>(v), viewProperty));
+        blockedViewCache.put(cacheKey, Pair.create(new WeakReference<>(v), viewProperty));
         return true;
     }
 
     public static void revokeRuleBatch(Activity activity, List<ViewRule> rules) {
         for (ViewRule rule : rules) {
             try {
+                if (rule.isRepeatable()) {
+                    List<View> views = ViewHelper.findAllViewsBestMatch(activity, rule);
+                    if (views != null) {
+                        for (View v : views) {
+                            if (v != null) revokeRule(v, rule);
+                        }
+                    }
+                    continue;
+                }
                 int ruleHashCode = rule.hashCode();
                 Pair<WeakReference<View>, ViewProperty> viewInfo = blockedViewCache.get(ruleHashCode);
                 View view = viewInfo != null ? viewInfo.first.get() : null;
@@ -94,8 +125,8 @@ public final class ViewController {
     }
 
     public static void revokeRule(View v, ViewRule viewRule) {
-        int ruleHashCode = viewRule.hashCode();
-        Pair<WeakReference<View>, ViewProperty> viewInfo = blockedViewCache.get(ruleHashCode);
+        int cacheKey = viewRule.isRepeatable() ? identityKey(viewRule) : viewRule.hashCode();
+        Pair<WeakReference<View>, ViewProperty> viewInfo = blockedViewCache.get(cacheKey);
         if (viewInfo != null && viewInfo.first.get() == v) {
             ViewProperty viewProperty = viewInfo.second;
             v.setAlpha(viewProperty.alpha);
@@ -107,7 +138,7 @@ public final class ViewController {
                 lp.height = viewProperty.layout_params_height;
                 v.requestLayout();
             }
-            blockedViewCache.delete(viewRule.hashCode());
+            blockedViewCache.delete(cacheKey);
         } else {
             Logger.w(TAG, "view cache missing during revoke, falling back to setAlpha");
             v.setAlpha(1f);

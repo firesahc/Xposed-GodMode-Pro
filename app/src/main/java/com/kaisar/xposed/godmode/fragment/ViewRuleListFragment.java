@@ -257,6 +257,7 @@ public final class ViewRuleListFragment extends Fragment {
                 }
                 summaryBuilder.append(getString(R.string.field_view, rule.viewClass));
                 holder.summaryView.setText(summaryBuilder);
+                if (rule.isRepeatable()) appendRepeatableBadge(holder);
             } else {
                 if (!TextUtils.isEmpty(rule.imagePath)) {
                     Glide.with(ViewRuleListFragment.this).load(rule).error(mIcon).diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.NONE).into(holder.imageView);
@@ -283,7 +284,25 @@ public final class ViewRuleListFragment extends Fragment {
                 summaryBuilder.append("\n").append(getString(R.string.field_view, rule.viewClass));
                 summaryBuilder.append(" ").append(getString(R.string.field_depth, Arrays.toString(rule.depth)));
                 holder.summaryView.setText(summaryBuilder);
+                if (rule.isRepeatable()) appendRepeatableBadge(holder);
             }
+        }
+
+        private void appendRepeatableBadge(ViewHolder holder) {
+            CharSequence current = holder.summaryView.getText();
+            SpannableStringBuilder sb;
+            if (current instanceof SpannableStringBuilder) {
+                sb = (SpannableStringBuilder) current;
+            } else {
+                sb = new SpannableStringBuilder(current != null ? current : "");
+            }
+            sb.append("\n");
+            SpannableString badge = new SpannableString(getString(R.string.rule_repeatable_badge));
+            badge.setSpan(new ForegroundColorSpan(
+                requireContext().getResources().getColor(R.color.prefsAliasColor, requireContext().getTheme())),
+                0, badge.length(), 0);
+            sb.append(badge);
+            holder.summaryView.setText(sb);
         }
 
         private void bindTitle(ViewHolder holder, String activityClass, int ruleTypeResId) {
