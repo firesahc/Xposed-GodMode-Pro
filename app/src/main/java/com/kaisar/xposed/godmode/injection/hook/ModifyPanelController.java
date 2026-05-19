@@ -87,7 +87,8 @@ final class ModifyPanelController {
     /** 取消修改：还原视图状态并关闭面板 */
     void cancel() {
         revertViewState();
-        for (Bitmap bmp : mPendingModBitmaps.values()) {
+        for (java.util.Map.Entry<String, Bitmap> entry : mPendingModBitmaps.entrySet()) {
+            Bitmap bmp = entry.getValue();
             if (bmp != null && !bmp.isRecycled()) bmp.recycle();
         }
         mPendingModBitmaps.clear();
@@ -367,10 +368,6 @@ final class ModifyPanelController {
                 }
             }
         }
-        for (Bitmap bmp : mPendingModBitmaps.values()) {
-            if (bmp != null && !bmp.isRecycled()) bmp.recycle();
-        }
-        mPendingModBitmaps.clear();
         mTempModifications.entrySet().removeIf(entry -> !entry.getValue().hasModifications());
         if (mTempModifications.isEmpty()) {
             Toast.makeText(activity, "没有需要保存的修改", Toast.LENGTH_SHORT).show();
@@ -384,7 +381,7 @@ final class ModifyPanelController {
         final HashMap<ViewRule, Bitmap> snapshots = new HashMap<>();
         for (ViewRule rule : rulesToSave) {
             try {
-                View view = ViewHelper.findViewByDepth(activity, rule.depth);
+                View view = rule.repeatable ? ViewHelper.findViewBestMatch(activity, rule) : ViewHelper.findViewByDepth(activity, rule.depth);
                 if (view != null) {
                     Bitmap snapshot = ViewHelper.snapshotView(ViewHelper.findTopParentViewByChildView(view));
                     ViewHelper.drawRuleMask(snapshot, rule);
@@ -394,20 +391,25 @@ final class ModifyPanelController {
                 Logger.w(TAG, "[saveAll] snapshot failed for rule", e);
             }
         }
+        // 不要回收 mPendingModBitmaps 中的位图——它们仍被 ImageView 引用显示。
+        // 待 writeRule 广播后，applyModificationToView 会从磁盘加载新位图替换，
+        // 旧位图届时由 GC 回收。
+        mPendingModBitmaps.clear();
         mTempModifications.clear();
         android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
         new Thread(() -> {
             boolean allOk = true;
             for (ViewRule rule : rulesToSave) {
+                Bitmap snapshot = snapshots.get(rule);
                 try {
-                    Bitmap snapshot = snapshots.get(rule);
                     if (!GodModeManager.getDefault().writeRule(pkg, rule, snapshot)) {
                         allOk = false;
                     }
-                    if (snapshot != null && !snapshot.isRecycled()) snapshot.recycle();
                 } catch (Exception e) {
                     Logger.e(TAG, "[saveAll] writeRule failed", e);
                     allOk = false;
+                } finally {
+                    if (snapshot != null && !snapshot.isRecycled()) snapshot.recycle();
                 }
             }
             boolean finalAllOk = allOk;
@@ -512,7 +514,6 @@ final class ModifyPanelController {
 
     private void hookActivityResult(Activity activity) {
         if (mActivityResultHooked) return;
-        mActivityResultHooked = true;
         try {
             XposedHelpers.findAndHookMethod(Activity.class, "onActivityResult",
                     int.class, int.class, Intent.class, new XC_MethodHook() {
@@ -564,6 +565,7 @@ final class ModifyPanelController {
                             }
                         }
                     });
+            mActivityResultHooked = true;
         } catch (Exception e) {
             Logger.e(TAG, "[hookActivityResult] Xposed hook failed, image replacement disabled", e);
         }

@@ -53,6 +53,14 @@ public final class ViewRule implements Parcelable, Cloneable {
     public String viewClass;
     @SerializedName("res_name")
     public String resourceName;
+    @SerializedName("item_path")
+    public String[] itemPath;
+    @SerializedName("item_root_class")
+    public String itemRootClass;
+    @SerializedName("parent_class")
+    public String parentClass;
+    @SerializedName("repeatable")
+    public boolean repeatable;
     @SerializedName("text")
     public String text;
     @SerializedName("description")
@@ -155,6 +163,10 @@ public final class ViewRule implements Parcelable, Cloneable {
         origText = in.readString();
         origLeftMargin = in.readInt();
         origTopMargin = in.readInt();
+        itemPath = in.createStringArray();
+        itemRootClass = in.readString();
+        parentClass = in.readString();
+        repeatable = in.readByte() != 0;
     }
 
     @Override
@@ -192,6 +204,10 @@ public final class ViewRule implements Parcelable, Cloneable {
         dest.writeString(origText);
         dest.writeInt(origLeftMargin);
         dest.writeInt(origTopMargin);
+        dest.writeStringArray(itemPath);
+        dest.writeString(itemRootClass);
+        dest.writeString(parentClass);
+        dest.writeByte((byte) (repeatable ? 1 : 0));
     }
 
     @Override
@@ -231,6 +247,10 @@ public final class ViewRule implements Parcelable, Cloneable {
         v.origText = origText;
         v.origLeftMargin = origLeftMargin;
         v.origTopMargin = origTopMargin;
+        v.itemPath = itemPath != null ? itemPath.clone() : null;
+        v.itemRootClass = itemRootClass;
+        v.parentClass = parentClass;
+        v.repeatable = repeatable;
         return v;
     }
 
@@ -277,6 +297,7 @@ public final class ViewRule implements Parcelable, Cloneable {
     public boolean isPositionModified() { return modXOffset != 0 || modYOffset != 0; }
     public boolean isTextModified() { return modText != null; }
     public boolean isImageModified() { return modImagePath != null; }
+    public boolean isRepeatable() { return repeatable; }
 
     public boolean hasModifications() {
         return isWidthModified() || isHeightModified() || isAlphaModified()
@@ -290,6 +311,9 @@ public final class ViewRule implements Parcelable, Cloneable {
         ViewRule that = (ViewRule) o;
         if (!activityClass.equals(that.activityClass)) return false;
         if (!viewClass.equals(that.viewClass)) return false;
+        if (repeatable && that.repeatable) {
+            return Arrays.equals(itemPath, that.itemPath);
+        }
         return Arrays.equals(depth, that.depth);
     }
 
@@ -297,7 +321,11 @@ public final class ViewRule implements Parcelable, Cloneable {
     public int hashCode() {
         int result = activityClass.hashCode();
         result = 31 * result + viewClass.hashCode();
-        result = 31 * result + Arrays.hashCode(depth);
+        if (repeatable && itemPath != null) {
+            result = 31 * result + Arrays.hashCode(itemPath);
+        } else {
+            result = 31 * result + Arrays.hashCode(depth);
+        }
         return result;
     }
 
@@ -311,6 +339,10 @@ public final class ViewRule implements Parcelable, Cloneable {
         sb.append(", activityClass='").append(activityClass).append('\'');
         sb.append(", viewClass='").append(viewClass).append('\'');
         sb.append(", depth=").append(Arrays.toString(depth));
+        if (itemPath != null) sb.append(", itemPath=").append(Arrays.toString(itemPath));
+        if (itemRootClass != null) sb.append(", itemRootClass='").append(itemRootClass).append('\'');
+        if (parentClass != null) sb.append(", parentClass='").append(parentClass).append('\'');
+        if (repeatable) sb.append(", repeatable=true");
         sb.append(", alias='").append(alias).append('\'');
         if (isRemoveRule()) {
             sb.append(", x=").append(x).append(", y=").append(y);

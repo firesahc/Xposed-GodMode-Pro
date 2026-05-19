@@ -63,6 +63,19 @@
             android:background="?android:selectableItemBackground" />
 
         <TextView
+            android:id="@+id/about_original"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:padding="12dp"
+            android:text="@string/about_original"
+            android:textSize="15sp"
+            android:textColor="?android:colorAccent"
+            android:gravity="center"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="?android:selectableItemBackground" />
+
+        <TextView
             android:id="@+id/about_issues"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -74,19 +87,6 @@
             android:clickable="true"
             android:focusable="true"
             android:background="?android:selectableItemBackground" />
-			
-		<TextView
-            android:id="@+id/about_original"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:background="?android:selectableItemBackground"
-            android:clickable="true"
-            android:focusable="true"
-            android:gravity="center"
-            android:padding="12dp"
-            android:text="@string/about_original"
-            android:textColor="?android:colorAccent"
-            android:textSize="15sp" />
 
         <View
             android:layout_width="match_parent"

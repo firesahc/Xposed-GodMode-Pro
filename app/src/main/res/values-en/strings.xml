@@ -39,78 +39,84 @@
     <string name="rule_type_modify">Modify</string>
 
     <string name="guide_content"><![CDATA[
-<b>1. Getting Started</b><br>
-  1. <b>Master Switch</b>: Settings → General → GodMode Pro switch. A notification appears when enabled.<br>
-  2. <b>Notification Toggle</b>: Tap the notification to toggle between "Start Editor" and "Exit Editor".<br>
-  3. <b>Quick Settings Tile</b>: Use the Quick Settings tile to toggle edit mode with one tap (alternative when notifications are disabled).<br>
-  &emsp;<i>Disabling the master switch forces edit mode off and removes the notification.</i><br><br>
+<b>1. Starting &amp; Stopping Editor</b><br>
+&emsp;Settings → General → Master switch ON.<br>
+&emsp;In the target app:<br>
+&bull; <b>Notification</b>: Tap to toggle Start/Exit Editor mode.<br>
+&bull; <b>Quick Settings Tile</b>: One-tap toggle (alternative when notifs disabled).<br>
+&bull; Disabling the master switch exits edit mode and removes the notification.<br><br>
 
 <b>2. Tool Panel</b><br>
-  When edit mode is active, a semi-transparent rounded toolbar appears on the right side of the target app:<br><br>
-  <b>Buttons (top to bottom):</b><br>
-  &bull; <b>Vertical Slider</b> — Drag to select elements at different hierarchy depths.<br>
-  &bull; <b>Toggle Position</b> — Switch the panel between right and left side.<br>
-  &bull; <b>Remove Mode</b> button — Expands remove menu (Block, Preview).<br>
-  &bull; <b>Modify Mode</b> button — Expands modify menu (Properties, Save).<br>
-  &bull; <b>Previous</b> / <b>Next</b> — Navigate elements one by one.<br><br>
-  <b>Show / Hide:</b><br>
-  &bull; Press <b>Volume Up</b> or <b>Volume Down</b> and release → toggle the panel.<br>
-  &bull; When the panel is visible, volume keys navigate between elements.<br><br>
+&emsp;A semi-transparent panel appears on the right when editing:<br>
+&bull; <b>Slider</b> — Select elements by hierarchy depth.<br>
+&bull; <b>Toggle Position</b> — Panel left/right side.<br>
+&bull; <b>Remove</b> / <b>Modify</b> — Expand respective menus.<br>
+&bull; <b>Feed Mode</b> — Toggle Feed ON/OFF (default ON, see §4).<br>
+&bull; <b>Prev</b> / <b>Next</b> — Navigate elements.<br>
+&emsp;<b>Volume Keys</b>: Press Vol Up/Down and release → toggle panel. When panel is open, volume keys navigate elements.<br>
+&emsp;Red overlay = selected element. Orange overlay = element inside a list (RecyclerView).<br><br>
 
 <b>3. Selecting Elements</b><br>
-  A red overlay highlights the currently selected element. Switch selection via:<br>
-  &bull; <b>Tap to Select</b>: Tap any element on the screen.<br>
-  &bull; <b>Slider</b>: Drag the vertical slider on the panel to navigate by depth.<br>
-  &bull; <b>Arrow Buttons</b>: Tap Previous / Next on the panel.<br>
-  &bull; <b>Volume Keys</b>: When panel is visible, volume keys step through elements.<br><br>
+&bull; <b>Tap</b> any element directly.<br>
+&bull; <b>Slider</b> — Drag the vertical bar.<br>
+&bull; <b>Buttons</b> — Tap Prev/Next on the panel.<br>
+&bull; <b>Volume keys</b> — When panel is visible.<br><br>
 
-<b>4. Remove Mode</b><br>
-  Tap the "Remove Mode" button to expand the submenu:<br><br>
-  <b>Preview</b><br>
-  Tap Preview → the selected element is temporarily hidden. Tap again to restore.<br><br>
-  <b>Block (three equivalent methods):</b><br>
-  1. Panel: Select element → tap the <b>Block button</b> on the panel.<br>
-  2. Touch: <b>Long-press</b> an element ~0.5s → green overlay appears with a cancel area at the top → release outside the green area → particle animation plays and the element disappears.<br>
-  3. Drag to Cancel: Long-press, then drag the green overlay to the <b>top green zone</b> and release → operation cancelled.<br>
-  &emsp;<i>After blocking, the rule and a screenshot are saved automatically.</i><br><br>
+<b>4. Feed Mode</b><br>
+&emsp;Tap the "Feed·ON/OFF" button on the panel:<br>
+&bull; <b>ON</b> (default): Changes to list (RecyclerView) items apply to all structurally identical items.<br>
+&bull; <b>OFF</b>: Each operation affects only the single selected element.<br><br>
 
-<b>5. Modify Mode</b><br>
-  Tap the "Modify Mode" button to expand the submenu:<br><br>
-  <b>Property Panel</b><br>
-  1. Select the target element, then tap the <b>Modify button</b> on the panel.<br>
-  2. The property panel appears with controls for:<br>
-  &emsp;&bull; <b>Width / Height</b> — SeekBar drag or manual input (0~2000).<br>
-  &emsp;&bull; <b>Alpha</b> — 0~255 slider.<br>
-  &emsp;&bull; <b>Position Nudge</b> — Arrow buttons move the element 10px per tap.<br>
-  &emsp;&bull; <b>Text</b> — Edit text content for TextViews.<br>
-  &emsp;&bull; <b>Replace Image</b> — Pick an image from the gallery for ImageViews.<br>
-  3. Tap <b>Confirm</b> to preview changes, or <b>Cancel</b> to revert.<br>
-  4. After confirming all changes, tap the <b>Save button</b> on the panel to persist.<br>
-  &emsp;<i>Supports modifying multiple elements and saving them all at once.</i><br><br>
-  <b>Drag to Reposition</b><br>
-  In modify mode, <b>long-press anywhere on the screen</b> to drag the <b>currently selected element</b> (not the element under your finger).<br>
-  &emsp;&bull; <b>16dp Grid Snap</b>: Moves align to a grid.<br>
-  &emsp;&bull; <b>12dp Edge Snap</b>: Automatically snaps to adjacent element edges.<br>
-  &emsp;&bull; Position is auto-saved on release as a modify rule.<br><br>
+<b>5. Remove Mode</b><br>
+&emsp;Tap "Remove" button to expand:<br>
+&bull; <b>Preview</b>: Temporarily hide the element. Tap again to restore.<br>
+&bull; <b>Block</b> (3 ways):<br>
+&emsp;1. Select → tap <b>Block</b> button on panel.<br>
+&emsp;2. <b>Long-press</b> element ~0.5s → green overlay + cancel zone at top → release outside cancel zone → particle burst → element gone.<br>
+&emsp;3. Long-press then drag to <b>top green cancel zone</b> → operation cancelled.<br>
+&emsp;<i>Rules and screenshots saved automatically.</i><br><br>
 
-<b>6. Rule Management</b><br>
-  &bull; <b>View List</b>: Settings → App Rules → tap package name. Menu filters All / Remove / Modify views. Title shows rule count.<br>
-  &bull; <b>View Details</b>: Tap a rule entry → swipe left/right to browse. View screenshot, view info, layout depth, etc.<br>
-  &bull; <b>Edit Alias</b>: Customize alias from rule details for easy identification.<br>
-  &bull; <b>Delete Single</b>: Rule details page → menu → Delete rule.<br>
-  &bull; <b>Delete Filtered</b>: Switch to "Remove Rules" or "Modify Rules" view first, then delete only the filtered rules.<br>
-  &bull; <b>Delete All</b>: Under "All Rules" view → menu → Delete rules (with confirmation dialog).<br>
-  &bull; <b>Backup Filtered</b>: Under filtered view, backup exports only current filtered rules; "All Rules" view exports all.<br>
-  &bull; <b>Backup Single</b>: Rule details page → menu → Backup rule.<br>
-  &bull; <b>Restore</b>: Settings → menu → Select .gzip backup file to import.<br>
-  &emsp;<i>Backups include screenshots and replacement images; rules take effect immediately after restore.</i><br><br>
+<b>6. Modify Mode</b><br>
+&emsp;Tap "Modify" button to expand:<br><br>
+<b>Property Panel</b><br>
+1. Select element → tap <b>Modify</b> button.<br>
+2. Adjust properties:<br>
+&emsp;&bull; <b>Width/Height</b> — Slider or manual input (0~2000).<br>
+&emsp;&bull; <b>Alpha</b> — 0~255 slider.<br>
+&emsp;&bull; <b>Position</b> — Arrow keys, 10px per step.<br>
+&emsp;&bull; <b>Text</b> — Edit TextView content.<br>
+&emsp;&bull; <b>Image</b> — Pick gallery image for ImageView.<br>
+3. Tap <b>Confirm</b> to preview, <b>Cancel</b> to revert.<br>
+4. After all modifications done, tap <b>Save</b> button on the panel.<br>
+&emsp;<i>Multiple elements can be modified before saving once.</i><br><br>
+<b>Drag to Reposition</b><br>
+&emsp;In modify mode, <b>long-press anywhere</b> to drag the <b>selected element</b> (not the touched one):<br>
+&bull; <b>16dp grid snap</b> — Aligns to grid.<br>
+&bull; <b>12dp edge snap</b> — Snaps to sibling edges.<br>
+&bull; Position auto-saved as a modify rule on release.<br><br>
 
-<b>7. Notes</b><br>
-  &bull; Edit mode only works in <b>third-party apps</b> where the module is activated in Xposed / LSPosed.<br>
-   &bull; Launcher, system UI, input methods, UI-less apps, and GodMode Pro itself are <b>not editable</b>.<br>
-  &bull; If a crash occurs, a dialog appears on next launch to copy the crash log.<br>
-  &bull; All function buttons have tooltips (long-press or hover to view).<br>
-  &bull; When notifications are disabled, the Quick Settings tile still works as an alternative.
+<b>7. Rule Management</b><br>
+&emsp;Settings → App Rules:<br>
+&bull; <b>List</b>: Tap a package. Menu filters: All / Remove / Modify.<br>
+&bull; <b>Details</b>: Tap a rule → swipe left/right to browse screenshots, view info, depth, etc.<br>
+&bull; <b>Alias</b>: Set a custom alias in details.<br>
+&bull; <b>Visibility</b>: Toggle visible / invisible / gone in details.<br>
+&bull; <b>Delete</b>:<br>
+&emsp;— Single: Details → menu → Delete.<br>
+&emsp;— Filtered: Filter first, then delete only that type.<br>
+&emsp;— All: All view → menu → Delete all (with confirmation).<br>
+&emsp;— <b>Long-press</b> a package in settings → clear all its rules at once.<br>
+&bull; <b>Backup</b>:<br>
+&emsp;— Single: Details → menu → Backup.<br>
+&emsp;— Filtered/All: List → menu, exports current view.<br>
+&bull; <b>Restore</b>: Settings → menu → select .gzip file.<br>
+&emsp;<i>Backups include screenshots and images; rules take effect immediately after restore.</i><br><br>
+
+<b>8. Notes</b><br>
+&bull; Only works in <b>third-party apps</b> where the module is activated in LSPosed.<br>
+&bull; Launcher, system UI, keyboard, GodMode Pro itself are <b>not editable</b>.<br>
+&bull; After a crash, a dialog appears on next launch with a copyable log.<br>
+&bull; Quick Settings tile works even when notifications are disabled.
     ]]></string>
 
     <string name="field_activity">Activity: %1$s</string>
@@ -181,4 +187,11 @@
     <string name="about_original">Original Project (GodMode)</string>
     <string name="about_issues">Report Issues</string>
     <string name="about_thanks">Thanks to all contributors and friends for your support!</string>
+
+    <string name="rule_repeatable_badge">[Feed auto-match]</string>
+    <string name="confirm_delete_rules_longpress">Delete all rules for %1$s? Can quickly remove abnormal rules.</string>
+    <string name="mode_info_flow_on">Feed·ON</string>
+    <string name="mode_info_flow_off">Feed·OFF</string>
+    <string name="accessibility_info_flow_on">Feed mode ON: modifications sync to same-type elements</string>
+    <string name="accessibility_info_flow_off">Feed mode OFF: each operation only affects a single element</string>
 </resources>

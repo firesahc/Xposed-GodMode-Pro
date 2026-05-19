@@ -32,6 +32,7 @@ import androidx.preference.Preference;
 import androidx.preference.PreferenceCategory;
 import androidx.preference.PreferenceFragmentCompat;
 import androidx.preference.PreferenceManager;
+import androidx.preference.PreferenceViewHolder;
 import androidx.preference.SwitchPreferenceCompat;
 
 import com.google.android.material.snackbar.Snackbar;
@@ -134,7 +135,23 @@ public final class GeneralPreferenceFragment extends PreferenceFragmentCompat im
             icon = ResourcesCompat.getDrawable(getResources(), R.mipmap.ic_god, requireContext().getTheme());
             label = packageName;
         }
-        Preference preference = new Preference(category.getContext());
+        Preference preference = new Preference(category.getContext()) {
+            @Override
+            public void onBindViewHolder(PreferenceViewHolder holder) {
+                super.onBindViewHolder(holder);
+                holder.itemView.setOnLongClickListener(v -> {
+                    new AlertDialog.Builder(requireContext())
+                            .setTitle(R.string.hey_guy)
+                            .setMessage(getString(R.string.confirm_delete_rules_longpress, packageName))
+                            .setPositiveButton(android.R.string.ok, (dialog, which) -> {
+                                if (mSharedViewModel.deleteAppRules(packageName)) mSharedViewModel.loadAppRules();
+                                else Snackbar.make(requireView(), R.string.snack_bar_msg_revert_rule_fail, Snackbar.LENGTH_SHORT).show();
+                            })
+                            .setNegativeButton(android.R.string.cancel, null).show();
+                    return true;
+                });
+            }
+        };
         preference.setIcon(icon);
         preference.setTitle(label);
         preference.setSummary(packageName);
