@@ -204,7 +204,8 @@ public final class EventHandlerHook extends XC_MethodHook implements Property.On
                     mMaskView.detachFromContainer();
                     new Thread(() -> {
                         try { GodModeManager.getDefault().writeRule(v.getContext().getPackageName(), mViewRule, mSnapshot); }
-                        catch (Exception e) { Logger.e(TAG, "write rule fail", e); }
+                        catch (Exception e) { Logger.e(TAG, "[EventHandler] write rule fail", e); }
+                        Logger.d(TAG, "[EventHandler] remove rule persisted for " + mViewRule.viewClass);
                         recycleNullableBitmap(mSnapshot);
                     }, "gm-write").start();
                 }
@@ -237,7 +238,7 @@ public final class EventHandlerHook extends XC_MethodHook implements Property.On
 
             ViewController.applyRule(v, mViewRule);
         } catch (PackageManager.NameNotFoundException | NullPointerException e) {
-            Logger.e(TAG, "startRemoveDrag fail", e);
+            Logger.e(TAG, "[EventHandler] startRemoveDrag fail", e);
         }
     }
 
@@ -294,7 +295,7 @@ public final class EventHandlerHook extends XC_MethodHook implements Property.On
         }
 
         target.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
-        Logger.d(TAG, "[ModifyDrag] start " + target
+        Logger.d(TAG, "[EventHandler] ModifyDrag: start " + target
                 + " startMargin=(" + mDragStartMarginX + "," + mDragStartMarginY + ")");
     }
 
@@ -371,7 +372,7 @@ public final class EventHandlerHook extends XC_MethodHook implements Property.On
         }
         int deltaX = finalMarginX - mDragStartMarginX;
         int deltaY = finalMarginY - mDragStartMarginY;
-        Logger.d(TAG, "[ModifyDrag] final delta=(" + deltaX + "," + deltaY + ")");
+        Logger.d(TAG, "[EventHandler] ModifyDrag: final delta=(" + deltaX + "," + deltaY + ")");
 
         if (deltaX != 0 || deltaY != 0) {
             ViewRule rule = ViewHelper.makeModifyRule(mDragTarget);
@@ -383,6 +384,7 @@ public final class EventHandlerHook extends XC_MethodHook implements Property.On
             Bitmap snapshot = ViewHelper.snapshotView(ViewHelper.findTopParentViewByChildView(mDragTarget));
             ViewHelper.drawRuleMask(snapshot, rule);
             GodModeManager.getDefault().writeRule(packageName, rule, snapshot);
+            Logger.d(TAG, "[EventHandler] ModifyDrag: rule persisted, delta=(" + deltaX + "," + deltaY + "), pkg=" + packageName);
             recycleNullableBitmap(snapshot);
         }
     }
@@ -455,7 +457,9 @@ public final class EventHandlerHook extends XC_MethodHook implements Property.On
 
     @Override
     public void onPropertyChange(Boolean enable) {
+        if (enable == null) return;
         mIsInEditMode = enable;
+        Logger.d(TAG, "[EventHandler] edit mode: " + enable);
         if (!enable) {
             mHandler.removeCallbacks(mPendingCheckForLongPress);
             mLongClick = false;

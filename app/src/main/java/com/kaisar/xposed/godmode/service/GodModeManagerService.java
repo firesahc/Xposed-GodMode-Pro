@@ -93,6 +93,7 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
         workThread.start();
         mHandle = new Handler(workThread.getLooper(), this);
         mStarted = true;
+        mLogger.i("GMMService started, loading rules from " + BASE_DIR);
         mHandle.sendEmptyMessage(LOAD_RULES);
     }
 
@@ -402,7 +403,7 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
     public void setEditMode(boolean enable) throws RemoteException {
         enforcePermission("set edit mode fail permission denied");
         if (!mStarted) return;
-        mLogger.i("[GodMode] setEditMode: " + enable);
+        mLogger.i("setEditMode: " + enable);
         mInEditMode = enable;
         notifyObserverEditModeChanged(enable);
     }
@@ -511,35 +512,19 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
     public boolean writeRule(String packageName, ViewRule viewRule, Bitmap snapshot) throws RemoteException {
         enforcePermission(new String[]{packageName, BuildConfig.APPLICATION_ID}, "write rule fail permission denied");
         if (!mStarted) return false;
-        synchronized (mAppRulesCache) {
-            try {
-                ActRules actRules = mAppRulesCache.get(packageName);
-                if (actRules == null) {
-                    mAppRulesCache.put(packageName, actRules = new ActRules());
-                }
-                List<ViewRule> viewRules = actRules.computeIfAbsent(viewRule.activityClass, k -> new ArrayList<>());
-                int index = viewRules.indexOf(viewRule);
-                String oldImagePath = null;
-                if (index >= 0) {
-                    oldImagePath = viewRules.get(index).imagePath;
-                    viewRules.set(index, viewRule);
-                } else {
-                    viewRules.add(viewRule);
-                }
-                if (snapshot != null) {
-                    mHandle.obtainMessage(WRITE_RULE,
-                            new Object[]{packageName, viewRule, snapshot, oldImagePath}).sendToTarget();
-                } else {
-                    String json = mGson.toJson(actRules);
-                    ActRules snapshotRules = snapshotActRules(actRules);
-                    mHandle.obtainMessage(WRITE_RULE,
-                            new Object[]{packageName, viewRule, null, null, json, snapshotRules}).sendToTarget();
-                }
-                return true;
-            } catch (Exception e) {
-                mLogger.w("write rule failed", e);
-                return false;
+        try {
+            CacheResult cr = applyRuleToCache(packageName, viewRule, true);
+            if (snapshot != null) {
+                mHandle.obtainMessage(WRITE_RULE,
+                        new Object[]{packageName, viewRule, snapshot, cr.oldImagePath}).sendToTarget();
+            } else {
+                mHandle.obtainMessage(WRITE_RULE,
+                        new Object[]{packageName, viewRule, null, null, cr.json, cr.snapshotRules}).sendToTarget();
             }
+            return true;
+        } catch (Exception e) {
+            mLogger.w("write rule failed", e);
+            return false;
         }
     }
 
@@ -554,28 +539,49 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
     public boolean updateRule(String packageName, ViewRule viewRule) throws RemoteException {
         enforcePermission("update rule fail permission denied");
         if (!mStarted) return false;
+        try {
+            CacheResult cr = applyRuleToCache(packageName, viewRule, false);
+            mHandle.obtainMessage(UPDATE_RULE,
+                    new Object[]{packageName, cr.json, cr.snapshotRules}).sendToTarget();
+            return true;
+        } catch (Exception e) {
+            mLogger.w("update rule failed", e);
+            return false;
+        }
+    }
+
+    /** 将规则写入内存缓存并返回序列化结果。供 writeRule / updateRule 复用。 */
+    private CacheResult applyRuleToCache(String packageName, ViewRule viewRule, boolean captureOldImagePath) {
         synchronized (mAppRulesCache) {
-            try {
-                ActRules actRules = mAppRulesCache.get(packageName);
-                if (actRules == null) {
-                    mAppRulesCache.put(packageName, actRules = new ActRules());
-                }
-                List<ViewRule> viewRules = actRules.computeIfAbsent(viewRule.activityClass, k -> new ArrayList<>());
-                int index = viewRules.indexOf(viewRule);
-                if (index >= 0) {
-                    viewRules.set(index, viewRule);
-                } else {
-                    viewRules.add(viewRule);
-                }
-                String json = mGson.toJson(actRules);
-                ActRules snapshotRules = snapshotActRules(actRules);
-                mHandle.obtainMessage(UPDATE_RULE,
-                        new Object[]{packageName, json, snapshotRules}).sendToTarget();
-                return true;
-            } catch (Exception e) {
-                mLogger.w("update rule failed", e);
-                return false;
+            ActRules actRules = mAppRulesCache.get(packageName);
+            if (actRules == null) {
+                mAppRulesCache.put(packageName, actRules = new ActRules());
             }
+            List<ViewRule> viewRules = actRules.computeIfAbsent(viewRule.activityClass, k -> new ArrayList<>());
+            int index = viewRules.indexOf(viewRule);
+            String oldImagePath = null;
+            if (index >= 0) {
+                if (captureOldImagePath) {
+                    oldImagePath = viewRules.get(index).imagePath;
+                }
+                viewRules.set(index, viewRule);
+            } else {
+                viewRules.add(viewRule);
+            }
+            String json = mGson.toJson(actRules);
+            ActRules snapshotRules = snapshotActRules(actRules);
+            return new CacheResult(oldImagePath, json, snapshotRules);
+        }
+    }
+
+    private static final class CacheResult {
+        final String oldImagePath;
+        final String json;
+        final ActRules snapshotRules;
+        CacheResult(String oldImagePath, String json, ActRules snapshotRules) {
+            this.oldImagePath = oldImagePath;
+            this.json = json;
+            this.snapshotRules = snapshotRules;
         }
     }
 
@@ -730,7 +736,6 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
     }
 
     private String getBaseDir() throws FileNotFoundException {
-        mLogger.d(BASE_DIR);
         File dir = new File(BASE_DIR);
         if (dir.exists() || dir.mkdirs()) {
             FileUtils.setPermissions(dir, S_IRWXU | S_IRWXG | S_IRWXO, -1, -1);

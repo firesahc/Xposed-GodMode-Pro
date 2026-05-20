@@ -36,12 +36,12 @@ public final class DebugLayoutHookInstaller {
                 modernOk = installModernHooksSafe(switchProp);
             }
         } catch (Throwable e) {
-            Logger.e(TAG, "Hook debug layout properties error (non-fatal)", e);
+            Logger.e(TAG, "[DebugLayout] Hook debug layout properties error (non-fatal)", e);
         }
         try {
             suppressOk = suppressGmOverlayDebugDrawSafe();
         } catch (Throwable e) {
-            Logger.e(TAG, "Hook debug draw suppression error (non-fatal)", e);
+            Logger.e(TAG, "[DebugLayout] Hook debug draw suppression error (non-fatal)", e);
         }
         Logger.i(TAG, String.format("[DebugLayout] install result: legacy=%b modern=%b suppress=%b",
                 legacyOk, modernOk, suppressOk));

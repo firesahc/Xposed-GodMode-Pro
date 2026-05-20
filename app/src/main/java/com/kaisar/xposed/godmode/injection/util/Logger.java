@@ -7,7 +7,7 @@ import androidx.annotation.Keep;
 @Keep
 public final class Logger {
 
-    private static final String TAG = "GodMode";
+    private static final String TAG = "GodModePro";
 
     public static int d(String tag, String msg) {
         return isLoggable(tag, Log.DEBUG) ? Log.d(tag, msg) : 0;

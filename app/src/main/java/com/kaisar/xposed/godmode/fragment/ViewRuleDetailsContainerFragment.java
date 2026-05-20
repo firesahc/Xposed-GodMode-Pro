@@ -91,7 +91,7 @@ public final class ViewRuleDetailsContainerFragment extends Fragment {
         mViewPager.setAdapter(detailFragmentStateAdapter);
         mViewPager.registerOnPageChangeCallback(mCallback);
         int safeIndex = Math.min(mCurIndex, Math.max(0, detailFragmentStateAdapter.getItemCount() - 1));
-        mViewPager.setCurrentItem(safeIndex);
+        mViewPager.setCurrentItem(safeIndex, false);
         return mViewPager;
     }
 

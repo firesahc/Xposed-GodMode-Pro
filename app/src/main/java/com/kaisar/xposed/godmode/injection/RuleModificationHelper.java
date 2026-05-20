@@ -48,12 +48,14 @@ public final class RuleModificationHelper {
                     for (View v : views) {
                         applyModificationToView(v, rule);
                     }
+                    Logger.d(TAG, "[RuleModification] applied modification to " + views.size() + " views for rule " + rule.viewClass);
                 }
                 return;
             }
             View view = ViewHelper.findViewBestMatch(activity, rule);
             if (view == null) return;
             applyModificationToView(view, rule);
+            Logger.d(TAG, "[RuleModification] applied modification to " + view.getClass().getSimpleName() + " for " + activity.getClass().getSimpleName());
         } catch (Exception e) {
             Logger.w(TAG, "[RuleModification] failed to apply modification: " + rule, e);
         }
@@ -130,7 +132,7 @@ public final class RuleModificationHelper {
             if (lp != null) view.setLayoutParams(lp);
             sAppliedViews.remove(view);
         } catch (Exception e) {
-            Logger.w(TAG, "[revokeModification] failed: " + e.getMessage());
+            Logger.w(TAG, "[RuleModification] revokeModification failed: " + e.getMessage());
         }
     }
 
@@ -152,7 +154,7 @@ public final class RuleModificationHelper {
             int hash = rule.hashCode();
             sAppliedViews.entrySet().removeIf(e -> e.getValue() != null && e.getValue() == hash);
         } catch (Exception e) {
-            Logger.w(TAG, "[revokeModificationRule] failed: " + e.getMessage());
+            Logger.w(TAG, "[RuleModification] revokeModificationRule failed: " + e.getMessage());
         }
     }
 

@@ -231,7 +231,7 @@ public final class ViewRuleDetailsFragment extends PreferenceFragmentCompat impl
                 try { pfd.close(); } catch (Exception ignored) {}
             }
         } catch (Exception e) {
-            Logger.w(TAG, e.getMessage());
+            Logger.w(TAG, "[ViewRuleDetails] " + e.getMessage());
             return null;
         }
     }

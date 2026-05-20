@@ -31,6 +31,7 @@ public final class ManagerObserver extends IObserver.Stub implements Handler.Cal
 
     @Override
     public boolean handleMessage(Message msg) {
+        if (msg.obj == null) return true;
         if (msg.what == ACTION_EDIT_MODE_CHANGED) {
             GodModeInjector.notifyEditModeChanged((Boolean) msg.obj);
         } else if (msg.what == ACTION_VIEW_RULES_CHANGED) {

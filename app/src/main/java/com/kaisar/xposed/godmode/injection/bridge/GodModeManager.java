@@ -43,7 +43,7 @@ public final class GodModeManager {
     }
 
     private static void logError(String method, RemoteException e) {
-        XposedBridge.log("[GodMode] GodModeManager#" + method + " failed: " + e.getMessage());
+        XposedBridge.log("[GodModePro] GodModeManager#" + method + " failed: " + e.getMessage());
     }
 
     public boolean hasLight() {

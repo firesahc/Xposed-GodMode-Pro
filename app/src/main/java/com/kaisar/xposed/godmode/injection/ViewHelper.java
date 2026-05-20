@@ -61,13 +61,13 @@ public final class ViewHelper {
                 PackageInfo packageInfo = activity.getPackageManager().getPackageInfo(activity.getPackageName(), 0);
                 strictMode = packageInfo.versionCode == rule.matchVersionCode;
             } catch (PackageManager.NameNotFoundException e) {
-                Logger.w(TAG, "See what happened!", e);
+                Logger.w(TAG, "[ViewHelper] Failed to get package info for strict mode check", e);
             }
         }
-        Logger.i(TAG, String.format("strict mode %b, matching view for rule: %s", strictMode, rule));
+        Logger.d(TAG, String.format("[ViewHelper] strict mode %b, matching view for rule: %s", strictMode, rule));
 
         if (rule.depth != null && rule.depth.length > 0) {
-            Logger.i(TAG, "match view by depth (primary anchor)");
+            Logger.d(TAG, "[ViewHelper] match view by depth (primary anchor)");
             View viewByDepth = findViewByDepth(activity, rule.depth);
             if (viewByDepth != null) {
                 if (isDepthMatch(viewByDepth, rule, strictMode))
@@ -88,7 +88,7 @@ public final class ViewHelper {
         }
 
         if (!TextUtils.isEmpty(rule.resourceName)) {
-            Logger.i(TAG, "match view by resource name (primary anchor)");
+            Logger.d(TAG, "[ViewHelper] match view by resource name (primary anchor)");
             View viewByRes = activity.findViewById(rule.getViewId(activity.getResources()));
             if (viewByRes != null) {
                 View matched = matchView(viewByRes, rule, strictMode);
@@ -97,7 +97,7 @@ public final class ViewHelper {
         }
 
         if (!TextUtils.isEmpty(rule.text)) {
-            Logger.i(TAG, "match view by text (auxiliary)");
+            Logger.d(TAG, "[ViewHelper] match view by text (auxiliary)");
             View viewByText = findViewByText(decorView, rule.text);
             if (viewByText != null) {
                 View matched = matchView(viewByText, rule, strictMode);
@@ -105,7 +105,7 @@ public final class ViewHelper {
             }
         }
         if (!TextUtils.isEmpty(rule.description)) {
-            Logger.i(TAG, "match view by description (auxiliary)");
+            Logger.d(TAG, "[ViewHelper] match view by description (auxiliary)");
             View viewByDesc = findViewByDescription(decorView, rule.description);
             if (viewByDesc != null) {
                 View matched = matchView(viewByDesc, rule, strictMode);
@@ -186,7 +186,7 @@ public final class ViewHelper {
             int threshold = strictMode ? 80 : 30;
             return score >= threshold ? view : null;
         } catch (Exception e) {
-            Logger.w(TAG, "[matchView] exception during matching: " + e.getMessage());
+            Logger.w(TAG, "[ViewHelper] matchView: exception during matching", e);
         }
         return null;
     }
@@ -215,7 +215,7 @@ public final class ViewHelper {
                 }
             }
         } catch (Exception e) {
-            Logger.w(TAG, "[findViewByCondition] traversal error: " + e.getMessage());
+            Logger.w(TAG, "[ViewHelper] findViewByCondition: traversal error", e);
         }
         return null;
     }
@@ -432,7 +432,7 @@ public final class ViewHelper {
                 }
             }
         } catch (Exception e) {
-            Logger.w(TAG, "[populateRepeatableInfo] failed (non-fatal)", e);
+            Logger.w(TAG, "[ViewHelper] populateRepeatableInfo: failed (non-fatal)", e);
         }
     }
 
