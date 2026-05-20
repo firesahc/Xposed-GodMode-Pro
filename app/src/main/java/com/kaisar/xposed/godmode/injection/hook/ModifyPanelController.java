@@ -124,7 +124,7 @@ final class ModifyPanelController {
             mModifyPanel.setAlpha(0);
             mModifyPanel.animate().alpha(1).setDuration(200).start();
         } catch (Exception e) {
-            Logger.e(TAG, "showModifyPanel fail", e);
+            Logger.e(TAG, "[ModifyPanel] showModifyPanel fail", e);
             dismiss();
         }
     }
@@ -361,7 +361,7 @@ final class ModifyPanelController {
                         rule.modImagePath = savedPath;
                     } else {
                         rule.modImagePath = null;
-                        Logger.w(TAG, "[saveAll] save modification image failed via IPC");
+                        Logger.w(TAG, "[ModifyPanel] saveAll: save modification image failed via IPC");
                     }
                 } else {
                     rule.modImagePath = null;
@@ -388,7 +388,7 @@ final class ModifyPanelController {
                     snapshots.put(rule, snapshot);
                 }
             } catch (Exception e) {
-                Logger.w(TAG, "[saveAll] snapshot failed for rule", e);
+                Logger.w(TAG, "[ModifyPanel] saveAll: snapshot failed for rule", e);
             }
         }
         // 不要回收 mPendingModBitmaps 中的位图——它们仍被 ImageView 引用显示。
@@ -406,7 +406,7 @@ final class ModifyPanelController {
                         allOk = false;
                     }
                 } catch (Exception e) {
-                    Logger.e(TAG, "[saveAll] writeRule failed", e);
+                    Logger.e(TAG, "[ModifyPanel] saveAll: writeRule failed", e);
                     allOk = false;
                 } finally {
                     if (snapshot != null && !snapshot.isRecycled()) snapshot.recycle();
@@ -464,7 +464,7 @@ final class ModifyPanelController {
     private void revertViewState() {
         if (mCurrentlyModifyingView == null) return;
         if (!verifyViewIdentity(mCurrentlyModifyingView)) {
-            Logger.w(TAG, "[revertViewState] view identity changed, skip revert for safety");
+            Logger.w(TAG, "[ModifyPanel] revertViewState: view identity changed, skip revert for safety");
             return;
         }
 
@@ -561,13 +561,13 @@ final class ModifyPanelController {
                                     mPendingModBitmaps.put(viewKey, bitmap);
                                 }
                             } catch (Exception e) {
-                                Logger.e(TAG, "handle image pick fail", e);
+                                Logger.e(TAG, "[ModifyPanel] handle image pick fail", e);
                             }
                         }
                     });
             mActivityResultHooked = true;
         } catch (Exception e) {
-            Logger.e(TAG, "[hookActivityResult] Xposed hook failed, image replacement disabled", e);
+            Logger.e(TAG, "[ModifyPanel] hookActivityResult: Xposed hook failed, image replacement disabled", e);
         }
     }
 }

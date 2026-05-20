@@ -9,7 +9,7 @@ import android.content.Context;
 
 public final class GodModeApplication extends Application {
 
-    public static final String TAG = "GodMode";
+    public static final String TAG = "GodModePro";
     private static GodModeApplication sApplication;
 
     public GodModeApplication() {

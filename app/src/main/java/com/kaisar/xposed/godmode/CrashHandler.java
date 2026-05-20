@@ -43,7 +43,7 @@ public final class CrashHandler implements Thread.UncaughtExceptionHandler {
                     return new String(byteBuffer.array());
                 }
             } catch (IOException e) {
-                Logger.e(TAG, "read crash info fail", e);
+                Logger.e(TAG, "[CrashHandler] read crash info fail", e);
             } finally {
                 //noinspection ResultOfMethodCallIgnored
                 logFile.delete();
@@ -70,9 +70,9 @@ public final class CrashHandler implements Thread.UncaughtExceptionHandler {
                 fileChannel.write(ByteBuffer.wrap(stackTraceString.getBytes()));
             }
         } catch (IOException ioe) {
-            Logger.w(TAG, "Failed to write crash log to file", ioe);
+            Logger.w(TAG, "[CrashHandler] Failed to write crash log to file", ioe);
         }
-        Logger.e(TAG, String.format("Crash on %s thread", t.getName()), e);
+        Logger.e(TAG, String.format("[CrashHandler] Crash on %s thread", t.getName()), e);
     }
 
 

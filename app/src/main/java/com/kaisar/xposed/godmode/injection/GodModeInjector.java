@@ -55,8 +55,10 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
     // 可观察状态 — 将编辑模式和规则变更传播到各个 Hook
     // =========================================================================
 
-    public final static Property<Boolean> switchProp = new Property<>();
-    public final static Property<ActRules> actRuleProp = new Property<>();
+    // 初始化为安全默认值，防止在观察者回调到达前出现 null 拆箱 NPE。
+    // Property 的 AtomicReference 默认为 null，所有读取方需能处理未初始化状态。
+    public final static Property<Boolean> switchProp = new Property<>(false);
+    public final static Property<ActRules> actRuleProp = new Property<>(new ActRules());
     public static XC_LoadPackage.LoadPackageParam loadPackageParam;
 
     private static State state = State.UNKNOWN;
@@ -85,7 +87,7 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
     @Override
     public void handleLoadPackage(XC_LoadPackage.LoadPackageParam lpp) {
         if (R.string.res_inject_success >>> 24 == 0x7f) {
-            XposedBridge.log("[GodMode] package id must NOT be 0x7f, reject loading...");
+            XposedBridge.log("[GodModePro] package id must NOT be 0x7f, reject loading...");
             return;
         }
         if (!lpp.isFirstApplication) return;
@@ -112,15 +114,29 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
     private void injectIntoTargetApp(XC_LoadPackage.LoadPackageParam lpp, String packageName) {
         Logger.i(TAG, "[GodMode] inject into app: " + packageName);
 
-        // Hook Activity.onCreate 以跟踪 Activity 并注入模块资源
+        // Hook Activity.onResume 以保持 mCurrentActivity 指向当前可见 Activity。
+        // 仅跟踪 Activity.onCreate 不足——用户导航到子页面再返回后，
+        // 原 Activity.onResume 触发但 mCurrentActivity 仍指向已销毁的 Activity，
+        // 导致工具栏显示在错误的（或已销毁的）窗口上，buildViewNodes 返回零元素。
+        XposedHelpers.findAndHookMethod(Activity.class, "onResume", new XC_MethodHook() {
+            @Override
+            protected void afterHookedMethod(MethodHookParam param) {
+                sDispatchKeyEventHook.setactivity((Activity) param.thisObject);
+            }
+        });
+
+        // Hook Activity.onCreate：注入模块资源，并在编辑模式已开启时延迟显示面板。
+        // setactivity 移至 onResume hook，避免与 onResume 形成重复调用。
         XposedHelpers.findAndHookMethod(Activity.class, "onCreate", Bundle.class, new XC_MethodHook() {
             @Override
             protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                 Activity activity = (Activity) param.thisObject;
-                sDispatchKeyEventHook.setactivity(activity);
                 injectModuleResources(activity.getResources());
                 if (switchProp.get()) {
-                    sDispatchKeyEventHook.setdisplay(true);
+                    // post 到 DecorView 以确保 setContentView 已完成、视图树完整后再显示面板。
+                    // AppCompatActivity 在 super.onCreate() 返回之后才调用 setContentView()，
+                    // 直接调用 buildViewNodes 会得到只有系统占位元素的残缺视图树。
+                    activity.getWindow().getDecorView().post(() -> sDispatchKeyEventHook.setdisplay(true));
                 }
                 super.afterHookedMethod(param);
             }
@@ -128,10 +144,12 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
 
         registerHooks();
         registerObserver(packageName);
+        Logger.d(TAG, "[GodMode] injection complete for: " + packageName);
     }
 
     /** 连接 ActivityLifecycleHook、EventHandlerHook、DispatchKeyEventHook 和调试布局 Hook */
     private void registerHooks() {
+        Logger.d(TAG, "[GodMode] registering hooks...");
         // Activity 生命周期 Hook — 在 Activity 恢复/销毁时应用/撤销规则
         ActivityLifecycleHook lifecycleHook = new ActivityLifecycleHook();
         actRuleProp.addOnPropertyChangeListener(lifecycleHook);
@@ -154,9 +172,10 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
     /** 注册 IPC 观察者，使服务端的规则更新能到达应用内 */
     private void registerObserver(String packageName) {
         GodModeManager gmManager = GodModeManager.getDefault();
+        Logger.d(TAG, "[GodMode] registering observer for: " + packageName);
+        // addObserver 立即通过 IPC 回调推送当前状态（onEditModeChanged + onViewRuleChanged），
+        // 无需再手动设置 switchProp / actRuleProp。避免在 BLOCKED 应用中出现短暂的错误激活窗口。
         gmManager.addObserver(packageName, new ManagerObserver());
-        switchProp.set(gmManager.isInEditMode());
-        actRuleProp.set(gmManager.getRules(packageName));
     }
 
     // =========================================================================
@@ -181,6 +200,7 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
     }
 
     public static void notifyViewRulesChanged(ActRules actRules) {
+        if (actRules == null) return;
         actRuleProp.set(actRules);
     }
 
@@ -212,19 +232,20 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
             int cookie = (int) addAssetPath.invoke(assets, path);
 
             try {
-                Logger.i(TAG, "injectModuleResources: " + res.getString(R.string.res_inject_success));
+                Logger.i(TAG, "[GodMode] injectModuleResources: " + res.getString(R.string.res_inject_success));
+                Logger.d(TAG, "[GodMode] module resources injected via: " + path);
             } catch (Resources.NotFoundException e) {
                 File f = new File(path);
-                Logger.e(TAG, "Fatal: injectModuleResources: test injection failure!");
-                Logger.e(TAG, "injectModuleResources: cookie=" + cookie + ", path=" + path
+                Logger.e(TAG, "[GodMode] injectModuleResources: Fatal: test injection failure!");
+                Logger.e(TAG, "[GodMode] injectModuleResources: cookie=" + cookie + ", path=" + path
                         + ", loader=" + GodModeInjector.class.getClassLoader());
-                Logger.e(TAG, "sModulePath: exists=" + f.exists()
+                Logger.e(TAG, "[GodMode] sModulePath: exists=" + f.exists()
                         + ", isDirectory=" + f.isDirectory()
                         + ", canRead=" + f.canRead()
                         + ", fileLength=" + f.length());
             }
         } catch (Exception e) {
-            Logger.e(TAG, "Inject module resources error", e);
+            Logger.e(TAG, "[GodMode] Inject module resources error", e);
         }
     }
 }

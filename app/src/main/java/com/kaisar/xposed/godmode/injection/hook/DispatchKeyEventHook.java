@@ -37,7 +37,6 @@ import com.kaisar.xposed.godmode.rule.ViewRule;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedHelpers;
@@ -152,6 +151,7 @@ public final class DispatchKeyEventHook extends XC_MethodHook
 
     public void setdisplay(Boolean display) {
         if (mCurrentActivity == null) return;
+        if (display == null) return;
         if (display && !GodModeInjector.switchProp.get()) return;
         if (display) {
             if (!mKeySelecting) {
@@ -243,7 +243,7 @@ public final class DispatchKeyEventHook extends XC_MethodHook
     // =========================================================================
 
     private void showNodeSelectPanel(final Activity activity) {
-        Logger.i(TAG, "[GodMode] showNodeSelectPanel for " + activity.getPackageName());
+        Logger.i(TAG, "[KeyEventHook] showNodeSelectPanel for " + activity.getPackageName());
         mViewNodes.clear();
         mCurrentViewIndex = 0;
         mHasUserSelection = false;
@@ -274,7 +274,7 @@ public final class DispatchKeyEventHook extends XC_MethodHook
             });
             mKeySelecting = true;
         } catch (Exception e) {
-            Logger.e(TAG, "showNodeSelectPanel fail", e);
+            Logger.e(TAG, "[KeyEventHook] showNodeSelectPanel fail", e);
             if (mMaskView != null) {
                 mMaskView.detachFromContainer();
                 mMaskView = null;
@@ -357,7 +357,7 @@ public final class DispatchKeyEventHook extends XC_MethodHook
     }
 
     private void dismissNodeSelectPanel() {
-        Logger.i(TAG, "[GodMode] dismissNodeSelectPanel");
+        Logger.i(TAG, "[KeyEventHook] dismissNodeSelectPanel");
         mModifyController.cancel();
         restorePreview();
         sInteractionMode = MODE_INITIAL;
@@ -393,7 +393,7 @@ public final class DispatchKeyEventHook extends XC_MethodHook
             if (mViewNodes.isEmpty()) return;
             if (mIsPreviewing) restorePreview();
             final View view = mViewNodes.get(Math.max(mCurrentViewIndex, 0)).get();
-            Logger.d(TAG, "block view = " + view);
+            Logger.d(TAG, "[KeyEventHook] block view = " + view);
             if (view == null) return;
             mMaskView.updateOverlayBounds(new Rect());
 
@@ -420,19 +420,19 @@ public final class DispatchKeyEventHook extends XC_MethodHook
                     try {
                         ViewHelper.drawRuleMask(snapshot, viewRule);
                         particleView.detachFromContainer();
-                    } catch (Exception e) { Logger.e(TAG, "write rule fail", e); }
+                    } catch (Exception e) { Logger.e(TAG, "[KeyEventHook] write rule fail", e); }
                     restorePanelAlpha();
                     updateViewNodesAfterRemove(blockedViewIndex);
                     new Thread(() -> {
                         try { GodModeManager.getDefault().writeRule(activity.getPackageName(), viewRule, snapshot); }
-                        catch (Exception e) { Logger.e(TAG, "write rule fail", e); }
+                        catch (Exception e) { Logger.e(TAG, "[KeyEventHook] write rule fail", e); }
                         recycleNullableBitmap(snapshot);
                     }, "gm-write").start();
                 }
             });
             particleView.boom(view);
         } catch (Exception e) {
-            Logger.e(TAG, "block fail", e);
+            Logger.e(TAG, "[KeyEventHook] block fail", e);
             restorePanelAlpha();
             Toast.makeText(activity, GmResources.getString(R.string.block_fail, e.getMessage()),
                     Toast.LENGTH_SHORT).show();
@@ -494,7 +494,7 @@ public final class DispatchKeyEventHook extends XC_MethodHook
             updatePreviewButton(true);
             mMaskView.updateOverlayBounds(new Rect());
         } catch (Exception e) {
-            Logger.e(TAG, "preview fail", e);
+            Logger.e(TAG, "[KeyEventHook] preview fail", e);
         }
     }
 
@@ -527,11 +527,11 @@ public final class DispatchKeyEventHook extends XC_MethodHook
 
     @Override
     public void onPropertyChange(Boolean enable) {
+        if (enable == null) return;
         if (!enable) {
             sInteractionMode = MODE_INITIAL;
-            if (mMaskView != null) {
-                dismissNodeSelectPanel();
-            }
+            // dismissNodeSelectPanel 不再在此调用——notifyEditModeChanged(false)
+            // 已通过 setdisplay(false) 执行完整的 dismiss 流程，此处是冗余路径。
         }
     }
 
@@ -542,7 +542,6 @@ public final class DispatchKeyEventHook extends XC_MethodHook
             mCurrentViewIndex = progress;
             if (fromUser) mHasUserSelection = true;
             View view = mViewNodes.get(mCurrentViewIndex).get();
-            Logger.d(TAG, String.format(Locale.getDefault(), "progress=%d selected view=%s", progress, view));
             if (view != null && mMaskView != null) {
                 if (ViewHelper.isInRecyclerView(view)) {
                     mMaskView.setMaskOverlay(OVERLAY_COLOR_REPEATABLE);

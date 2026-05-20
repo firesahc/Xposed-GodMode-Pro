@@ -48,7 +48,7 @@ public final class ActivityLifecycleHook extends XC_MethodHook implements Proper
                 decorView.post(listener::applyRuleIfMatchCondition);
             }
             installRecyclerViewHooks(activity);
-            Logger.d(TAG, "resume:" + sActivities);
+            Logger.d(TAG, "[ActivityLifecycle] resume: " + activity.getClass().getSimpleName() + " (total=" + sActivities.size() + ")");
         } else if ("onDestroy".equals(methodName)) {
             OnLayoutChangeListener listener = sActivities.remove(activity);
             decorView.getViewTreeObserver().removeOnGlobalLayoutListener(listener);
@@ -56,12 +56,13 @@ public final class ActivityLifecycleHook extends XC_MethodHook implements Proper
                 Runnable r = sPendingReapply.remove(activity);
                 if (r != null) sDebounceHandler.removeCallbacks(r);
             }
-            Logger.d(TAG, "destroy:" + sActivities);
+            Logger.d(TAG, "[ActivityLifecycle] destroy: " + activity.getClass().getSimpleName() + " (total=" + sActivities.size() + ")");
         }
     }
 
     @Override
     public void onPropertyChange(ActRules newActRules) {
+        if (newActRules == null) return;
         RuleModificationHelper.clearAppliedCache();
         Set<Map.Entry<String, List<ViewRule>>> entries = newActRules.entrySet();
         for (Map.Entry<String, List<ViewRule>> entry : entries) {
@@ -78,6 +79,7 @@ public final class ActivityLifecycleHook extends XC_MethodHook implements Proper
             entries = sActRules.entrySet();
             for (Map.Entry<String, List<ViewRule>> entry : entries) {
                 List<ViewRule> rules = entry.getValue();
+                if (rules == null || rules.isEmpty()) continue;
                 List<ViewRule> revRemove = new java.util.ArrayList<>();
                 List<ViewRule> revModify = new java.util.ArrayList<>();
                 for (ViewRule r : rules) {
@@ -146,9 +148,9 @@ public final class ActivityLifecycleHook extends XC_MethodHook implements Proper
                 }
             });
             sRecyclerViewHooksInstalled = true;
-            Logger.i(TAG, "[DynamicContent] RecyclerView adapter hook installed");
+            Logger.i(TAG, "[ActivityLifecycle] DynamicContent: RecyclerView adapter hook installed");
         } catch (Throwable t) {
-            Logger.d(TAG, "[DynamicContent] RecyclerView hook skipped: " + t.getMessage());
+            Logger.d(TAG, "[ActivityLifecycle] DynamicContent: RecyclerView hook skipped: " + t.getMessage());
         }
     }
 
@@ -180,7 +182,7 @@ public final class ActivityLifecycleHook extends XC_MethodHook implements Proper
                     }
                 }
             } catch (Exception e) {
-                Logger.w(TAG, "[OnLayoutChange] applyRuleIfMatchCondition failed: " + e.getMessage());
+                Logger.w(TAG, "[ActivityLifecycle] OnLayoutChange: applyRuleIfMatchCondition failed: " + e.getMessage());
             }
         }
 

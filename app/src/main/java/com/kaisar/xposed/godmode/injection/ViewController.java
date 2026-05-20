@@ -38,13 +38,14 @@ public final class ViewController {
     }
 
     public static void applyRuleBatch(Activity activity, List<ViewRule> rules) {
+        int appliedCount = 0;
         for (ViewRule rule : rules) {
             try {
                 if (rule.isRepeatable()) {
                     List<View> views = ViewHelper.findAllViewsBestMatch(activity, rule);
                     if (views != null) {
                         for (View v : views) {
-                            if (v != null) applyRule(v, rule);
+                            if (v != null && applyRule(v, rule)) appliedCount++;
                         }
                     }
                     continue;
@@ -57,13 +58,13 @@ public final class ViewController {
                     view = ViewHelper.findViewBestMatch(activity, rule);
                     Preconditions.checkNotNull(view, "apply rule fail not match any view");
                 }
-                boolean blocked = applyRule(view, rule);
-                if (!blocked) {
-                    Logger.d(TAG, "[Skipped] " + activity + "#" + view + " already be blocked");
-                }
+                if (applyRule(view, rule)) appliedCount++;
             } catch (NullPointerException e) {
-                Logger.w(TAG, "[Failed] " + activity + "#" + rule.viewClass + " block failed: " + e.getMessage());
+                Logger.w(TAG, "[ViewController] Failed: " + activity + "#" + rule.viewClass + " block failed: " + e.getMessage());
             }
+        }
+        if (appliedCount > 0) {
+            Logger.d(TAG, "[ViewController] applied " + appliedCount + " rules for " + activity);
         }
     }
 
@@ -119,7 +120,7 @@ public final class ViewController {
                 }
                 revokeRule(view, rule);
             } catch (NullPointerException e) {
-                Logger.w(TAG, "###revoke rule fail [Act]:" + activity + " [Reason]:" + e.getMessage());
+                Logger.w(TAG, "[ViewController] revoke rule fail (act=" + activity + "): " + e.getMessage());
             }
         }
     }
@@ -140,7 +141,7 @@ public final class ViewController {
             }
             blockedViewCache.delete(cacheKey);
         } else {
-            Logger.w(TAG, "view cache missing during revoke, falling back to setAlpha");
+            Logger.w(TAG, "[ViewController] view cache missing during revoke, falling back to setAlpha");
             v.setAlpha(1f);
             ViewCompat.setVisibility(v, viewRule.visibility);
         }

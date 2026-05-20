@@ -57,7 +57,7 @@ public final class AboutFragment extends Fragment {
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             startActivity(intent);
         } catch (Exception e) {
-            android.util.Log.w("GodMode", "[AboutFragment] openUrl failed: " + url, e);
+            android.util.Log.w("GodModePro", "[AboutFragment] openUrl failed: " + url, e);
         }
     }
 }
