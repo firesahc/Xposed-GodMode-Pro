@@ -507,6 +507,12 @@ public final class DispatchKeyEventHook extends XC_MethodHook
         }
         mIsPreviewing = false;
         updatePreviewButton(false);
+        if (mMaskView != null && !mViewNodes.isEmpty()) {
+            View currentView = mViewNodes.get(Math.max(mCurrentViewIndex, 0)).get();
+            if (currentView != null) {
+                mMaskView.updateOverlayBounds(ViewHelper.getLocationInWindow(currentView));
+            }
+        }
     }
 
     private void updatePreviewButton(boolean inPreview) {
