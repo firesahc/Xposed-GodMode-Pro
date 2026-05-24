@@ -103,9 +103,35 @@ public final class EventHandlerHook extends XC_MethodHook implements Property.On
         if (!mIsInEditMode) return;
         View view = (View) param.thisObject;
         MotionEvent event = (MotionEvent) param.args[0];
-        if (!TAG_GM_CMP.equals(view.getTag())) {
-            param.setResult(dispatchTouchEvent(view, event));
+        if (TAG_GM_CMP.equals(view.getTag())) return;
+        if (!isEditableWindow(view)) {
+            return;
         }
+        param.setResult(dispatchTouchEvent(view, event));
+    }
+
+    private boolean isEditableWindow(View v) {
+        if (!isAttachedToActivity(v)) return false;
+        try {
+            Object viewRootImpl = ViewHelper.findViewRootImplByChildView(v.getParent());
+            if (viewRootImpl == null) return false;
+            WindowManager.LayoutParams wl = (WindowManager.LayoutParams)
+                    XposedHelpers.getObjectField(viewRootImpl, "mWindowAttributes");
+            if (wl == null) return false;
+            int type = wl.type;
+            if (type >= WindowManager.LayoutParams.FIRST_SYSTEM_WINDOW
+                    && type <= WindowManager.LayoutParams.LAST_SYSTEM_WINDOW) {
+                return false;
+            }
+            if (type == WindowManager.LayoutParams.TYPE_INPUT_METHOD
+                    || type == WindowManager.LayoutParams.TYPE_INPUT_METHOD_DIALOG
+                    || type == WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY) {
+                return false;
+            }
+        } catch (Exception e) {
+            return v.getWindowToken() == null;
+        }
+        return true;
     }
 
     private boolean dispatchTouchEvent(View v, MotionEvent event) {
@@ -298,18 +324,16 @@ public final class EventHandlerHook extends XC_MethodHook implements Property.On
     }
 
     /** 将目标边距吸附到兄弟视图边缘（在阈值范围内）。返回 {x, y} */
-    private int[] snapToSiblings(View target, int marginX, int marginY) {
+    private int[] snapToSiblings(View target, int targetLeftMargin, int targetTopMargin) {
         ViewParent parent = target.getParent();
-        if (!(parent instanceof ViewGroup)) return new int[]{marginX, marginY};
+        if (!(parent instanceof ViewGroup)) return new int[]{targetLeftMargin, targetTopMargin};
         ViewGroup container = (ViewGroup) parent;
 
-        int targetLeft = marginX;
-        int targetTop = marginY;
-        int targetRight = targetLeft + target.getWidth();
-        int targetBottom = targetTop + target.getHeight();
+        int targetRight = targetLeftMargin + target.getWidth();
+        int targetBottom = targetTopMargin + target.getHeight();
 
-        int snappedX = marginX;
-        int snappedY = marginY;
+        int snappedX = targetLeftMargin;
+        int snappedY = targetTopMargin;
 
         for (int i = 0; i < container.getChildCount(); i++) {
             View sibling = container.getChildAt(i);
@@ -324,14 +348,14 @@ public final class EventHandlerHook extends XC_MethodHook implements Property.On
             int sibBottom = sibTop + sibling.getHeight();
 
             // 左/右吸附
-            if (Math.abs(targetLeft - sibLeft) < mSnapThresholdPx) snappedX = sibLeft;
-            if (Math.abs(targetLeft - sibRight) < mSnapThresholdPx) snappedX = sibRight;
+            if (Math.abs(targetLeftMargin - sibLeft) < mSnapThresholdPx) snappedX = sibLeft;
+            if (Math.abs(targetLeftMargin - sibRight) < mSnapThresholdPx) snappedX = sibRight;
             if (Math.abs(targetRight - sibLeft) < mSnapThresholdPx) snappedX = sibLeft - target.getWidth();
             if (Math.abs(targetRight - sibRight) < mSnapThresholdPx) snappedX = sibRight - target.getWidth();
 
             // 上/下吸附
-            if (Math.abs(targetTop - sibTop) < mSnapThresholdPx) snappedY = sibTop;
-            if (Math.abs(targetTop - sibBottom) < mSnapThresholdPx) snappedY = sibBottom;
+            if (Math.abs(targetTopMargin - sibTop) < mSnapThresholdPx) snappedY = sibTop;
+            if (Math.abs(targetTopMargin - sibBottom) < mSnapThresholdPx) snappedY = sibBottom;
             if (Math.abs(targetBottom - sibTop) < mSnapThresholdPx) snappedY = sibTop - target.getHeight();
             if (Math.abs(targetBottom - sibBottom) < mSnapThresholdPx) snappedY = sibBottom - target.getHeight();
         }
