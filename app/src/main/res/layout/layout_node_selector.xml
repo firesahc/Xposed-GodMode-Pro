@@ -10,7 +10,7 @@
     <LinearLayout
         android:id="@+id/topcentent"
         android:layout_width="wrap_content"
-        android:layout_height="393dp"
+        android:layout_height="wrap_content"
         android:layout_gravity="center|right|center_horizontal"
         android:background="@android:color/transparent"
         android:clipToPadding="false"
@@ -23,7 +23,7 @@
 
         <LinearLayout
             android:layout_width="64dp"
-            android:layout_height="380dp"
+            android:layout_height="430dp"
             android:layout_gravity="right"
             android:layout_marginTop="14dp"
             android:layout_marginBottom="14dp"
@@ -55,6 +55,16 @@
 
             </FrameLayout>
 
+            <ImageButton
+                android:id="@+id/exchange"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_gravity="center"
+                android:background="@drawable/ripple_drawable_20dp"
+                android:contentDescription="@string/accessibility_exchange"
+                android:src="@drawable/exchange"
+                android:tag="@string/tag_gm_cmp" />
+
             <FrameLayout
                 android:layout_width="match_parent"
                 android:layout_height="49dp"
@@ -74,13 +84,13 @@
             </FrameLayout>
 
             <ImageButton
-                android:id="@+id/exchange"
+                android:id="@+id/preview"
                 android:layout_width="48dp"
                 android:layout_height="48dp"
                 android:layout_gravity="center"
                 android:background="@drawable/ripple_drawable_20dp"
-                android:contentDescription="@string/accessibility_block"
-                android:src="@drawable/exchange"
+                android:contentDescription="@string/accessibility_preview"
+                android:src="@android:drawable/ic_menu_view"
                 android:tag="@string/tag_gm_cmp" />
 
             <ImageButton
@@ -102,7 +112,6 @@
                 android:contentDescription="@string/accessibility_block"
                 android:src="@drawable/down"
                 android:tag="@string/tag_gm_cmp" />
-
 
         </LinearLayout>
 
