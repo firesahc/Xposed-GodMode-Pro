@@ -8,13 +8,14 @@ import android.util.SparseArray;
 import android.view.View;
 import android.view.ViewGroup;
 
+import androidx.annotation.NonNull;
+
 import com.kaisar.xposed.godmode.injection.util.Logger;
 import com.kaisar.xposed.godmode.rule.ViewRule;
 import com.kaisar.xposed.godmode.util.Preconditions;
 
 import java.lang.ref.WeakReference;
 import java.util.List;
-import java.util.Locale;
 
 /**
  * Created by jrsen on 17-10-15.
@@ -25,10 +26,8 @@ public final class ViewController {
     private final static SparseArray<Pair<WeakReference<View>, ViewProperty>> blockedViewCache = new SparseArray<>();
 
     public static void applyRuleBatch(Activity activity, List<ViewRule> rules) {
-        Logger.d(TAG, "[ApplyRuleBatch info start------------------------------------]");
         for (ViewRule rule : rules) {
             try {
-                Logger.d(TAG, "[Apply rule]:" + rule.toString());
                 int ruleHashCode = rule.hashCode();
                 Pair<WeakReference<View>, ViewProperty> viewInfo = blockedViewCache.get(ruleHashCode);
                 View view = viewInfo != null ? viewInfo.first.get() : null;
@@ -38,16 +37,13 @@ public final class ViewController {
                     Preconditions.checkNotNull(view, "apply rule fail not match any view");
                 }
                 boolean blocked = applyRule(view, rule);
-                if (blocked) {
-                    Logger.i(TAG, String.format("[Success] %s#%s has been blocked", activity, view));
-                } else {
-                    Logger.i(TAG, String.format("[Skipped] %s#%s already be blocked", activity, view));
+                if (!blocked) {
+                    Logger.d(TAG, "[Skipped] " + activity + "#" + view + " already be blocked");
                 }
             } catch (NullPointerException e) {
-                Logger.w(TAG, String.format("[Failed] %s#%s block failed because %s", activity, rule.viewClass, e.getMessage()));
+                Logger.w(TAG, "[Failed] " + activity + "#" + rule.viewClass + " block failed: " + e.getMessage());
             }
         }
-        Logger.d(TAG, "[ApplyRuleBatch info end------------------------------------]");
     }
 
     public static boolean applyRule(View v, ViewRule viewRule) {
@@ -76,29 +72,23 @@ public final class ViewController {
         }
         ViewCompat.setVisibility(v, viewRule.visibility);
         blockedViewCache.put(ruleHashCode, Pair.create(new WeakReference<>(v), viewProperty));
-        Logger.d(TAG, String.format(Locale.getDefault(), "apply rule add view cache %d=%s", ruleHashCode, v));
-        Logger.d(TAG, "blockedViewCache:" + blockedViewCache);
         return true;
     }
 
     public static void revokeRuleBatch(Activity activity, List<ViewRule> rules) {
         for (ViewRule rule : rules) {
             try {
-                Logger.d(TAG, "revoke rule:" + rule.toString());
                 int ruleHashCode = rule.hashCode();
                 Pair<WeakReference<View>, ViewProperty> viewInfo = blockedViewCache.get(ruleHashCode);
                 View view = viewInfo != null ? viewInfo.first.get() : null;
                 if (view == null || !view.isAttachedToWindow()) {
-                    Logger.w(TAG, "view cache not found");
                     blockedViewCache.delete(ruleHashCode);
                     view = ViewHelper.findViewBestMatch(activity, rule);
-                    Logger.w(TAG, "find view in activity" + view);
                     Preconditions.checkNotNull(view, "revoke rule fail can't found block view");
                 }
                 revokeRule(view, rule);
-                Logger.i(TAG, String.format("###revoke rule success [Act]:%s  [View]:%s", activity, view));
             } catch (NullPointerException e) {
-                Logger.w(TAG, String.format("###revoke rule fail [Act]:%s  [View]:%s [Reason]:%s", activity, null, e.getMessage()));
+                Logger.w(TAG, "###revoke rule fail [Act]:" + activity + " [Reason]:" + e.getMessage());
             }
         }
     }
@@ -118,10 +108,8 @@ public final class ViewController {
                 v.requestLayout();
             }
             blockedViewCache.delete(viewRule.hashCode());
-            Logger.d(TAG, String.format(Locale.getDefault(), "revoke blocked view %d=%s %s", ruleHashCode, v, viewProperty));
         } else {
-            // cache missing why?
-            Logger.w(TAG, "view cache missing why?");
+            Logger.w(TAG, "view cache missing during revoke, falling back to setAlpha");
             v.setAlpha(1f);
             ViewCompat.setVisibility(v, viewRule.visibility);
         }
@@ -143,6 +131,7 @@ public final class ViewController {
             this.layout_params_height = layout_params_height;
         }
 
+        @NonNull
         @Override
         public String toString() {
             final StringBuilder sb = new StringBuilder("ViewProperty{");
