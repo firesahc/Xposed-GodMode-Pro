@@ -135,7 +135,7 @@ public final class ViewRuleDetailsContainerFragment extends PreferenceFragmentCo
 
                     @Override
                     public boolean areContentsTheSame(int oldItemPosition, int newItemPosition) {
-                        return true;
+                        return oldData.get(oldItemPosition).equals(newData.get(newItemPosition));
                     }
                 });
                 adapter.setData(newData);
