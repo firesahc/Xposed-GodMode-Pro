@@ -61,10 +61,15 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
     // /data/system/godmode/{package}/xxxxxxxxx.webp
     private static final String IMAGE_FILE_SUFFIX = ".webp";
 
+    private static final int LOAD_RULES = 0x00001;
     private static final int WRITE_RULE = 0x00002;
     private static final int DELETE_RULE = 0x00004;
     private static final int DELETE_RULES = 0x00008;
     private static final int UPDATE_RULE = 0x000016;
+    private static final int CLEAN_OBSERVERS = 0x000032;
+    private static final int CLEAN_ORPHANS = 0x000064;
+    private static final long OBSERVER_CLEAN_INTERVAL = 60_000L;
+    private static final long ORPHAN_CLEAN_INTERVAL = 120_000L;
 
     private final Logger mLogger;
     private final RemoteCallbackList<ObserverProxy> mRemoteCallbackList = new RemoteCallbackList<>();
@@ -73,8 +78,11 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
     private final Handler mHandle;
     private boolean mInEditMode;
     private boolean mStarted;
+    private volatile boolean mDataLoaded;
+    private volatile boolean mOrphanCleanPending;
 
     private final Gson mGson = new GsonBuilder().setPrettyPrinting().create();
+    private final HashMap<String, IBinder> mRegisteredObserverMap = new HashMap<>();
 
     public GodModeManagerService(Context context) {
         mLogger = Logger.getLogger("GMMService");
@@ -82,13 +90,8 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
         HandlerThread workThread = new HandlerThread("work-thread");
         workThread.start();
         mHandle = new Handler(workThread.getLooper(), this);
-        try {
-            loadRuleData();
-            mStarted = true;
-        } catch (Exception e) {
-            mStarted = false;
-            mLogger.e("loadPreferenceData failed " + BASE_DIR, e);
-        }
+        mStarted = true;
+        mHandle.sendEmptyMessage(LOAD_RULES);
     }
 
     private void loadRuleData() throws IOException {
@@ -140,19 +143,28 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
                     ViewRule viewRule = (ViewRule) args[2];
                     Bitmap snapshot = (Bitmap) args[3];
                     String oldImagePath = args.length > 4 ? (String) args[4] : null;
+                    String newImagePath = null;
                     if (snapshot != null) {
                         if (oldImagePath != null && !TextUtils.isEmpty(oldImagePath)) {
                             FileUtils.delete(oldImagePath);
+                        }
+                        newImagePath = saveBitmap(snapshot, getAppDataDir(packageName));
+                        if (newImagePath == null) {
+                            mLogger.w("write rule aborted: save snapshot failed", (Throwable) null);
+                            break;
                         }
                         List<ViewRule> rules = actRules.get(viewRule.activityClass);
                         if (rules != null) {
                             int idx = rules.indexOf(viewRule);
                             if (idx >= 0) {
-                                rules.get(idx).imagePath = saveBitmap(snapshot, getAppDataDir(packageName));
+                                rules.get(idx).imagePath = newImagePath;
                             }
                         }
                     }
-                    persistAndNotify(packageName, actRules);
+                    String json = mGson.toJson(actRules);
+                    safePersistRules(packageName, json);
+                    scheduleOrphanCleanup();
+                    notifyObserverRuleChanged(packageName, actRules);
                 } catch (IOException e) {
                     mLogger.w("write rule failed", e);
                 }
@@ -165,7 +177,9 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
                     String packageName = (String) args[1];
                     ViewRule viewRule = (ViewRule) args[2];
                     FileUtils.delete(viewRule.imagePath);
-                    persistAndNotify(packageName, actRules);
+                    safePersistRules(packageName, mGson.toJson(actRules));
+                    scheduleOrphanCleanup();
+                    notifyObserverRuleChanged(packageName, actRules);
                 } catch (IOException e) {
                     mLogger.w("delete rule failed", e);
                 }
@@ -186,9 +200,35 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
                     Object[] args = (Object[]) msg.obj;
                     ActRules actRules = (ActRules) args[0];
                     String packageName = (String) args[1];
-                    persistAndNotify(packageName, actRules);
+                    safePersistRules(packageName, mGson.toJson(actRules));
+                    notifyObserverRuleChanged(packageName, actRules);
                 } catch (IOException e) {
                     mLogger.w("update rule failed", e);
+                }
+                break;
+            }
+            case LOAD_RULES: {
+                try {
+                    loadRuleData();
+                    mDataLoaded = true;
+                    mLogger.i("rule data loaded: " + mAppRulesCache.size() + " packages");
+                } catch (Exception e) {
+                    mLogger.e("loadRuleData failed: " + BASE_DIR, e);
+                    mDataLoaded = true;
+                }
+                break;
+            }
+            case CLEAN_OBSERVERS: {
+                cleanDeadObservers();
+                mHandle.sendEmptyMessageDelayed(CLEAN_OBSERVERS, OBSERVER_CLEAN_INTERVAL);
+                break;
+            }
+            case CLEAN_ORPHANS: {
+                mOrphanCleanPending = false;
+                try {
+                    cleanAllOrphanImages();
+                } catch (Exception e) {
+                    mLogger.w("orphan cleanup failed", e);
                 }
                 break;
             }
@@ -199,9 +239,84 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
         return true;
     }
 
-    private void persistAndNotify(String packageName, ActRules actRules) throws IOException {
-        FileUtils.stringToFile(getAppRuleFilePath(packageName), mGson.toJson(actRules));
-        notifyObserverRuleChanged(packageName, actRules);
+    private void safePersistRules(String packageName, String json) throws IOException {
+        File appDataDir = new File(getBaseDir(), packageName);
+        if (!appDataDir.exists() && !appDataDir.mkdirs()) {
+            throw new IOException("Failed to create dir: " + appDataDir);
+        }
+        File ruleFile = new File(appDataDir, packageName + RULE_FILE_SUFFIX);
+        File tmpFile = new File(appDataDir, packageName + RULE_FILE_SUFFIX + ".tmp");
+        FileUtils.stringToFile(tmpFile, json);
+        if (!tmpFile.renameTo(ruleFile)) {
+            if (tmpFile.exists()) tmpFile.delete();
+            throw new IOException("Failed to atomically rename rule file: " + ruleFile);
+        }
+        FileUtils.setPermissions(ruleFile, S_IRWXU | S_IRWXG | S_IRWXO, -1, -1);
+    }
+
+    private void scheduleOrphanCleanup() {
+        if (!mOrphanCleanPending) {
+            mOrphanCleanPending = true;
+            mHandle.sendEmptyMessageDelayed(CLEAN_ORPHANS, ORPHAN_CLEAN_INTERVAL);
+        }
+    }
+
+    private void cleanAllOrphanImages() {
+        try {
+            File dataDir = new File(getBaseDir());
+            File[] packageDirs = dataDir.listFiles(File::isDirectory);
+            if (packageDirs == null) return;
+            for (File packageDir : packageDirs) {
+                File[] imageFiles = packageDir.listFiles((dir, name) -> name.endsWith(IMAGE_FILE_SUFFIX));
+                if (imageFiles == null || imageFiles.length == 0) continue;
+                java.util.Set<String> referenced = new java.util.HashSet<>();
+                synchronized (mAppRulesCache) {
+                    ActRules actRules = mAppRulesCache.get(packageDir.getName());
+                    if (actRules != null) {
+                        for (List<ViewRule> rules : actRules.values()) {
+                            for (ViewRule rule : rules) {
+                                if (!TextUtils.isEmpty(rule.imagePath)) referenced.add(rule.imagePath);
+                                if (!TextUtils.isEmpty(rule.modImagePath)) referenced.add(rule.modImagePath);
+                            }
+                        }
+                    }
+                }
+                for (File f : imageFiles) {
+                    if (!referenced.contains(f.getAbsolutePath())) {
+                        FileUtils.delete(f);
+                    }
+                }
+            }
+        } catch (FileNotFoundException e) {
+            mLogger.w("orphan cleanup: base dir not found", e);
+        }
+    }
+
+    private void cleanDeadObservers() {
+        synchronized (mRemoteCallbackList) {
+            int N = mRemoteCallbackList.beginBroadcast();
+            List<ObserverProxy> dead = new ArrayList<>();
+            for (int i = 0; i < N; i++) {
+                ObserverProxy proxy = mRemoteCallbackList.getBroadcastItem(i);
+                if (proxy == null || !proxy.observer.asBinder().pingBinder()) {
+                    dead.add(proxy);
+                }
+            }
+            mRemoteCallbackList.finishBroadcast();
+            for (ObserverProxy proxy : dead) {
+                if (proxy != null) {
+                    try {
+                        mRemoteCallbackList.unregister(proxy);
+                        synchronized (mRegisteredObserverMap) {
+                            mRegisteredObserverMap.remove(proxy.packageName, proxy.observer.asBinder());
+                        }
+                        mLogger.d("cleaned dead observer: " + proxy.packageName);
+                    } catch (Exception e) {
+                        mLogger.w("clean dead observer failed", e);
+                    }
+                }
+            }
+        }
     }
 
     private boolean checkPermission(@NonNull String permPackage) {
@@ -265,11 +380,26 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
         enforcePermission(new String[]{packageName, BuildConfig.APPLICATION_ID}, "register observer fail permission denied");
         if (!mStarted) return;
         synchronized (mRemoteCallbackList) {
+            synchronized (mRegisteredObserverMap) {
+                IBinder binder = observer.asBinder();
+                if (mRegisteredObserverMap.containsKey(packageName)
+                        && mRegisteredObserverMap.get(packageName) == binder) {
+                    mLogger.d("observer already registered for: " + packageName);
+                    return;
+                }
+                mRegisteredObserverMap.put(packageName, binder);
+            }
             mRemoteCallbackList.register(new ObserverProxy(packageName, observer));
+            if (!mHandle.hasMessages(CLEAN_OBSERVERS)) {
+                mHandle.sendEmptyMessageDelayed(CLEAN_OBSERVERS, OBSERVER_CLEAN_INTERVAL);
+            }
         }
         try {
             observer.onEditModeChanged(mInEditMode);
-            ActRules rules = mAppRulesCache.containsKey(packageName) ? mAppRulesCache.get(packageName) : new ActRules();
+            ActRules rules;
+            synchronized (mAppRulesCache) {
+                rules = mAppRulesCache.containsKey(packageName) ? mAppRulesCache.get(packageName) : new ActRules();
+            }
             observer.onViewRuleChanged(packageName, rules);
         } catch (RemoteException e) {
             mLogger.w("immediate notify observer failed", e);
@@ -289,6 +419,9 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
         if (!mStarted) return;
         synchronized (mRemoteCallbackList) {
             mRemoteCallbackList.unregister(new ObserverProxy(packageName, observer));
+            synchronized (mRegisteredObserverMap) {
+                mRegisteredObserverMap.remove(packageName);
+            }
         }
     }
 
@@ -300,8 +433,12 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
     @Override
     public AppRules getAllRules() throws RemoteException {
         enforcePermission("get all rules fail permission denied");
-        if (!mStarted) return new AppRules();
-        return mAppRulesCache;
+        if (!mStarted || !mDataLoaded) return new AppRules();
+        synchronized (mAppRulesCache) {
+            AppRules copy = new AppRules();
+            copy.putAll(mAppRulesCache);
+            return copy;
+        }
     }
 
     /**
@@ -313,8 +450,10 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
     @Override
     public ActRules getRules(String packageName) throws RemoteException {
         enforcePermission(new String[]{packageName, BuildConfig.APPLICATION_ID}, "get rules fail permission denied");
-        if (!mStarted) return new ActRules();
-        return mAppRulesCache.containsKey(packageName) ? mAppRulesCache.get(packageName) : new ActRules();
+        if (!mStarted || !mDataLoaded) return new ActRules();
+        synchronized (mAppRulesCache) {
+            return mAppRulesCache.containsKey(packageName) ? mAppRulesCache.get(packageName) : new ActRules();
+        }
     }
 
     /**
@@ -324,28 +463,27 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
     public boolean writeRule(String packageName, ViewRule viewRule, Bitmap snapshot) throws RemoteException {
         enforcePermission(new String[]{packageName, BuildConfig.APPLICATION_ID}, "write rule fail permission denied");
         if (!mStarted) return false;
-        try {
-            ActRules actRules = mAppRulesCache.get(packageName);
-            if (actRules == null) {
-                mAppRulesCache.put(packageName, actRules = new ActRules());
+        synchronized (mAppRulesCache) {
+            try {
+                ActRules actRules = mAppRulesCache.get(packageName);
+                if (actRules == null) {
+                    mAppRulesCache.put(packageName, actRules = new ActRules());
+                }
+                List<ViewRule> viewRules = actRules.computeIfAbsent(viewRule.activityClass, k -> new ArrayList<>());
+                int index = viewRules.indexOf(viewRule);
+                String oldImagePath = null;
+                if (index >= 0) {
+                    oldImagePath = viewRules.get(index).imagePath;
+                    viewRules.set(index, viewRule);
+                } else {
+                    viewRules.add(viewRule);
+                }
+                mHandle.obtainMessage(WRITE_RULE, new Object[]{actRules, packageName, viewRule, snapshot, oldImagePath}).sendToTarget();
+                return true;
+            } catch (Exception e) {
+                mLogger.w("write rule failed", e);
+                return false;
             }
-            List<ViewRule> viewRules = actRules.get(viewRule.activityClass);
-            if (viewRules == null) {
-                actRules.put(viewRule.activityClass, viewRules = new ArrayList<>());
-            }
-            int index = viewRules.indexOf(viewRule);
-            String oldImagePath = null;
-            if (index >= 0) {
-                oldImagePath = viewRules.get(index).imagePath;
-                viewRules.set(index, viewRule);
-            } else {
-                viewRules.add(viewRule);
-            }
-            mHandle.obtainMessage(WRITE_RULE, new Object[]{actRules, packageName, viewRule, snapshot, oldImagePath}).sendToTarget();
-            return true;
-        } catch (Exception e) {
-            mLogger.w("write rule failed", e);
-            return false;
         }
     }
 
@@ -360,26 +498,25 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
     public boolean updateRule(String packageName, ViewRule viewRule) throws RemoteException {
         enforcePermission("update rule fail permission denied");
         if (!mStarted) return false;
-        try {
-            ActRules actRules = mAppRulesCache.get(packageName);
-            if (actRules == null) {
-                mAppRulesCache.put(packageName, actRules = new ActRules());
+        synchronized (mAppRulesCache) {
+            try {
+                ActRules actRules = mAppRulesCache.get(packageName);
+                if (actRules == null) {
+                    mAppRulesCache.put(packageName, actRules = new ActRules());
+                }
+                List<ViewRule> viewRules = actRules.computeIfAbsent(viewRule.activityClass, k -> new ArrayList<>());
+                int index = viewRules.indexOf(viewRule);
+                if (index >= 0) {
+                    viewRules.set(index, viewRule);
+                } else {
+                    viewRules.add(viewRule);
+                }
+                mHandle.obtainMessage(UPDATE_RULE, new Object[]{actRules, packageName}).sendToTarget();
+                return true;
+            } catch (Exception e) {
+                mLogger.w("update rule failed", e);
+                return false;
             }
-            List<ViewRule> viewRules = actRules.get(viewRule.activityClass);
-            if (viewRules == null) {
-                actRules.put(viewRule.activityClass, viewRules = new ArrayList<>());
-            }
-            int index = viewRules.indexOf(viewRule);
-            if (index >= 0) {
-                viewRules.set(index, viewRule);
-            } else {
-                viewRules.add(viewRule);
-            }
-            mHandle.obtainMessage(UPDATE_RULE, new Object[]{actRules, packageName}).sendToTarget();
-            return true;
-        } catch (Exception e) {
-            mLogger.w("update rule failed", e);
-            return false;
         }
     }
 
@@ -394,23 +531,25 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
     public boolean deleteRule(String packageName, ViewRule viewRule) throws RemoteException {
         enforcePermission("delete rule fail permission denied");
         if (!mStarted) return false;
-        try {
-            ActRules actRules = Preconditions.checkNotNull(mAppRulesCache.get(packageName), "not found this rule can't delete.");
-            List<ViewRule> viewRules = Preconditions.checkNotNull(actRules.get(viewRule.activityClass), "not found this rule can't delete.");
-            boolean removed = viewRules.remove(viewRule);
-            if (removed) {
-                if (viewRules.isEmpty()) {
-                    actRules.remove(viewRule.activityClass);
-                    if (actRules.isEmpty()) {
-                        mAppRulesCache.remove(packageName);
+        synchronized (mAppRulesCache) {
+            try {
+                ActRules actRules = Preconditions.checkNotNull(mAppRulesCache.get(packageName), "not found this rule can't delete.");
+                List<ViewRule> viewRules = Preconditions.checkNotNull(actRules.get(viewRule.activityClass), "not found this rule can't delete.");
+                boolean removed = viewRules.remove(viewRule);
+                if (removed) {
+                    if (viewRules.isEmpty()) {
+                        actRules.remove(viewRule.activityClass);
+                        if (actRules.isEmpty()) {
+                            mAppRulesCache.remove(packageName);
+                        }
                     }
+                    mHandle.obtainMessage(DELETE_RULE, new Object[]{actRules, packageName, viewRule}).sendToTarget();
                 }
-                mHandle.obtainMessage(DELETE_RULE, new Object[]{actRules, packageName, viewRule}).sendToTarget();
+                return removed;
+            } catch (Exception e) {
+                mLogger.w("delete rule failed", e);
+                return false;
             }
-            return removed;
-        } catch (Exception e) {
-            mLogger.w("delete rule failed", e);
-            return false;
         }
     }
 
@@ -424,13 +563,15 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
     public boolean deleteRules(String packageName) throws RemoteException {
         enforcePermission("delete rules fail permission denied");
         if (!mStarted) return false;
-        mLogger.d("delete rules pkg=" + packageName + " cache=" + mAppRulesCache);
-        if (mAppRulesCache.containsKey(packageName)) {
-            mAppRulesCache.remove(packageName);
-            mHandle.obtainMessage(DELETE_RULES, packageName).sendToTarget();
-            return true;
+        synchronized (mAppRulesCache) {
+            mLogger.d("delete rules pkg=" + packageName + " cache=" + mAppRulesCache);
+            if (mAppRulesCache.containsKey(packageName)) {
+                mAppRulesCache.remove(packageName);
+                mHandle.obtainMessage(DELETE_RULES, packageName).sendToTarget();
+                return true;
+            }
+            return false;
         }
-        return false;
     }
 
     @Override
@@ -438,8 +579,15 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
         enforcePermission("open fd fail permission denied");
         if (!filePath.startsWith(BASE_DIR) || !filePath.endsWith(IMAGE_FILE_SUFFIX))
             throw new RemoteException(String.format("unauthorized access %s", filePath));
+        File file = new File(filePath);
+        if (!file.exists() || !file.isFile()) {
+            throw new RemoteException("File not found: " + filePath);
+        }
+        if (file.length() > 5 * 1024 * 1024) {
+            throw new RemoteException("File too large (>5MB): " + filePath);
+        }
         try {
-            return ParcelFileDescriptor.open(new File(filePath), ParcelFileDescriptor.MODE_READ_ONLY);
+            return ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY);
         } catch (FileNotFoundException e) {
             RemoteException remoteException = new RemoteException();
             remoteException.initCause(e);
@@ -464,14 +612,16 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
     }
 
     private void notifyObserverRuleChanged(String packageName, ActRules actRules) {
-        final ActRules copy = deepCopyActRules(actRules);
         synchronized (mRemoteCallbackList) {
             final int N = mRemoteCallbackList.beginBroadcast();
             for (int i = 0; i < N; i++) {
                 try {
                     ObserverProxy observerProxy = mRemoteCallbackList.getBroadcastItem(i);
+                    if (observerProxy == null) continue;
                     if (TextUtils.equals(observerProxy.packageName, packageName) || TextUtils.equals(observerProxy.packageName, "*")) {
-                        observerProxy.observer.onViewRuleChanged(packageName, copy);
+                        if (observerProxy.observer.asBinder().pingBinder()) {
+                            observerProxy.observer.onViewRuleChanged(packageName, actRules);
+                        }
                     }
                 } catch (Exception e) {
                     mLogger.w("notify rule changed fail", e);
@@ -481,20 +631,15 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
         }
     }
 
-    private ActRules deepCopyActRules(ActRules source) {
-        ActRules copy = new ActRules();
-        for (Map.Entry<String, List<ViewRule>> entry : source.entrySet()) {
-            copy.put(entry.getKey(), new ArrayList<>(entry.getValue()));
-        }
-        return copy;
-    }
-
     private void notifyObserverEditModeChanged(boolean enable) {
         synchronized (mRemoteCallbackList) {
             final int N = mRemoteCallbackList.beginBroadcast();
             for (int i = 0; i < N; i++) {
                 try {
-                    mRemoteCallbackList.getBroadcastItem(i).onEditModeChanged(enable);
+                    ObserverProxy proxy = mRemoteCallbackList.getBroadcastItem(i);
+                    if (proxy != null && proxy.observer.asBinder().pingBinder()) {
+                        proxy.onEditModeChanged(enable);
+                    }
                 } catch (Exception e) {
                     mLogger.w("notify edit mode changed fail", e);
                 }
