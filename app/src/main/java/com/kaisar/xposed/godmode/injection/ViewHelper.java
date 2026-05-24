@@ -40,7 +40,7 @@ public final class ViewHelper {
     public static final String TAG_GM_CMP = "gm_cmp";
 
     public static View findViewBestMatch(Activity activity, ViewRule rule) {
-        // if the rule version and the application version are the same, use strict mode.
+        // 多策略匹配：resourceName + depth + viewClass 为主锚点，text/description 为辅助
         boolean strictMode = false;
         try {
             ClassLoader cl = activity.getClassLoader();
@@ -55,30 +55,84 @@ public final class ViewHelper {
                 Logger.w(TAG, "See what happened!", e);
             }
         }
-        if (!TextUtils.isEmpty(rule.description)) {
-            Logger.i(TAG, String.format("strict mode %b, match view by description", strictMode));
-            View view = matchView(findViewByDescription(activity.getWindow().getDecorView(), rule.description), rule, strictMode);
-            if (view != null) {
-                return view;
+        Logger.i(TAG, String.format("strict mode %b, matching view for rule: %s", strictMode, rule));
+
+        if (rule.depth != null && rule.depth.length > 0) {
+            Logger.i(TAG, "match view by depth (primary anchor)");
+            View viewByDepth = findViewByDepth(activity, rule.depth);
+            if (viewByDepth != null) {
+                if (isDepthMatch(viewByDepth, rule, strictMode))
+                    return viewByDepth;
+                View anchored = matchByAnchoredStrategy(activity, rule, strictMode, viewByDepth);
+                if (anchored != null) return anchored;
             }
         }
-        if (!TextUtils.isEmpty(rule.text)) {
-            Logger.i(TAG, String.format("strict mode %b, match view by text", strictMode));
-            View view = matchView(findViewByText(activity.getWindow().getDecorView(), rule.text), rule, strictMode);
-            if (view != null) {
-                return view;
-            }
-        }
+
         if (!TextUtils.isEmpty(rule.resourceName)) {
-            Logger.i(TAG, String.format("strict mode %b, match view by resource name", strictMode));
-            View view = matchView(activity.findViewById(rule.getViewId(activity.getResources())), rule, strictMode);
-            if (view != null) {
-                return view;
+            Logger.i(TAG, "match view by resource name (primary anchor)");
+            View viewByRes = activity.findViewById(rule.getViewId(activity.getResources()));
+            if (viewByRes != null) {
+                View matched = matchView(viewByRes, rule, strictMode);
+                if (matched != null) return matched;
             }
         }
-        Logger.i(TAG, String.format("strict mode %b, match view by depth", strictMode));
-        View view = matchView(findViewByDepth(activity, rule.depth), rule, strictMode);
-        return view;
+
+        if (!TextUtils.isEmpty(rule.text)) {
+            Logger.i(TAG, "match view by text (auxiliary)");
+            View viewByText = findViewByText(activity.getWindow().getDecorView(), rule.text);
+            if (viewByText != null) {
+                View matched = matchView(viewByText, rule, strictMode);
+                if (matched != null) return matched;
+            }
+        }
+        if (!TextUtils.isEmpty(rule.description)) {
+            Logger.i(TAG, "match view by description (auxiliary)");
+            View viewByDesc = findViewByDescription(activity.getWindow().getDecorView(), rule.description);
+            if (viewByDesc != null) {
+                View matched = matchView(viewByDesc, rule, strictMode);
+                if (matched != null) return matched;
+            }
+        }
+
+        // 最终兜底：仅按 depth 作为最后手段
+        if (rule.depth != null && rule.depth.length > 0) {
+            View view = findViewByDepth(activity, rule.depth);
+            if (view != null) return matchView(view, rule, false);
+        }
+        return null;
+    }
+
+    private static boolean isDepthMatch(View view, ViewRule rule, boolean strictMode) {
+        try {
+            String viewClass = view.getClass().getName();
+            if (!TextUtils.isEmpty(rule.viewClass) && !TextUtils.equals(viewClass, rule.viewClass))
+                return false;
+            if (strictMode && !TextUtils.isEmpty(rule.resourceName)) {
+                try {
+                    String resName = view.getResources().getResourceName(view.getId());
+                    if (!TextUtils.equals(resName, rule.resourceName)) return false;
+                } catch (Resources.NotFoundException ignore) {
+                    return false;
+                }
+            }
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private static View matchByAnchoredStrategy(Activity activity, ViewRule rule, boolean strictMode, View depthView) {
+        // 主锚点匹配失败时，尝试在同级视图组中按 resourceName 或 text 匹配
+        ViewParent parent = depthView.getParent();
+        if (!(parent instanceof ViewGroup)) return null;
+        ViewGroup group = (ViewGroup) parent;
+        for (int i = 0; i < group.getChildCount(); i++) {
+            View child = group.getChildAt(i);
+            if (child == null) continue;
+            View matched = matchView(child, rule, strictMode);
+            if (matched != null) return matched;
+        }
+        return null;
     }
 
     private static View matchView(View view, ViewRule rule, boolean strictMode) {
@@ -93,10 +147,6 @@ public final class ViewHelper {
             String text = (view instanceof TextView) ? Preconditions.optionDefault(((TextView) view).getText(), "").toString() : "";
             String description = Preconditions.optionDefault(view.getContentDescription(), "").toString();
             String viewClass = view.getClass().getName();
-            Logger.i(TAG, String.format("view res name:%s matched:%b", resourceName, TextUtils.equals(resourceName, rule.resourceName)));
-            Logger.i(TAG, String.format("view text:%s matched:%b", text, TextUtils.equals(text, rule.text)));
-            Logger.i(TAG, String.format("view description:%s matched:%b", description, TextUtils.equals(description, rule.description)));
-            Logger.i(TAG, String.format("view class:%s matched:%b", viewClass, TextUtils.equals(viewClass, rule.viewClass)));
             if (strictMode) {
                 return TextUtils.equals(resourceName, rule.resourceName)
                         && TextUtils.equals(text, rule.text)
@@ -109,7 +159,8 @@ public final class ViewHelper {
                         || (!TextUtils.isEmpty(rule.viewClass) && TextUtils.equals(viewClass, rule.viewClass))) ? view : null;
 
             }
-        } catch (Exception ignore) {
+        } catch (Exception e) {
+            Logger.w(TAG, "[matchView] exception during matching: " + e.getMessage());
         }
         return null;
     }
@@ -220,9 +271,8 @@ public final class ViewHelper {
     }
 
     public static ViewRule makeRemoveRule(View v) throws PackageManager.NameNotFoundException {
-        ViewRule rule = makeRule(v);
-        rule.type = ViewRule.TYPE_REMOVE;
-        return rule;
+        // ruleTag is left null to indicate remove rule (backward compat with old JSON)
+        return makeRule(v);
     }
 
     public static ViewRule makeModifyRule(View view) {
@@ -234,7 +284,7 @@ public final class ViewHelper {
                 act != null ? act.getComponentName().getClassName() : "",
                 view.getClass().getName(), "", "", "",
                 View.VISIBLE, System.currentTimeMillis());
-        rule.type = ViewRule.TYPE_MODIFY;
+        rule.ruleTag = "modify";
         rule.captureOriginals(view);
         fillCoordinates(rule, view);
         return rule;
