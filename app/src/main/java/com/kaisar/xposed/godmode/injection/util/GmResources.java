@@ -15,7 +15,7 @@ public class GmResources {
 
     public static int getColor(int id) throws Resources.NotFoundException {
         try {
-            return getGmResource().getColor(id);
+            return getGmResource().getColor(id, null);
         } catch (PackageManager.NameNotFoundException e) {
             throw new Resources.NotFoundException("get resources fail GodMode package may be not installed?");
         }
@@ -24,7 +24,7 @@ public class GmResources {
     @SuppressLint("UseCompatLoadingForDrawables")
     public static Drawable getDrawable(int id) throws Resources.NotFoundException {
         try {
-            return getGmResource().getDrawable(id);
+            return getGmResource().getDrawable(id, null);
         } catch (PackageManager.NameNotFoundException e) {
             throw new Resources.NotFoundException("get resources fail GodMode package may be not installed?");
         }

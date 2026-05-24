@@ -10,8 +10,6 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.nio.channels.FileChannel;
 
 /**
@@ -165,19 +163,21 @@ public final class FileUtils {
      */
     public static int setPermissions(String path, int mode, int uid, int gid) {
         try {
-            Class<?> FileUtilsClass = Class.forName("android.os.FileUtils");
-            Method setPermissionsMethod = FileUtilsClass.getDeclaredMethod("setPermissions", String.class, int.class, int.class, int.class);
-            return (int) setPermissionsMethod.invoke(null, path, mode, uid, gid);
-        } catch (ClassNotFoundException e) {
-            e.printStackTrace();
-        } catch (NoSuchMethodException e) {
-            e.printStackTrace();
-        } catch (IllegalAccessException e) {
-            e.printStackTrace();
-        } catch (InvocationTargetException e) {
-            e.printStackTrace();
+            File file = new File(path);
+            if (!file.exists()) return -1;
+            if (file.isDirectory()) {
+                file.setExecutable((mode & 0100) != 0, false);
+                file.setReadable((mode & 0400) != 0, false);
+                file.setWritable((mode & 0200) != 0, false);
+            } else {
+                file.setExecutable((mode & 0100) != 0, (mode & 0001) == 0);
+                file.setReadable((mode & 0400) != 0, (mode & 0004) == 0);
+                file.setWritable((mode & 0200) != 0, (mode & 0002) == 0);
+            }
+            return 0;
+        } catch (Exception e) {
+            return -1;
         }
-        return -1;
     }
 
     public static String readTextFile(String filePath, int max, String ellipsis) throws IOException {
