@@ -46,6 +46,11 @@ public final class ActivityLifecycleHook extends XC_MethodHook implements Proper
                 decorView.getViewTreeObserver().addOnGlobalLayoutListener(listener);
                 sActivities.put(activity, listener);
                 decorView.post(listener::applyRuleIfMatchCondition);
+                // 确保在规则已到达但 sActivities 尚为空（规则早于 onPostResume）
+                // 或视图在初次 applyRuleIfMatchCondition 时尚未就绪时有一个延迟重试。
+                // 如果 onPropertyChange 中新规则的循环没有触发（sActivities 为空），
+                // 此处的 scheduleRuleReapplication 会在规则添加后提供唯一的重试窗口。
+                scheduleRuleReapplication(activity);
             }
             installRecyclerViewHooks(activity);
             Logger.d(TAG, "[ActivityLifecycle] resume: " + activity.getClass().getSimpleName() + " (total=" + sActivities.size() + ")");
@@ -116,6 +121,14 @@ public final class ActivityLifecycleHook extends XC_MethodHook implements Proper
                     }
                 }
             }
+        }
+        // 修复: 在规则存放后为所有已跟踪 Activity 调度重应用，
+        // 以处理视图在规则首次到达时尚不存在的情况（例如异步填充、Fragment 懒加载）。
+        // 如果视图尚不可用，applyRuleBatch 会静默失败，
+        // 而 onGlobalLayout 在静态 UI 上可能永远不会再次触发。
+        // scheduleRuleReapplication（200ms 消抖）提供重试窗口以捕获动态创建的视图。
+        for (Activity activity : sActivities.keySet()) {
+            scheduleRuleReapplication(activity);
         }
     }
 
