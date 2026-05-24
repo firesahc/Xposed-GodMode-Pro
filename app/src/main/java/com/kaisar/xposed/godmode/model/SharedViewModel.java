@@ -12,10 +12,8 @@ import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.ViewModel;
 
 import com.kaisar.xposed.godmode.IObserver;
-import com.kaisar.xposed.godmode.bean.GroupInfo;
 import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
 import com.kaisar.xposed.godmode.repository.LocalRepository;
-import com.kaisar.xposed.godmode.repository.RemoteRepository;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.AppRules;
 import com.kaisar.xposed.godmode.rule.ViewRule;
@@ -24,11 +22,8 @@ import com.kaisar.xposed.godmode.util.BackupUtils;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-
-import retrofit2.Callback;
 
 public class SharedViewModel extends ViewModel {
 
@@ -56,10 +51,6 @@ public class SharedViewModel extends ViewModel {
 
     public void loadAppRules() {
         mExecutor.execute(() -> appRules.postValue(LocalRepository.loadAppRules()));
-    }
-
-    public void getGroupInfo(Callback<List<GroupInfo>> cb) {
-        RemoteRepository.fetchGroupInfo(cb);
     }
 
     public void updateSelectedPackage(String packageName) {
