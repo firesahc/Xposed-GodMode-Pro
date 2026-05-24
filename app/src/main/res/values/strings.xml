@@ -135,6 +135,7 @@
     <string name="snack_bar_msg_revert_rule_fail">删除规则失败</string>
     <string name="snack_bar_msg_backup_rule_fail">备份规则失败</string>
     <string name="snack_bar_msg_restore_rules_fail">恢复规则失败</string>
+    <string name="confirm_delete_rules">确认删除 %d 条规则？</string>
     <string name="dialog_btn_copy">复制给我的老伙计</string>
     <string name="crash_tip">我想你应该遇了些麻烦，天知道这该死的程序都干了些什么。把下面这些奇奇怪怪的日志复制给老伙计吧，也许有用。\n\n</string>
     <string name="update_tips">你可以试试用上帝模式屏蔽一些令人烦恼的按钮。噢！没错这听起来很有趣。不过这小家伙有时会像汤姆家那只倔驴一样不听话，别担心伙计们，我会尽快修理好的！\n\n伙计们玩的开心记得来 GitHub 点个 Star，非常感谢！</string>

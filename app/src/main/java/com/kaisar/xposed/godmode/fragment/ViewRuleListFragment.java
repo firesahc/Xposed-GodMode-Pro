@@ -9,6 +9,7 @@ import android.text.SpannableString;
 import android.text.SpannableStringBuilder;
 import android.text.TextUtils;
 import android.text.style.ForegroundColorSpan;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuInflater;
@@ -17,12 +18,14 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.LayoutRes;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
 import androidx.core.content.res.ResourcesCompat;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
@@ -46,6 +49,7 @@ import java.util.Objects;
 
 public final class ViewRuleListFragment extends Fragment {
 
+    private static final String TAG = "GodMode";
     private static final int FILTER_ALL = 0;
     private static final int FILTER_REMOVE = 1;
     private static final int FILTER_MODIFY = 2;
@@ -58,6 +62,8 @@ public final class ViewRuleListFragment extends Fragment {
     private SharedViewModel mSharedViewModel;
     private ActivityResultLauncher<String> mBackupLauncher;
     private List<ViewRule> mAllRules = new ArrayList<>();
+    private List<ViewRule> mPendingBackupRules;
+    private boolean mIsBatchOperation;
 
     public ViewRuleListFragment() {
         super(R.layout.fragment_rule_list);
@@ -80,7 +86,9 @@ public final class ViewRuleListFragment extends Fragment {
         mSharedViewModel.selectedPackage.observe(this, packageName -> mSharedViewModel.updateViewRuleList(packageName));
         mSharedViewModel.actRules.observe(this, newData -> {
             mAllRules = newData != null ? newData : new ArrayList<>();
-            updateFilteredList();
+            if (!mIsBatchOperation) {
+                updateFilteredList();
+            }
         });
     }
 
@@ -130,20 +138,24 @@ public final class ViewRuleListFragment extends Fragment {
 
     private void onBackupFileSelected(Uri uri) {
         if (uri == null) return;
-        if (!mAllRules.isEmpty()) {
-            mSharedViewModel.backupRules(uri, mPackageName, mAllRules, new SharedViewModel.ResultCallback() {
-                @Override
-                public void onSuccess() {
-                }
-
-                @Override
-                public void onFailure(Exception e) {
-                    Snackbar.make(requireView(), R.string.snack_bar_msg_backup_rule_fail, Snackbar.LENGTH_SHORT).show();
-                }
-            });
-        } else {
+        List<ViewRule> rulesToBackup = mPendingBackupRules != null ? mPendingBackupRules : mAllRules;
+        mPendingBackupRules = null;
+        if (rulesToBackup.isEmpty()) {
             Snackbar.make(requireView(), R.string.snack_bar_msg_backup_rule_fail, Snackbar.LENGTH_SHORT).show();
+            return;
         }
+        mSharedViewModel.backupRules(uri, mPackageName, rulesToBackup, new SharedViewModel.ResultCallback() {
+            @Override
+            public void onSuccess() {
+                Log.i(TAG, "[ViewRuleList] backup success: " + rulesToBackup.size() + " rules");
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                Log.w(TAG, "[ViewRuleList] backup failed", e);
+                Snackbar.make(requireView(), R.string.snack_bar_msg_backup_rule_fail, Snackbar.LENGTH_SHORT).show();
+            }
+        });
     }
 
     @Nullable
@@ -332,20 +344,92 @@ public final class ViewRuleListFragment extends Fragment {
             restoreMenuCheck(mMenu);
             return true;
         } else if (id == R.id.menu_delete_rules) {
-            if (!mSharedViewModel.deleteAppRules(mPackageName)) {
-                Snackbar.make(requireView(), R.string.snack_bar_msg_revert_rule_fail, Snackbar.LENGTH_SHORT).show();
+            if (mRuleFilter == FILTER_ALL) {
+                deleteAllRules();
+            } else {
+                deleteFilteredRules();
             }
             return true;
         } else if (id == R.id.menu_backup_rules) {
             try {
+                List<ViewRule> filtered = buildFilteredItems();
+                if (filtered.isEmpty()) {
+                    Snackbar.make(requireView(), R.string.snack_bar_msg_backup_rule_fail, Snackbar.LENGTH_SHORT).show();
+                    return true;
+                }
+                mPendingBackupRules = new ArrayList<>(filtered);
                 mBackupLauncher.launch(AppInfoHelper.generateBackupFilename(requireContext(), mPackageName));
                 return true;
             } catch (ActivityNotFoundException | PackageManager.NameNotFoundException e) {
+                Log.w(TAG, "[ViewRuleList] backup launch failed", e);
                 Snackbar.make(requireView(), R.string.snack_bar_msg_backup_rule_fail, Snackbar.LENGTH_SHORT).show();
                 return false;
             }
         }
         return super.onOptionsItemSelected(item);
+    }
+
+    private void deleteAllRules() {
+        if (mAllRules.isEmpty()) {
+            Snackbar.make(requireView(), R.string.snack_bar_msg_revert_rule_fail, Snackbar.LENGTH_SHORT).show();
+            return;
+        }
+        showDeleteConfirmDialog(mAllRules.size(), () -> {
+            if (!mSharedViewModel.deleteAppRules(mPackageName)) {
+                Snackbar.make(requireView(), R.string.snack_bar_msg_revert_rule_fail, Snackbar.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    private void deleteFilteredRules() {
+        List<ViewRule> filtered = buildFilteredItems();
+        if (filtered.isEmpty()) {
+            Snackbar.make(requireView(), R.string.snack_bar_msg_revert_rule_fail, Snackbar.LENGTH_SHORT).show();
+            return;
+        }
+        showDeleteConfirmDialog(filtered.size(), () -> {
+            mIsBatchOperation = true;
+            int failed = 0;
+            for (ViewRule rule : filtered) {
+                if (!isAdded()) break;
+                try {
+                    if (!mSharedViewModel.deleteRule(rule)) {
+                        failed++;
+                        Log.w(TAG, "[ViewRuleList] delete rule failed: " + rule);
+                    }
+                } catch (Exception e) {
+                    failed++;
+                    Log.w(TAG, "[ViewRuleList] delete rule failed: " + rule);
+                    Log.e(TAG, "[ViewRuleList] delete rule exception", e);
+                }
+            }
+            mIsBatchOperation = false;
+            if (isAdded()) {
+                if (failed == 0) {
+                    updateFilteredList();
+                } else if (failed == filtered.size()) {
+                    updateFilteredList();
+                    Snackbar.make(requireView(), R.string.snack_bar_msg_revert_rule_fail, Snackbar.LENGTH_SHORT).show();
+                } else {
+                    // 部分失败：重新加载完整数据
+                    mSharedViewModel.loadAppRules();
+                    if (failed > 0) {
+                        Toast.makeText(requireContext(),
+                                getString(R.string.snack_bar_msg_revert_rule_fail) + " (" + failed + ")",
+                                Toast.LENGTH_SHORT).show();
+                    }
+                }
+            }
+        });
+    }
+
+    private void showDeleteConfirmDialog(int count, Runnable onConfirm) {
+        new AlertDialog.Builder(requireContext())
+                .setTitle(R.string.hey_guy)
+                .setMessage(getString(R.string.confirm_delete_rules, count) + "\n" + mPackageName)
+                .setPositiveButton(android.R.string.ok, (dialog, which) -> onConfirm.run())
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
     }
 
     private void restoreMenuCheck(Menu menu) {

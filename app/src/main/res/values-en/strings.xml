@@ -111,6 +111,14 @@
 
     <string name="field_activity">Activity: %1$s</string>
     <string name="field_view">View: %1$s</string>
+    <string name="field_depth">Layout depth: %1$s</string>
+
+    <string name="modify_detail_width">Width: %1$d</string>
+    <string name="modify_detail_height">Height: %1$d</string>
+    <string name="modify_detail_alpha">Opacity: %1$s</string>
+    <string name="modify_detail_position">Position: (%1$d,%2$d)</string>
+    <string name="modify_detail_text">Modified text</string>
+    <string name="modify_detail_image">Replaced image</string>
 
     <string name="hey_guy">Hey guy</string>
     <string name="not_active_module">GodMode module is not activated. Please activate it in LSPosed manager</string>
@@ -120,6 +128,7 @@
     <string name="snack_bar_msg_revert_rule_fail">Delete rule failed</string>
     <string name="snack_bar_msg_backup_rule_fail">Backup rules failed</string>
     <string name="snack_bar_msg_restore_rules_fail">Restore rules failed</string>
+    <string name="confirm_delete_rules">Confirm delete %d rules?</string>
     <string name="dialog_btn_copy">COPY</string>
     <string name="crash_tip">Crash detected. Copy the log below for feedback.\n\n</string>
     <string name="update_tips">Try using GodMode to block annoying buttons. If you encounter issues, please report them on GitHub!</string>

@@ -373,6 +373,10 @@ final class ModifyPanelController {
 
     private void revertViewState() {
         if (mCurrentlyModifyingView == null) return;
+        if (!verifyViewIdentity(mCurrentlyModifyingView)) {
+            Logger.w(TAG, "[revertViewState] view identity changed, skip revert for safety");
+            return;
+        }
 
         ViewGroup.LayoutParams lp = mCurrentlyModifyingView.getLayoutParams();
         if (lp != null) {
@@ -402,6 +406,16 @@ final class ModifyPanelController {
 
         String viewKey = ViewHelper.getViewKey(mCurrentlyModifyingView);
         mTempModifications.remove(viewKey);
+    }
+
+    private boolean verifyViewIdentity(View view) {
+        if (!view.isAttachedToWindow()) return false;
+        if (mModifyingViewDepth == null || mModifyingViewActClass == null) return true;
+        Activity currentAct = ViewHelper.getAttachedActivityFromView(view);
+        if (currentAct == null) return false;
+        if (!mModifyingViewActClass.equals(currentAct.getComponentName().getClassName())) return false;
+        int[] currentDepth = ViewHelper.getViewHierarchyDepth(view);
+        return java.util.Arrays.equals(mModifyingViewDepth, currentDepth);
     }
 
     private String saveModificationImage(String packageName, Bitmap bitmap) {
@@ -445,7 +459,8 @@ final class ModifyPanelController {
                     snapshot = ViewHelper.snapshotView(ViewHelper.findTopParentViewByChildView(view));
                     ViewHelper.drawRuleMask(snapshot, rule);
                 }
-            } catch (Exception ignored) {
+            } catch (Exception e) {
+                Logger.w(TAG, "[saveAll] snapshot failed for rule", e);
             }
             GodModeManager.getDefault().writeRule(pkg, rule, snapshot);
         }
@@ -520,7 +535,8 @@ final class ModifyPanelController {
                             }
                         }
                     });
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            Logger.e(TAG, "[hookActivityResult] Xposed hook failed, image replacement disabled", e);
         }
     }
 }
