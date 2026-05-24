@@ -1,45 +1,80 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">GodMode</string>
+
     <string name="pref_header_general">GENERAL</string>
-    <string name="pref_header_support">SUPPORT</string>
     <string name="pref_header_app_rules">APP RULES</string>
+
     <string name="pref_title_god_mode">GodMode</string>
-    <string name="snack_bar_msg_revert_rule_fail">Revoke rule failed</string>
-    <string name="snack_bar_msg_backup_rule_fail">Oops, backup rules failed.</string>
-    <string name="snack_bar_msg_restore_rules_fail">Oops, restore rules failed.</string>
-    <string name="pref_title_donate_me">Donate</string>
-    <string name="pref_title_add_group">Join community</string>
-    <string name="pref_description_donate_me">That great</string>
-    <string name="menu_backup_rule">Backup rule</string>
-    <string name="dialog_btn_alipay">Alipay</string>
-    <string name="dialog_btn_wxpay">WechatPay</string>
+    <string name="pref_description_god_mode">Enable to control editing from notification</string>
+    <string name="pref_title_guide">Guide</string>
+    <string name="pref_description_guide">View usage and operation modes</string>
+
     <string name="menu_delete_rule">Delete rule</string>
-    <string name="not_active_module">GodMode module is not activated</string>
-    <string name="hey_guy">Hey guy</string>
-    <string name="pref_description_god_mode">Start editor</string>
-    <string name="pref_description_add_group">Have fun</string>
-    <string name="thanks">Thank you guys</string>
-    <string name="tips_qrcord">The QR code image has been placed in your gallery</string>
-    <string name="welcome_title">Hey guys, Welcome</string>
+    <string name="menu_backup_rule">Backup rule</string>
     <string name="enter_edit">Exit editor</string>
     <string name="exit_edit">Start editor</string>
     <string name="manage">Manager</string>
+    <string name="xposed_description">Like God, remove any elements on the interface that you don\'t like</string>
+
     <string name="menu_delete_rules">Delete rules</string>
     <string name="menu_backup_rules">Backup rules</string>
     <string name="menu_title_restore_rules">Restore rules</string>
+    <string name="menu_title_restore_rules_description">Restore rules from external storage</string>
     <string name="menu_icon_switch_show">Show icon</string>
     <string name="menu_icon_switch_hide">Hide icon</string>
-    <string name="menu_icon_switch_description">Show or hide app icon</string>
+    <string name="menu_icon_switch_description">Show or hide app icon from launcher</string>
+
     <string name="title_app_rule">App rules</string>
     <string name="title_rule_details">Details</string>
-    <string name="donate_thanks">Thanks for supporting my work</string>
-    <string name="xposed_description">Like God, Remove any elements on the interface that you don’t like</string>
-    <string name="menu_title_restore_rules_description">Restore rules from external</string>
-    <string name="field_activity">Activity:%1$s</string>
-    <string name="field_view">View:%1$s</string>
+    <string name="guide_title">Guide</string>
+
+    <string name="guide_content"><![CDATA[
+<b>1. Overview</b><br>GodMode is an Xposed module that can block unwanted elements (buttons, ads, text, etc.) on any app\'s interface.<br><br>
+<b>2. Enable/Disable</b><br>
+  1. <b>Master Switch</b>: Settings → General → GodMode switch.<br>
+     &nbsp;&nbsp;- When enabled, a notification appears showing "Start editor".<br>
+     &nbsp;&nbsp;- When disabled, edit mode is forced off and the notification disappears.<br>
+  2. <b>Notification Toggle</b>: With master switch on, tap the notification to toggle between "Start editor" and "Exit editor".<br><br>
+<b>3. Edit Mode Operations</b><br>When edit mode is active, a toolbar appears on the right side of the target app:<br><br>
+  1. <b>Tap to Select</b>: Tap any element on the screen to select it (red overlay follows).<br>
+  2. <b>Long Press to Block</b>: Long press an element (~0.5s), it turns green.<br>
+     &nbsp;&nbsp;- Drag the green overlay to the top green area and release → cancel.<br>
+     &nbsp;&nbsp;- Release elsewhere → particle animation plays, element disappears, rule saved.<br>
+  3. <b>Volume Keys</b>: Press and release volume up/down to show/hide the toolbar. When toolbar is visible, volume keys navigate between elements.<br>
+  4. <b>SeekBar Slider</b>: Drag the slider to select elements at different hierarchy levels.<br>
+  5. <b>⬆⬇ Buttons</b>: Manually switch to previous/next element.<br>
+  6. <b>🔀 Button</b>: Toggle toolbar position (right/left).<br>
+  7. <b>👁 Button</b>: Preview block effect — temporarily hides the selected element, tap again to restore.<br>
+  8. <b>🚫 Button</b>: Block the currently selected element (same as long press).<br><br>
+<b>4. Rule Management</b><br>
+  - View rules: Settings → App Rules → tap package name.<br>
+  - View details: Rule list → tap entry, swipe left/right.<br>
+  - Delete single rule: Rule details → menu → Delete rule.<br>
+  - Delete all rules: Rule list → menu → Delete rules.<br>
+  - Backup rules: Rule list/details → menu → Backup rules.<br>
+  - Restore rules: Settings → menu → Restore rules.<br><br>
+<b>5. Notes</b><br>
+  - Edit mode only works in third-party apps where the module is activated in Xposed/LSPosed.<br>
+  - Launcher, system UI, input methods, UI-less apps, and GodMode itself are not editable.<br>
+  - If a crash occurs, a dialog will appear on next launch to copy the crash log.
+    ]]></string>
+
+    <string name="field_activity">Activity: %1$s</string>
+    <string name="field_view">View: %1$s</string>
+
+    <string name="hey_guy">Hey guy</string>
+    <string name="not_active_module">GodMode module is not activated</string>
+    <string name="notification_permission_denied">Notification permission denied, notification switch will not be shown</string>
+    <string name="welcome_title">Hey guys, Welcome</string>
+
+    <string name="snack_bar_msg_revert_rule_fail">Revoke rule failed</string>
+    <string name="snack_bar_msg_backup_rule_fail">Backup rules failed</string>
+    <string name="snack_bar_msg_restore_rules_fail">Restore rules failed</string>
     <string name="dialog_btn_copy">COPY</string>
-    <string name="wechat_donate_tips">Select QR code scan from gallery</string>
+    <string name="crash_tip">Crash detected\n</string>
+    <string name="update_tips">You can try using GodMode to block annoying buttons. If you encounter issues, don\'t worry, they will be fixed soon!</string>
+
     <string name="rule_details_field_create_time">Create time</string>
     <string name="rule_details_field_generate_version">Match version</string>
     <string name="rule_details_field_activity">Activity</string>
@@ -50,17 +85,15 @@
     <string name="rule_details_field_res_name">Resource name</string>
     <string name="rule_details_field_text">Text</string>
     <string name="rule_details_field_description">Description</string>
+    <string name="rule_details_field_visible">Visibility</string>
     <string name="rule_details_invisible">Invisible</string>
     <string name="rule_details_gone">Gone</string>
     <string name="rule_details_set_alias">Set alias</string>
-    <string name="rule_details_field_visible">Visibility</string>
-    <string name="update_tips">I think you can try to block some annoying buttons in God mode. Oh! Yes, it sounds interesting. But this little guy is sometimes as disobedient as the damn stubborn donkey at Tom\'s, don\'t worry guys, I will fix it as soon as possible!</string>
-    <string name="crash_tip">Crash detected\n</string>
+
     <string name="top_revert_tip">Move here to cancel</string>
-    <string name="block_fail">Failed to block:%1$s</string>
-    <string name="dialog_message_query_community">Loading community info...</string>
     <string name="accessibility_block">Block</string>
-    <string name="fetch_group_list_err1">Error: group list is empty</string>
-    <string name="fetch_group_list_err2">Error: unknown exception</string>
-    <string name="fetch_group_list_err3">Error: %1$s</string>
+    <string name="accessibility_preview">Preview</string>
+    <string name="accessibility_preview_exit">Exit preview</string>
+    <string name="accessibility_exchange">Toggle position</string>
+    <string name="block_fail">Failed to block: %1$s</string>
 </resources>
