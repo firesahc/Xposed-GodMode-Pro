@@ -1,0 +1,32 @@
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <PreferenceCategory android:title="@string/settings_category_features">
+        <Preference
+            android:key="@string/pref_restore_rules"
+            android:title="@string/pref_restore_rules" />
+        <Preference
+            android:key="@string/settings_save_all_rules"
+            android:title="@string/settings_save_all_rules"
+            android:summary="@string/settings_save_all_rules_desc" />
+        <SwitchPreferenceCompat
+            android:key="@string/pref_key_hide_icon"
+            android:title="@string/menu_icon_switch_hide"
+            android:defaultValue="false" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/settings_customize_toolbar">
+        <SwitchPreferenceCompat
+            android:key="@string/pref_key_show_info_flow_mode"
+            android:title="@string/toolbar_info_flow_mode"
+            android:defaultValue="false" />
+        <SwitchPreferenceCompat
+            android:key="@string/pref_key_show_remove_mode"
+            android:title="@string/toolbar_remove_mode"
+            android:defaultValue="true" />
+        <SwitchPreferenceCompat
+            android:key="@string/pref_key_show_modify_mode"
+            android:title="@string/toolbar_modify_mode"
+            android:defaultValue="true" />
+    </PreferenceCategory>
+
+</PreferenceScreen>

@@ -34,4 +34,8 @@ interface IGodModeManager {
     ParcelFileDescriptor openImageFileDescriptor(String filePath);
 
     String saveImageFile(String packageName, in Bitmap bitmap);
+
+    String getToolbarHiddenItems();
+
+    void setToolbarHiddenItems(String items);
 }

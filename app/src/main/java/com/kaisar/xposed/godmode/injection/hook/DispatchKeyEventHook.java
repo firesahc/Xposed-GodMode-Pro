@@ -30,6 +30,7 @@ import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
 import com.kaisar.xposed.godmode.injection.util.GmResources;
 import com.kaisar.xposed.godmode.injection.util.Logger;
 import com.kaisar.xposed.godmode.injection.util.Property;
+import com.kaisar.xposed.godmode.injection.util.ToolbarVisibilityController;
 import com.kaisar.xposed.godmode.injection.weiget.MaskView;
 import com.kaisar.xposed.godmode.injection.weiget.ParticleView;
 import com.kaisar.xposed.godmode.rule.ViewRule;
@@ -69,7 +70,7 @@ public final class DispatchKeyEventHook extends XC_MethodHook
     public static int getInteractionMode() { return sInteractionMode; }
     static boolean isKeySelecting() { return sInstance != null && sInstance.mKeySelecting; }
 
-    private static volatile boolean sInfoFlowMode = true;
+    private static volatile boolean sInfoFlowMode = false;
     public static boolean isInfoFlowMode() { return sInfoFlowMode; }
 
     // =========================================================================
@@ -263,6 +264,7 @@ public final class DispatchKeyEventHook extends XC_MethodHook
 
             wireNodeSelectorButtons(activity, container);
             container.addView(mNodeSelectorPanel);
+            ToolbarVisibilityController.apply(mNodeSelectorPanel);
             mNodeSelectorPanel.setAlpha(0);
             mNodeSelectorPanel.post(() -> {
                 mNodeSelectorPanel.setTranslationX(mNodeSelectorPanel.getWidth() / 2.0f);
