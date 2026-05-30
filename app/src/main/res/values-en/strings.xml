@@ -194,4 +194,20 @@
     <string name="mode_info_flow_off">Feed·OFF</string>
     <string name="accessibility_info_flow_on">Feed mode ON: modifications sync to same-type elements</string>
     <string name="accessibility_info_flow_off">Feed mode OFF: each operation only affects a single element</string>
+
+    <string name="toolbar_settings_title">Settings</string>
+    <string name="settings_save_all_rules">Save All Rules</string>
+    <string name="settings_save_all_rules_desc">Export rule backups for all apps one by one</string>
+    <string name="settings_customize_toolbar">Customize Toolbar</string>
+    <string name="toolbar_remove_mode">Remove Mode</string>
+    <string name="toolbar_modify_mode">Modify Mode</string>
+    <string name="toolbar_info_flow_mode">Info Flow Mode</string>
+    <string name="filter_icon_desc">Filter Rules</string>
+    <string name="filter_dialog_title">Rule Filter</string>
+    <string name="settings_category_features">Features</string>
+    <string name="restore_rules_success">Restore rules succeeded</string>
+    <string name="save_all_rules_result">Saved: %1$d success, %2$d failed</string>
+    <string name="pref_restore_rules">Restore Rules</string>
+    <string name="snack_bar_msg_restore_rules_success">Rules restored successfully</string>
+    <string name="snack_bar_msg_backup_all_result">Saved: %1$d success, %2$d failed</string>
 </resources>

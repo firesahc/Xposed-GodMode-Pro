@@ -57,7 +57,7 @@
 &bull; <b>垂直滑块</b> — 按层级深度选择元素。<br>
 &bull; <b>切换位置</b> — 面板居左/居右。<br>
 &bull; <b>移除</b> / <b>修改</b> — 展开对应操作菜单。<br>
-&bull; <b>信息流</b> — 切换「信息流开/关」（默认开，见第四章）。<br>
+&bull; <b>信息流</b> — 切换「信息流开/关」（默认关，见第四章）。<br>
 &bull; <b>上一步</b> / <b>下一步</b> — 逐个切换选中元素。<br>
 &emsp;<b>音量键控制</b>：按音量上/下键松开 → 打开/关闭面板；面板打开时按音量键导航元素。<br>
 &emsp;红色遮罩指示当前选中元素；橙色遮罩表示该元素在列表（RecyclerView）中。<br><br>
@@ -70,8 +70,8 @@
 
 <b>四、信息流模式</b><br>
 &emsp;面板上「信息流·开/关」按钮：<br>
-&bull; <b>开</b>（默认）：对列表（RecyclerView）元素执行操作时，自动同步到所有结构相同的元素。<br>
-&bull; <b>关</b>：每次操作仅影响当前单个元素。<br><br>
+&bull; <b>关</b>（默认）：每次操作仅影响当前单个元素。<br>
+&bull; <b>开</b>：对列表（RecyclerView）元素执行操作时，自动同步到所有结构相同的元素。<br><br>
 
 <b>五、移除模式</b><br>
 &emsp;点击「移除」按钮展开菜单：<br>
@@ -223,5 +223,26 @@
     <string name="mode_info_flow_off">信息流·关</string>
     <string name="accessibility_info_flow_on">信息流模式已开启：修改和移除将同步到同类型元素</string>
     <string name="accessibility_info_flow_off">信息流模式已关闭：每次操作仅作用于单个元素</string>
+
+    <string name="toolbar_settings_title">设置</string>
+    <string name="settings_save_all_rules">保存所有规则</string>
+    <string name="settings_save_all_rules_desc">逐个导出所有 App 的规则备份</string>
+    <string name="settings_customize_toolbar">自定义工具栏</string>
+    <string name="toolbar_remove_mode">移除模式</string>
+    <string name="toolbar_modify_mode">修改模式</string>
+    <string name="toolbar_info_flow_mode">信息流模式</string>
+    <string name="filter_icon_desc">筛选规则</string>
+    <string name="filter_dialog_title">规则筛选</string>
+    <string name="pref_restore_rules">恢复规则</string>
+    <string name="snack_bar_msg_restore_rules_success">恢复规则成功</string>
+    <string name="snack_bar_msg_backup_all_result">保存完成: %1$d 成功, %2$d 失败</string>
+
+    <string name="settings_category_features">功能</string>
+    <string name="restore_rules_success">恢复规则成功</string>
+    <string name="save_all_rules_result">保存完成：%1$d 成功，%2$d 失败</string>
+    <string name="pref_key_hide_icon" translatable="false">pref_hide_icon</string>
+    <string name="pref_key_show_remove_mode" translatable="false">pref_show_remove_mode</string>
+    <string name="pref_key_show_modify_mode" translatable="false">pref_show_modify_mode</string>
+    <string name="pref_key_show_info_flow_mode" translatable="false">pref_show_info_flow_mode</string>
 
 </resources>

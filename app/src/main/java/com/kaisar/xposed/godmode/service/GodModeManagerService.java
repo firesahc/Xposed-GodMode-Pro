@@ -62,6 +62,8 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
     // /data/system/godmode/{package}/xxxxxxxxx.webp
     private static final String IMAGE_FILE_SUFFIX = ".webp";
 
+    private static final String TOOLBAR_PREFS_FILE = "toolbar_prefs.json";
+
     private static final int LOAD_RULES = 0x00001;
     private static final int WRITE_RULE = 0x00002;
     private static final int DELETE_RULE = 0x00004;
@@ -85,6 +87,7 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
 
     private final Gson mGson = new GsonBuilder().setPrettyPrinting().create();
     private final HashMap<String, IBinder> mRegisteredObserverMap = new HashMap<>();
+    private String mToolbarHiddenItems = "";
 
     public GodModeManagerService(Context context) {
         mLogger = Logger.getLogger("GMMService");
@@ -248,6 +251,7 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
             case LOAD_RULES: {
                 try {
                     loadRuleData();
+                    loadToolbarHiddenItems();
                     mDataLoaded = true;
                     mLogger.i("rule data loaded: " + mAppRulesCache.size() + " packages");
                 } catch (Exception e) {
@@ -674,6 +678,36 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
             RemoteException remoteException = new RemoteException();
             remoteException.initCause(e);
             throw remoteException;
+        }
+    }
+
+    @Override
+    public String getToolbarHiddenItems() {
+        return mToolbarHiddenItems;
+    }
+
+    @Override
+    public void setToolbarHiddenItems(String items) throws RemoteException {
+        enforcePermission("set toolbar prefs fail permission denied");
+        mToolbarHiddenItems = items != null ? items : "";
+        try {
+            File prefsFile = new File(getBaseDir(), TOOLBAR_PREFS_FILE);
+            FileUtils.stringToFile(prefsFile, mToolbarHiddenItems);
+            FileUtils.setPermissions(prefsFile, S_IRWXU | S_IRWXG | S_IRWXO, -1, -1);
+        } catch (Exception e) {
+            mLogger.w("persist toolbar prefs failed", e);
+        }
+    }
+
+    private void loadToolbarHiddenItems() {
+        try {
+            File prefsFile = new File(getBaseDir(), TOOLBAR_PREFS_FILE);
+            if (prefsFile.exists()) {
+                mToolbarHiddenItems = FileUtils.readTextFile(prefsFile, 0, null);
+                if (mToolbarHiddenItems == null) mToolbarHiddenItems = "";
+            }
+        } catch (Exception e) {
+            mLogger.w("load toolbar prefs failed", e);
         }
     }
 

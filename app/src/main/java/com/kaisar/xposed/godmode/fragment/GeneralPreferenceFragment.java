@@ -4,7 +4,6 @@ import static com.kaisar.xposed.godmode.fragment.GeneralPreferenceFragmentDirect
 import static com.kaisar.xposed.godmode.fragment.GeneralPreferenceFragmentDirections.actionGeneralPreferenceFragmentToGuideFragment;
 import static com.kaisar.xposed.godmode.fragment.GeneralPreferenceFragmentDirections.actionGeneralPreferenceFragmentToViewRuleListFragment;
 
-import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
@@ -248,25 +247,18 @@ public final class GeneralPreferenceFragment extends PreferenceFragmentCompat im
     @Override
     public void onCreateOptionsMenu(@NonNull Menu menu, MenuInflater inflater) {
         inflater.inflate(R.menu.menu_general, menu);
-        MenuItem item = menu.findItem(R.id.menu_icon_switch);
-        boolean hidden = mSharedViewModel.isIconHidden(requireContext());
-        item.setTitle(!hidden ? R.string.menu_icon_switch_hide : R.string.menu_icon_switch_show);
     }
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
-        if (item.getItemId() == R.id.menu_import_rules) {
-            try {
-                mRestoreLauncher.launch(new String[]{"*/*"});
-            } catch (ActivityNotFoundException e) {
-                Snackbar.make(requireView(), R.string.snack_bar_msg_restore_rules_fail, Snackbar.LENGTH_SHORT).show();
-            }
-        } else if (item.getItemId() == R.id.menu_icon_switch) {
-            boolean hidden = mSharedViewModel.isIconHidden(requireContext());
-            mSharedViewModel.setIconHidden(requireContext(), hidden = !hidden);
-            item.setTitle(hidden ? R.string.menu_icon_switch_show : R.string.menu_icon_switch_hide);
+        if (item.getItemId() == R.id.menu_settings) {
+            NavController nc = NavHostFragment.findNavController(this);
+            nc.navigate(GeneralPreferenceFragmentDirections.actionGeneralPreferenceFragmentToSettingsFragment());
+            return true;
+        } else if (item.getItemId() == android.R.id.home) {
+            return false;
         }
-        return true;
+        return super.onOptionsItemSelected(item);
     }
 
     private void showEnableModuleDialog() {

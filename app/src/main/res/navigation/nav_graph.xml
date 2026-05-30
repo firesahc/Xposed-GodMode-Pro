@@ -29,6 +29,13 @@
                 app:exitAnim="@anim/fragment_exit"
                 app:popEnterAnim="@anim/fragment_enter_pop"
                 app:popExitAnim="@anim/fragment_exit_pop" />
+        <action
+                android:id="@+id/action_generalPreferenceFragment_to_settingsFragment"
+                app:destination="@id/settingsFragment"
+                app:enterAnim="@anim/fragment_enter"
+                app:exitAnim="@anim/fragment_exit"
+                app:popEnterAnim="@anim/fragment_enter_pop"
+                app:popExitAnim="@anim/fragment_exit_pop" />
     </fragment>
     <fragment
             android:id="@+id/guideFragment"
@@ -38,6 +45,10 @@
             android:id="@+id/aboutFragment"
             android:name="com.kaisar.xposed.godmode.fragment.AboutFragment"
             android:label="@string/about_title" />
+    <fragment
+            android:id="@+id/settingsFragment"
+            android:name="com.kaisar.xposed.godmode.fragment.SettingsFragment"
+            android:label="@string/toolbar_settings_title" />
     <fragment
             android:id="@+id/viewRuleListFragment"
             android:name="com.kaisar.xposed.godmode.fragment.ViewRuleListFragment"

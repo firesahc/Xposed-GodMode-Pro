@@ -1,14 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<menu xmlns:android="http://schemas.android.com/apk/res/android">
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <item
-        android:id="@+id/menu_import_rules"
-        android:contentDescription="@string/menu_title_restore_rules_description"
-        android:title="@string/menu_title_restore_rules" />
-
-    <item
-        android:id="@+id/menu_icon_switch"
-        android:contentDescription="@string/menu_icon_switch_description"
-        android:title="@string/menu_icon_switch_hide" />
+        android:id="@+id/menu_settings"
+        android:title="@string/toolbar_settings_title"
+        android:icon="@drawable/ic_gear"
+        app:showAsAction="ifRoom" />
 
 </menu>

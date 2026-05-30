@@ -151,4 +151,21 @@ public final class GodModeManager {
             return null;
         }
     }
+
+    public String getToolbarHiddenItems() {
+        try {
+            return mGMM.getToolbarHiddenItems();
+        } catch (RemoteException e) {
+            logError("getToolbarHiddenItems", e);
+            return "";
+        }
+    }
+
+    public void setToolbarHiddenItems(String items) {
+        try {
+            mGMM.setToolbarHiddenItems(items);
+        } catch (RemoteException e) {
+            logError("setToolbarHiddenItems", e);
+        }
+    }
 }
