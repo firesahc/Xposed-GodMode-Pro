@@ -349,29 +349,16 @@ public final class ViewRuleListFragment extends Fragment {
     public void onCreateOptionsMenu(@NonNull Menu menu, @NonNull MenuInflater inflater) {
         super.onCreateOptionsMenu(menu, inflater);
         inflater.inflate(R.menu.menu_app_rules, menu);
+        MenuItem filterItem = menu.add(Menu.NONE, Menu.NONE, Menu.NONE, R.string.filter_dialog_title);
+        filterItem.setIcon(R.drawable.ic_filter);
+        filterItem.setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM);
         mMenu = menu;
-        restoreMenuCheck(menu);
     }
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         int id = item.getItemId();
-        if (id == R.id.menu_filter_all) {
-            mRuleFilter = FILTER_ALL;
-            updateFilteredList();
-            restoreMenuCheck(mMenu);
-            return true;
-        } else if (id == R.id.menu_filter_remove) {
-            mRuleFilter = FILTER_REMOVE;
-            updateFilteredList();
-            restoreMenuCheck(mMenu);
-            return true;
-        } else if (id == R.id.menu_filter_modify) {
-            mRuleFilter = FILTER_MODIFY;
-            updateFilteredList();
-            restoreMenuCheck(mMenu);
-            return true;
-        } else if (id == R.id.menu_delete_rules) {
+        if (id == R.id.menu_delete_rules) {
             if (mRuleFilter == FILTER_ALL) {
                 deleteAllRules();
             } else {
@@ -393,6 +380,11 @@ public final class ViewRuleListFragment extends Fragment {
                 Snackbar.make(requireView(), R.string.snack_bar_msg_backup_rule_fail, Snackbar.LENGTH_SHORT).show();
                 return false;
             }
+        }
+        // Handle filter icon click — compare by title string since it's a programmatic MenuItem
+        if (item.getTitle() != null && item.getTitle().equals(getString(R.string.filter_dialog_title))) {
+            showFilterDialog();
+            return true;
         }
         return super.onOptionsItemSelected(item);
     }
@@ -451,6 +443,19 @@ public final class ViewRuleListFragment extends Fragment {
         });
     }
 
+    private void showFilterDialog() {
+        String[] items = {getString(R.string.menu_filter_all), getString(R.string.menu_filter_remove), getString(R.string.menu_filter_modify)};
+        new AlertDialog.Builder(requireContext())
+                .setTitle(R.string.filter_dialog_title)
+                .setSingleChoiceItems(items, mRuleFilter, (dialog, which) -> {
+                    mRuleFilter = which;
+                    updateFilteredList();
+                    dialog.dismiss();
+                })
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
+    }
+
     private void showDeleteConfirmDialog(int count, Runnable onConfirm) {
         new AlertDialog.Builder(requireContext())
                 .setTitle(R.string.hey_guy)
@@ -458,11 +463,5 @@ public final class ViewRuleListFragment extends Fragment {
                 .setPositiveButton(android.R.string.ok, (dialog, which) -> onConfirm.run())
                 .setNegativeButton(android.R.string.cancel, null)
                 .show();
-    }
-
-    private void restoreMenuCheck(Menu menu) {
-        menu.findItem(R.id.menu_filter_all).setChecked(mRuleFilter == FILTER_ALL);
-        menu.findItem(R.id.menu_filter_remove).setChecked(mRuleFilter == FILTER_REMOVE);
-        menu.findItem(R.id.menu_filter_modify).setChecked(mRuleFilter == FILTER_MODIFY);
     }
 }
