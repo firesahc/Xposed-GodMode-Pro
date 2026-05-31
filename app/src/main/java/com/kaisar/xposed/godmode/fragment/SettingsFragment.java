@@ -7,7 +7,6 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.provider.DocumentsContract;
 import android.text.TextUtils;
-import android.util.Log;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
@@ -21,6 +20,7 @@ import androidx.preference.SwitchPreferenceCompat;
 import com.google.android.material.snackbar.Snackbar;
 import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
+import com.kaisar.xposed.godmode.injection.util.Logger;
 import com.kaisar.xposed.godmode.model.SharedViewModel;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.AppRules;
@@ -35,7 +35,7 @@ import java.util.Set;
 public final class SettingsFragment extends PreferenceFragmentCompat implements
         Preference.OnPreferenceClickListener, Preference.OnPreferenceChangeListener {
 
-    private static final String TAG = "GodMode";
+    public static final String TAG = "GodModePro";
     private static final String TOOLBAR_PREFS = "toolbar_prefs";
     private static final String TOOLBAR_HIDDEN_ITEMS = "toolbar_hidden_items";
 
@@ -117,7 +117,7 @@ public final class SettingsFragment extends PreferenceFragmentCompat implements
             try {
                 mRestoreLauncher.launch(new String[]{"*/*"});
             } catch (Exception e) {
-                Log.w(TAG, "[Settings] restore launch failed", e);
+                Logger.w(TAG, "[Settings] restore launch failed", e);
                 Snackbar.make(requireView(), R.string.snack_bar_msg_restore_rules_fail, Snackbar.LENGTH_SHORT).show();
             }
             return true;
@@ -173,11 +173,13 @@ public final class SettingsFragment extends PreferenceFragmentCompat implements
     // Group A: Handle restore file result
     private void onRestoreFileSelected(Uri uri) {
         if (uri == null) return;
+        Logger.i(TAG, "[Settings] restoreRules: file selected, uri=" + uri);
         showProgressSnackbar(getString(R.string.menu_title_restore_rules) + "...");
         mSharedViewModel.restoreRules(uri, new SharedViewModel.ResultCallback() {
             @Override
             public void onSuccess() {
                 if (!isAdded()) return;
+                Logger.i(TAG, "[Settings] restoreRules: success");
                 dismissProgressSnackbar();
                 Snackbar.make(requireView(), R.string.snack_bar_msg_restore_rules_success, Snackbar.LENGTH_SHORT).show();
             }
@@ -186,7 +188,7 @@ public final class SettingsFragment extends PreferenceFragmentCompat implements
             public void onFailure(Exception e) {
                 if (!isAdded()) return;
                 dismissProgressSnackbar();
-                Log.w(TAG, "[Settings] restore failed", e);
+                Logger.w(TAG, "[Settings] restoreRules: failed", e);
                 Snackbar.make(requireView(), R.string.snack_bar_msg_restore_rules_fail, Snackbar.LENGTH_LONG).show();
             }
         });
@@ -201,7 +203,7 @@ public final class SettingsFragment extends PreferenceFragmentCompat implements
             requireContext().getContentResolver().takePersistableUriPermission(
                     treeUri, Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
         } catch (Exception e) {
-            Log.w(TAG, "[Settings] take permission failed", e);
+            Logger.w(TAG, "[Settings] saveAllRules: take permission failed", e);
             // Continue anyway — some SAF providers don't support persistable permissions
         }
 
@@ -209,6 +211,7 @@ public final class SettingsFragment extends PreferenceFragmentCompat implements
         mBackupSuccess = 0;
         mBackupFailed = 0;
         mSaveAllTreeUri = treeUri;
+        Logger.i(TAG, "[Settings] saveAllRules: start, packageCount=" + mBackupQueue.size());
         showProgressSnackbar(getBackupProgressMessage());
         backupNextPackageToDirectory();
     }
@@ -216,6 +219,7 @@ public final class SettingsFragment extends PreferenceFragmentCompat implements
     private void backupNextPackageToDirectory() {
         if (!isAdded()) return;
         if (mBackupIndex >= mBackupQueue.size()) {
+            Logger.i(TAG, "[Settings] saveAllRules: completed, success=" + mBackupSuccess + ", failed=" + mBackupFailed);
             dismissProgressSnackbar();
             Snackbar.make(requireView(),
                     getString(R.string.snack_bar_msg_backup_all_result, mBackupSuccess, mBackupFailed),
@@ -271,7 +275,7 @@ public final class SettingsFragment extends PreferenceFragmentCompat implements
                 @Override
                 public void onFailure(Exception e) {
                     if (!isAdded()) return;
-                    Log.w(TAG, "[Settings] backup failed for " + packageName, e);
+                    Logger.w(TAG, "[Settings] saveAllRules: backup failed for " + packageName, e);
                     mBackupFailed++;
                     mBackupIndex++;
                     showProgressSnackbar(getBackupProgressMessage());
@@ -279,7 +283,7 @@ public final class SettingsFragment extends PreferenceFragmentCompat implements
                 }
             });
         } catch (Exception e) {
-            Log.w(TAG, "[Settings] backup exception for " + packageName, e);
+            Logger.w(TAG, "[Settings] saveAllRules: backup exception for " + packageName, e);
             mBackupFailed++;
             mBackupIndex++;
             showProgressSnackbar(getBackupProgressMessage());

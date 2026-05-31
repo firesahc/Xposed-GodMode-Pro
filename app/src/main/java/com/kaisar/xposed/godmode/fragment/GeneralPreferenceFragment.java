@@ -1,5 +1,6 @@
 package com.kaisar.xposed.godmode.fragment;
 
+import static com.kaisar.xposed.godmode.GodModeApplication.TAG;
 import static com.kaisar.xposed.godmode.fragment.GeneralPreferenceFragmentDirections.actionGeneralPreferenceFragmentToAboutFragment;
 import static com.kaisar.xposed.godmode.fragment.GeneralPreferenceFragmentDirections.actionGeneralPreferenceFragmentToGuideFragment;
 import static com.kaisar.xposed.godmode.fragment.GeneralPreferenceFragmentDirections.actionGeneralPreferenceFragmentToViewRuleListFragment;
@@ -41,6 +42,7 @@ import com.kaisar.xposed.godmode.GodModeApplication;
 import com.kaisar.xposed.godmode.GodModeHelper;
 import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
+import com.kaisar.xposed.godmode.injection.util.Logger;
 import com.kaisar.xposed.godmode.model.SharedViewModel;
 import com.kaisar.xposed.godmode.preference.ProgressPreference;
 import com.kaisar.xposed.godmode.rule.ActRules;
@@ -95,15 +97,18 @@ public final class GeneralPreferenceFragment extends PreferenceFragmentCompat im
 
     private void onBackupFileSelected(Uri uri) {
         if (uri == null) return;
+        Logger.i(TAG, "[General] restoreRules: file selected, uri=" + uri);
         mProgressPreference.setVisible(true);
         mSharedViewModel.restoreRules(uri, new SharedViewModel.ResultCallback() {
             @Override
             public void onSuccess() {
+                Logger.i(TAG, "[General] restoreRules: success");
                 mProgressPreference.setVisible(false);
             }
 
             @Override
             public void onFailure(Exception e) {
+                Logger.w(TAG, "[General] restoreRules: failed", e);
                 mProgressPreference.setVisible(false);
                 Snackbar.make(requireView(), R.string.snack_bar_msg_restore_rules_fail, Snackbar.LENGTH_LONG).show();
             }

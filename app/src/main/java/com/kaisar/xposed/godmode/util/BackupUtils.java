@@ -1,6 +1,7 @@
 
 package com.kaisar.xposed.godmode.util;
 
+import static com.kaisar.xposed.godmode.GodModeApplication.TAG;
 import static com.kaisar.xposed.godmode.injection.util.CommonUtils.recycleNullableBitmap;
 
 import android.graphics.Bitmap;
@@ -17,6 +18,7 @@ import com.google.gson.JsonObject;
 import com.kaisar.xposed.godmode.GodModeApplication;
 import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
 import com.kaisar.xposed.godmode.injection.util.FileUtils;
+import com.kaisar.xposed.godmode.injection.util.Logger;
 import com.kaisar.xposed.godmode.rule.ViewRule;
 
 import java.io.File;
@@ -51,12 +53,14 @@ public final class BackupUtils {
     }
 
     public static void backupRules(Uri toUri, String packageName, List<ViewRule> viewRules) throws BackupException {
+        Logger.i(TAG, "[Backup] backupRules: start, package=" + packageName + ", ruleCount=" + viewRules.size());
         ArrayList<String> backupFilePathList = new ArrayList<>();
         ArrayList<ViewRule> backupViewRuleList = new ArrayList<>(viewRules.size());
         File backupDir = new File(GodModeApplication.getApplication().getCacheDir(), "backup");
         if (!backupDir.exists() || FileUtils.delete(backupDir.getPath())) {
             boolean ok = backupDir.mkdirs();
             if (!ok) throw new BackupException("Create backup directory failed.");
+            Logger.d(TAG, "[Backup] backupRules: temp dir created, package=" + packageName);
             try {
                 for (ViewRule viewRule : viewRules) {
                     ViewRule viewRuleCopy = viewRule.clone();
@@ -70,6 +74,8 @@ public final class BackupUtils {
                                 backupFilePathList.add(file.getPath());
                             }
                         }
+                    } else {
+                        viewRuleCopy.imagePath = "";
                     }
                     if (viewRule.isModifyRule() && !TextUtils.isEmpty(viewRule.modImagePath)
                             && !viewRule.modImagePath.equals(viewRule.imagePath)) {
@@ -83,6 +89,8 @@ public final class BackupUtils {
                                     backupFilePathList.add(file.getPath());
                                 }
                             }
+                        } else {
+                            viewRuleCopy.modImagePath = "";
                         }
                     }
                     backupViewRuleList.add(viewRuleCopy);
@@ -96,10 +104,13 @@ public final class BackupUtils {
                 jsonObject.add("rules", jsonElement);
                 FileUtils.stringToFile(manifestFile, jsonObject.toString());
                 backupFilePathList.add(manifestFile.getPath());
+                Logger.d(TAG, "[Backup] backupRules: manifest written, fileCount=" + backupFilePathList.size());
                 try (OutputStream out = GodModeApplication.getApplication().getContentResolver().openOutputStream(toUri)) {
                     ZipUtils.compress(out, backupFilePathList.toArray(new String[0]));
                 }
+                Logger.i(TAG, "[Backup] backupRules: success, package=" + packageName + ", rules=" + backupViewRuleList.size());
             } catch (IOException e) {
+                Logger.e(TAG, "[Backup] backupRules: failed, package=" + packageName, e);
                 throw new BackupException(e);
             } finally {
                 FileUtils.delete(backupDir.getPath());
@@ -108,6 +119,7 @@ public final class BackupUtils {
     }
 
     public static void restoreRules(Uri fromUri) throws RestoreException {
+        Logger.i(TAG, "[Backup] restoreRules: start, uri=" + fromUri);
         File restoreDir = new File(GodModeApplication.getApplication().getCacheDir(), "restore");
         if (!restoreDir.exists() || FileUtils.delete(restoreDir.getPath())) {
             boolean ok = restoreDir.mkdirs();
@@ -123,13 +135,18 @@ public final class BackupUtils {
                 JsonObject jsonObject = gson.fromJson(json, JsonObject.class);
                 jsonObject.get("version").getAsInt();
                 JsonArray jsonArray = jsonObject.getAsJsonArray("rules");
+                Logger.d(TAG, "[Backup] restoreRules: manifest parsed, ruleCount=" + jsonArray.size());
                 for (int i = 0; i < jsonArray.size(); i++) {
                     String ruleJson = jsonArray.get(i).toString();
                     ViewRule viewRule = gson.fromJson(ruleJson, ViewRule.class);
-                    String imagePath = new File(restoreDir, viewRule.imagePath).getPath();
-                    Bitmap bitmap = BitmapFactory.decodeFile(imagePath);
-                    GodModeManager.getDefault().writeRule(viewRule.packageName, viewRule, bitmap);
-                    recycleNullableBitmap(bitmap);
+                    if (!TextUtils.isEmpty(viewRule.imagePath)) {
+                        String imagePath = new File(restoreDir, viewRule.imagePath).getPath();
+                        Bitmap bitmap = BitmapFactory.decodeFile(imagePath);
+                        GodModeManager.getDefault().writeRule(viewRule.packageName, viewRule, bitmap);
+                        recycleNullableBitmap(bitmap);
+                    } else {
+                        GodModeManager.getDefault().writeRule(viewRule.packageName, viewRule, null);
+                    }
                     if (viewRule.isModifyRule() && !TextUtils.isEmpty(viewRule.modImagePath)) {
                         String modPath = new File(restoreDir, viewRule.modImagePath).getPath();
                         Bitmap modBitmap = BitmapFactory.decodeFile(modPath);
@@ -143,7 +160,9 @@ public final class BackupUtils {
                         }
                     }
                 }
+                Logger.i(TAG, "[Backup] restoreRules: success, ruleCount=" + jsonArray.size());
             } catch (IOException e) {
+                Logger.e(TAG, "[Backup] restoreRules: failed", e);
                 throw new RestoreException(e);
             } finally {
                 FileUtils.delete(restoreDir.getPath());
