@@ -68,7 +68,7 @@ public final class BackupUtils {
                         ParcelFileDescriptor parcelFileDescriptor = GodModeManager.getDefault().openImageFileDescriptor(viewRule.imagePath);
                         if (parcelFileDescriptor != null) {
                             try (FileChannel inChannel = new FileInputStream(parcelFileDescriptor.getFileDescriptor()).getChannel()) {
-                                File file = new File(backupDir, System.currentTimeMillis() + ".webp");
+                                File file = new File(backupDir, new File(viewRule.imagePath).getName());
                                 try (FileChannel outChannel = new FileOutputStream(file).getChannel()) {
                                     inChannel.transferTo(0, inChannel.size(), outChannel);
                                     viewRuleCopy.imagePath = file.getName();
@@ -88,7 +88,7 @@ public final class BackupUtils {
                             ParcelFileDescriptor modPfd = GodModeManager.getDefault().openImageFileDescriptor(viewRule.modImagePath);
                             if (modPfd != null) {
                                 try (FileChannel inChannel = new FileInputStream(modPfd.getFileDescriptor()).getChannel()) {
-                                    File file = new File(backupDir, "mod_" + System.currentTimeMillis() + ".webp");
+                                    File file = new File(backupDir, "mod_" + new File(viewRule.modImagePath).getName());
                                     try (FileChannel outChannel = new FileOutputStream(file).getChannel()) {
                                         inChannel.transferTo(0, inChannel.size(), outChannel);
                                         viewRuleCopy.modImagePath = file.getName();
