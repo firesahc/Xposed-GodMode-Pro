@@ -4,36 +4,82 @@ import android.util.Log;
 
 import androidx.annotation.Keep;
 
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
 @Keep
 public final class Logger {
 
     private static final String TAG = "GodModePro";
 
+    private static File sLogFile;
+    private static final ExecutorService sLogExecutor = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "Logger-File");
+        t.setDaemon(true);
+        return t;
+    });
+    private static final SimpleDateFormat sDateFormat = new SimpleDateFormat("MM-dd HH:mm:ss.SSS", Locale.US);
+
+    public static void enableFileLog(String dirPath) {
+        sLogFile = new File(dirPath, "godmodepro.log");
+    }
+
+    public static void disableFileLog() {
+        sLogFile = null;
+    }
+
+    private static void fileLog(char level, String tag, String msg) {
+        File f = sLogFile;
+        if (f == null) return;
+        sLogExecutor.execute(() -> {
+            try (FileWriter fw = new FileWriter(f, true)) {
+                fw.append(sDateFormat.format(new Date()))
+                  .append(" ").append(level).append("/").append(tag)
+                  .append(": ").append(msg).append("\n");
+            } catch (IOException ignored) {
+            }
+        });
+    }
+
     public static int d(String tag, String msg) {
+        fileLog('D', tag, msg);
         return isLoggable(tag, Log.DEBUG) ? Log.d(tag, msg) : 0;
     }
 
     public static int d(String tag, String format, Object... args) {
-        return isLoggable(tag, Log.DEBUG) ? Log.d(tag, String.format(format, args)) : 0;
+        String msg = String.format(format, args);
+        fileLog('D', tag, msg);
+        return isLoggable(tag, Log.DEBUG) ? Log.d(tag, msg) : 0;
     }
 
     public static int i(String tag, String msg) {
+        fileLog('I', tag, msg);
         return isLoggable(tag, Log.INFO) ? Log.i(tag, msg) : 0;
     }
 
     public static int w(String tag, String msg) {
+        fileLog('W', tag, msg);
         return isLoggable(tag, Log.WARN) ? Log.w(tag, msg) : 0;
     }
 
     public static int w(String tag, String msg, Throwable tr) {
+        fileLog('W', tag, msg + '\n' + Log.getStackTraceString(tr));
         return isLoggable(tag, Log.WARN) ? Log.w(tag, msg, tr) : 0;
     }
 
     public static int e(String tag, String msg) {
+        fileLog('E', tag, msg);
         return isLoggable(tag, Log.ERROR) ? Log.e(tag, msg) : 0;
     }
 
     public static int e(String tag, String msg, Throwable tr) {
+        fileLog('E', tag, msg + '\n' + Log.getStackTraceString(tr));
         return isLoggable(tag, Log.ERROR) ? Log.e(tag, msg, tr) : 0;
     }
 
