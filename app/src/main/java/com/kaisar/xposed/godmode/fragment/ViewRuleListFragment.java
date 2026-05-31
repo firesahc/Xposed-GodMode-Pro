@@ -149,8 +149,9 @@ public final class ViewRuleListFragment extends Fragment {
         Logger.i(TAG, "[ViewRuleList] backupRules: start, package=" + mPackageName + ", ruleCount=" + rulesToBackup.size());
         mSharedViewModel.backupRules(uri, mPackageName, rulesToBackup, new SharedViewModel.ResultCallback() {
             @Override
-            public void onSuccess() {
-                Logger.i(TAG, "[ViewRuleList] backupRules: success, package=" + mPackageName + ", ruleCount=" + rulesToBackup.size());
+            public void onSuccess(int count) {
+                Logger.i(TAG, "[ViewRuleList] backupRules: success, package=" + mPackageName + ", ruleCount=" + count);
+                Snackbar.make(requireView(), getString(R.string.snack_bar_msg_backup_rule_success, count), Snackbar.LENGTH_SHORT).show();
             }
 
             @Override

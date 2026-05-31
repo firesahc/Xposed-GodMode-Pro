@@ -59,7 +59,7 @@ public final class ViewRuleDetailsContainerFragment extends Fragment {
             List<ViewRule> viewRules = rules.subList(mCurIndex, mCurIndex + 1);
             mSharedViewModel.backupRules(uri, viewRule.packageName, viewRules, new SharedViewModel.ResultCallback() {
                 @Override
-                public void onSuccess() {
+                public void onSuccess(int count) {
 
                 }
 

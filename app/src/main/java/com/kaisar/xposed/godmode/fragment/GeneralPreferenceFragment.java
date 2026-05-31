@@ -101,9 +101,10 @@ public final class GeneralPreferenceFragment extends PreferenceFragmentCompat im
         mProgressPreference.setVisible(true);
         mSharedViewModel.restoreRules(uri, new SharedViewModel.ResultCallback() {
             @Override
-            public void onSuccess() {
-                Logger.i(TAG, "[General] restoreRules: success");
+            public void onSuccess(int count) {
+                Logger.i(TAG, "[General] restoreRules: success, count=" + count);
                 mProgressPreference.setVisible(false);
+                Snackbar.make(requireView(), getString(R.string.snack_bar_msg_restore_rules_success, count), Snackbar.LENGTH_SHORT).show();
             }
 
             @Override

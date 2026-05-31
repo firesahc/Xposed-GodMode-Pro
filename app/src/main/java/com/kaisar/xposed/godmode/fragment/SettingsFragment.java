@@ -177,11 +177,11 @@ public final class SettingsFragment extends PreferenceFragmentCompat implements
         showProgressSnackbar(getString(R.string.menu_title_restore_rules) + "...");
         mSharedViewModel.restoreRules(uri, new SharedViewModel.ResultCallback() {
             @Override
-            public void onSuccess() {
+            public void onSuccess(int count) {
                 if (!isAdded()) return;
-                Logger.i(TAG, "[Settings] restoreRules: success");
+                Logger.i(TAG, "[Settings] restoreRules: success, count=" + count);
                 dismissProgressSnackbar();
-                Snackbar.make(requireView(), R.string.snack_bar_msg_restore_rules_success, Snackbar.LENGTH_SHORT).show();
+                Snackbar.make(requireView(), getString(R.string.snack_bar_msg_restore_rules_success, count), Snackbar.LENGTH_SHORT).show();
             }
 
             @Override
@@ -264,7 +264,7 @@ public final class SettingsFragment extends PreferenceFragmentCompat implements
 
             mSharedViewModel.backupRules(docUri, packageName, rules, new SharedViewModel.ResultCallback() {
                 @Override
-                public void onSuccess() {
+                public void onSuccess(int count) {
                     if (!isAdded()) return;
                     mBackupSuccess++;
                     mBackupIndex++;
