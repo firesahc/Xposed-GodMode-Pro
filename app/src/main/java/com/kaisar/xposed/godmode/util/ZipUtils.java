@@ -25,7 +25,9 @@ public final class ZipUtils {
                 ZipEntry e = new ZipEntry(file.getName());
                 zipOut.putNextEntry(e);
                 try (FileInputStream in = new FileInputStream(file)) {
-                    FileUtils.copy(in, zipOut);
+                    if (!FileUtils.copy(in, zipOut)) {
+                        throw new IOException("Failed to copy file: " + filePath);
+                    }
                 }
                 zipOut.closeEntry();
             }
@@ -38,7 +40,9 @@ public final class ZipUtils {
             for (ZipEntry e; (e = zipIn.getNextEntry()) != null; ) {
                 File file = new File(destPath, e.getName());
                 try (FileOutputStream out = new FileOutputStream(file)) {
-                    FileUtils.copy(zipIn, out);
+                    if (!FileUtils.copy(zipIn, out)) {
+                        throw new IOException("Failed to decompress entry: " + e.getName());
+                    }
                 }
                 zipIn.closeEntry();
             }
