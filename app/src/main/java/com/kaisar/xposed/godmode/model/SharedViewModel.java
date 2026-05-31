@@ -1,5 +1,7 @@
 package com.kaisar.xposed.godmode.model;
 
+import static com.kaisar.xposed.godmode.GodModeApplication.TAG;
+
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.pm.PackageManager;
@@ -13,6 +15,7 @@ import androidx.lifecycle.ViewModel;
 
 import com.kaisar.xposed.godmode.IObserver;
 import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
+import com.kaisar.xposed.godmode.injection.util.Logger;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.AppRules;
 import com.kaisar.xposed.godmode.rule.ViewRule;
@@ -105,9 +108,12 @@ public class SharedViewModel extends ViewModel {
     public void restoreRules(Uri uri, ResultCallback callback) {
         mExecutor.execute(() -> {
             try {
+                Logger.i(TAG, "[ViewModel] restoreRules: start, uri=" + uri);
                 BackupUtils.restoreRules(uri);
+                Logger.i(TAG, "[ViewModel] restoreRules: success");
                 mMainHandler.post(callback::onSuccess);
             } catch (BackupUtils.RestoreException e) {
+                Logger.w(TAG, "[ViewModel] restoreRules: failed", e);
                 mMainHandler.post(() -> callback.onFailure(e));
             }
         });
@@ -116,9 +122,12 @@ public class SharedViewModel extends ViewModel {
     public void backupRules(Uri uri, String packageName, List<ViewRule> viewRules, ResultCallback callback) {
         mExecutor.execute(() -> {
             try {
+                Logger.i(TAG, "[ViewModel] backupRules: start, package=" + packageName + ", ruleCount=" + viewRules.size());
                 BackupUtils.backupRules(uri, packageName, viewRules);
+                Logger.i(TAG, "[ViewModel] backupRules: success, package=" + packageName);
                 mMainHandler.post(callback::onSuccess);
             } catch (BackupUtils.BackupException e) {
+                Logger.w(TAG, "[ViewModel] backupRules: failed, package=" + packageName, e);
                 mMainHandler.post(() -> callback.onFailure(e));
             }
         });

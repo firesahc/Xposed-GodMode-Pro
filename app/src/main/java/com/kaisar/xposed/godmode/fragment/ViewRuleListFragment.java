@@ -1,5 +1,7 @@
 package com.kaisar.xposed.godmode.fragment;
 
+import static com.kaisar.xposed.godmode.GodModeApplication.TAG;
+
 import android.content.ActivityNotFoundException;
 import android.content.pm.PackageManager;
 import android.graphics.drawable.Drawable;
@@ -9,7 +11,6 @@ import android.text.SpannableString;
 import android.text.SpannableStringBuilder;
 import android.text.TextUtils;
 import android.text.style.ForegroundColorSpan;
-import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuInflater;
@@ -37,6 +38,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.bumptech.glide.Glide;
 import com.google.android.material.snackbar.Snackbar;
 import com.kaisar.xposed.godmode.R;
+import com.kaisar.xposed.godmode.injection.util.Logger;
 import com.kaisar.xposed.godmode.model.SharedViewModel;
 import com.kaisar.xposed.godmode.rule.ViewRule;
 import com.kaisar.xposed.godmode.util.AppInfoHelper;
@@ -49,7 +51,6 @@ import java.util.Objects;
 
 public final class ViewRuleListFragment extends Fragment {
 
-    private static final String TAG = "GodMode";
     private static final int FILTER_ALL = 0;
     private static final int FILTER_REMOVE = 1;
     private static final int FILTER_MODIFY = 2;
@@ -141,18 +142,20 @@ public final class ViewRuleListFragment extends Fragment {
         List<ViewRule> rulesToBackup = mPendingBackupRules != null ? mPendingBackupRules : mAllRules;
         mPendingBackupRules = null;
         if (rulesToBackup.isEmpty()) {
+            Logger.w(TAG, "[ViewRuleList] backupRules: no rules to backup for " + mPackageName);
             Snackbar.make(requireView(), R.string.snack_bar_msg_backup_rule_fail, Snackbar.LENGTH_SHORT).show();
             return;
         }
+        Logger.i(TAG, "[ViewRuleList] backupRules: start, package=" + mPackageName + ", ruleCount=" + rulesToBackup.size());
         mSharedViewModel.backupRules(uri, mPackageName, rulesToBackup, new SharedViewModel.ResultCallback() {
             @Override
             public void onSuccess() {
-                Log.i(TAG, "[ViewRuleList] backup success: " + rulesToBackup.size() + " rules");
+                Logger.i(TAG, "[ViewRuleList] backupRules: success, package=" + mPackageName + ", ruleCount=" + rulesToBackup.size());
             }
 
             @Override
             public void onFailure(Exception e) {
-                Log.w(TAG, "[ViewRuleList] backup failed", e);
+                Logger.w(TAG, "[ViewRuleList] backupRules: failed, package=" + mPackageName, e);
                 Snackbar.make(requireView(), R.string.snack_bar_msg_backup_rule_fail, Snackbar.LENGTH_SHORT).show();
             }
         });
@@ -376,7 +379,7 @@ public final class ViewRuleListFragment extends Fragment {
                 mBackupLauncher.launch(AppInfoHelper.generateBackupFilename(requireContext(), mPackageName));
                 return true;
             } catch (ActivityNotFoundException | PackageManager.NameNotFoundException e) {
-                Log.w(TAG, "[ViewRuleList] backup launch failed", e);
+                Logger.w(TAG, "[ViewRuleList] backupRules: launch failed for " + mPackageName, e);
                 Snackbar.make(requireView(), R.string.snack_bar_msg_backup_rule_fail, Snackbar.LENGTH_SHORT).show();
                 return false;
             }
@@ -415,12 +418,12 @@ public final class ViewRuleListFragment extends Fragment {
                 try {
                     if (!mSharedViewModel.deleteRule(rule)) {
                         failed++;
-                        Log.w(TAG, "[ViewRuleList] delete rule failed: " + rule);
+                        Logger.w(TAG, "[ViewRuleList] deleteFilteredRules: delete failed: " + rule);
                     }
                 } catch (Exception e) {
                     failed++;
-                    Log.w(TAG, "[ViewRuleList] delete rule failed: " + rule);
-                    Log.e(TAG, "[ViewRuleList] delete rule exception", e);
+                    Logger.w(TAG, "[ViewRuleList] deleteFilteredRules: delete failed: " + rule);
+                    Logger.e(TAG, "[ViewRuleList] deleteFilteredRules: delete exception", e);
                 }
             }
             mIsBatchOperation = false;
