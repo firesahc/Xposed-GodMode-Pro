@@ -128,7 +128,7 @@ public final class BackupUtils {
         }
     }
 
-    public static void restoreRules(Uri fromUri) throws RestoreException {
+    public static int restoreRules(Uri fromUri) throws RestoreException {
         Logger.i(TAG, "[Backup] restoreRules: start, uri=" + fromUri);
         File restoreDir = new File(GodModeApplication.getApplication().getCacheDir(), "restore");
         if (!restoreDir.exists() || FileUtils.delete(restoreDir.getPath())) {
@@ -167,10 +167,12 @@ public final class BackupUtils {
                                 GodModeManager.getDefault().updateRule(viewRule.packageName, viewRule);
                             }
                             recycleNullableBitmap(modBitmap);
-                        }
-                    }
-                }
+            }
+        }
+        return 0;
+    }
                 Logger.i(TAG, "[Backup] restoreRules: success, ruleCount=" + jsonArray.size());
+                return jsonArray.size();
             } catch (IOException e) {
                 Logger.e(TAG, "[Backup] restoreRules: failed", e);
                 throw new RestoreException(e);

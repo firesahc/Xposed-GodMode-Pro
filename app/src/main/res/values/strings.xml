@@ -234,7 +234,8 @@
     <string name="filter_icon_desc">筛选规则</string>
     <string name="filter_dialog_title">规则筛选</string>
     <string name="pref_restore_rules">恢复规则</string>
-    <string name="snack_bar_msg_restore_rules_success">恢复规则成功</string>
+    <string name="snack_bar_msg_restore_rules_success">已恢复 %d 条规则</string>
+    <string name="snack_bar_msg_backup_rule_success">已备份 %d 条规则</string>
     <string name="snack_bar_msg_backup_all_result">保存完成: %1$d 成功, %2$d 失败</string>
 
     <string name="settings_category_features">功能</string>
