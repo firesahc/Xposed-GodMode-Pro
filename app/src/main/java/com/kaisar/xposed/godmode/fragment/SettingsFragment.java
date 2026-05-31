@@ -1,5 +1,7 @@
 package com.kaisar.xposed.godmode.fragment;
 
+import static com.kaisar.xposed.godmode.GodModeApplication.TAG;
+
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -35,7 +37,6 @@ import java.util.Set;
 public final class SettingsFragment extends PreferenceFragmentCompat implements
         Preference.OnPreferenceClickListener, Preference.OnPreferenceChangeListener {
 
-    public static final String TAG = "GodModePro";
     private static final String TOOLBAR_PREFS = "toolbar_prefs";
     private static final String TOOLBAR_HIDDEN_ITEMS = "toolbar_hidden_items";
 
