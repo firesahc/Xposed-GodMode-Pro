@@ -1,8 +1,5 @@
 package com.kaisar.xposed.godmode.fragment;
 
-import static com.kaisar.xposed.godmode.GodModeApplication.TAG;
-import static com.kaisar.xposed.godmode.fragment.GeneralPreferenceFragmentDirections.actionGeneralPreferenceFragmentToAboutFragment;
-import static com.kaisar.xposed.godmode.fragment.GeneralPreferenceFragmentDirections.actionGeneralPreferenceFragmentToGuideFragment;
 import static com.kaisar.xposed.godmode.fragment.GeneralPreferenceFragmentDirections.actionGeneralPreferenceFragmentToViewRuleListFragment;
 
 import android.content.Context;
@@ -10,7 +7,6 @@ import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.graphics.drawable.Drawable;
-import android.net.Uri;
 import android.os.Bundle;
 import android.text.SpannableString;
 import android.text.TextUtils;
@@ -20,8 +16,6 @@ import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.widget.Toast;
 
-import androidx.activity.result.ActivityResultLauncher;
-import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.core.content.res.ResourcesCompat;
@@ -42,7 +36,6 @@ import com.kaisar.xposed.godmode.GodModeApplication;
 import com.kaisar.xposed.godmode.GodModeHelper;
 import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
-import com.kaisar.xposed.godmode.injection.util.Logger;
 import com.kaisar.xposed.godmode.model.SharedViewModel;
 import com.kaisar.xposed.godmode.preference.ProgressPreference;
 import com.kaisar.xposed.godmode.rule.ActRules;
@@ -61,7 +54,6 @@ public final class GeneralPreferenceFragment extends PreferenceFragmentCompat im
     private ProgressPreference mProgressPreference;
     private SwitchPreferenceCompat mEditorSwitchPreference;
 
-    private ActivityResultLauncher<String[]> mRestoreLauncher;
     private SharedViewModel mSharedViewModel;
 
     @Override
@@ -70,7 +62,6 @@ public final class GeneralPreferenceFragment extends PreferenceFragmentCompat im
         setHasOptionsMenu(true);
         PreferenceManager.getDefaultSharedPreferences(requireContext()).registerOnSharedPreferenceChangeListener(this);
         mSharedViewModel = new ViewModelProvider(requireActivity()).get(SharedViewModel.class);
-        mRestoreLauncher = requireActivity().registerForActivityResult(new ActivityResultContracts.OpenDocument(), this::onBackupFileSelected);
         mSharedViewModel.appRules.observe(this, this::onAppRuleChange);
         if (!checkCrash()) {
             mProgressPreference.setVisible(true);
@@ -93,27 +84,6 @@ public final class GeneralPreferenceFragment extends PreferenceFragmentCompat im
             return true;
         }
         return false;
-    }
-
-    private void onBackupFileSelected(Uri uri) {
-        if (uri == null) return;
-        Logger.i(TAG, "[General] restoreRules: file selected, uri=" + uri);
-        mProgressPreference.setVisible(true);
-        mSharedViewModel.restoreRules(uri, new SharedViewModel.ResultCallback() {
-            @Override
-            public void onSuccess(int count) {
-                Logger.i(TAG, "[General] restoreRules: success, count=" + count);
-                mProgressPreference.setVisible(false);
-                Snackbar.make(requireView(), getString(R.string.snack_bar_msg_restore_rules_success, count), Snackbar.LENGTH_SHORT).show();
-            }
-
-            @Override
-            public void onFailure(Exception e) {
-                Logger.w(TAG, "[General] restoreRules: failed", e);
-                mProgressPreference.setVisible(false);
-                Snackbar.make(requireView(), R.string.snack_bar_msg_restore_rules_fail, Snackbar.LENGTH_LONG).show();
-            }
-        });
     }
 
     private void onAppRuleChange(AppRules appRules) {
