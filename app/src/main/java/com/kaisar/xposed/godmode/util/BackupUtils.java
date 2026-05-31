@@ -167,10 +167,9 @@ public final class BackupUtils {
                                 GodModeManager.getDefault().updateRule(viewRule.packageName, viewRule);
                             }
                             recycleNullableBitmap(modBitmap);
-            }
-        }
-        return 0;
-    }
+                        }
+                    }
+                }
                 Logger.i(TAG, "[Backup] restoreRules: success, ruleCount=" + jsonArray.size());
                 return jsonArray.size();
             } catch (IOException e) {
@@ -183,5 +182,6 @@ public final class BackupUtils {
                 FileUtils.delete(restoreDir.getPath());
             }
         }
+        return 0;
     }
 }
