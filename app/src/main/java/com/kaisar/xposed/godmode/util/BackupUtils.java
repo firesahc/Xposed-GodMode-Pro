@@ -164,6 +164,9 @@ public final class BackupUtils {
             } catch (IOException e) {
                 Logger.e(TAG, "[Backup] restoreRules: failed", e);
                 throw new RestoreException(e);
+            } catch (Exception e) {
+                Logger.e(TAG, "[Backup] restoreRules: failed, malformed data", e);
+                throw new RestoreException(e);
             } finally {
                 FileUtils.delete(restoreDir.getPath());
             }
