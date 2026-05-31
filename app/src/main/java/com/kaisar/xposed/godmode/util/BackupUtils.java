@@ -64,33 +64,43 @@ public final class BackupUtils {
             try {
                 for (ViewRule viewRule : viewRules) {
                     ViewRule viewRuleCopy = viewRule.clone();
-                    ParcelFileDescriptor parcelFileDescriptor = GodModeManager.getDefault().openImageFileDescriptor(viewRule.imagePath);
-                    if (parcelFileDescriptor != null) {
-                        try (FileChannel inChannel = new FileInputStream(parcelFileDescriptor.getFileDescriptor()).getChannel()) {
-                            File file = new File(backupDir, System.currentTimeMillis() + ".webp");
-                            try (FileChannel outChannel = new FileOutputStream(file).getChannel()) {
-                                inChannel.transferTo(0, inChannel.size(), outChannel);
-                                viewRuleCopy.imagePath = file.getName();
-                                backupFilePathList.add(file.getPath());
-                            }
-                        }
-                    } else {
-                        viewRuleCopy.imagePath = "";
-                    }
-                    if (viewRule.isModifyRule() && !TextUtils.isEmpty(viewRule.modImagePath)
-                            && !viewRule.modImagePath.equals(viewRule.imagePath)) {
-                        ParcelFileDescriptor modPfd = GodModeManager.getDefault().openImageFileDescriptor(viewRule.modImagePath);
-                        if (modPfd != null) {
-                            try (FileChannel inChannel = new FileInputStream(modPfd.getFileDescriptor()).getChannel()) {
-                                File file = new File(backupDir, "mod_" + System.currentTimeMillis() + ".webp");
+                    try {
+                        ParcelFileDescriptor parcelFileDescriptor = GodModeManager.getDefault().openImageFileDescriptor(viewRule.imagePath);
+                        if (parcelFileDescriptor != null) {
+                            try (FileChannel inChannel = new FileInputStream(parcelFileDescriptor.getFileDescriptor()).getChannel()) {
+                                File file = new File(backupDir, System.currentTimeMillis() + ".webp");
                                 try (FileChannel outChannel = new FileOutputStream(file).getChannel()) {
                                     inChannel.transferTo(0, inChannel.size(), outChannel);
-                                    viewRuleCopy.modImagePath = file.getName();
+                                    viewRuleCopy.imagePath = file.getName();
                                     backupFilePathList.add(file.getPath());
                                 }
                             }
                         } else {
+                            viewRuleCopy.imagePath = "";
+                        }
+                    } catch (IOException e) {
+                        viewRuleCopy.imagePath = "";
+                        Logger.w(TAG, "[Backup] backupRules: skip image for " + viewRule.viewClass + ", failed to copy", e);
+                    }
+                    if (viewRule.isModifyRule() && !TextUtils.isEmpty(viewRule.modImagePath)
+                            && !viewRule.modImagePath.equals(viewRule.imagePath)) {
+                        try {
+                            ParcelFileDescriptor modPfd = GodModeManager.getDefault().openImageFileDescriptor(viewRule.modImagePath);
+                            if (modPfd != null) {
+                                try (FileChannel inChannel = new FileInputStream(modPfd.getFileDescriptor()).getChannel()) {
+                                    File file = new File(backupDir, "mod_" + System.currentTimeMillis() + ".webp");
+                                    try (FileChannel outChannel = new FileOutputStream(file).getChannel()) {
+                                        inChannel.transferTo(0, inChannel.size(), outChannel);
+                                        viewRuleCopy.modImagePath = file.getName();
+                                        backupFilePathList.add(file.getPath());
+                                    }
+                                }
+                            } else {
+                                viewRuleCopy.modImagePath = "";
+                            }
+                        } catch (IOException e) {
                             viewRuleCopy.modImagePath = "";
+                            Logger.w(TAG, "[Backup] backupRules: skip mod image for " + viewRule.viewClass + ", failed to copy", e);
                         }
                     }
                     backupViewRuleList.add(viewRuleCopy);
