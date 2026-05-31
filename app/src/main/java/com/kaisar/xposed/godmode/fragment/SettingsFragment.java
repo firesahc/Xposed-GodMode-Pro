@@ -27,6 +27,7 @@ import com.kaisar.xposed.godmode.model.SharedViewModel;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.AppRules;
 import com.kaisar.xposed.godmode.rule.ViewRule;
+import com.kaisar.xposed.godmode.util.AppInfoHelper;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -198,11 +199,16 @@ public final class SettingsFragment extends PreferenceFragmentCompat implements
     // Group B: Handle save-all directory selection — save each package as an individual file
     private void onSaveAllDirectorySelected(Uri treeUri) {
         if (treeUri == null || !isAdded()) return;
+        if (mBackupQueue == null || mBackupQueue.isEmpty()) {
+            Logger.w(TAG, "[Settings] saveAllRules: backup queue lost (activity recreated?), abort");
+            Snackbar.make(requireView(), R.string.snack_bar_msg_backup_rule_fail, Snackbar.LENGTH_SHORT).show();
+            return;
+        }
 
         // Take persistable permission so we can write multiple files
         try {
             requireContext().getContentResolver().takePersistableUriPermission(
-                    treeUri, Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+                    treeUri, Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
         } catch (Exception e) {
             Logger.w(TAG, "[Settings] saveAllRules: take permission failed", e);
             // Continue anyway — some SAF providers don't support persistable permissions
@@ -219,7 +225,7 @@ public final class SettingsFragment extends PreferenceFragmentCompat implements
 
     private void backupNextPackageToDirectory() {
         if (!isAdded()) return;
-        if (mBackupIndex >= mBackupQueue.size()) {
+        if (mBackupQueue == null || mBackupIndex >= mBackupQueue.size()) {
             Logger.i(TAG, "[Settings] saveAllRules: completed, success=" + mBackupSuccess + ", failed=" + mBackupFailed);
             dismissProgressSnackbar();
             Snackbar.make(requireView(),
@@ -248,10 +254,12 @@ public final class SettingsFragment extends PreferenceFragmentCompat implements
 
         try {
             // Create a file inside the chosen directory
-            String filename = "backup_" + packageName + "_" + System.currentTimeMillis() + ".gzip";
+            String filename = AppInfoHelper.generateBackupFilename(requireContext(), packageName);
+            Uri parentUri = DocumentsContract.buildDocumentUriUsingTree(
+                    mSaveAllTreeUri, DocumentsContract.getTreeDocumentId(mSaveAllTreeUri));
             Uri docUri = DocumentsContract.createDocument(
                     requireContext().getContentResolver(),
-                    mSaveAllTreeUri,
+                    parentUri,
                     "application/gzip",
                     filename
             );
