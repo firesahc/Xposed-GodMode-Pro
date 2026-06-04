@@ -20,6 +20,8 @@ import android.view.ViewParent;
 import android.widget.TextView;
 
 import com.kaisar.xposed.godmode.BuildConfig;
+import com.kaisar.xposed.godmode.engine.traversal.ViewTraversal;
+import com.kaisar.xposed.godmode.engine.util.GmConstants;
 import com.kaisar.xposed.godmode.injection.util.Logger;
 import com.kaisar.xposed.godmode.rule.ViewRule;
 import com.kaisar.xposed.godmode.util.Preconditions;
@@ -44,7 +46,7 @@ public final class ViewHelper {
     private static final Map<Activity, List<WeakReference<ViewGroup>>> sRecyclerViewCache
         = new WeakHashMap<>();
 
-    public static final String TAG_GM_CMP = "gm_cmp";
+    public static final String TAG_GM_CMP = GmConstants.TAG_GM_CMP;
 
     public static View findViewBestMatch(Activity activity, ViewRule rule) {
         if (activity == null || activity.getWindow() == null) return null;
@@ -226,21 +228,11 @@ public final class ViewHelper {
 
     public static View findViewByDepth(Activity activity, int[] depths) {
         if (activity == null || activity.getWindow() == null || depths == null) return null;
-        View view = activity.getWindow().getDecorView();
-        for (int depth : depths) {
-            view = view instanceof ViewGroup
-                    ? ((ViewGroup) view).getChildAt(depth) : null;
-            if (view == null) break;
-        }
-        return view;
+        return ViewTraversal.findViewByDepth(activity.getWindow().getDecorView(), depths);
     }
 
     public static View findTopParentViewByChildView(View v) {
-        if (v.getParent() == null || !(v.getParent() instanceof ViewGroup)) {
-            return v;
-        } else {
-            return findTopParentViewByChildView((View) v.getParent());
-        }
+        return ViewTraversal.findTopParentView(v);
     }
 
     public static Object findViewRootImplByChildView(ViewParent parent) {
@@ -252,29 +244,17 @@ public final class ViewHelper {
     }
 
     public static int[] getViewHierarchyDepth(View view) {
-        ArrayList<Integer> depthList = new ArrayList<>();
-        ViewParent parent = view.getParent();
-        while (parent instanceof ViewGroup) {
-            depthList.add(((ViewGroup) parent).indexOfChild(view));
-            view = (View) parent;
-            parent = parent.getParent();
-        }
-        int[] depth = new int[depthList.size()];
-        for (int i = 0; i < depth.length; i++) {
-            depth[i] = depthList.get(depth.length - 1 - i);
-        }
-        return depth;
+        return ViewTraversal.getViewHierarchyDepth(view);
     }
 
     public static ViewGroup findRecyclerViewAncestor(View view) {
-        ViewParent parent = view.getParent();
-        while (parent instanceof ViewGroup) {
-            if (parent.getClass().getName().contains("RecyclerView")) {
-                return (ViewGroup) parent;
-            }
-            parent = parent.getParent();
-        }
-        return null;
+        return ViewTraversal.findRecyclerViewAncestor(view);
+    }
+
+    // ... getItemPath / findViewByItemPath unchanged ...
+
+    public static boolean isInRecyclerView(View v) {
+        return ViewTraversal.isInRecyclerView(v);
     }
 
     public static String[] getItemPath(View v, ViewGroup recyclerView) {
@@ -308,15 +288,6 @@ public final class ViewHelper {
             }
         }
         return null;
-    }
-
-    public static boolean isInRecyclerView(View v) {
-        ViewParent parent = v.getParent();
-        while (parent instanceof ViewGroup) {
-            if (parent.getClass().getName().contains("RecyclerView")) return true;
-            parent = parent.getParent();
-        }
-        return false;
     }
 
     public static List<View> findViewsInRecyclers(Activity activity, ViewRule rule) {
@@ -640,18 +611,7 @@ public final class ViewHelper {
     }
 
     public static List<WeakReference<View>> buildViewNodes(View view) {
-        ArrayList<WeakReference<View>> views = new ArrayList<>();
-        if (view.getVisibility() == View.VISIBLE && !TAG_GM_CMP.equals(view.getTag())) {
-            views.add(new WeakReference<>(view));
-            if (view instanceof ViewGroup) {
-                final int N = ((ViewGroup) view).getChildCount();
-                for (int i = 0; i < N; i++) {
-                    View childView = ((ViewGroup) view).getChildAt(i);
-                    views.addAll(buildViewNodes(childView));
-                }
-            }
-        }
-        return views;
+        return ViewTraversal.buildViewNodes(view);
     }
 
     public static Rect getLocationInWindow(View v) {
