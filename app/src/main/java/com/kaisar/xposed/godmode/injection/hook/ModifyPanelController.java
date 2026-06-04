@@ -21,6 +21,7 @@ import android.widget.Toast;
 
 import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.injection.GodModeInjector;
+import com.kaisar.xposed.godmode.injection.ModuleResources;
 import com.kaisar.xposed.godmode.injection.ViewHelper;
 import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
 import com.kaisar.xposed.godmode.injection.util.GmResources;
@@ -107,7 +108,7 @@ final class ModifyPanelController {
             mCurrentlyModifyingView = selectedView;
             saveViewState(selectedView);
 
-            GodModeInjector.injectModuleResources(activity.getResources());
+            ModuleResources.injectInto(activity.getResources());
             LayoutInflater inflater = LayoutInflater.from(activity);
             mModifyPanel = inflater.inflate(
                     GmResources.getLayout(R.layout.layout_modify_panel), container, false);

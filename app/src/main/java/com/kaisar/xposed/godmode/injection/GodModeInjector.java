@@ -73,17 +73,13 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
     private enum State { UNKNOWN, ALLOWED, BLOCKED }
 
     // =========================================================================
-    // 模块资源 — 在 initZygote 中加载，注入到目标应用的 AssetManager
+    // 模块资源 — 在 initZygote 中加载，注入到目标应用的 AssetManager（委托 ModuleResources）
     // =========================================================================
-
-    private static String modulePath;
-    private static Resources moduleRes;
 
     @Override
     public void initZygote(StartupParam startupParam) {
-        modulePath = startupParam.modulePath;
-        moduleRes = XModuleResources.createInstance(modulePath, null);
-        GmResources.init(moduleRes);
+        ModuleResources.init(startupParam.modulePath,
+                XModuleResources.createInstance(startupParam.modulePath, null));
     }
 
     // =========================================================================
@@ -137,7 +133,7 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
             @Override
             protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                 Activity activity = (Activity) param.thisObject;
-                injectModuleResources(activity.getResources());
+                ModuleResources.injectInto(activity.getResources());
                 if (switchProp.get()) {
                     // post 到 DecorView 以确保 setContentView 已完成、视图树完整后再显示面板。
                     // AppCompatActivity 在 super.onCreate() 返回之后才调用 setContentView()，
@@ -213,48 +209,5 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
                 loadPackageParam != null ? loadPackageParam.packageName : "", actRules));
     }
 
-    // =========================================================================
-    // 资源注入 — 将模块资源注入目标应用的 AssetManager
-    // =========================================================================
-
-    /**
-     * 将 GodMode 模块资源注入目标应用的 {@link Resources}。
-     * 使得在目标应用中渲染覆盖层 UI 时可以使用模块的布局、字符串和图片资源。
-     */
-    public static void injectModuleResources(Resources res) {
-        if (res == null) return;
-        try {
-            res.getString(R.string.res_inject_success);
-            return; // 已注入，无需重复
-        } catch (Resources.NotFoundException ignored) {
-        }
-        try {
-            String path = modulePath;
-            if (path == null) {
-                throw new RuntimeException("get module path failed, loader="
-                        + GodModeInjector.class.getClassLoader());
-            }
-            AssetManager assets = res.getAssets();
-            @SuppressLint("DiscouragedPrivateApi")
-            Method addAssetPath = AssetManager.class.getDeclaredMethod("addAssetPath", String.class);
-            addAssetPath.setAccessible(true);
-            int cookie = (int) addAssetPath.invoke(assets, path);
-
-            try {
-                Logger.i(TAG, "[GodMode] injectModuleResources: " + res.getString(R.string.res_inject_success));
-                Logger.d(TAG, "[GodMode] module resources injected via: " + path);
-            } catch (Resources.NotFoundException e) {
-                File f = new File(path);
-                Logger.e(TAG, "[GodMode] injectModuleResources: Fatal: test injection failure!");
-                Logger.e(TAG, "[GodMode] injectModuleResources: cookie=" + cookie + ", path=" + path
-                        + ", loader=" + GodModeInjector.class.getClassLoader());
-                Logger.e(TAG, "[GodMode] sModulePath: exists=" + f.exists()
-                        + ", isDirectory=" + f.isDirectory()
-                        + ", canRead=" + f.canRead()
-                        + ", fileLength=" + f.length());
-            }
-        } catch (Exception e) {
-            Logger.e(TAG, "[GodMode] Inject module resources error", e);
-        }
-    }
+    // 资源注入委托给 ModuleResources — 见 injectIntoTargetApp 中的 ModuleResources.injectInto() 调用
 }
