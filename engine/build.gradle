@@ -1,0 +1,39 @@
+// =========================================================================
+// engine 模块 — 规则引擎 (com.kaisar.xposed.godmode.engine)
+// Android Library, compileSdk 35, 依赖 Gson
+// 职责: 视图匹配、规则应用、规则持久化、事件系统、线程池、通用工具
+// 与 app 模块通过共享 POJO (不依赖 Parcelable) 解耦
+// =========================================================================
+plugins {
+    id 'com.android.library'
+}
+
+android {
+    namespace 'com.kaisar.xposed.godmode.engine'
+    compileSdk 35
+
+    defaultConfig {
+        minSdkVersion 24
+        targetSdkVersion 35
+
+        testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
+        consumerProguardFiles 'consumer-rules.pro'
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}
+
+dependencies {
+    implementation 'com.google.code.gson:gson:2.10.1'
+    implementation 'androidx.annotation:annotation:1.5.0'
+}
