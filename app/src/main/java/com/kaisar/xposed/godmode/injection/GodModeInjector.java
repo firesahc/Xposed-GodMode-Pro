@@ -121,12 +121,12 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
         XposedHelpers.findAndHookMethod(Activity.class, "onResume", new XC_MethodHook() {
             @Override
             protected void afterHookedMethod(MethodHookParam param) {
-                sDispatchKeyEventHook.setactivity((Activity) param.thisObject);
+                sDispatchKeyEventHook.setActivity((Activity) param.thisObject);
             }
         });
 
         // Hook Activity.onCreate：注入模块资源，并在编辑模式已开启时延迟显示面板。
-        // setactivity 移至 onResume hook，避免与 onResume 形成重复调用。
+        // setActivity 移至 onResume hook，避免与 onResume 形成重复调用。
         XposedHelpers.findAndHookMethod(Activity.class, "onCreate", Bundle.class, new XC_MethodHook() {
             @Override
             protected void afterHookedMethod(MethodHookParam param) throws Throwable {

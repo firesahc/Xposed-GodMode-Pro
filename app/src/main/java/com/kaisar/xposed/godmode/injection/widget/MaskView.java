@@ -1,4 +1,4 @@
-package com.kaisar.xposed.godmode.injection.weiget;
+package com.kaisar.xposed.godmode.injection.widget;
 
 import static com.kaisar.xposed.godmode.injection.ViewHelper.TAG_GM_CMP;
 
