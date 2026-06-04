@@ -141,8 +141,7 @@ public final class ActivityLifecycleHook extends XC_MethodHook implements Proper
             if (existing != null) sDebounceHandler.removeCallbacks(existing);
             Runnable r = () -> {
                 synchronized (sPendingReapply) { sPendingReapply.remove(activity); }
-                RuleModificationHelper.clearAppliedCache();
-                ViewController.clearBlockedCache();
+                // 不清理缓存：重应用应增量补充未覆盖的规则，而非破坏已生效的修改
                 OnLayoutChangeListener listener = sActivities.get(activity);
                 if (listener != null) listener.applyRuleIfMatchCondition();
             };
