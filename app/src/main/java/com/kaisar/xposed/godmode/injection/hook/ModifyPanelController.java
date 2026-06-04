@@ -1,6 +1,7 @@
 package com.kaisar.xposed.godmode.injection.hook;
 
 import static com.kaisar.xposed.godmode.GodModeApplication.TAG;
+import static com.kaisar.xposed.godmode.injection.util.CommonUtils.recycleNullableBitmap;
 
 import android.app.Activity;
 import android.content.Intent;
@@ -88,13 +89,10 @@ final class ModifyPanelController {
     void cancel() {
         revertViewState();
         for (java.util.Map.Entry<String, Bitmap> entry : mPendingModBitmaps.entrySet()) {
-            Bitmap bmp = entry.getValue();
-            if (bmp != null && !bmp.isRecycled()) bmp.recycle();
+            recycleNullableBitmap(entry.getValue());
         }
         mPendingModBitmaps.clear();
-        if (mPendingImageBitmap != null && !mPendingImageBitmap.isRecycled()) {
-            mPendingImageBitmap.recycle();
-        }
+        recycleNullableBitmap(mPendingImageBitmap);
         mPendingImageBitmap = null;
         dismiss();
     }
@@ -409,7 +407,7 @@ final class ModifyPanelController {
                     Logger.e(TAG, "[ModifyPanel] saveAll: writeRule failed", e);
                     allOk = false;
                 } finally {
-                    if (snapshot != null && !snapshot.isRecycled()) snapshot.recycle();
+                    recycleNullableBitmap(snapshot);
                 }
             }
             boolean finalAllOk = allOk;

@@ -1,5 +1,8 @@
-// Top-level build file where you can add configuration options common to all sub-projects/modules.
-
+// =========================================================================
+// 根构建脚本 — Xposed-GodMode
+// 包含模块: :app (Xposed模块+设置UI), :libxservicemanager (系统服务注入库)
+// AGP 8.4.0, compileSdk 35, Java 8
+// =========================================================================
 buildscript {
     repositories {
         maven { url 'https://maven.aliyun.com/repository/google' }
