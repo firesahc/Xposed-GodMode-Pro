@@ -119,14 +119,14 @@ final class RulePersistManager {
     }
 
     /** 保存 Bitmap 为 .webp 文件，处理 HARDWARE → ARGB_8888 转换 */
-    String saveBitmap(Bitmap bitmap, String packageName) {
+    String saveBitmap(Bitmap bitmap, String dir) {
         try {
             Bitmap bitmapToSave = bitmap;
             if (bitmap.getConfig() == Bitmap.Config.HARDWARE) {
                 bitmapToSave = Bitmap.createBitmap(bitmap.getWidth(), bitmap.getHeight(), Bitmap.Config.ARGB_8888);
                 new Canvas(bitmapToSave).drawBitmap(bitmap, 0, 0, null);
             }
-            File file = new File(getAppDataDir(packageName),
+            File file = new File(dir,
                     System.currentTimeMillis() + IMAGE_FILE_SUFFIX);
             try (FileOutputStream out = new FileOutputStream(file)) {
                 if (bitmapToSave.compress(Bitmap.CompressFormat.WEBP, 80, out)) {
