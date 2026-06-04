@@ -172,6 +172,7 @@ public final class ActivityLifecycleHook extends XC_MethodHook implements Proper
     static final class OnLayoutChangeListener implements ViewTreeObserver.OnGlobalLayoutListener {
 
         final WeakReference<Activity> activityReference;
+        private volatile boolean mApplying; // 防重入标志
 
         OnLayoutChangeListener(Activity activity) {
             activityReference = new WeakReference<>(activity);
@@ -179,10 +180,13 @@ public final class ActivityLifecycleHook extends XC_MethodHook implements Proper
 
         @Override
         public void onGlobalLayout() {
+            if (mApplying) return; // 防止规则应用触发的布局变更导致递归重入
             applyRuleIfMatchCondition();
         }
 
         void applyRuleIfMatchCondition() {
+            if (mApplying) return;
+            mApplying = true;
             try {
                 Activity activity = Preconditions.checkNotNull(activityReference.get());
                 List<ViewRule> rules = sActRules.get(activity.getComponentName().getClassName());
@@ -198,6 +202,8 @@ public final class ActivityLifecycleHook extends XC_MethodHook implements Proper
                 }
             } catch (Exception e) {
                 Logger.w(TAG, "[ActivityLifecycle] OnLayoutChange: applyRuleIfMatchCondition failed: " + e.getMessage());
+            } finally {
+                mApplying = false;
             }
         }
 
