@@ -400,8 +400,7 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
 
     @Override
     public ParcelFileDescriptor openImageFileDescriptor(String filePath) throws RemoteException {
-        if (!filePath.startsWith("/data/system/godmode")
-                || !filePath.endsWith(RulePersistManager.IMAGE_FILE_SUFFIX))
+        if (!mPersistManager.isValidImagePath(filePath))
             throw new RemoteException("unauthorized access " + filePath);
         File parentFile = new File(filePath).getParentFile();
         String packageFromPath = parentFile != null ? parentFile.getName() : "";

@@ -205,6 +205,16 @@ final class RulePersistManager {
         throw new FileNotFoundException();
     }
 
+    /** 校验文件路径是否为合法的 GodMode 图片文件路径 */
+    boolean isValidImagePath(String filePath) {
+        try {
+            return filePath.startsWith(getBaseDir())
+                    && filePath.endsWith(IMAGE_FILE_SUFFIX);
+        } catch (FileNotFoundException e) {
+            return false;
+        }
+    }
+
     String getAppDataDir(String packageName) throws FileNotFoundException {
         File dir = new File(getBaseDir(), packageName);
         if (dir.exists() || dir.mkdirs()) {
