@@ -68,6 +68,9 @@ public final class ActivityLifecycleHook extends XC_MethodHook implements Proper
     @Override
     public void onPropertyChange(ActRules newActRules) {
         if (newActRules == null) return;
+        // 规则未变化时跳过，避免不必要的撤销→再应用导致的闪回
+        // 触发场景：IPC addObserver 推送的规则与 onPostResume 中已应用的规则完全相同时
+        if (newActRules.equals(sActRules)) return;
         RuleModificationHelper.clearAppliedCache();
         Set<Map.Entry<String, List<ViewRule>>> entries = newActRules.entrySet();
         for (Map.Entry<String, List<ViewRule>> entry : entries) {
