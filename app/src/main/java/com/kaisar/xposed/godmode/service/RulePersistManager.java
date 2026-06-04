@@ -7,6 +7,7 @@ import static com.kaisar.xposed.godmode.injection.util.FileUtils.S_IRWXU;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.os.Environment;
+import android.os.Handler;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
@@ -44,11 +45,13 @@ final class RulePersistManager {
 
     private final Gson mGson;
     private final Logger mLogger;
+    private final Handler mHandle;
     private final RuleCacheManager mCacheManager;
 
-    RulePersistManager(Gson gson, Logger logger, RuleCacheManager cacheManager) {
+    RulePersistManager(Gson gson, Logger logger, Handler handle, RuleCacheManager cacheManager) {
         this.mGson = gson;
         this.mLogger = logger;
+        this.mHandle = handle;
         this.mCacheManager = cacheManager;
     }
 

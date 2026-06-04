@@ -56,7 +56,7 @@ final class ObserverManager {
         // 立即推送当前状态
         try {
             observer.onEditModeChanged(editModeEnabled);
-            observer.onViewRuleChanged(packageName, rulesProvider.get());
+            observer.onViewRuleChanged(packageName, currentRules);
         } catch (RemoteException e) {
             mLogger.w("immediate notify observer failed", e);
         }
