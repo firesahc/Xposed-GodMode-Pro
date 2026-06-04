@@ -24,6 +24,7 @@ import androidx.appcompat.widget.TooltipCompat;
 
 import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.injection.GodModeInjector;
+import com.kaisar.xposed.godmode.injection.ModuleResources;
 import com.kaisar.xposed.godmode.injection.ViewController;
 import com.kaisar.xposed.godmode.injection.ViewHelper;
 import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
@@ -254,7 +255,7 @@ public final class DispatchKeyEventHook extends XC_MethodHook
             mMaskView = MaskView.makeMaskView(activity);
             mMaskView.setMaskOverlay(OVERLAY_COLOR);
             mMaskView.attachToContainer(container);
-            GodModeInjector.injectModuleResources(activity.getResources());
+            ModuleResources.injectInto(activity.getResources());
             LayoutInflater inflater = LayoutInflater.from(activity);
             mNodeSelectorPanel = inflater.inflate(
                     GmResources.getLayout(R.layout.layout_node_selector), container, false);
