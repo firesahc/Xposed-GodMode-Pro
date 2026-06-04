@@ -31,8 +31,8 @@ import com.kaisar.xposed.godmode.injection.util.GmResources;
 import com.kaisar.xposed.godmode.injection.util.Logger;
 import com.kaisar.xposed.godmode.injection.util.Property;
 import com.kaisar.xposed.godmode.injection.util.ToolbarVisibilityController;
-import com.kaisar.xposed.godmode.injection.weiget.MaskView;
-import com.kaisar.xposed.godmode.injection.weiget.ParticleView;
+import com.kaisar.xposed.godmode.injection.widget.MaskView;
+import com.kaisar.xposed.godmode.injection.widget.ParticleView;
 import com.kaisar.xposed.godmode.rule.ViewRule;
 
 import java.lang.ref.WeakReference;
@@ -143,7 +143,7 @@ public final class DispatchKeyEventHook extends XC_MethodHook
     // Activity 生命周期（由 GodModeInjector 在 Activity.onCreate 中调用）
     // =========================================================================
 
-    public void setactivity(final Activity a) {
+    public void setActivity(final Activity a) {
         if (mCurrentActivity != null && mCurrentActivity != a && mKeySelecting) {
             dismissNodeSelectPanel();
         }
