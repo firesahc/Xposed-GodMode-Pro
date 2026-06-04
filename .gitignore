@@ -8,3 +8,25 @@
 .idea
 .omo
 /AGENTS.md
+
+# Android build outputs
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# Module build directories
+engine/build/
+app/build/
+libxservicemanager/build/
+
+# IDE
+*.swp
+*.swo
+*~
+.vscode/
+
+# OS
+Thumbs.db
+ehthumbs.db
+Desktop.ini

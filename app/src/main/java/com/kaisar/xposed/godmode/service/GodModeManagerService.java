@@ -1,32 +1,23 @@
 package com.kaisar.xposed.godmode.service;
 
-
 import static com.kaisar.xposed.godmode.injection.util.FileUtils.S_IRWXG;
 import static com.kaisar.xposed.godmode.injection.util.FileUtils.S_IRWXO;
 import static com.kaisar.xposed.godmode.injection.util.FileUtils.S_IRWXU;
 
 import android.content.Context;
 import android.graphics.Bitmap;
-import android.graphics.Canvas;
 import android.os.Binder;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.HandlerThread;
-import android.os.IBinder;
 import android.os.Message;
 import android.os.ParcelFileDescriptor;
-import android.os.RemoteCallbackList;
 import android.os.RemoteException;
-import android.text.TextUtils;
-
-import androidx.annotation.NonNull;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import com.google.gson.JsonSyntaxException;
 import com.kaisar.xposed.godmode.BuildConfig;
 import com.kaisar.xposed.godmode.IGodModeManager;
-import com.kaisar.xposed.godmode.IObserver;
 import com.kaisar.xposed.godmode.injection.util.FileUtils;
 import com.kaisar.xposed.godmode.injection.util.Logger;
 import com.kaisar.xposed.godmode.rule.ActRules;
@@ -36,266 +27,211 @@ import com.kaisar.xposed.godmode.util.Preconditions;
 
 import java.io.File;
 import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-
 
 /**
- * Created by jrsen on 17-10-15.
- * 上帝模式核心管理服务所有跨进程通讯均通过此服务
- * 该服务通过Xposed注入到SystemServer进程作为一个系统服务
- * Client端可以使用{@link GodModeManager#getDefault()}使用该服务提供的接口
+ * 上帝模式核心管理服务 — 所有跨进程通讯均通过此服务。
+ * <p>
+ * 该服务通过 XServiceManager 注入到 SystemServer 进程。
+ * 采用组合模式，将规则缓存、持久化、观察者管理、权限验证委托给 4 个专职 Manager。
+ * Handler 消息分发作为编排层，协调各 Manager 之间的工作流。
+ * <p>
+ * Client 端通过 {@link com.kaisar.xposed.godmode.injection.bridge.GodModeManager#getDefault()} 使用接口。
  */
-
 public final class GodModeManagerService extends IGodModeManager.Stub implements Handler.Callback {
 
-    // /data/system/godmode
-    private static final String BASE_DIR = String.format("%s/misc/%s", Environment.getDataDirectory().getAbsolutePath(), "godmode");
-    // /data/system/godmode/{package}/package.rule
-    private static final String RULE_FILE_SUFFIX = ".rule";
-    // /data/system/godmode/{package}/xxxxxxxxx.webp
-    private static final String IMAGE_FILE_SUFFIX = ".webp";
-
-    private static final String TOOLBAR_PREFS_FILE = "toolbar_prefs.json";
-
-    private static final int LOAD_RULES = 0x00001;
+    // ===== 消息代码（ObserverManager 引用 CLEAN_OBSERVERS） =====
+    static final int LOAD_RULES = 0x00001;
     private static final int WRITE_RULE = 0x00002;
     private static final int DELETE_RULE = 0x00004;
     private static final int DELETE_RULES = 0x00008;
     private static final int UPDATE_RULE = 0x000016;
-    private static final int CLEAN_OBSERVERS = 0x000032;
+    static final int CLEAN_OBSERVERS = 0x000032;
     private static final int CLEAN_ORPHANS = 0x000064;
     private static final int UPDATE_IMAGE_PATH = 0x000128;
-    private static final long OBSERVER_CLEAN_INTERVAL = 60_000L;
+
     private static final long ORPHAN_CLEAN_INTERVAL = 120_000L;
 
+    // ===== 组合的 4 个 Manager =====
+    private final PermissionEnforcer mPermissionEnforcer;
+    private final RuleCacheManager mCacheManager;
+    private final RulePersistManager mPersistManager;
+    private final ObserverManager mObserverManager;
+
+    // ===== 基础设施 =====
     private final Logger mLogger;
-    private final RemoteCallbackList<ObserverProxy> mRemoteCallbackList = new RemoteCallbackList<>();
-    private final AppRules mAppRulesCache = new AppRules();
-    private final Context mContext;
     private final Handler mHandle;
+    private final Context mContext;
+    private final Gson mGson = new GsonBuilder().setPrettyPrinting().create();
+
+    // ===== 状态字段 =====
     private volatile boolean mInEditMode;
     private boolean mStarted;
     private volatile boolean mDataLoaded;
     private volatile boolean mOrphanCleanPending;
 
-    private final Gson mGson = new GsonBuilder().setPrettyPrinting().create();
-    private final HashMap<String, IBinder> mRegisteredObserverMap = new HashMap<>();
+    // ===== 工具栏偏好（简单字段，不需单独 Manager） =====
     private String mToolbarHiddenItems = "";
 
     public GodModeManagerService(Context context) {
         mLogger = Logger.getLogger("GMMService");
         mContext = context;
+        // 初始化 4 个 Manager（构造注入）
+        mPermissionEnforcer = new PermissionEnforcer(context);
+        mCacheManager = new RuleCacheManager(mGson, mLogger);
         HandlerThread workThread = new HandlerThread("work-thread");
         workThread.start();
         mHandle = new Handler(workThread.getLooper(), this);
+        mPersistManager = new RulePersistManager(mGson, mLogger, mHandle, mCacheManager);
+        mObserverManager = new ObserverManager(mLogger, mHandle);
         mStarted = true;
-        mLogger.i("GMMService started, loading rules from " + BASE_DIR);
+        mLogger.i("GMMService started, loading rules from /data/system/godmode");
         mHandle.sendEmptyMessage(LOAD_RULES);
     }
 
-    private void loadRuleData() throws IOException {
-        File dataDir = new File(getBaseDir());
-        File[] packageDirs = dataDir.listFiles(File::isDirectory);
-        if (packageDirs != null && packageDirs.length > 0) {
-            HashMap<String, ActRules> appRules = new HashMap<>();
-            for (File packageDir : packageDirs) {
-                try {
-                    String packageName = packageDir.getName();
-                    String appRuleFile = getAppRuleFilePath(packageName);
-                    String json = FileUtils.readTextFile(appRuleFile, 0, null);
-                    ActRules rules = mGson.fromJson(json, ActRules.class);
-                    Preconditions.checkNotNull(rules, "rules is null");
-                    //compact rule
-                    Iterator<Map.Entry<String, List<ViewRule>>> iterator = rules.entrySet().iterator();
-                    while (iterator.hasNext()) {
-                        Map.Entry<String, List<ViewRule>> listEntry = iterator.next();
-                        List<ViewRule> value = listEntry.getValue();
-                        if (value == null || value.isEmpty()) {
-                            iterator.remove();
-                        }
-                    }
-                    if (rules.isEmpty()) {
-                        FileUtils.delete(packageDir);
-                        continue;
-                    }
-                    appRules.put(packageName, rules);
-                } catch (IOException e) {
-                    mLogger.w("load rule fail", e);
-                } catch (NullPointerException | JsonSyntaxException e) {
-                    mLogger.e("load rule error", e);
-                    FileUtils.delete(packageDir);
-                }
-            }
-            synchronized (mAppRulesCache) {
-                mAppRulesCache.putAll(appRules);
-            }
-            mLogger.d("app rules cache=" + mAppRulesCache.size());
-        }
-    }
+    // ===================================================================
+    // Handler 消息编排 — 协调各 Manager 之间的工作流
+    // ===================================================================
 
     @Override
     public boolean handleMessage(Message msg) {
         switch (msg.what) {
-            case WRITE_RULE: {
-                try {
-                    Object[] args = (Object[]) msg.obj;
-                    String packageName = (String) args[0];
-                    ViewRule viewRule = (ViewRule) args[1];
-                    Bitmap snapshot = (Bitmap) args[2];
-                    String oldImagePath = args.length > 3 ? (String) args[3] : null;
-                    if (snapshot != null) {
-                        if (oldImagePath != null && !TextUtils.isEmpty(oldImagePath)) {
-                            if (!FileUtils.delete(oldImagePath)) {
-                                mLogger.w("Failed to delete old snapshot: " + oldImagePath, (Throwable) null);
-                            }
-                        }
-                        String newImagePath = saveBitmap(snapshot, getAppDataDir(packageName));
-                        if (newImagePath == null) {
-                            mLogger.w("write rule aborted: save snapshot failed", (Throwable) null);
-                            break;
-                        }
-                        mHandle.obtainMessage(UPDATE_IMAGE_PATH,
-                                new Object[]{packageName, viewRule, newImagePath}).sendToTarget();
-                    } else {
-                        String json = (String) args[4];
-                        ActRules snapshotRules = (ActRules) args[5];
-                        notifyObserverRuleChanged(packageName, snapshotRules);
-                        safePersistRules(packageName, json);
-                        scheduleOrphanCleanup();
-                    }
-                } catch (IOException e) {
-                    mLogger.w("write rule failed", e);
-                }
-            }
-            break;
-            case UPDATE_IMAGE_PATH: {
-                try {
-                    Object[] args = (Object[]) msg.obj;
-                    String packageName = (String) args[0];
-                    ViewRule viewRule = (ViewRule) args[1];
-                    String newImagePath = (String) args[2];
-                    String json;
-                    ActRules snapshotRules;
-                    synchronized (mAppRulesCache) {
-                        ActRules actRules = mAppRulesCache.get(packageName);
-                        if (actRules != null) {
-                            List<ViewRule> rules = actRules.get(viewRule.activityClass);
-                            if (rules != null) {
-                                int idx = rules.indexOf(viewRule);
-                                if (idx >= 0) {
-                                    rules.get(idx).imagePath = newImagePath;
-                                }
-                            }
-                        }
-                        json = mGson.toJson(actRules);
-                        snapshotRules = snapshotActRules(actRules);
-                    }
-                    notifyObserverRuleChanged(packageName, snapshotRules);
-                    safePersistRules(packageName, json);
-                    scheduleOrphanCleanup();
-                } catch (IOException e) {
-                    mLogger.w("update image path failed", e);
-                }
-            }
-            break;
-            case DELETE_RULE: {
-                try {
-                    Object[] args = (Object[]) msg.obj;
-                    String packageName = (String) args[0];
-                    String json = (String) args[1];
-                    ActRules snapshotRules = (ActRules) args[2];
-                    String imagePath = (String) args[3];
-                    if (!FileUtils.delete(imagePath)) {
-                        mLogger.w("Failed to delete rule image: " + imagePath, (Throwable) null);
-                    }
-                    notifyObserverRuleChanged(packageName, snapshotRules);
-                    safePersistRules(packageName, json);
-                    scheduleOrphanCleanup();
-                } catch (IOException e) {
-                    mLogger.w("delete rule failed", e);
-                }
-            }
-            break;
-            case DELETE_RULES: {
-                try {
-                    String packageName = (String) msg.obj;
-                    if (!FileUtils.delete(getAppDataDir(packageName))) {
-                        mLogger.w("Failed to delete app data dir: " + packageName, (Throwable) null);
-                    }
-                    notifyObserverRuleChanged(packageName, new ActRules());
-                } catch (FileNotFoundException e) {
-                    mLogger.w("delete rules failed", e);
-                }
-            }
-            break;
-            case UPDATE_RULE: {
-                try {
-                    Object[] args = (Object[]) msg.obj;
-                    String packageName = (String) args[0];
-                    String json = (String) args[1];
-                    ActRules snapshotRules = (ActRules) args[2];
-                    safePersistRules(packageName, json);
-                    notifyObserverRuleChanged(packageName, snapshotRules);
-                } catch (IOException e) {
-                    mLogger.w("update rule failed", e);
-                }
+            case WRITE_RULE:
+                handleWriteRule(msg);
                 break;
-            }
-            case LOAD_RULES: {
-                try {
-                    loadRuleData();
-                    loadToolbarHiddenItems();
-                    mDataLoaded = true;
-                    mLogger.i("rule data loaded: " + mAppRulesCache.size() + " packages");
-                } catch (Exception e) {
-                    mLogger.e("loadRuleData failed: " + BASE_DIR, e);
-                    mDataLoaded = true;
-                }
+            case UPDATE_IMAGE_PATH:
+                handleUpdateImagePath(msg);
                 break;
-            }
-            case CLEAN_OBSERVERS: {
-                cleanDeadObservers();
-                mHandle.sendEmptyMessageDelayed(CLEAN_OBSERVERS, OBSERVER_CLEAN_INTERVAL);
+            case DELETE_RULE:
+                handleDeleteRule(msg);
                 break;
-            }
-            case CLEAN_ORPHANS: {
-                mOrphanCleanPending = false;
-                try {
-                    cleanAllOrphanImages();
-                } catch (Exception e) {
-                    mLogger.w("orphan cleanup failed", e);
-                }
+            case DELETE_RULES:
+                handleDeleteRules(msg);
                 break;
-            }
-            default: {
-            }
-            break;
+            case UPDATE_RULE:
+                handleUpdateRule(msg);
+                break;
+            case LOAD_RULES:
+                handleLoadRules();
+                break;
+            case CLEAN_OBSERVERS:
+                handleCleanObservers();
+                break;
+            case CLEAN_ORPHANS:
+                handleCleanOrphans();
+                break;
         }
         return true;
     }
 
-    private void safePersistRules(String packageName, String json) throws IOException {
-        File appDataDir = new File(getBaseDir(), packageName);
-        if (!appDataDir.exists() && !appDataDir.mkdirs()) {
-            throw new IOException("Failed to create dir: " + appDataDir);
-        }
-        File ruleFile = new File(appDataDir, packageName + RULE_FILE_SUFFIX);
-        File tmpFile = new File(appDataDir, packageName + RULE_FILE_SUFFIX + ".tmp");
-        FileUtils.stringToFile(tmpFile, json);
-        if (!tmpFile.renameTo(ruleFile)) {
-            if (tmpFile.exists() && !tmpFile.delete()) {
-                mLogger.w("Failed to delete tmp file: " + tmpFile, (Throwable) null);
+    private void handleWriteRule(Message msg) {
+        try {
+            Object[] args = (Object[]) msg.obj;
+            String packageName = (String) args[0];
+            ViewRule viewRule = (ViewRule) args[1];
+            Bitmap snapshot = (Bitmap) args[2];
+            String oldImagePath = args.length > 3 ? (String) args[3] : null;
+            if (snapshot != null) {
+                if (oldImagePath != null && !android.text.TextUtils.isEmpty(oldImagePath)) {
+                    FileUtils.delete(oldImagePath);
+                }
+                String newImagePath = mPersistManager.saveBitmap(snapshot,
+        mPersistManager.getAppDataDir(packageName));
+                if (newImagePath == null) {
+                    mLogger.w("write rule aborted: save snapshot failed", (Throwable) null);
+                    return;
+                }
+                mHandle.obtainMessage(UPDATE_IMAGE_PATH,
+                        new Object[]{packageName, viewRule, newImagePath}).sendToTarget();
+            } else {
+                String json = (String) args[4];
+                ActRules snapshotRules = (ActRules) args[5];
+                mObserverManager.notifyObserverRuleChanged(packageName, snapshotRules);
+                mPersistManager.safePersistRules(packageName, json);
+                scheduleOrphanCleanup();
             }
-            throw new IOException("Failed to atomically rename rule file: " + ruleFile);
+        } catch (Exception e) {
+            mLogger.w("write rule failed", e);
         }
-        FileUtils.setPermissions(ruleFile, S_IRWXU | S_IRWXG | S_IRWXO, -1, -1);
+    }
+
+    private void handleUpdateImagePath(Message msg) {
+        try {
+            Object[] args = (Object[]) msg.obj;
+            String packageName = (String) args[0];
+            ViewRule viewRule = (ViewRule) args[1];
+            String newImagePath = (String) args[2];
+            RuleCacheManager.CacheResult cr =
+                    mCacheManager.updateImagePath(packageName, viewRule, newImagePath);
+            mObserverManager.notifyObserverRuleChanged(packageName, cr.snapshotRules);
+            mPersistManager.safePersistRules(packageName, cr.json);
+            scheduleOrphanCleanup();
+        } catch (Exception e) {
+            mLogger.w("update image path failed", e);
+        }
+    }
+
+    private void handleDeleteRule(Message msg) {
+        try {
+            Object[] args = (Object[]) msg.obj;
+            String packageName = (String) args[0];
+            String json = (String) args[1];
+            ActRules snapshotRules = (ActRules) args[2];
+            String imagePath = (String) args[3];
+            FileUtils.delete(imagePath);
+            mObserverManager.notifyObserverRuleChanged(packageName, snapshotRules);
+            mPersistManager.safePersistRules(packageName, json);
+            scheduleOrphanCleanup();
+        } catch (Exception e) {
+            mLogger.w("delete rule failed", e);
+        }
+    }
+
+    private void handleDeleteRules(Message msg) {
+        try {
+            String packageName = (String) msg.obj;
+            FileUtils.delete(mPersistManager.getAppDataDir(packageName));
+            mObserverManager.notifyObserverRuleChanged(packageName, new ActRules());
+        } catch (Exception e) {
+            mLogger.w("delete rules failed", e);
+        }
+    }
+
+    private void handleUpdateRule(Message msg) {
+        try {
+            Object[] args = (Object[]) msg.obj;
+            String packageName = (String) args[0];
+            String json = (String) args[1];
+            ActRules snapshotRules = (ActRules) args[2];
+            mPersistManager.safePersistRules(packageName, json);
+            mObserverManager.notifyObserverRuleChanged(packageName, snapshotRules);
+        } catch (Exception e) {
+            mLogger.w("update rule failed", e);
+        }
+    }
+
+    private void handleLoadRules() {
+        try {
+            mPersistManager.loadRuleData();
+            mToolbarHiddenItems = mPersistManager.loadToolbarHiddenItems();
+            mDataLoaded = true;
+            mLogger.i("rule data loaded: " + mCacheManager.size() + " packages");
+        } catch (Exception e) {
+            mLogger.e("loadRuleData failed", e);
+            mDataLoaded = true;
+        }
+    }
+
+    private void handleCleanObservers() {
+        mObserverManager.cleanDeadObservers();
+    }
+
+    private void handleCleanOrphans() {
+        mOrphanCleanPending = false;
+        try {
+            mPersistManager.cleanAllOrphanImages();
+        } catch (Exception e) {
+            mLogger.w("orphan cleanup failed", e);
+        }
     }
 
     private void scheduleOrphanCleanup() {
@@ -305,225 +241,92 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
         }
     }
 
-    private ActRules snapshotActRules(ActRules source) {
-        if (source == null) return new ActRules();
-        ActRules copy = new ActRules();
-        for (Map.Entry<String, List<ViewRule>> entry : source.entrySet()) {
-            copy.put(entry.getKey(), new ArrayList<>(entry.getValue()));
-        }
-        return copy;
-    }
-
-    private void cleanAllOrphanImages() {
-        try {
-            File dataDir = new File(getBaseDir());
-            File[] packageDirs = dataDir.listFiles(File::isDirectory);
-            if (packageDirs == null) return;
-            for (File packageDir : packageDirs) {
-                File[] imageFiles = packageDir.listFiles((dir, name) -> name.endsWith(IMAGE_FILE_SUFFIX));
-                if (imageFiles == null || imageFiles.length == 0) continue;
-                java.util.Set<String> referenced = new java.util.HashSet<>();
-                synchronized (mAppRulesCache) {
-                    ActRules actRules = mAppRulesCache.get(packageDir.getName());
-                    if (actRules != null) {
-                        for (List<ViewRule> rules : actRules.values()) {
-                            for (ViewRule rule : rules) {
-                                if (!TextUtils.isEmpty(rule.imagePath)) referenced.add(rule.imagePath);
-                                if (!TextUtils.isEmpty(rule.modImagePath)) referenced.add(rule.modImagePath);
-                            }
-                        }
-                    }
-                }
-                for (File f : imageFiles) {
-                    if (!referenced.contains(f.getAbsolutePath())) {
-                        FileUtils.delete(f);
-                    }
-                }
-            }
-        } catch (FileNotFoundException e) {
-            mLogger.w("orphan cleanup: base dir not found", e);
-        }
-    }
-
-    private void cleanDeadObservers() {
-        synchronized (mRemoteCallbackList) {
-            int N = mRemoteCallbackList.beginBroadcast();
-            List<ObserverProxy> dead = new ArrayList<>();
-            for (int i = 0; i < N; i++) {
-                ObserverProxy proxy = mRemoteCallbackList.getBroadcastItem(i);
-                if (proxy == null || !proxy.observer.asBinder().pingBinder()) {
-                    dead.add(proxy);
-                }
-            }
-            mRemoteCallbackList.finishBroadcast();
-            for (ObserverProxy proxy : dead) {
-                if (proxy != null) {
-                    try {
-                        mRemoteCallbackList.unregister(proxy);
-                        synchronized (mRegisteredObserverMap) {
-                            mRegisteredObserverMap.remove(proxy.packageName, proxy.observer.asBinder());
-                        }
-                        mLogger.d("cleaned dead observer: " + proxy.packageName);
-                    } catch (Exception e) {
-                        mLogger.w("clean dead observer failed", e);
-                    }
-                }
-            }
-        }
-    }
-
-    private boolean checkPermission(@NonNull String permPackage) {
-        int callingUid = Binder.getCallingUid();
-        String[] packagesForUid = mContext.getPackageManager().getPackagesForUid(callingUid);
-        return packagesForUid != null && Arrays.asList(packagesForUid).contains(permPackage);
-    }
-
-    private void enforcePermission(@NonNull String[] permPackages, String message) throws RemoteException {
-        for (String permPackage : permPackages) {
-            if (checkPermission(permPackage)) {
-                return;
-            }
-        }
-        throw new RemoteException(message);
-    }
-
-    private void enforcePermission(String message) throws RemoteException {
-        if (!checkPermission(BuildConfig.APPLICATION_ID)) {
-            throw new RemoteException(message);
-        }
-    }
+    // ===================================================================
+    // AIDL 接口实现 — 委托给各 Manager
+    // ===================================================================
 
     @Override
     public boolean hasLight() {
         return true;
     }
 
-    /**
-     * Set edit mode
-     *
-     * @param enable enable or disable
-     */
+    // ---- 编辑模式 ----
+
     @Override
     public void setEditMode(boolean enable) throws RemoteException {
-        enforcePermission("set edit mode fail permission denied");
+        mPermissionEnforcer.enforcePermission("set edit mode fail permission denied");
         if (!mStarted) return;
         mLogger.i("setEditMode: " + enable);
         mInEditMode = enable;
-        notifyObserverEditModeChanged(enable);
+        mObserverManager.notifyObserverEditModeChanged(enable);
     }
 
-    /**
-     * Check in edit mode
-     *
-     * @return enable or disable
-     */
     @Override
     public boolean isInEditMode() {
         return mInEditMode;
     }
 
-    /**
-     * Register an observer to be notified when status changed.
-     *
-     * @param packageName package name
-     * @param observer    client observer
-     */
+    // ---- 观察者 ----
+
     @Override
-    public void addObserver(String packageName, IObserver observer) throws RemoteException {
-        enforcePermission(new String[]{packageName, BuildConfig.APPLICATION_ID}, "register observer fail permission denied");
+    public void addObserver(String packageName, com.kaisar.xposed.godmode.IObserver observer)
+            throws RemoteException {
+        mPermissionEnforcer.enforcePermission(
+                new String[]{packageName, BuildConfig.APPLICATION_ID},
+                "register observer fail permission denied");
         if (!mStarted) return;
-        synchronized (mRemoteCallbackList) {
-            synchronized (mRegisteredObserverMap) {
-                IBinder binder = observer.asBinder();
-                if (mRegisteredObserverMap.containsKey(packageName)
-                        && mRegisteredObserverMap.get(packageName) == binder) {
-                    mLogger.d("observer already registered for: " + packageName);
-                    return;
-                }
-                mRegisteredObserverMap.put(packageName, binder);
-            }
-            mRemoteCallbackList.register(new ObserverProxy(packageName, observer));
-            if (!mHandle.hasMessages(CLEAN_OBSERVERS)) {
-                mHandle.sendEmptyMessageDelayed(CLEAN_OBSERVERS, OBSERVER_CLEAN_INTERVAL);
-            }
-        }
-        try {
-            observer.onEditModeChanged(mInEditMode);
-            ActRules rules;
-            synchronized (mAppRulesCache) {
-                rules = mAppRulesCache.containsKey(packageName) ? mAppRulesCache.get(packageName) : new ActRules();
-            }
-            observer.onViewRuleChanged(packageName, rules);
-        } catch (RemoteException e) {
-            mLogger.w("immediate notify observer failed", e);
-        }
+        ActRules rules = mCacheManager.getRules(packageName);
+        mObserverManager.addObserver(packageName, observer, mInEditMode, rules);
     }
 
-    /**
-     * Unregister an observer
-     *
-     * @param packageName package name
-     * @param observer    client observer
-     * @throws RemoteException nothing
-     */
     @Override
-    public void removeObserver(String packageName, IObserver observer) throws RemoteException {
-        enforcePermission(new String[]{packageName, BuildConfig.APPLICATION_ID}, "unregister observer fail permission denied");
+    public void removeObserver(String packageName, com.kaisar.xposed.godmode.IObserver observer)
+            throws RemoteException {
+        mPermissionEnforcer.enforcePermission(
+                new String[]{packageName, BuildConfig.APPLICATION_ID},
+                "unregister observer fail permission denied");
         if (!mStarted) return;
-        synchronized (mRemoteCallbackList) {
-            mRemoteCallbackList.unregister(new ObserverProxy(packageName, observer));
-            synchronized (mRegisteredObserverMap) {
-                mRegisteredObserverMap.remove(packageName);
-            }
-        }
+        mObserverManager.removeObserver(packageName, observer);
     }
 
-    /**
-     * Get all packages rules
-     *
-     * @return packages rules
-     */
+    // ---- 规则查询 ----
+
     @Override
     public AppRules getAllRules() throws RemoteException {
-        enforcePermission("get all rules fail permission denied");
+        mPermissionEnforcer.enforcePermission("get all rules fail permission denied");
         if (!mStarted || !mDataLoaded) return new AppRules();
-        synchronized (mAppRulesCache) {
-            AppRules copy = new AppRules();
-            copy.putAll(mAppRulesCache);
-            return copy;
-        }
+        return mCacheManager.getAllRules();
     }
 
-    /**
-     * Get rules by package name
-     *
-     * @param packageName package name of the rule
-     * @return rules
-     */
     @Override
     public ActRules getRules(String packageName) throws RemoteException {
-        enforcePermission(new String[]{packageName, BuildConfig.APPLICATION_ID}, "get rules fail permission denied");
+        mPermissionEnforcer.enforcePermission(
+                new String[]{packageName, BuildConfig.APPLICATION_ID},
+                "get rules fail permission denied");
         if (!mStarted || !mDataLoaded) return new ActRules();
-        synchronized (mAppRulesCache) {
-            return mAppRulesCache.containsKey(packageName) ? mAppRulesCache.get(packageName) : new ActRules();
-        }
+        return mCacheManager.getRules(packageName);
     }
 
-    /**
-     * Write or update a rule (remove or modify). Replaces existing rule for the same view.
-     */
+    // ---- 规则写入 ----
+
     @Override
-    public boolean writeRule(String packageName, ViewRule viewRule, Bitmap snapshot) throws RemoteException {
-        enforcePermission(new String[]{packageName, BuildConfig.APPLICATION_ID}, "write rule fail permission denied");
+    public boolean writeRule(String packageName, ViewRule viewRule, Bitmap snapshot)
+            throws RemoteException {
+        mPermissionEnforcer.enforcePermission(
+                new String[]{packageName, BuildConfig.APPLICATION_ID},
+                "write rule fail permission denied");
         if (!mStarted) return false;
         try {
-            CacheResult cr = applyRuleToCache(packageName, viewRule, true);
+            RuleCacheManager.CacheResult cr =
+                    mCacheManager.applyRuleToCache(packageName, viewRule, true);
             if (snapshot != null) {
                 mHandle.obtainMessage(WRITE_RULE,
-                        new Object[]{packageName, viewRule, snapshot, cr.oldImagePath}).sendToTarget();
+                        new Object[]{packageName, viewRule, snapshot, cr.oldImagePath})
+                        .sendToTarget();
             } else {
                 mHandle.obtainMessage(WRITE_RULE,
-                        new Object[]{packageName, viewRule, null, null, cr.json, cr.snapshotRules}).sendToTarget();
+                        new Object[]{packageName, viewRule, null, null, cr.json,
+                                cr.snapshotRules}).sendToTarget();
             }
             return true;
         } catch (Exception e) {
@@ -532,19 +335,13 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
         }
     }
 
-    /**
-     * Update rule of package
-     *
-     * @param packageName package name of the rule
-     * @param viewRule    rule object
-     * @return success or fail
-     */
     @Override
     public boolean updateRule(String packageName, ViewRule viewRule) throws RemoteException {
-        enforcePermission("update rule fail permission denied");
+        mPermissionEnforcer.enforcePermission("update rule fail permission denied");
         if (!mStarted) return false;
         try {
-            CacheResult cr = applyRuleToCache(packageName, viewRule, false);
+            RuleCacheManager.CacheResult cr =
+                    mCacheManager.applyRuleToCache(packageName, viewRule, false);
             mHandle.obtainMessage(UPDATE_RULE,
                     new Object[]{packageName, cr.json, cr.snapshotRules}).sendToTarget();
             return true;
@@ -554,132 +351,78 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
         }
     }
 
-    /** 将规则写入内存缓存并返回序列化结果。供 writeRule / updateRule 复用。 */
-    private CacheResult applyRuleToCache(String packageName, ViewRule viewRule, boolean captureOldImagePath) {
-        synchronized (mAppRulesCache) {
-            ActRules actRules = mAppRulesCache.get(packageName);
-            if (actRules == null) {
-                mAppRulesCache.put(packageName, actRules = new ActRules());
-            }
-            List<ViewRule> viewRules = actRules.computeIfAbsent(viewRule.activityClass, k -> new ArrayList<>());
-            int index = viewRules.indexOf(viewRule);
-            String oldImagePath = null;
-            if (index >= 0) {
-                if (captureOldImagePath) {
-                    oldImagePath = viewRules.get(index).imagePath;
-                }
-                viewRules.set(index, viewRule);
-            } else {
-                viewRules.add(viewRule);
-            }
-            String json = mGson.toJson(actRules);
-            ActRules snapshotRules = snapshotActRules(actRules);
-            return new CacheResult(oldImagePath, json, snapshotRules);
-        }
-    }
+    // ---- 规则删除 ----
 
-    private static final class CacheResult {
-        final String oldImagePath;
-        final String json;
-        final ActRules snapshotRules;
-        CacheResult(String oldImagePath, String json, ActRules snapshotRules) {
-            this.oldImagePath = oldImagePath;
-            this.json = json;
-            this.snapshotRules = snapshotRules;
-        }
-    }
-
-    /**
-     * Delete the single rule of package
-     *
-     * @param packageName package name of the rule
-     * @param viewRule    rule object
-     * @return success or fail
-     */
     @Override
     public boolean deleteRule(String packageName, ViewRule viewRule) throws RemoteException {
-        enforcePermission("delete rule fail permission denied");
+        mPermissionEnforcer.enforcePermission("delete rule fail permission denied");
         if (!mStarted) return false;
-        synchronized (mAppRulesCache) {
-            try {
-                ActRules actRules = Preconditions.checkNotNull(mAppRulesCache.get(packageName), "not found this rule can't delete.");
-                List<ViewRule> viewRules = Preconditions.checkNotNull(actRules.get(viewRule.activityClass), "not found this rule can't delete.");
-                boolean removed = viewRules.remove(viewRule);
-                if (removed) {
-                    if (viewRules.isEmpty()) {
-                        actRules.remove(viewRule.activityClass);
-                        if (actRules.isEmpty()) {
-                            mAppRulesCache.remove(packageName);
-                        }
-                    }
-                    String json = mGson.toJson(actRules);
-                    ActRules snapshotRules = snapshotActRules(actRules);
-                    mHandle.obtainMessage(DELETE_RULE,
-                            new Object[]{packageName, json, snapshotRules, viewRule.imagePath}).sendToTarget();
-                }
-                return removed;
-            } catch (Exception e) {
-                mLogger.w("delete rule failed", e);
-                return false;
-            }
-        }
-    }
-
-    /**
-     * Delete all rules of package
-     *
-     * @param packageName package name of the rule
-     * @return success or fail
-     */
-    @Override
-    public boolean deleteRules(String packageName) throws RemoteException {
-        enforcePermission("delete rules fail permission denied");
-        if (!mStarted) return false;
-        synchronized (mAppRulesCache) {
-            mLogger.d("delete rules pkg=" + packageName + " cache=" + mAppRulesCache);
-            if (mAppRulesCache.containsKey(packageName)) {
-                mAppRulesCache.remove(packageName);
-                mHandle.obtainMessage(DELETE_RULES, packageName).sendToTarget();
-                return true;
-            }
+        try {
+            RuleCacheManager.DeleteResult dr = mCacheManager.deleteRule(packageName, viewRule);
+            if (dr == null) return false;
+            mHandle.obtainMessage(DELETE_RULE,
+                    new Object[]{packageName, dr.json, dr.snapshotRules, dr.imagePath})
+                    .sendToTarget();
+            return true;
+        } catch (Exception e) {
+            mLogger.w("delete rule failed", e);
             return false;
         }
     }
 
     @Override
+    public boolean deleteRules(String packageName) throws RemoteException {
+        mPermissionEnforcer.enforcePermission("delete rules fail permission denied");
+        if (!mStarted) return false;
+        mLogger.d("delete rules pkg=" + packageName + " size=" + mCacheManager.size());
+        if (mCacheManager.deleteRules(packageName)) {
+            mHandle.obtainMessage(DELETE_RULES, packageName).sendToTarget();
+            return true;
+        }
+        return false;
+    }
+
+    // ---- 图片操作 ----
+
+    @Override
     public String saveImageFile(String packageName, Bitmap bitmap) throws RemoteException {
-        enforcePermission(new String[]{packageName, BuildConfig.APPLICATION_ID}, "save image fail permission denied");
+        mPermissionEnforcer.enforcePermission(
+                new String[]{packageName, BuildConfig.APPLICATION_ID},
+                "save image fail permission denied");
         if (!mStarted || bitmap == null || bitmap.isRecycled()) return null;
         try {
-            return saveBitmap(bitmap, getAppDataDir(packageName));
-        } catch (FileNotFoundException e) {
+            return mPersistManager.saveBitmap(bitmap,
+                mPersistManager.getAppDataDir(packageName));
+        } catch (Exception e) {
             throw new RemoteException("Cannot access package data dir: " + e.getMessage());
         }
     }
 
     @Override
     public ParcelFileDescriptor openImageFileDescriptor(String filePath) throws RemoteException {
-        if (!filePath.startsWith(BASE_DIR) || !filePath.endsWith(IMAGE_FILE_SUFFIX))
-            throw new RemoteException(String.format("unauthorized access %s", filePath));
+        if (!filePath.startsWith("/data/system/godmode")
+                || !filePath.endsWith(RulePersistManager.IMAGE_FILE_SUFFIX))
+            throw new RemoteException("unauthorized access " + filePath);
         File parentFile = new File(filePath).getParentFile();
         String packageFromPath = parentFile != null ? parentFile.getName() : "";
-        enforcePermission(new String[]{packageFromPath, BuildConfig.APPLICATION_ID},
+        mPermissionEnforcer.enforcePermission(
+                new String[]{packageFromPath, BuildConfig.APPLICATION_ID},
                 "open fd fail permission denied");
         File file = new File(filePath);
-        if (!file.exists() || !file.isFile()) {
+        if (!file.exists() || !file.isFile())
             throw new RemoteException("File not found: " + filePath);
-        }
-        if (file.length() > 5 * 1024 * 1024) {
+        if (file.length() > 5 * 1024 * 1024)
             throw new RemoteException("File too large (>5MB): " + filePath);
-        }
         try {
             return ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY);
         } catch (FileNotFoundException e) {
-            RemoteException remoteException = new RemoteException();
-            remoteException.initCause(e);
-            throw remoteException;
+            RemoteException re = new RemoteException();
+            re.initCause(e);
+            throw re;
         }
     }
+
+    // ---- 工具栏偏好 ----
 
     @Override
     public String getToolbarHiddenItems() {
@@ -688,138 +431,8 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
 
     @Override
     public void setToolbarHiddenItems(String items) throws RemoteException {
-        enforcePermission("set toolbar prefs fail permission denied");
+        mPermissionEnforcer.enforcePermission("set toolbar prefs fail permission denied");
         mToolbarHiddenItems = items != null ? items : "";
-        try {
-            File prefsFile = new File(getBaseDir(), TOOLBAR_PREFS_FILE);
-            FileUtils.stringToFile(prefsFile, mToolbarHiddenItems);
-            FileUtils.setPermissions(prefsFile, S_IRWXU | S_IRWXG | S_IRWXO, -1, -1);
-        } catch (Exception e) {
-            mLogger.w("persist toolbar prefs failed", e);
-        }
+        mPersistManager.persistToolbarHiddenItems(mToolbarHiddenItems);
     }
-
-    private void loadToolbarHiddenItems() {
-        try {
-            File prefsFile = new File(getBaseDir(), TOOLBAR_PREFS_FILE);
-            if (prefsFile.exists()) {
-                mToolbarHiddenItems = FileUtils.readTextFile(prefsFile, 0, null);
-                if (mToolbarHiddenItems == null) mToolbarHiddenItems = "";
-            }
-        } catch (Exception e) {
-            mLogger.w("load toolbar prefs failed", e);
-        }
-    }
-
-    private String saveBitmap(Bitmap bitmap, String dir) {
-        try {
-            Bitmap bitmapToSave = bitmap;
-            if (bitmap.getConfig() == Bitmap.Config.HARDWARE) {
-                bitmapToSave = Bitmap.createBitmap(bitmap.getWidth(), bitmap.getHeight(), Bitmap.Config.ARGB_8888);
-                new Canvas(bitmapToSave).drawBitmap(bitmap, 0, 0, null);
-            }
-            File file = new File(dir, System.currentTimeMillis() + IMAGE_FILE_SUFFIX);
-            try (FileOutputStream out = new FileOutputStream(file)) {
-                if (bitmapToSave.compress(Bitmap.CompressFormat.WEBP, 80, out)) {
-                    FileUtils.setPermissions(file, S_IRWXU | S_IRWXG | S_IRWXO, -1, -1);
-                    return file.getAbsolutePath();
-                }
-                throw new FileNotFoundException("bitmap can't compress to " + file.getAbsolutePath());
-            } finally {
-                if (bitmapToSave != bitmap && !bitmapToSave.isRecycled()) {
-                    bitmapToSave.recycle();
-                }
-            }
-        } catch (IOException e) {
-            mLogger.w("save bitmap fail", e);
-            return null;
-        }
-    }
-
-    private void notifyObserverRuleChanged(String packageName, ActRules actRules) {
-        forEachLiveObserver((proxy) -> {
-            if (TextUtils.equals(proxy.packageName, packageName) || TextUtils.equals(proxy.packageName, "*")) {
-                proxy.observer.onViewRuleChanged(packageName, actRules);
-            }
-        });
-    }
-
-    private void notifyObserverEditModeChanged(boolean enable) {
-        forEachLiveObserver((proxy) -> proxy.onEditModeChanged(enable));
-    }
-
-    private void forEachLiveObserver(ObserverAction action) {
-        synchronized (mRemoteCallbackList) {
-            final int N = mRemoteCallbackList.beginBroadcast();
-            for (int i = 0; i < N; i++) {
-                try {
-                    ObserverProxy proxy = mRemoteCallbackList.getBroadcastItem(i);
-                    if (proxy != null && proxy.observer.asBinder().pingBinder()) {
-                        action.execute(proxy);
-                    }
-                } catch (Exception e) {
-                    mLogger.w("notify observer failed", e);
-                }
-            }
-            mRemoteCallbackList.finishBroadcast();
-        }
-    }
-
-    private interface ObserverAction {
-        void execute(ObserverProxy proxy) throws RemoteException;
-    }
-
-    private String getBaseDir() throws FileNotFoundException {
-        File dir = new File(BASE_DIR);
-        if (dir.exists() || dir.mkdirs()) {
-            FileUtils.setPermissions(dir, S_IRWXU | S_IRWXG | S_IRWXO, -1, -1);
-            return dir.getAbsolutePath();
-        }
-        throw new FileNotFoundException();
-    }
-
-    private String getAppDataDir(String packageName) throws FileNotFoundException {
-        File dir = new File(getBaseDir(), packageName);
-        if (dir.exists() || dir.mkdirs()) {
-            FileUtils.setPermissions(dir, S_IRWXU | S_IRWXG | S_IRWXO, -1, -1);
-            return dir.getAbsolutePath();
-        }
-        throw new FileNotFoundException();
-    }
-
-    private String getAppRuleFilePath(String packageName) throws IOException {
-        File file = new File(getAppDataDir(packageName), packageName + RULE_FILE_SUFFIX);
-        if (file.exists() || file.createNewFile()) {
-            FileUtils.setPermissions(file, S_IRWXU | S_IRWXG | S_IRWXO, -1, -1);
-            return file.getAbsolutePath();
-        }
-        throw new FileNotFoundException();
-    }
-
-    private static final class ObserverProxy implements IObserver {
-
-        private final String packageName;
-        private final IObserver observer;
-
-        public ObserverProxy(String packageName, IObserver observer) {
-            this.packageName = packageName;
-            this.observer = observer;
-        }
-
-        @Override
-        public void onEditModeChanged(boolean enable) throws RemoteException {
-            observer.onEditModeChanged(enable);
-        }
-
-        @Override
-        public void onViewRuleChanged(String packageName, ActRules actRules) throws RemoteException {
-            observer.onViewRuleChanged(packageName, actRules);
-        }
-
-        @Override
-        public IBinder asBinder() {
-            return observer.asBinder();
-        }
-    }
-
 }
