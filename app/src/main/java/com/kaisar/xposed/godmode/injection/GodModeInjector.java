@@ -13,6 +13,9 @@ import android.view.MotionEvent;
 import android.view.View;
 
 import com.kaisar.xposed.godmode.R;
+import com.kaisar.xposed.godmode.engine.event.EditModeEvent;
+import com.kaisar.xposed.godmode.engine.event.EventBus;
+import com.kaisar.xposed.godmode.injection.event.RulesChangedEvent;
 import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
 import com.kaisar.xposed.godmode.injection.bridge.ManagerObserver;
 import com.kaisar.xposed.godmode.injection.hook.ActivityLifecycleHook;
@@ -60,6 +63,9 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
     public final static Property<Boolean> switchProp = new Property<>(false);
     public final static Property<ActRules> actRuleProp = new Property<>(new ActRules());
     public static XC_LoadPackage.LoadPackageParam loadPackageParam;
+
+    // 双轨事件系统 — EventBus 与 Property 并行运行，逐步迁移监听方
+    private static final EventBus sEventBus = EventBus.getDefault();
 
     private static State state = State.UNKNOWN;
     private static final DispatchKeyEventHook sDispatchKeyEventHook = new DispatchKeyEventHook();
@@ -194,14 +200,17 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
         Logger.i(TAG, "[GodMode] edit mode " + enable + " state=" + state
                 + " pkg=" + loadPackageParam.packageName);
         if (state == State.ALLOWED) {
-            switchProp.set(enable);
+            switchProp.set(enable);                        // 旧路径
+            sEventBus.post(new EditModeEvent(enable));     // 新路径
         }
         sDispatchKeyEventHook.setdisplay(enable);
     }
 
     public static void notifyViewRulesChanged(ActRules actRules) {
         if (actRules == null) return;
-        actRuleProp.set(actRules);
+        actRuleProp.set(actRules);                                    // 旧路径
+        sEventBus.post(new RulesChangedEvent(                        // 新路径
+                loadPackageParam != null ? loadPackageParam.packageName : "", actRules));
     }
 
     // =========================================================================
