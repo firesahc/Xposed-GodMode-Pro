@@ -64,8 +64,12 @@ public final class RuleModificationHelper {
     private static void applyModificationToView(View view, ViewRule rule) {
         if (view == null || rule == null || !view.isAttachedToWindow()) return;
 
+        boolean hasImageMod = rule.isImageModified() && view instanceof ImageView
+                && rule.modImagePath != null;
+
         Integer appliedHash = sAppliedViews.get(view);
-        if (appliedHash != null && appliedHash == rule.hashCode()) {
+        // 非图片修改时检查缓存跳过；图片修改始终重新加载（异步加载与缓存清除存在竞态）
+        if (!hasImageMod && appliedHash != null && appliedHash == rule.hashCode()) {
             return;
         }
 
@@ -88,7 +92,7 @@ public final class RuleModificationHelper {
         if (rule.isTextModified() && view instanceof TextView) {
             ((TextView) view).setText(rule.modText);
         }
-        if (rule.isImageModified() && view instanceof ImageView && rule.modImagePath != null) {
+        if (hasImageMod) {
             final ImageView targetView = (ImageView) view;
             final String path = rule.modImagePath;
             SoftReference<Bitmap> cached = sBitmapCache.get(path);
