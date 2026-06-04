@@ -1,46 +1,124 @@
 package com.kaisar.xposed.godmode.injection.editor.gesture;
 
+import android.animation.Animator;
+import android.app.Activity;
+import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.graphics.Color;
 import android.view.View;
+import android.view.ViewGroup;
+
+import com.kaisar.xposed.godmode.injection.ViewController;
+import com.kaisar.xposed.godmode.injection.ViewHelper;
+import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
+import com.kaisar.xposed.godmode.injection.editor.overlay.CancelView;
+import com.kaisar.xposed.godmode.injection.editor.overlay.MaskView;
+import com.kaisar.xposed.godmode.injection.editor.overlay.ParticleView;
+import com.kaisar.xposed.godmode.injection.util.CommonUtils;
+import com.kaisar.xposed.godmode.injection.util.Logger;
+import com.kaisar.xposed.godmode.rule.ViewRule;
+import com.kaisar.xposed.godmode.util.Preconditions;
 
 /**
- * 移除手势处理器 — 长按拖拽移除 + 粒子动画。
- * 计划从 EventHandlerHook 的 remove 分支提取 (~187行)。
- * <p>
- * 当前为骨架，待第4阶段后续迁移实际逻辑。
+ * 移除手势处理器 — 长按拖拽移除 + 粒子爆炸动画 + IPC 持久化。
+ * 从 EventHandlerHook 提取的移除模式交互逻辑。
  */
-public class RemoveGestureHandler {
+public final class RemoveGestureHandler {
 
-    private View mPhantomView;
-    private View mTargetView;
-    private boolean mIsActive;
+    private static final String TAG = "GodMode";
+    private static final int MARK_COLOR = Color.argb(150, 139, 195, 75);
 
-    public void onLongPress(View targetView) {
-        mTargetView = targetView;
-        mIsActive = true;
-        // TODO: 创建幻影视图 + 显示取消区域 + 开始拖拽跟踪
+    private RemoveGestureHandler() {}
+
+    /** 初始化移除拖拽：克隆视图为遮罩，显示取消区域 */
+    public static RemoveState startDrag(View v) {
+        RemoveState state = new RemoveState();
+        try {
+            Activity activity = Preconditions.checkNotNull(
+                    ViewHelper.getAttachedActivityFromView(v));
+            ViewGroup container = (ViewGroup) activity.getWindow().getDecorView();
+            state.snapshot = ViewHelper.snapshotView(
+                    ViewHelper.findTopParentViewByChildView(v));
+            state.viewRule = ViewHelper.makeRemoveRule(v);
+
+            state.cancelView = new CancelView(activity);
+            state.cancelView.attachToContainer(container);
+
+            state.maskView = MaskView.makeMaskView(activity);
+            state.maskView.setMaskOverlay(v);
+            state.maskView.setMarkColor(MARK_COLOR);
+            state.maskView.updateOverlayBounds(ViewHelper.getLocationInWindow(v));
+            state.maskView.attachToContainer(container);
+
+            ViewController.applyRule(v, state.viewRule);
+        } catch (PackageManager.NameNotFoundException | NullPointerException e) {
+            Logger.e(TAG, "[EventHandler] startRemoveDrag fail", e);
+            return null;
+        }
+        return state;
     }
 
-    public void onDrag(float x, float y) {
-        if (!mIsActive) return;
-        // TODO: 移动幻影视图 + 检测是否在取消区域内
+    /** 完成移除拖拽：已取消则还原，已确认则粒子动画 → IPC 持久化 */
+    public static void finishDrag(View v, RemoveState state) {
+        Activity activity = ViewHelper.getAttachedActivityFromView(v);
+        if (activity == null) return;
+
+        if (state.cancelView != null) state.cancelView.detachFromContainer();
+
+        if (state.maskView != null && state.maskView.isMarked()) {
+            // 已取消
+            state.maskView.detachFromContainer();
+            state.viewRule.visibility = View.VISIBLE;
+            ViewController.revokeRule(v, state.viewRule);
+            CommonUtils.recycleNullableBitmap(state.snapshot);
+        } else {
+            // 已确认：粒子爆炸 → IPC 持久化
+            ViewGroup container = (ViewGroup) activity.getWindow().getDecorView();
+            ParticleView particleView = new ParticleView(activity);
+            particleView.setDuration(1000);
+            particleView.attachToContainer(container);
+            particleView.setOnAnimationListener(new ParticleView.OnAnimationListener() {
+                @Override
+                public void onAnimationStart(View animView, Animator animation) {
+                    state.viewRule.visibility = View.GONE;
+                    ViewController.applyRule(v, state.viewRule);
+                    ViewHelper.drawRuleMask(state.snapshot, state.viewRule);
+                    state.maskView.detachFromContainer();
+                    new Thread(() -> {
+                        try {
+                            GodModeManager.getDefault().writeRule(
+                                    v.getContext().getPackageName(),
+                                    state.viewRule, state.snapshot);
+                        } catch (Exception e) {
+                            Logger.e(TAG, "[EventHandler] write rule fail", e);
+                        }
+                        CommonUtils.recycleNullableBitmap(state.snapshot);
+                    }, "gm-write").start();
+                }
+                @Override
+                public void onAnimationEnd(View animView, Animator animation) {
+                    particleView.detachFromContainer();
+                }
+            });
+            particleView.boom(state.maskView);
+        }
     }
 
-    public void onDrop(float x, float y) {
-        if (!mIsActive) return;
-        mIsActive = false;
-        // TODO: 判断是否取消 or 确认移除 → 粒子动画 → IPC 持久化
-        mPhantomView = null;
-        mTargetView = null;
+    /** 清理移除状态 */
+    public static void clearState(RemoveState state) {
+        if (state != null) {
+            state.snapshot = null;
+            state.maskView = null;
+            state.cancelView = null;
+            state.viewRule = null;
+        }
     }
 
-    public void cancel() {
-        mIsActive = false;
-        // TODO: 移除幻影视图 + 清理状态
-        mPhantomView = null;
-        mTargetView = null;
-    }
-
-    public boolean isActive() {
-        return mIsActive;
+    /** 移除模式状态容器 */
+    public static final class RemoveState {
+        public Bitmap snapshot;
+        public ViewRule viewRule;
+        public MaskView maskView;
+        public CancelView cancelView;
     }
 }

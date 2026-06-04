@@ -1,50 +1,102 @@
 package com.kaisar.xposed.godmode.injection.editor.gesture;
 
+import android.graphics.Bitmap;
+import android.view.HapticFeedbackConstants;
 import android.view.View;
 import android.view.ViewGroup;
 
+import com.kaisar.xposed.godmode.injection.ViewHelper;
+import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
+import com.kaisar.xposed.godmode.injection.util.CommonUtils;
+import com.kaisar.xposed.godmode.rule.ViewRule;
+
 /**
- * 修改手势处理器 — 长按拖拽修改视图位置 + 吸附对齐。
- * 计划从 EventHandlerHook 的 modify 分支提取 (~186行)。
- * <p>
- * 当前为骨架，待第4阶段后续迁移实际逻辑。
+ * 修改手势处理器 — 长按拖拽修改视图位置 + 网格/边缘吸附 + IPC 持久化。
+ * 从 EventHandlerHook 提取的修改模式交互逻辑。
  */
-public class ModifyGestureHandler {
+public final class ModifyGestureHandler {
 
-    private View mTargetView;
-    private int mOriginalLeftMargin;
-    private int mOriginalTopMargin;
-    private boolean mIsActive;
+    private static final int GRID_SIZE_DP = 16;
+    private static final int EDGE_SNAP_THRESHOLD_DP = 12;
 
-    public void onLongPress(View targetView) {
-        mTargetView = targetView;
-        mIsActive = true;
-        // TODO: 记录原始 margin + 开始拖拽
-        ViewGroup.MarginLayoutParams mlp =
-                (ViewGroup.MarginLayoutParams) targetView.getLayoutParams();
-        mOriginalLeftMargin = mlp.leftMargin;
-        mOriginalTopMargin = mlp.topMargin;
+    private ModifyGestureHandler() {}
+
+    /** 开始拖拽当前选中的视图 */
+    public static ModifyState startDrag(View target) {
+        if (target == null) return null;
+        ModifyState state = new ModifyState();
+        state.dragTarget = target;
+
+        float density = target.getResources().getDisplayMetrics().density;
+        state.gridSizePx = (int) (GRID_SIZE_DP * density + 0.5f);
+        state.snapThresholdPx = (int) (EDGE_SNAP_THRESHOLD_DP * density + 0.5f);
+
+        ViewGroup.LayoutParams lp = target.getLayoutParams();
+        if (lp instanceof ViewGroup.MarginLayoutParams) {
+            ViewGroup.MarginLayoutParams mlp = (ViewGroup.MarginLayoutParams) lp;
+            state.startMarginX = mlp.leftMargin;
+            state.startMarginY = mlp.topMargin;
+        }
+        target.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+        return state;
     }
 
-    public void onDrag(float dx, float dy) {
-        if (!mIsActive || mTargetView == null) return;
-        // TODO: 计算新 margin → 网格吸附 → 兄弟视图边缘吸附 → 更新 layoutParams
+    /** 移动拖拽目标，应用网格+兄弟边缘吸附 */
+    public static void moveTarget(ModifyState state, float dx, float dy) {
+        if (state == null || state.dragTarget == null) return;
+
+        int newMarginX = state.startMarginX + (int) dx;
+        int newMarginY = state.startMarginY + (int) dy;
+
+        newMarginX = Math.round(newMarginX / (float) state.gridSizePx) * state.gridSizePx;
+        newMarginY = Math.round(newMarginY / (float) state.gridSizePx) * state.gridSizePx;
+
+        int[] snapped = SnapHelper.snapToSiblings(state.dragTarget,
+                newMarginX, newMarginY, state.snapThresholdPx);
+        newMarginX = snapped[0];
+        newMarginY = snapped[1];
+
+        ViewGroup.LayoutParams lp = state.dragTarget.getLayoutParams();
+        if (lp instanceof ViewGroup.MarginLayoutParams) {
+            ViewGroup.MarginLayoutParams mlp = (ViewGroup.MarginLayoutParams) lp;
+            mlp.leftMargin = newMarginX;
+            mlp.topMargin = newMarginY;
+            state.dragTarget.setLayoutParams(mlp);
+        }
     }
 
-    public void onDrop() {
-        if (!mIsActive) return;
-        mIsActive = false;
-        // TODO: 计算最终偏移量 → 创建 modify 规则 → IPC 持久化
-        mTargetView = null;
+    /** 将最终拖拽位置持久化为修改规则 */
+    public static void finalizeDrag(ModifyState state, String packageName) {
+        if (state == null || state.dragTarget == null) return;
+        ViewGroup.LayoutParams lp = state.dragTarget.getLayoutParams();
+        int finalMarginX = 0, finalMarginY = 0;
+        if (lp instanceof ViewGroup.MarginLayoutParams) {
+            ViewGroup.MarginLayoutParams mlp = (ViewGroup.MarginLayoutParams) lp;
+            finalMarginX = mlp.leftMargin;
+            finalMarginY = mlp.topMargin;
+        }
+        int deltaX = finalMarginX - state.startMarginX;
+        int deltaY = finalMarginY - state.startMarginY;
+
+        if (deltaX != 0 || deltaY != 0) {
+            ViewRule rule = ViewHelper.makeModifyRule(state.dragTarget);
+            rule.origLeftMargin = state.startMarginX;
+            rule.origTopMargin = state.startMarginY;
+            rule.modXOffset = deltaX;
+            rule.modYOffset = deltaY;
+            ViewHelper.fillCoordinates(rule, state.dragTarget);
+            Bitmap snapshot = ViewHelper.snapshotView(
+                    ViewHelper.findTopParentViewByChildView(state.dragTarget));
+            ViewHelper.drawRuleMask(snapshot, rule);
+            GodModeManager.getDefault().writeRule(packageName, rule, snapshot);
+            CommonUtils.recycleNullableBitmap(snapshot);
+        }
     }
 
-    public void cancel() {
-        mIsActive = false;
-        // TODO: 恢复原始 margin
-        mTargetView = null;
-    }
-
-    public boolean isActive() {
-        return mIsActive;
+    /** 修改模式状态容器 */
+    public static final class ModifyState {
+        public View dragTarget;
+        public int startMarginX, startMarginY;
+        public int gridSizePx, snapThresholdPx;
     }
 }
