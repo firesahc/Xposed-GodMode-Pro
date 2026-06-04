@@ -1,4 +1,4 @@
-package com.kaisar.xposed.godmode.injection.widget;
+package com.kaisar.xposed.godmode.injection.editor.overlay;
 
 import android.view.View;
 import android.view.ViewGroup;

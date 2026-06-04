@@ -31,8 +31,8 @@ import com.kaisar.xposed.godmode.injection.util.GmResources;
 import com.kaisar.xposed.godmode.injection.util.Logger;
 import com.kaisar.xposed.godmode.injection.util.Property;
 import com.kaisar.xposed.godmode.injection.util.ToolbarVisibilityController;
-import com.kaisar.xposed.godmode.injection.widget.MaskView;
-import com.kaisar.xposed.godmode.injection.widget.ParticleView;
+import com.kaisar.xposed.godmode.injection.editor.overlay.MaskView;
+import com.kaisar.xposed.godmode.injection.editor.overlay.ParticleView;
 import com.kaisar.xposed.godmode.rule.ViewRule;
 
 import java.lang.ref.WeakReference;

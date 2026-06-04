@@ -1,4 +1,4 @@
-package com.kaisar.xposed.godmode.injection.widget;
+package com.kaisar.xposed.godmode.injection.editor.overlay;
 
 import static com.kaisar.xposed.godmode.injection.ViewHelper.TAG_GM_CMP;
 
@@ -24,24 +24,13 @@ public final class CancelView extends View implements OverlayWidget {
     private final Paint rectPaint = new Paint();
     private final Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private CharSequence text;
-    private Rect statusBarBounds = new Rect();
-    private Rect textLayoutBounds = new Rect();
-    private Rect textBounds = new Rect();
+    private final Rect statusBarBounds = new Rect();
+    private final Rect textLayoutBounds = new Rect();
+    private final Rect textBounds = new Rect();
 
-    public CancelView(Context context) {
-        super(context);
-        init(context);
-    }
-
-    public CancelView(Context context, @Nullable AttributeSet attrs) {
-        super(context, attrs);
-        init(context);
-    }
-
-    public CancelView(Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
-        super(context, attrs, defStyleAttr);
-        init(context);
-    }
+    public CancelView(Context context) { super(context); init(context); }
+    public CancelView(Context context, @Nullable AttributeSet attrs) { super(context, attrs); init(context); }
+    public CancelView(Context context, @Nullable AttributeSet attrs, int defStyleAttr) { super(context, attrs, defStyleAttr); init(context); }
 
     private void init(Context context) {
         setTag(TAG_GM_CMP);
@@ -52,32 +41,25 @@ public final class CancelView extends View implements OverlayWidget {
         textPaint.setColor(Color.WHITE);
         textPaint.getTextBounds(text.toString(), 0, text.length(), textBounds);
         textBounds.offsetTo(0, 0);
-
-        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT);
-        setLayoutParams(lp);
+        setLayoutParams(new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
     }
 
     public int getStatusBarHeight() {
         int resourceId = getResources().getIdentifier("status_bar_height", "dimen", "android");
-        if (resourceId > 0) {
-            return getResources().getDimensionPixelSize(resourceId);
-        }
-        return 0;
+        return resourceId > 0 ? getResources().getDimensionPixelSize(resourceId) : 0;
     }
 
-    @Override
-    public View getView() { return this; }
+    @Override public View getView() { return this; }
 
     @Override
     protected void onDraw(Canvas canvas) {
         canvas.save();
         canvas.drawRect(getStatusBarBounds(), rectPaint);
-        Rect textLayoutBounds = getTextLayoutBounds();
-        canvas.drawRect(textLayoutBounds, rectPaint);
-
-        float x = textLayoutBounds.centerX() - textBounds.centerX();
-        float y = textLayoutBounds.centerY() + textBounds.centerY();
+        Rect layout = getTextLayoutBounds();
+        canvas.drawRect(layout, rectPaint);
+        float x = layout.centerX() - textBounds.centerX();
+        float y = layout.centerY() + textBounds.centerY();
         canvas.drawText(text, 0, text.length(), x, y, textPaint);
         canvas.restore();
     }
@@ -92,8 +74,8 @@ public final class CancelView extends View implements OverlayWidget {
         if (textLayoutBounds.isEmpty()) {
             TypedValue tv = new TypedValue();
             if (getContext().getTheme().resolveAttribute(android.R.attr.actionBarSize, tv, true)) {
-                int actionBarHeight = TypedValue.complexToDimensionPixelSize(tv.data, getResources().getDisplayMetrics());
-                textLayoutBounds.set(getLeft(), getStatusBarHeight(), getRight(), getStatusBarHeight() + actionBarHeight);
+                int h = TypedValue.complexToDimensionPixelSize(tv.data, getResources().getDisplayMetrics());
+                textLayoutBounds.set(getLeft(), getStatusBarHeight(), getRight(), getStatusBarHeight() + h);
             }
         }
         return textLayoutBounds;

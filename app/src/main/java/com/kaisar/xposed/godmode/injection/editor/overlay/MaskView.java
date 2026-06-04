@@ -1,4 +1,4 @@
-package com.kaisar.xposed.godmode.injection.widget;
+package com.kaisar.xposed.godmode.injection.editor.overlay;
 
 import static com.kaisar.xposed.godmode.injection.ViewHelper.TAG_GM_CMP;
 
@@ -19,37 +19,19 @@ import androidx.annotation.Nullable;
 
 import com.kaisar.xposed.godmode.injection.ViewHelper;
 
-/**
- * Created by jrsen on 17-10-13.
- */
-
 public final class MaskView extends View implements OverlayWidget {
 
     private Drawable mMaskDrawable;
-
     private int mMarkColor = Color.TRANSPARENT;
     private boolean isMarked;
 
-    public MaskView(Context context) {
-        super(context);
-        setTag(TAG_GM_CMP);
-    }
-
-    public MaskView(Context context, @Nullable AttributeSet attrs) {
-        super(context, attrs);
-        setTag(TAG_GM_CMP);
-    }
-
-    public MaskView(Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
-        super(context, attrs, defStyleAttr);
-        setTag(TAG_GM_CMP);
-    }
+    public MaskView(Context context) { super(context); setTag(TAG_GM_CMP); }
+    public MaskView(Context context, @Nullable AttributeSet attrs) { super(context, attrs); setTag(TAG_GM_CMP); }
+    public MaskView(Context context, @Nullable AttributeSet attrs, int defStyleAttr) { super(context, attrs, defStyleAttr); setTag(TAG_GM_CMP); }
 
     @Override
     protected void onDraw(Canvas canvas) {
-        if (mMaskDrawable != null) {
-            mMaskDrawable.draw(canvas);
-        }
+        if (mMaskDrawable != null) mMaskDrawable.draw(canvas);
     }
 
     public void updateOverlayBounds(int x, int y, int w, int h) {
@@ -57,37 +39,26 @@ public final class MaskView extends View implements OverlayWidget {
     }
 
     public void updateOverlayBounds(Rect bounds) {
-        if (mMaskDrawable != null) {
-            mMaskDrawable.setBounds(bounds);
-            invalidate();
-        }
+        if (mMaskDrawable != null) { mMaskDrawable.setBounds(bounds); invalidate(); }
     }
 
     public Rect getRealBounds() {
         return mMaskDrawable != null ? mMaskDrawable.getBounds() : new Rect();
     }
 
-    public void setMarkColor(int color) {
-        mMarkColor = color;
-    }
+    public void setMarkColor(int color) { mMarkColor = color; }
 
     public void setMarked(boolean enable) {
         if (isMarked != enable && mMaskDrawable != null) {
             isMarked = enable;
-            if (enable) {
-                mMaskDrawable.setColorFilter(mMarkColor, PorterDuff.Mode.SRC_ATOP);
-            } else {
-                mMaskDrawable.clearColorFilter();
-            }
+            if (enable) mMaskDrawable.setColorFilter(mMarkColor, PorterDuff.Mode.SRC_ATOP);
+            else mMaskDrawable.clearColorFilter();
         }
     }
 
-    public boolean isMarked() {
-        return isMarked;
-    }
+    public boolean isMarked() { return isMarked; }
 
-    @Override
-    public View getView() { return this; }
+    @Override public View getView() { return this; }
 
     public void setMaskOverlay(View view) {
         Bitmap bitmap = ViewHelper.cloneViewAsBitmap(view);
@@ -100,9 +71,8 @@ public final class MaskView extends View implements OverlayWidget {
 
     public static MaskView makeMaskView(Context context) {
         MaskView maskView = new MaskView(context);
-        ViewGroup.MarginLayoutParams layoutParams = new ViewGroup.MarginLayoutParams(ViewGroup.MarginLayoutParams.MATCH_PARENT, ViewGroup.MarginLayoutParams.MATCH_PARENT);
-        maskView.setLayoutParams(layoutParams);
+        maskView.setLayoutParams(new ViewGroup.MarginLayoutParams(
+                ViewGroup.MarginLayoutParams.MATCH_PARENT, ViewGroup.MarginLayoutParams.MATCH_PARENT));
         return maskView;
     }
-
 }
