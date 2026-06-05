@@ -1,4 +1,4 @@
-package com.kaisar.xposed.godmode.injection.hook;
+package com.kaisar.xposed.godmode.hook;
 
 import static com.kaisar.xposed.godmode.GodModeApplication.TAG;
 import static com.kaisar.xposed.godmode.injection.ViewHelper.TAG_GM_CMP;
@@ -48,7 +48,7 @@ import de.robv.android.xposed.XposedHelpers;
  *       位置偏移量保存为修改规则。</li>
  * </ul>
  */
-public final class EventHandlerHook extends XC_MethodHook implements Property.OnPropertyChangeListener<Boolean> {
+public final class TouchInterceptor extends XC_MethodHook implements Property.OnPropertyChangeListener<Boolean> {
 
     // =========================================================================
     // 常量
@@ -130,13 +130,13 @@ public final class EventHandlerHook extends XC_MethodHook implements Property.On
     }
 
     private boolean dispatchTouchEvent(View v, MotionEvent event) {
-        int mode = DispatchKeyEventHook.getInteractionMode();
+        int mode = KeyInterceptor.getInteractionMode();
         int action = event.getActionMasked();
 
-        if (mode == DispatchKeyEventHook.MODE_INITIAL) {
+        if (mode == KeyInterceptor.MODE_INITIAL) {
             return true;
         }
-        if (mode == DispatchKeyEventHook.MODE_MODIFY) {
+        if (mode == KeyInterceptor.MODE_MODIFY) {
             return handleModifyTouch(v, event);
         }
         return handleRemoveTouch(v, event, action);
@@ -165,8 +165,8 @@ public final class EventHandlerHook extends XC_MethodHook implements Property.On
         } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
             if (mLongClick) {
                 finishRemoveDrag(v);
-            } else if (action == MotionEvent.ACTION_UP && DispatchKeyEventHook.isKeySelecting()) {
-                DispatchKeyEventHook.selectViewByTap(v);
+            } else if (action == MotionEvent.ACTION_UP && KeyInterceptor.isKeySelecting()) {
+                KeyInterceptor.selectViewByTap(v);
             }
             endTouch(v);
         }
@@ -270,7 +270,7 @@ public final class EventHandlerHook extends XC_MethodHook implements Property.On
             if (mLongClick && mDragTarget != null) {
                 finalizeModifyDrag(v.getContext().getPackageName());
             } else if (action == MotionEvent.ACTION_UP && !mLongClick) {
-                DispatchKeyEventHook.selectViewByTap(v);
+                KeyInterceptor.selectViewByTap(v);
             }
             endTouch(v);
         }
@@ -279,7 +279,7 @@ public final class EventHandlerHook extends XC_MethodHook implements Property.On
 
     /** 开始拖拽当前选中的视图（非被触摸的视图） */
     private void startModifyDrag() {
-        View target = DispatchKeyEventHook.getSelectedView();
+        View target = KeyInterceptor.getSelectedView();
         if (target == null) return;
 
         mDragTarget = target;

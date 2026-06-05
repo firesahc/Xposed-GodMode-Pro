@@ -15,13 +15,13 @@ import android.view.View;
 import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.engine.event.EditModeEvent;
 import com.kaisar.xposed.godmode.engine.event.EventBus;
-import com.kaisar.xposed.godmode.injection.event.RulesChangedEvent;
+import com.kaisar.xposed.godmode.engine.event.RulesChangedEvent;
 import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
 import com.kaisar.xposed.godmode.injection.bridge.ManagerObserver;
 import com.kaisar.xposed.godmode.injection.hook.ActivityLifecycleHook;
-import com.kaisar.xposed.godmode.injection.hook.DebugLayoutHookInstaller;
-import com.kaisar.xposed.godmode.injection.hook.DispatchKeyEventHook;
-import com.kaisar.xposed.godmode.injection.hook.EventHandlerHook;
+import com.kaisar.xposed.godmode.hook.DebugLayoutHook;
+import com.kaisar.xposed.godmode.hook.KeyInterceptor;
+import com.kaisar.xposed.godmode.hook.TouchInterceptor;
 import com.kaisar.xposed.godmode.injection.util.BlockListChecker;
 import com.kaisar.xposed.godmode.injection.util.GmResources;
 import com.kaisar.xposed.godmode.injection.util.Logger;
@@ -68,7 +68,7 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
     private static final EventBus sEventBus = EventBus.getDefault();
 
     private static State state = State.UNKNOWN;
-    private static final DispatchKeyEventHook sDispatchKeyEventHook = new DispatchKeyEventHook();
+    private static final KeyInterceptor sKeyInterceptor = new KeyInterceptor();
 
     private enum State { UNKNOWN, ALLOWED, BLOCKED }
 
@@ -123,7 +123,7 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
         XposedHelpers.findAndHookMethod(Activity.class, "onResume", new XC_MethodHook() {
             @Override
             protected void afterHookedMethod(MethodHookParam param) {
-                sDispatchKeyEventHook.setActivity((Activity) param.thisObject);
+                sKeyInterceptor.setActivity((Activity) param.thisObject);
             }
         });
 
@@ -138,7 +138,7 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
                     // post 到 DecorView 以确保 setContentView 已完成、视图树完整后再显示面板。
                     // AppCompatActivity 在 super.onCreate() 返回之后才调用 setContentView()，
                     // 直接调用 buildViewNodes 会得到只有系统占位元素的残缺视图树。
-                    activity.getWindow().getDecorView().post(() -> sDispatchKeyEventHook.setdisplay(true));
+                    activity.getWindow().getDecorView().post(() -> sKeyInterceptor.setdisplay(true));
                 }
                 super.afterHookedMethod(param);
             }
@@ -160,16 +160,16 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
         XposedHelpers.findAndHookMethod(Activity.class, "onDestroy", lifecycleHook);
 
         // 调试布局 Hook — 编辑模式激活时显示视图边界
-        DebugLayoutHookInstaller.install(switchProp);
+        DebugLayoutHook.install(switchProp);
 
         // 触摸事件 Hook — 拦截点击/拖拽以进行移除和修改操作
-        EventHandlerHook eventHandlerHook = new EventHandlerHook();
-        switchProp.addOnPropertyChangeListener(eventHandlerHook);
+        TouchInterceptor touchInterceptor = new TouchInterceptor();
+        switchProp.addOnPropertyChangeListener(touchInterceptor);
         XposedHelpers.findAndHookMethod(View.class, "dispatchTouchEvent",
-                MotionEvent.class, eventHandlerHook);
+                MotionEvent.class, touchInterceptor);
 
         // 按键事件 Hook — 音量键切换节点选择器面板
-        switchProp.addOnPropertyChangeListener(sDispatchKeyEventHook);
+        switchProp.addOnPropertyChangeListener(sKeyInterceptor);
     }
 
     /** 注册 IPC 观察者，使服务端的规则更新能到达应用内 */
@@ -200,7 +200,7 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
             switchProp.set(enable);                        // 旧路径
             sEventBus.post(new EditModeEvent(enable));     // 新路径
         }
-        sDispatchKeyEventHook.setdisplay(enable);
+        sKeyInterceptor.setdisplay(enable);
     }
 
     public static void notifyViewRulesChanged(ActRules actRules) {

@@ -1,4 +1,4 @@
-package com.kaisar.xposed.godmode.injection.hook;
+package com.kaisar.xposed.godmode.hook;
 
 import static com.kaisar.xposed.godmode.GodModeApplication.TAG;
 
@@ -12,6 +12,8 @@ import com.kaisar.xposed.godmode.injection.ViewHelper;
 import com.kaisar.xposed.godmode.injection.util.Logger;
 import com.kaisar.xposed.godmode.injection.util.Property;
 
+import java.util.Optional;
+
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XC_MethodReplacement;
 import de.robv.android.xposed.XposedBridge;
@@ -23,9 +25,9 @@ import de.robv.android.xposed.XposedHelpers;
  * 当 GodMode 编辑模式激活时，显示每个 View 的边距/内边距/焦点覆盖层，
  * 帮助用户在选中过程中看清视图边界。同时禁止 GM 覆盖层视图自身的调试绘制。
  */
-public final class DebugLayoutHookInstaller {
+public final class DebugLayoutHook {
 
-    private DebugLayoutHookInstaller() {}
+    private DebugLayoutHook() {}
 
     public static void install(Property<Boolean> switchProp) {
         boolean legacyOk = false, modernOk = false, suppressOk = false;
@@ -49,7 +51,7 @@ public final class DebugLayoutHookInstaller {
 
     private static boolean installLegacyHooksSafe(Property<Boolean> switchProp) {
         try {
-            SystemPropertiesHook hook = new SystemPropertiesHook();
+            LegacyHook hook = new LegacyHook();
             switchProp.addOnPropertyChangeListener(hook);
             XposedHelpers.findAndHookMethod("android.os.SystemProperties",
                     ClassLoader.getSystemClassLoader(),
@@ -64,7 +66,7 @@ public final class DebugLayoutHookInstaller {
     private static boolean installModernHooksSafe(Property<Boolean> switchProp) {
         boolean ok = false;
         try {
-            SystemPropertiesStringHook stringHook = new SystemPropertiesStringHook();
+            ModernHook stringHook = new ModernHook();
             switchProp.addOnPropertyChangeListener(stringHook);
             XposedBridge.hookAllMethods(
                     XposedHelpers.findClass("android.os.SystemProperties", ClassLoader.getSystemClassLoader()),
@@ -74,7 +76,7 @@ public final class DebugLayoutHookInstaller {
             Logger.w(TAG, "[DebugLayout] native_get hook failed: " + t.getMessage());
         }
         try {
-            DisplayPropertiesHook displayHook = new DisplayPropertiesHook();
+            DisplayHook displayHook = new DisplayHook();
             switchProp.addOnPropertyChangeListener(displayHook);
             XposedHelpers.findAndHookMethod("android.sysprop.DisplayProperties",
                     ClassLoader.getSystemClassLoader(),
@@ -112,5 +114,49 @@ public final class DebugLayoutHookInstaller {
             Logger.w(TAG, "[DebugLayout] debug draw suppression failed: " + t.getMessage());
         }
         return ok;
+    }
+
+    // =========================================================================
+    // 内部 Hook 类
+    // =========================================================================
+
+    private static abstract class BaseDebugHook extends XC_MethodHook implements Property.OnPropertyChangeListener<Boolean> {
+
+        protected volatile boolean mDebugLayout;
+
+        @Override
+        public void onPropertyChange(Boolean debugLayout) {
+            mDebugLayout = debugLayout;
+        }
+    }
+
+    private static final class LegacyHook extends BaseDebugHook {
+
+        @Override
+        protected void beforeHookedMethod(MethodHookParam param) {
+            if (mDebugLayout && "debug.layout".equals(param.args[0])) {
+                param.setResult(true);
+            }
+        }
+    }
+
+    private static final class ModernHook extends BaseDebugHook {
+
+        @Override
+        protected void beforeHookedMethod(MethodHookParam param) {
+            if (mDebugLayout && "debug.layout".equals(param.args[0])) {
+                param.setResult("true");
+            }
+        }
+    }
+
+    private static final class DisplayHook extends BaseDebugHook {
+
+        @Override
+        protected void beforeHookedMethod(MethodHookParam param) {
+            if (mDebugLayout) {
+                param.setResult(Optional.of(true));
+            }
+        }
     }
 }

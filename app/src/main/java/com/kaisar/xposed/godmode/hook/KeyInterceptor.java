@@ -1,4 +1,4 @@
-package com.kaisar.xposed.godmode.injection.hook;
+package com.kaisar.xposed.godmode.hook;
 
 import static com.kaisar.xposed.godmode.GodModeApplication.TAG;
 import static com.kaisar.xposed.godmode.injection.util.CommonUtils.recycleNullableBitmap;
@@ -34,6 +34,7 @@ import com.kaisar.xposed.godmode.injection.util.Property;
 import com.kaisar.xposed.godmode.injection.util.ToolbarVisibilityController;
 import com.kaisar.xposed.godmode.injection.editor.overlay.MaskView;
 import com.kaisar.xposed.godmode.injection.editor.overlay.ParticleView;
+import com.kaisar.xposed.godmode.injection.hook.ModifyPanelController;
 import com.kaisar.xposed.godmode.rule.ViewRule;
 
 import java.lang.ref.WeakReference;
@@ -52,7 +53,7 @@ import de.robv.android.xposed.XposedHelpers;
  *   <li>{@link ModifyPanelController} – 逐视图属性编辑面板</li>
  * </ul>
  */
-public final class DispatchKeyEventHook extends XC_MethodHook
+public final class KeyInterceptor extends XC_MethodHook
         implements Property.OnPropertyChangeListener<Boolean>, SeekBar.OnSeekBarChangeListener {
 
     // =========================================================================
@@ -61,7 +62,7 @@ public final class DispatchKeyEventHook extends XC_MethodHook
 
     private static final int OVERLAY_COLOR = Color.argb(150, 255, 0, 0);
     private static final int OVERLAY_COLOR_REPEATABLE = Color.argb(150, 255, 165, 0);
-    private static DispatchKeyEventHook sInstance;
+    private static KeyInterceptor sInstance;
 
     public static final int MODE_INITIAL = 0;
     public static final int MODE_REMOVE = 1;
@@ -69,13 +70,13 @@ public final class DispatchKeyEventHook extends XC_MethodHook
     private static volatile int sInteractionMode = MODE_INITIAL;
 
     public static int getInteractionMode() { return sInteractionMode; }
-    static boolean isKeySelecting() { return sInstance != null && sInstance.mKeySelecting; }
+    public static boolean isKeySelecting() { return sInstance != null && sInstance.mKeySelecting; }
 
     private static volatile boolean sInfoFlowMode = false;
     public static boolean isInfoFlowMode() { return sInfoFlowMode; }
 
     // =========================================================================
-    // 视图树状态（通过静态访问器与 EventHandlerHook 共享）
+    // 视图树状态（通过静态访问器与 TouchInterceptor 共享）
     // =========================================================================
 
     private final List<WeakReference<View>> mViewNodes = new ArrayList<>();
@@ -110,11 +111,11 @@ public final class DispatchKeyEventHook extends XC_MethodHook
     // 构造器 — 注册音量键 Hook
     // =========================================================================
 
-    public DispatchKeyEventHook() {
+    public KeyInterceptor() {
         sInstance = this;
         XposedHelpers.findAndHookMethod(Activity.class, "dispatchKeyEvent", KeyEvent.class, new XC_MethodHook() {
             protected void beforeHookedMethod(MethodHookParam param) {
-                if (!GodModeInjector.switchProp.get() || EventHandlerHook.mDragging) return;
+                if (!GodModeInjector.switchProp.get() || TouchInterceptor.mDragging) return;
                 KeyEvent event = (KeyEvent) param.args[0];
                 int action = event.getAction();
                 int keyCode = event.getKeyCode();
@@ -168,9 +169,9 @@ public final class DispatchKeyEventHook extends XC_MethodHook
     // 视图选择 — 点击选中、获取选中视图、视图匹配
     // =========================================================================
 
-    /** 通过点击事件选中视图（从 EventHandlerHook 调用） */
+    /** 通过点击事件选中视图（从 TouchInterceptor 调用） */
     public static void selectViewByTap(View tappedView) {
-        DispatchKeyEventHook instance = sInstance;
+        KeyInterceptor instance = sInstance;
         if (instance == null || !instance.mKeySelecting || instance.mNodeSeekbar == null
                 || instance.mModifyController.isPanelShowing()) return;
 
@@ -185,9 +186,9 @@ public final class DispatchKeyEventHook extends XC_MethodHook
         }
     }
 
-    /** 获取当前选中的视图（由 EventHandlerHook 的修改模式拖拽调用） */
+    /** 获取当前选中的视图（由 TouchInterceptor 的修改模式拖拽调用） */
     public static View getSelectedView() {
-        DispatchKeyEventHook instance = sInstance;
+        KeyInterceptor instance = sInstance;
         if (instance == null || instance.mViewNodes.isEmpty()) return null;
         int idx = Math.max(instance.mCurrentViewIndex, 0);
         if (idx < instance.mViewNodes.size()) {

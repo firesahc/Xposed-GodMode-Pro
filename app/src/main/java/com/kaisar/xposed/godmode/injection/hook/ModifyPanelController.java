@@ -53,7 +53,7 @@ import de.robv.android.xposed.XposedHelpers;
  * 显示本面板，通过 {@link #isPanelShowing()} 判断是否禁止切换元素，
  * 并在用户请求批量保存时调用 {@link #saveAll(Activity, View, View, View)}。
  */
-final class ModifyPanelController {
+public final class ModifyPanelController {
 
     private View mModifyPanel;
     private View mCurrentlyModifyingView;
@@ -78,16 +78,16 @@ final class ModifyPanelController {
 
     private boolean mActivityResultHooked;
 
-    boolean isPanelShowing() {
+    public boolean isPanelShowing() {
         return mModifyPanel != null;
     }
 
-    View getPanelView() {
+    public View getPanelView() {
         return mModifyPanel;
     }
 
     /** 取消修改：还原视图状态并关闭面板 */
-    void cancel() {
+    public void cancel() {
         revertViewState();
         for (java.util.Map.Entry<String, Bitmap> entry : mPendingModBitmaps.entrySet()) {
             recycleNullableBitmap(entry.getValue());
@@ -100,7 +100,7 @@ final class ModifyPanelController {
 
     // ---- 显示 / 关闭 ----
 
-    void show(View selectedView, Activity activity, ViewGroup container) {
+    public void show(View selectedView, Activity activity, ViewGroup container) {
         if (mModifyPanel != null) return;
         if (selectedView == null) return;
 
@@ -340,7 +340,7 @@ final class ModifyPanelController {
     /**
      * 持久化所有待保存的修改并通知系统服务。
      */
-    void saveAll(Activity activity, View nodeSelectorPanel, View maskView, View modifyPanel) {
+    public void saveAll(Activity activity, View nodeSelectorPanel, View maskView, View modifyPanel) {
         if (mTempModifications.isEmpty()) {
             Toast.makeText(activity, "没有需要保存的修改", Toast.LENGTH_SHORT).show();
             return;
