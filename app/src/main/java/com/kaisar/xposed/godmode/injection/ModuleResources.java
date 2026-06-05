@@ -5,6 +5,7 @@ import android.content.res.AssetManager;
 import android.content.res.Resources;
 
 import com.kaisar.xposed.godmode.R;
+import com.kaisar.xposed.godmode.injection.util.GmResources;
 import com.kaisar.xposed.godmode.injection.util.Logger;
 
 import java.io.File;
@@ -65,17 +66,5 @@ public final class ModuleResources {
         } catch (Exception e) {
             Logger.e(TAG, "[ModuleResources] inject failed", e);
         }
-    }
-}
-
-// 保留 GmResources 桥接类
-class GmResources {
-    private static Resources sRes;
-    static void init(Resources res) { sRes = res; }
-    public static android.view.LayoutInflater getLayout(int id) {
-        return null; // 由调用方自行处理
-    }
-    public static CharSequence getText(int id) {
-        return sRes != null ? sRes.getText(id) : "";
     }
 }
