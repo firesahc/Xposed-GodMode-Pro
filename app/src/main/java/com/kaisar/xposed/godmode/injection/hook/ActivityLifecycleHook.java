@@ -9,8 +9,10 @@ import android.text.TextUtils;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
 
+import com.kaisar.xposed.godmode.engine.event.Subscribe;
 import com.kaisar.xposed.godmode.injection.RuleModificationHelper;
 import com.kaisar.xposed.godmode.injection.ViewController;
+import com.kaisar.xposed.godmode.injection.event.RulesChangedEvent;
 import com.kaisar.xposed.godmode.injection.util.Logger;
 import com.kaisar.xposed.godmode.injection.util.Property;
 import com.kaisar.xposed.godmode.rule.ActRules;
@@ -63,6 +65,12 @@ public final class ActivityLifecycleHook extends XC_MethodHook implements Proper
             }
             Logger.d(TAG, "[ActivityLifecycle] destroy: " + activity.getClass().getSimpleName() + " (total=" + sActivities.size() + ")");
         }
+    }
+
+    // EventBus 路径 — 与 Property 监听并存，双轨运行
+    @Subscribe
+    public void onRulesChanged(RulesChangedEvent event) {
+        onPropertyChange(event.rules);
     }
 
     @Override

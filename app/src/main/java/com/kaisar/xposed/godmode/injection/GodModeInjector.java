@@ -154,7 +154,8 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
         Logger.d(TAG, "[GodMode] registering hooks...");
         // Activity 生命周期 Hook — 在 Activity 恢复/销毁时应用/撤销规则
         ActivityLifecycleHook lifecycleHook = new ActivityLifecycleHook();
-        actRuleProp.addOnPropertyChangeListener(lifecycleHook);
+        actRuleProp.addOnPropertyChangeListener(lifecycleHook);     // Property 路径
+        sEventBus.register(lifecycleHook);                          // EventBus 路径
         XposedHelpers.findAndHookMethod(Activity.class, "onPostResume", lifecycleHook);
         XposedHelpers.findAndHookMethod(Activity.class, "onDestroy", lifecycleHook);
 
