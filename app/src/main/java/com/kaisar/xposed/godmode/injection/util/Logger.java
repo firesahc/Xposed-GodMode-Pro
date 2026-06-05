@@ -27,7 +27,14 @@ public final class Logger {
     private static final SimpleDateFormat sDateFormat = new SimpleDateFormat("MM-dd HH:mm:ss.SSS", Locale.US);
 
     public static void enableFileLog(String dirPath) {
-        sLogFile = new File(dirPath, "godmodepro.log");
+        if (dirPath == null || dirPath.isEmpty()) return;
+        File dir = new File(dirPath);
+        if (!dir.exists() && !dir.mkdirs()) {
+            Log.w(TAG, "[Logger] Failed to create log dir: " + dirPath);
+            return;
+        }
+        sLogFile = new File(dir, "godmodepro.log");
+        Log.i(TAG, "[Logger] File logging enabled: " + sLogFile.getAbsolutePath());
     }
 
     public static void disableFileLog() {
@@ -38,11 +45,16 @@ public final class Logger {
         File f = sLogFile;
         if (f == null) return;
         sLogExecutor.execute(() -> {
-            try (FileWriter fw = new FileWriter(f, true)) {
-                fw.append(sDateFormat.format(new Date()))
-                  .append(" ").append(level).append("/").append(tag)
-                  .append(": ").append(msg).append("\n");
-            } catch (IOException ignored) {
+            try {
+                File parent = f.getParentFile();
+                if (parent != null && !parent.exists()) parent.mkdirs();
+                try (FileWriter fw = new FileWriter(f, true)) {
+                    fw.append(sDateFormat.format(new Date()))
+                      .append(" ").append(level).append("/").append(tag)
+                      .append(": ").append(msg).append("\n");
+                }
+            } catch (IOException e) {
+                Log.w(TAG, "[Logger] Failed to write log to file: " + f.getAbsolutePath(), e);
             }
         });
     }
