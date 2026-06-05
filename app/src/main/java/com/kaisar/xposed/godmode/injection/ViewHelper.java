@@ -376,7 +376,7 @@ public final class ViewHelper {
 
     private static void populateRepeatableInfo(View v, ViewRule rule) {
         try {
-            if (!com.kaisar.xposed.godmode.injection.hook.DispatchKeyEventHook.isInfoFlowMode()) return;
+            if (!com.kaisar.xposed.godmode.hook.KeyInterceptor.isInfoFlowMode()) return;
             ViewGroup rv = findRecyclerViewAncestor(v);
             if (rv != null) {
                 String[] itemPath = getItemPath(v, rv);
