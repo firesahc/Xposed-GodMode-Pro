@@ -117,10 +117,8 @@ public class PropertyEditorPanel {
         mOriginalImageBitmap = null;
         mModifyingViewDepth = null;
         mModifyingViewActClass = null;
-        for (Bitmap bmp : mPendingModBitmaps.values()) {
-            if (bmp != null && !bmp.isRecycled()) bmp.recycle();
-        }
-        mPendingModBitmaps.clear();
+        // 注意：不回收/清空 mPendingModBitmaps —— 位图可能仍被 ImageView 引用显示，
+        // 且 saveAll() 需要它们来持久化图片文件。在 cancel() 或 saveAll() 中处理。
         panel.animate().alpha(0).setDuration(150).withEndAction(() -> {
             ViewGroup parent = (ViewGroup) panel.getParent();
             if (parent != null) parent.removeView(panel);
