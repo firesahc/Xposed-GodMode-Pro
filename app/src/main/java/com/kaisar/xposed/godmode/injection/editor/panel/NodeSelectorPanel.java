@@ -1,11 +1,15 @@
 package com.kaisar.xposed.godmode.injection.editor.panel;
 
 import android.app.Activity;
+import android.view.Display;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.animation.DecelerateInterpolator;
 import android.widget.SeekBar;
+import android.widget.TextView;
+
+import androidx.appcompat.widget.TooltipCompat;
 
 import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.injection.ModuleResources;
@@ -17,12 +21,30 @@ import java.util.List;
 
 /**
  * 节点选择面板 — 视图树导航 + 选中/预览/移除/修改操作。
- * 从 DispatchKeyEventHook 提取核心 show/dismiss 逻辑。
  * <p>
- * 内部按钮绑定（block/preview/modify/nudge/mode切换/面板位置）仍由
- * DispatchKeyEventHook 管理，因为依赖 MODE_* 静态交互模式状态。
+ * 按钮点击通过 {@link Callbacks} 接口转发给外界处理器，
+ * 面板自身的 UI 操作（导航、位置切换）在内部完成。
  */
 public class NodeSelectorPanel {
+
+    // 交互模式（与 KeyInterceptor 的 MODE_* 对应，待 P3.2 统一为 EditorInteractionMode）
+    private static final int MODE_INITIAL = 0;
+    private static final int MODE_REMOVE = 1;
+    private static final int MODE_MODIFY = 2;
+
+    /**
+     * 节点选择器面板的按钮回调接口。
+     * <p>
+     * 由 {@link #wireButtons} 在绑定按钮时调用，实现方负责处理具体业务逻辑。
+     */
+    public interface Callbacks {
+        void onBlockRequested(Activity activity, ViewGroup container);
+        void onPreviewRequested(Activity activity);
+        void onModifyRequested(View selectedView, Activity activity, ViewGroup container);
+        void onSaveModifyRequested(Activity activity);
+        void onModeChanged(int mode);
+        void onInfoFlowRequested();
+    }
 
     private View mPanelView;
     private int mCurrentIndex;
@@ -82,6 +104,88 @@ public class NodeSelectorPanel {
             }).start();
         }
         mViewNodes = null;
+    }
+
+    /**
+     * 绑定面板所有按钮的点击监听。
+     * <p>
+     * 面板自身的 UI 操作（导航、位置切换）在内部处理；
+     * 需要业务逻辑的操作通过 {@code callbacks} 转发。
+     *
+     * @param activity  当前 Activity
+     * @param container DecorView 容器
+     * @param callbacks 业务回调
+     */
+    public void wireButtons(final Activity activity, final ViewGroup container,
+            final Callbacks callbacks) {
+        if (mPanelView == null) return;
+        View removeMenu = mPanelView.findViewById(R.id.remove_menu);
+        View modifyMenu = mPanelView.findViewById(R.id.modify_menu);
+
+        // 移除按钮
+        View btnBlock = mPanelView.findViewById(R.id.block);
+        TooltipCompat.setTooltipText(btnBlock, GmResources.getText(R.string.accessibility_block));
+        btnBlock.setOnClickListener(v -> callbacks.onBlockRequested(activity, container));
+
+        // 预览按钮
+        View btnPreview = mPanelView.findViewById(R.id.preview);
+        TooltipCompat.setTooltipText(btnPreview, GmResources.getText(R.string.accessibility_preview));
+        btnPreview.setOnClickListener(v -> callbacks.onPreviewRequested(activity));
+
+        // 修改按钮 — 打开属性编辑面板
+        View btnModify = mPanelView.findViewById(R.id.modify);
+        btnModify.setOnClickListener(v -> {
+            if (!mHasUserSelection) return;
+            View selectedView = getSelectedView();
+            if (selectedView != null) {
+                callbacks.onModifyRequested(selectedView, activity, container);
+            }
+        });
+
+        // 保存修改按钮
+        View btnSaveModify = mPanelView.findViewById(R.id.save_modify);
+        btnSaveModify.setOnClickListener(v -> callbacks.onSaveModifyRequested(activity));
+
+        // 模式切换
+        View removeModeBtn = mPanelView.findViewById(R.id.remove_mode_btn);
+        View modifyModeBtn = mPanelView.findViewById(R.id.modify_mode_btn);
+
+        removeModeBtn.setOnClickListener(v -> {
+            boolean wasVisible = removeMenu.getVisibility() == View.VISIBLE;
+            removeMenu.setVisibility(wasVisible ? View.GONE : View.VISIBLE);
+            modifyMenu.setVisibility(View.GONE);
+            modifyModeBtn.setEnabled(wasVisible);
+            callbacks.onModeChanged(wasVisible ? MODE_INITIAL : MODE_REMOVE);
+        });
+
+        modifyModeBtn.setOnClickListener(v -> {
+            boolean wasVisible = modifyMenu.getVisibility() == View.VISIBLE;
+            modifyMenu.setVisibility(wasVisible ? View.GONE : View.VISIBLE);
+            removeMenu.setVisibility(View.GONE);
+            removeModeBtn.setEnabled(wasVisible);
+            callbacks.onModeChanged(wasVisible ? MODE_INITIAL : MODE_MODIFY);
+        });
+
+        // 面板位置切换
+        View exchangeBtn = mPanelView.findViewById(R.id.exchange);
+        View topContent = mPanelView.findViewById(R.id.topcentent);
+        exchangeBtn.setOnClickListener(v -> {
+            Display display = activity.getWindowManager().getDefaultDisplay();
+            int width = display.getWidth();
+            int targetWidth = width - (width / 6);
+            topContent.setPadding(4, 4,
+                    topContent.getPaddingRight() == targetWidth ? 12 : targetWidth, 4);
+        });
+
+        // 信息流模式
+        TextView infoFlowBtn = mPanelView.findViewById(R.id.info_flow_mode_btn);
+        if (infoFlowBtn != null) {
+            infoFlowBtn.setOnClickListener(v -> callbacks.onInfoFlowRequested());
+        }
+
+        // 上/下导航
+        mPanelView.findViewById(R.id.Up).setOnClickListener(v -> navigatePrevious());
+        mPanelView.findViewById(R.id.Down).setOnClickListener(v -> navigateNext());
     }
 
     // ---- 访问器 ----

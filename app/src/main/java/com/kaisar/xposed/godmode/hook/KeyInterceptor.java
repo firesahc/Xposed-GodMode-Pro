@@ -1,14 +1,13 @@
 package com.kaisar.xposed.godmode.hook;
 
 import static com.kaisar.xposed.godmode.GodModeApplication.TAG;
-import static com.kaisar.xposed.godmode.engine.util.CommonUtils.recycleNullableBitmap;
 
-import android.animation.Animator;
+import com.kaisar.xposed.godmode.injection.editor.gesture.BlockHandler;
+import com.kaisar.xposed.godmode.injection.editor.gesture.PreviewHandler;
 import android.app.Activity;
 import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.Rect;
-import android.view.Display;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -22,19 +21,18 @@ import androidx.appcompat.widget.TooltipCompat;
 
 import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.injection.GodModeInjector;
-import com.kaisar.xposed.godmode.injection.ViewController;
 import com.kaisar.xposed.godmode.injection.ViewHelper;
-import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
+
 import com.kaisar.xposed.godmode.injection.util.GmResources;
 import com.kaisar.xposed.godmode.injection.util.Logger;
 import com.kaisar.xposed.godmode.injection.util.Property;
 import com.kaisar.xposed.godmode.injection.util.ToolbarVisibilityController;
 import com.kaisar.xposed.godmode.injection.editor.overlay.MaskView;
-import com.kaisar.xposed.godmode.injection.editor.overlay.ParticleView;
+
 import com.kaisar.xposed.godmode.injection.editor.panel.NodeSelectorPanel;
 import com.kaisar.xposed.godmode.injection.editor.panel.PropertyEditorPanel;
-import com.kaisar.xposed.godmode.engine.pool.ThreadPools;
-import com.kaisar.xposed.godmode.rule.ViewRule;
+
+
 
 import java.lang.ref.WeakReference;
 import java.util.List;
@@ -77,9 +75,7 @@ public final class KeyInterceptor extends XC_MethodHook
     // 预览状态（在确认移除前临时隐藏视图）
     // =========================================================================
 
-    private View mPreviewView;
-    private ViewRule mPreviewRule;
-    private boolean mIsPreviewing;
+    final PreviewHandler mPreviewHandler = new PreviewHandler();
 
     // =========================================================================
     // 子控制器
@@ -88,6 +84,36 @@ public final class KeyInterceptor extends XC_MethodHook
     private final NodeSelectorPanel mNodePanel = new NodeSelectorPanel();
     final PropertyEditorPanel mPropertyEditor = new PropertyEditorPanel();
     private Activity mCurrentActivity;
+
+    /** 节点选择器面板按钮回调 */
+    private final NodeSelectorPanel.Callbacks mNodePanelCallbacks =
+            new NodeSelectorPanel.Callbacks() {
+        @Override
+        public void onBlockRequested(Activity activity, ViewGroup container) {
+            performBlock(activity, container);
+        }
+        @Override
+        public void onPreviewRequested(Activity activity) {
+            togglePreview(activity);
+        }
+        @Override
+        public void onModifyRequested(View selectedView, Activity activity, ViewGroup container) {
+            mPropertyEditor.show(selectedView, activity, container);
+        }
+        @Override
+        public void onSaveModifyRequested(Activity activity) {
+            mPropertyEditor.saveAll(activity, mNodePanel.getPanelView(),
+                    mNodePanel.getMaskView(), mPropertyEditor.getPanelView());
+        }
+        @Override
+        public void onModeChanged(int mode) {
+            sInteractionMode = mode;
+        }
+        @Override
+        public void onInfoFlowRequested() {
+            toggleInfoFlowMode();
+        }
+    };
 
     // =========================================================================
     // 构造器 — 注册音量键 Hook
@@ -234,89 +260,14 @@ public final class KeyInterceptor extends XC_MethodHook
             mask.setMaskOverlay(OVERLAY_COLOR);
         }
         ToolbarVisibilityController.apply(mNodePanel.getPanelView());
-        wireNodeSelectorButtons(activity, container);
-    }
-
-    /** 绑定节点选择器面板所有按钮的点击监听 */
-    private void wireNodeSelectorButtons(final Activity activity, final ViewGroup container) {
-        View panelView = mNodePanel.getPanelView();
-        if (panelView == null) return;
-        View removeMenu = panelView.findViewById(R.id.remove_menu);
-        View modifyMenu = panelView.findViewById(R.id.modify_menu);
-
-        // 移除按钮
-        View btnBlock = panelView.findViewById(R.id.block);
-        TooltipCompat.setTooltipText(btnBlock, GmResources.getText(R.string.accessibility_block));
-        btnBlock.setOnClickListener(v -> performBlock(activity, container));
-
-        // 预览按钮
-        View btnPreview = panelView.findViewById(R.id.preview);
-        TooltipCompat.setTooltipText(btnPreview, GmResources.getText(R.string.accessibility_preview));
-        btnPreview.setOnClickListener(v -> togglePreview(activity));
-
-        // 修改按钮 — 打开属性编辑面板
-        View btnModify = panelView.findViewById(R.id.modify);
-        btnModify.setOnClickListener(v -> {
-            if (!mNodePanel.hasUserSelection()) return;
-            View selectedView = mNodePanel.getSelectedView();
-            if (selectedView != null) {
-                mPropertyEditor.show(selectedView, activity, container);
-            }
-        });
-
-        // 保存修改按钮
-        View btnSaveModify = panelView.findViewById(R.id.save_modify);
-        btnSaveModify.setOnClickListener(v -> mPropertyEditor.saveAll(
-                activity, mNodePanel.getPanelView(), mNodePanel.getMaskView(),
-                mPropertyEditor.getPanelView()));
-
-        // 模式切换：移除模式
-        View removeModeBtn = panelView.findViewById(R.id.remove_mode_btn);
-        View modifyModeBtn = panelView.findViewById(R.id.modify_mode_btn);
-
-        removeModeBtn.setOnClickListener(v -> {
-            boolean wasVisible = removeMenu.getVisibility() == View.VISIBLE;
-            removeMenu.setVisibility(wasVisible ? View.GONE : View.VISIBLE);
-            modifyMenu.setVisibility(View.GONE);
-            modifyModeBtn.setEnabled(wasVisible);
-            sInteractionMode = wasVisible ? MODE_INITIAL : MODE_REMOVE;
-        });
-
-        // 模式切换：修改模式
-        modifyModeBtn.setOnClickListener(v -> {
-            boolean wasVisible = modifyMenu.getVisibility() == View.VISIBLE;
-            modifyMenu.setVisibility(wasVisible ? View.GONE : View.VISIBLE);
-            removeMenu.setVisibility(View.GONE);
-            removeModeBtn.setEnabled(wasVisible);
-            sInteractionMode = wasVisible ? MODE_INITIAL : MODE_MODIFY;
-        });
-
-        // 面板位置切换按钮
-        View exchangeBtn = panelView.findViewById(R.id.exchange);
-        View topContent = panelView.findViewById(R.id.topcentent);
-        exchangeBtn.setOnClickListener(v -> {
-            Display display = activity.getWindowManager().getDefaultDisplay();
-            int width = display.getWidth();
-            int targetWidth = width - (width / 6);
-            topContent.setPadding(4, 4,
-                    topContent.getPaddingRight() == targetWidth ? 12 : targetWidth, 4);
-        });
-
-        TextView infoFlowBtn = panelView.findViewById(R.id.info_flow_mode_btn);
-        if (infoFlowBtn != null) {
-            infoFlowBtn.setOnClickListener(v -> toggleInfoFlowMode());
-            updateInfoFlowModeButton();
-        }
-
-        // 上/下导航按钮
-        panelView.findViewById(R.id.Up).setOnClickListener(v -> navigatePrevious());
-        panelView.findViewById(R.id.Down).setOnClickListener(v -> navigateNext());
+        mNodePanel.wireButtons(activity, container, mNodePanelCallbacks);
+        updateInfoFlowModeButton();
     }
 
     private void dismissNodeSelectPanel() {
         Logger.i(TAG, "[KeyEventHook] dismissNodeSelectPanel");
         mPropertyEditor.cancel();
-        restorePreview();
+        mPreviewHandler.restorePreview(null, null, null);
         sInteractionMode = MODE_INITIAL;
         mNodePanel.dismiss();
     }
@@ -329,7 +280,10 @@ public final class KeyInterceptor extends XC_MethodHook
         try {
             List<WeakReference<View>> viewNodes = mNodePanel.getViewNodes();
             if (viewNodes == null || viewNodes.isEmpty()) return;
-            if (mIsPreviewing) restorePreview();
+            if (mPreviewHandler.isPreviewing()) {
+                mPreviewHandler.restorePreview(mNodePanel.getMaskView(),
+                        mNodePanel.getSelectedView(), () -> updatePreviewButton(false));
+            }
             final View view = mNodePanel.getSelectedView();
             Logger.d(TAG, "[KeyEventHook] block view = " + view);
             if (view == null) return;
@@ -340,36 +294,26 @@ public final class KeyInterceptor extends XC_MethodHook
 
             // 隐藏 GM 覆盖层以获取干净截图
             hideGmOverlays(View.INVISIBLE);
-            final Bitmap snapshot = ViewHelper.snapshotView(ViewHelper.findTopParentViewByChildView(view));
+            final Bitmap snapshot = ViewHelper.snapshotView(
+                    ViewHelper.findTopParentViewByChildView(view));
             hideGmOverlays(View.VISIBLE);
 
-            final ViewRule viewRule = ViewHelper.makeRemoveRule(view);
-            final ParticleView particleView = new ParticleView(activity);
-            particleView.setDuration(1000);
-            particleView.attachToContainer(container);
-            particleView.setOnAnimationListener(new ParticleView.OnAnimationListener() {
-                @Override
-                public void onAnimationStart(View animView, Animator animation) {
-                    viewRule.visibility = View.GONE;
-                    ViewController.applyRule(view, viewRule);
-                }
+            BlockHandler.execute(activity, view, container, snapshot, blockedViewIndex,
+                    new BlockHandler.OnBlockListener() {
+                        @Override
+                        public void onAnimationEnd(int index) {
+                            restorePanelAlpha();
+                            mNodePanel.updateAfterRemove(index);
+                        }
 
-                @Override
-                public void onAnimationEnd(View animView, Animator animation) {
-                    try {
-                        ViewHelper.drawRuleMask(snapshot, viewRule);
-                        particleView.detachFromContainer();
-                    } catch (Exception e) { Logger.e(TAG, "[KeyEventHook] write rule fail", e); }
-                    restorePanelAlpha();
-                    mNodePanel.updateAfterRemove(blockedViewIndex);
-                    ThreadPools.IO.execute(() -> {
-                        try { GodModeManager.getDefault().writeRule(activity.getPackageName(), viewRule, snapshot); }
-                        catch (Exception e) { Logger.e(TAG, "[KeyEventHook] write rule fail", e); }
-                        recycleNullableBitmap(snapshot);
+                        @Override
+                        public void onError(String message) {
+                            restorePanelAlpha();
+                            Toast.makeText(activity,
+                                    GmResources.getString(R.string.block_fail, message),
+                                    Toast.LENGTH_SHORT).show();
+                        }
                     });
-                }
-            });
-            particleView.boom(view);
         } catch (Exception e) {
             Logger.e(TAG, "[KeyEventHook] block fail", e);
             restorePanelAlpha();
@@ -407,48 +351,19 @@ public final class KeyInterceptor extends XC_MethodHook
     // =========================================================================
 
     private void togglePreview(final Activity activity) {
-        if (mIsPreviewing) {
-            restorePreview();
-        } else {
-            startPreview();
-        }
-    }
-
-    private void startPreview() {
-        List<WeakReference<View>> viewNodes = mNodePanel.getViewNodes();
-        if (viewNodes == null || viewNodes.isEmpty()) return;
-        View view = mNodePanel.getSelectedView();
-        if (view == null) return;
-        try {
-            mPreviewRule = ViewHelper.makeRemoveRule(view);
-            mPreviewRule.visibility = View.GONE;
-            ViewController.applyRule(view, mPreviewRule);
-            mPreviewView = view;
-            mIsPreviewing = true;
-            updatePreviewButton(true);
+        if (mPreviewHandler.isPreviewing()) {
             MaskView maskView = mNodePanel.getMaskView();
-            if (maskView != null) maskView.updateOverlayBounds(new Rect());
-        } catch (Exception e) {
-            Logger.e(TAG, "[KeyEventHook] preview fail", e);
-        }
-    }
-
-    private void restorePreview() {
-        if (mPreviewView != null && mPreviewRule != null) {
-            mPreviewRule.visibility = View.VISIBLE;
-            ViewController.revokeRule(mPreviewView, mPreviewRule);
-            mPreviewView = null;
-            mPreviewRule = null;
-        }
-        mIsPreviewing = false;
-        updatePreviewButton(false);
-        MaskView maskView = mNodePanel.getMaskView();
-        List<WeakReference<View>> viewNodes = mNodePanel.getViewNodes();
-        if (maskView != null && viewNodes != null && !viewNodes.isEmpty()) {
-            View currentView = mNodePanel.getSelectedView();
-            if (currentView != null) {
-                maskView.updateOverlayBounds(ViewHelper.getLocationInWindow(currentView));
-            }
+            View selectedView = mNodePanel.getSelectedView();
+            mPreviewHandler.restorePreview(maskView, selectedView,
+                    () -> updatePreviewButton(false));
+        } else {
+            List<WeakReference<View>> viewNodes = mNodePanel.getViewNodes();
+            if (viewNodes == null || viewNodes.isEmpty()) return;
+            View view = mNodePanel.getSelectedView();
+            if (view == null) return;
+            MaskView maskView = mNodePanel.getMaskView();
+            mPreviewHandler.startPreview(view, maskView,
+                    () -> updatePreviewButton(true));
         }
     }
 
