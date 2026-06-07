@@ -3,39 +3,59 @@ package com.kaisar.xposed.godmode.injection;
 import static com.kaisar.xposed.godmode.GodModeApplication.TAG;
 
 import android.app.Activity;
-import android.util.Pair;
-import android.util.SparseArray;
 import android.view.View;
-import android.view.ViewGroup;
 
-import androidx.annotation.NonNull;
-
+import com.kaisar.xposed.godmode.engine.applier.ModifyApplier;
+import com.kaisar.xposed.godmode.engine.applier.RemoveApplier;
+import com.kaisar.xposed.godmode.engine.applier.RuleApplier;
+import com.kaisar.xposed.godmode.engine.util.FieldMapper;
+import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
 import com.kaisar.xposed.godmode.injection.util.Logger;
 import com.kaisar.xposed.godmode.rule.ViewRule;
-import com.kaisar.xposed.godmode.engine.applier.ViewCompat;
 import com.kaisar.xposed.godmode.util.Preconditions;
 
-import java.lang.ref.WeakReference;
 import java.util.List;
 
 /**
- * Created by jrsen on 17-10-15.
+ * 视图控制器 — 使用 engine/applier 体系应用/撤销规则。
+ * <p>
+ * 根据 {@link ViewRule#ruleTag} 自动路由：
+ * <ul>
+ *   <li>ruleTag 为 null 或空 → 移除规则，委托 {@link RemoveApplier}</li>
+ *   <li>ruleTag 非空 → 修改规则，委托 {@link ModifyApplier}</li>
+ * </ul>
  */
-
 public final class ViewController {
 
-    private final static SparseArray<Pair<WeakReference<View>, ViewProperty>> blockedViewCache = new SparseArray<>();
+    private static RuleApplier sModifyApplier;
+    private static RuleApplier sRemoveApplier;
 
-    public static void clearBlockedCache() {
-        blockedViewCache.clear();
+    private static RuleApplier getModifyApplier() {
+        if (sModifyApplier == null) {
+            sModifyApplier = new ModifyApplier(
+                    path -> GodModeManager.getDefault().openImageFileDescriptor(path));
+        }
+        return sModifyApplier;
     }
 
-    private static int identityKey(ViewRule rule) {
-        int result = rule.activityClass.hashCode();
-        result = 31 * result + rule.viewClass.hashCode();
-        result = 31 * result + java.util.Objects.hashCode(rule.resourceName);
-        result = 31 * result + java.util.Objects.hashCode(rule.text);
-        return result;
+    private static RuleApplier getRemoveApplier() {
+        if (sRemoveApplier == null) {
+            sRemoveApplier = new RemoveApplier();
+        }
+        return sRemoveApplier;
+    }
+
+    public static void clearBlockedCache() {
+        if (sRemoveApplier != null) sRemoveApplier.clearCache();
+        if (sModifyApplier != null) sModifyApplier.clearCache();
+    }
+
+    /** 将 app 模块的 ViewRule（Transport 版）转换为 engine 的 ViewRule（Computation 版）。 */
+    private static com.kaisar.xposed.godmode.engine.rule.ViewRule toEngineRule(ViewRule appRule) {
+        com.kaisar.xposed.godmode.engine.rule.ViewRule engineRule =
+                new com.kaisar.xposed.godmode.engine.rule.ViewRule();
+        FieldMapper.copyFields(appRule, engineRule);
+        return engineRule;
     }
 
     public static void applyRuleBatch(Activity activity, List<ViewRule> rules) {
@@ -51,14 +71,8 @@ public final class ViewController {
                     }
                     continue;
                 }
-                int ruleHashCode = rule.hashCode();
-                Pair<WeakReference<View>, ViewProperty> viewInfo = blockedViewCache.get(ruleHashCode);
-                View view = viewInfo != null ? viewInfo.first.get() : null;
-                if (view == null || !view.isAttachedToWindow()) {
-                    blockedViewCache.delete(ruleHashCode);
-                    view = ViewHelper.findViewBestMatch(activity, rule);
-                    Preconditions.checkNotNull(view, "apply rule fail not match any view");
-                }
+                View view = ViewHelper.findViewBestMatch(activity, rule);
+                Preconditions.checkNotNull(view, "apply rule fail not match any view");
                 if (applyRule(view, rule)) appliedCount++;
             } catch (NullPointerException e) {
                 Logger.w(TAG, "[ViewController] Failed: " + activity + "#" + rule.viewClass + " block failed: " + e.getMessage());
@@ -71,32 +85,12 @@ public final class ViewController {
 
     public static boolean applyRule(View v, ViewRule viewRule) {
         if (v == null || viewRule == null) return false;
-        int cacheKey = viewRule.isRepeatable() ? identityKey(viewRule) : viewRule.hashCode();
-        Pair<WeakReference<View>, ViewProperty> viewInfo = blockedViewCache.get(cacheKey);
-        View blockedView = viewInfo != null ? viewInfo.first.get() : null;
-        if (blockedView == v && v.getVisibility() == viewRule.visibility) {
-            return false;
+        com.kaisar.xposed.godmode.engine.rule.ViewRule engineRule = toEngineRule(viewRule);
+        if (viewRule.isModifyRule()) {
+            return getModifyApplier().apply(v, engineRule);
+        } else {
+            return getRemoveApplier().apply(v, engineRule);
         }
-        ViewProperty viewProperty = blockedView == v ? viewInfo.second : ViewProperty.create(v);
-        v.setAlpha(0f);
-        v.setClickable(false);
-        ViewGroup.LayoutParams lp = v.getLayoutParams();
-        if (lp != null) {
-            switch (viewRule.visibility) {
-                case View.GONE:
-                    lp.width = 0;
-                    lp.height = 0;
-                    break;
-                case View.INVISIBLE:
-                    lp.width = viewProperty.layout_params_width;
-                    lp.height = viewProperty.layout_params_height;
-                    break;
-            }
-            v.requestLayout();
-        }
-        ViewCompat.setVisibility(v, viewRule.visibility);
-        blockedViewCache.put(cacheKey, Pair.create(new WeakReference<>(v), viewProperty));
-        return true;
     }
 
     public static void revokeRuleBatch(Activity activity, List<ViewRule> rules) {
@@ -111,14 +105,8 @@ public final class ViewController {
                     }
                     continue;
                 }
-                int ruleHashCode = rule.hashCode();
-                Pair<WeakReference<View>, ViewProperty> viewInfo = blockedViewCache.get(ruleHashCode);
-                View view = viewInfo != null ? viewInfo.first.get() : null;
-                if (view == null || !view.isAttachedToWindow()) {
-                    blockedViewCache.delete(ruleHashCode);
-                    view = ViewHelper.findViewBestMatch(activity, rule);
-                    Preconditions.checkNotNull(view, "revoke rule fail can't found block view");
-                }
+                View view = ViewHelper.findViewBestMatch(activity, rule);
+                Preconditions.checkNotNull(view, "revoke rule fail can't found block view");
                 revokeRule(view, rule);
             } catch (NullPointerException e) {
                 Logger.w(TAG, "[ViewController] revoke rule fail (act=" + activity + "): " + e.getMessage());
@@ -127,65 +115,16 @@ public final class ViewController {
     }
 
     public static void revokeRule(View v, ViewRule viewRule) {
-        int cacheKey = viewRule.isRepeatable() ? identityKey(viewRule) : viewRule.hashCode();
-        Pair<WeakReference<View>, ViewProperty> viewInfo = blockedViewCache.get(cacheKey);
-        if (viewInfo != null && viewInfo.first.get() == v) {
-            ViewProperty viewProperty = viewInfo.second;
-            v.setAlpha(viewProperty.alpha);
-            v.setClickable(viewProperty.clickable);
-            ViewCompat.setVisibility(v, viewProperty.visibility);
-            ViewGroup.LayoutParams lp = v.getLayoutParams();
-            if (lp != null) {
-                lp.width = viewProperty.layout_params_width;
-                lp.height = viewProperty.layout_params_height;
-                v.requestLayout();
-            }
-            blockedViewCache.delete(cacheKey);
+        if (v == null || viewRule == null) return;
+        com.kaisar.xposed.godmode.engine.rule.ViewRule engineRule = toEngineRule(viewRule);
+        if (viewRule.isModifyRule()) {
+            getModifyApplier().revoke(v, engineRule);
         } else {
-            Logger.w(TAG, "[ViewController] view cache missing during revoke, falling back to setAlpha");
-            v.setAlpha(1f);
-            ViewCompat.setVisibility(v, viewRule.visibility);
+            getRemoveApplier().revoke(v, engineRule);
         }
     }
 
-    private static final class ViewProperty {
-
-        final float alpha;
-        final boolean clickable;
-        final int visibility;
-        final int layout_params_width;
-        final int layout_params_height;
-
-        public ViewProperty(float alpha, boolean clickable, int visibility, int layout_params_width, int layout_params_height) {
-            this.alpha = alpha;
-            this.clickable = clickable;
-            this.visibility = visibility;
-            this.layout_params_width = layout_params_width;
-            this.layout_params_height = layout_params_height;
-        }
-
-        @NonNull
-        @Override
-        public String toString() {
-            final StringBuilder sb = new StringBuilder("ViewProperty{");
-            sb.append("alpha=").append(alpha);
-            sb.append(", clickable=").append(clickable);
-            sb.append(", visibility=").append(visibility);
-            sb.append(", layout_params_width=").append(layout_params_width);
-            sb.append(", layout_params_height=").append(layout_params_height);
-            sb.append('}');
-            return sb.toString();
-        }
-
-        public static ViewProperty create(View view) {
-            float alpha = view.getAlpha();
-            boolean clickable = view.isClickable();
-            int visibility = view.getVisibility();
-            ViewGroup.LayoutParams layoutParams = view.getLayoutParams();
-            int width = layoutParams != null ? layoutParams.width : 0;
-            int height = layoutParams != null ? layoutParams.height : 0;
-            return new ViewProperty(alpha, clickable, visibility, width, height);
-        }
+    private ViewController() {
     }
 
 }

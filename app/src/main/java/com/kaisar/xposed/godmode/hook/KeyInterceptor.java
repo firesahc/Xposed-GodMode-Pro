@@ -33,6 +33,7 @@ import com.kaisar.xposed.godmode.injection.editor.overlay.MaskView;
 import com.kaisar.xposed.godmode.injection.editor.overlay.ParticleView;
 import com.kaisar.xposed.godmode.injection.editor.panel.NodeSelectorPanel;
 import com.kaisar.xposed.godmode.injection.editor.panel.PropertyEditorPanel;
+import com.kaisar.xposed.godmode.engine.pool.ThreadPools;
 import com.kaisar.xposed.godmode.rule.ViewRule;
 
 import java.lang.ref.WeakReference;
@@ -361,11 +362,11 @@ public final class KeyInterceptor extends XC_MethodHook
                     } catch (Exception e) { Logger.e(TAG, "[KeyEventHook] write rule fail", e); }
                     restorePanelAlpha();
                     mNodePanel.updateAfterRemove(blockedViewIndex);
-                    new Thread(() -> {
+                    ThreadPools.IO.execute(() -> {
                         try { GodModeManager.getDefault().writeRule(activity.getPackageName(), viewRule, snapshot); }
                         catch (Exception e) { Logger.e(TAG, "[KeyEventHook] write rule fail", e); }
                         recycleNullableBitmap(snapshot);
-                    }, "gm-write").start();
+                    });
                 }
             });
             particleView.boom(view);

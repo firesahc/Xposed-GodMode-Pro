@@ -25,6 +25,7 @@ import com.kaisar.xposed.godmode.injection.ViewHelper;
 import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
 import com.kaisar.xposed.godmode.injection.util.GmResources;
 import com.kaisar.xposed.godmode.injection.util.Logger;
+import com.kaisar.xposed.godmode.engine.pool.ThreadPools;
 import com.kaisar.xposed.godmode.rule.ViewRule;
 
 import java.io.InputStream;
@@ -461,7 +462,7 @@ public class PropertyEditorPanel {
         mPendingModBitmaps.clear();
         mTempModifications.clear();
         android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
-        new Thread(() -> {
+        ThreadPools.IO.execute(() -> {
             boolean allOk = true;
             for (ViewRule rule : rulesToSave) {
                 Bitmap snapshot = snapshots.get(rule);
@@ -484,7 +485,7 @@ public class PropertyEditorPanel {
                 Toast.makeText(activity,
                         finalAllOk ? "修改已保存" : "部分修改保存失败", Toast.LENGTH_SHORT).show();
             });
-        }, "gm-save-thread").start();
+        });
     }
 
     // ---- Xposed Hook 用于图片选择结果 ----

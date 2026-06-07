@@ -11,7 +11,6 @@ import android.view.ViewTreeObserver;
 
 import com.kaisar.xposed.godmode.engine.event.RulesChangedEvent;
 import com.kaisar.xposed.godmode.engine.event.Subscribe;
-import com.kaisar.xposed.godmode.injection.RuleModificationHelper;
 import com.kaisar.xposed.godmode.injection.ViewController;
 import com.kaisar.xposed.godmode.injection.util.Logger;
 import com.kaisar.xposed.godmode.rule.ActRules;
@@ -81,7 +80,7 @@ public final class LifecycleObserver extends XC_MethodHook {
         // 规则未变化时跳过，避免不必要的撤销→再应用导致的闪回
         // 触发场景：IPC addObserver 推送的规则与 onPostResume 中已应用的规则完全相同时
         if (newActRules.equals(sActRules)) return;
-        RuleModificationHelper.clearAppliedCache();
+        ViewController.clearBlockedCache();
         Set<Map.Entry<String, List<ViewRule>>> entries = newActRules.entrySet();
         for (Map.Entry<String, List<ViewRule>> entry : entries) {
             String key = entry.getKey();
@@ -107,7 +106,7 @@ public final class LifecycleObserver extends XC_MethodHook {
                 for (Activity activity : sActivities.keySet()) {
                     if (TextUtils.equals(activity.getComponentName().getClassName(), entry.getKey())) {
                         if (!revRemove.isEmpty()) ViewController.revokeRuleBatch(activity, revRemove);
-                        for (ViewRule r : revModify) RuleModificationHelper.revokeModificationRule(activity, r);
+                        if (!revModify.isEmpty()) ViewController.revokeRuleBatch(activity, revModify);
                     }
                 }
             }
@@ -120,17 +119,8 @@ public final class LifecycleObserver extends XC_MethodHook {
             List<ViewRule> rules = entry.getValue();
             for (Activity activity : sActivities.keySet()) {
                 if (TextUtils.equals(activity.getComponentName().getClassName(), entry.getKey())) {
-                    for (ViewRule rule : rules) {
-                        if (rule.isModifyRule()) {
-                            RuleModificationHelper.applyModificationRule(activity, rule);
-                        }
-                    }
-                    List<ViewRule> removeRules = new java.util.ArrayList<>();
-                    for (ViewRule r : rules) {
-                        if (r.isRemoveRule()) removeRules.add(r);
-                    }
-                    if (!removeRules.isEmpty()) {
-                        ViewController.applyRuleBatch(activity, removeRules);
+                    if (!rules.isEmpty()) {
+                        ViewController.applyRuleBatch(activity, rules);
                     }
                 }
             }
@@ -201,13 +191,8 @@ public final class LifecycleObserver extends XC_MethodHook {
                 Activity activity = Preconditions.checkNotNull(activityReference.get());
                 List<ViewRule> rules = sActRules.get(activity.getComponentName().getClassName());
                 if (rules != null && !rules.isEmpty()) {
-                    List<ViewRule> removeRules = new java.util.ArrayList<>();
-                    for (ViewRule rule : rules) {
-                        if (rule.isRemoveRule()) removeRules.add(rule);
-                        else if (rule.isModifyRule()) RuleModificationHelper.applyModificationRule(activity, rule);
-                    }
-                    if (!removeRules.isEmpty()) {
-                        ViewController.applyRuleBatch(activity, removeRules);
+                    if (!rules.isEmpty()) {
+                        ViewController.applyRuleBatch(activity, rules);
                     }
                 }
             } catch (Exception e) {
