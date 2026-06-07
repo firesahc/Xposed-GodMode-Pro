@@ -1,6 +1,6 @@
 package com.kaisar.xposed.godmode.util;
 
-import com.kaisar.xposed.godmode.injection.util.FileUtils;
+import com.kaisar.xposed.godmode.engine.util.FileUtils;
 
 import java.io.File;
 import java.io.FileInputStream;

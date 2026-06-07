@@ -1,8 +1,8 @@
 package com.kaisar.xposed.godmode.service;
 
-import static com.kaisar.xposed.godmode.injection.util.FileUtils.S_IRWXG;
-import static com.kaisar.xposed.godmode.injection.util.FileUtils.S_IRWXO;
-import static com.kaisar.xposed.godmode.injection.util.FileUtils.S_IRWXU;
+import static com.kaisar.xposed.godmode.engine.util.FileUtils.S_IRWXG;
+import static com.kaisar.xposed.godmode.engine.util.FileUtils.S_IRWXO;
+import static com.kaisar.xposed.godmode.engine.util.FileUtils.S_IRWXU;
 
 import android.content.Context;
 import android.graphics.Bitmap;
@@ -18,7 +18,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.kaisar.xposed.godmode.BuildConfig;
 import com.kaisar.xposed.godmode.IGodModeManager;
-import com.kaisar.xposed.godmode.injection.util.FileUtils;
+import com.kaisar.xposed.godmode.engine.util.FileUtils;
 import com.kaisar.xposed.godmode.injection.util.Logger;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.AppRules;

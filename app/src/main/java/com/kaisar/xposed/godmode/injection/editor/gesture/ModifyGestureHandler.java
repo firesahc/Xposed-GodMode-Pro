@@ -7,7 +7,7 @@ import android.view.ViewGroup;
 
 import com.kaisar.xposed.godmode.injection.ViewHelper;
 import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
-import com.kaisar.xposed.godmode.injection.util.CommonUtils;
+import com.kaisar.xposed.godmode.engine.util.CommonUtils;
 import com.kaisar.xposed.godmode.rule.ViewRule;
 
 /**

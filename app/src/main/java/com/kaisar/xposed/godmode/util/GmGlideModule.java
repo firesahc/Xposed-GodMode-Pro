@@ -22,7 +22,7 @@ import com.bumptech.glide.load.model.ModelLoaderFactory;
 import com.bumptech.glide.load.model.MultiModelLoaderFactory;
 import com.bumptech.glide.module.AppGlideModule;
 import com.bumptech.glide.signature.ObjectKey;
-import static com.kaisar.xposed.godmode.injection.util.CommonUtils.recycleNullableBitmap;
+import static com.kaisar.xposed.godmode.engine.util.CommonUtils.recycleNullableBitmap;
 
 import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
 import com.kaisar.xposed.godmode.rule.ViewRule;
