@@ -14,7 +14,7 @@ import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
 import com.kaisar.xposed.godmode.injection.editor.overlay.CancelView;
 import com.kaisar.xposed.godmode.injection.editor.overlay.MaskView;
 import com.kaisar.xposed.godmode.injection.editor.overlay.ParticleView;
-import com.kaisar.xposed.godmode.injection.util.CommonUtils;
+import com.kaisar.xposed.godmode.engine.util.CommonUtils;
 import com.kaisar.xposed.godmode.injection.util.Logger;
 import com.kaisar.xposed.godmode.rule.ViewRule;
 import com.kaisar.xposed.godmode.util.Preconditions;
