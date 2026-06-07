@@ -14,6 +14,7 @@ import android.view.ViewParent;
 import android.view.WindowManager;
 
 import com.kaisar.xposed.godmode.injection.ViewHelper;
+import com.kaisar.xposed.godmode.injection.editor.gesture.GestureDispatcher;
 import com.kaisar.xposed.godmode.injection.editor.gesture.ModifyGestureHandler;
 import com.kaisar.xposed.godmode.injection.editor.gesture.RemoveGestureHandler;
 import com.kaisar.xposed.godmode.injection.util.Logger;
@@ -192,29 +193,26 @@ public final class TouchInterceptor extends XC_MethodHook implements Property.On
     // =========================================================================
 
     private boolean beginTouch(View v, boolean isModifyMode) {
-        if (mMultiPointLock) {
-            if (!isModifyMode) {
-                android.widget.Toast.makeText(v.getContext(),
-                        "不支持多点操作", android.widget.Toast.LENGTH_SHORT).show();
-            }
+        boolean[] draggingRef = new boolean[1];
+        if (!GestureDispatcher.tryBeginTouch(v, isModifyMode,
+                mMultiPointLock, new boolean[]{mHasBlockEvent},
+                this::getWindowLayoutParams, draggingRef)) {
             return false;
         }
-        if (getWindowLayoutParams(v) == null) {
-            if (!isModifyMode && !mHasBlockEvent) {
-                android.widget.Toast.makeText(v.getContext(),
-                        "该控件属于悬浮窗暂不支持编辑", android.widget.Toast.LENGTH_SHORT).show();
-                mHasBlockEvent = true;
-            }
-            return false;
-        }
-        mDragging = true;
+        mDragging = draggingRef[0];
         mMultiPointLock = true;
-        ViewParent parent = v.getParent();
-        if (parent != null) parent.requestDisallowInterceptTouchEvent(true);
         mHandler.postDelayed(() -> onLongPress(v, isModifyMode), LONG_PRESS_TIMEOUT);
         return true;
     }
 
+    /**
+     * 结束触摸：完整清理所有触摸状态。
+     * <p>
+     * 比 {@link GestureDispatcher#tryBeginTouch} 的职责更广：
+     * 除了释放触摸拦截，还会重置 mLongClick/mHasBlockEvent/mMultiPointLock/mDragging
+     * 并取消所有排队的 Handler 消息（包括长按回调）。
+     * GestureDispatcher 的旧 endTouch() 只清理单个长按回调，故已废弃删除。
+     */
     private void endTouch(View v) {
         ViewParent parent = v.getParent();
         if (parent != null) parent.requestDisallowInterceptTouchEvent(false);
