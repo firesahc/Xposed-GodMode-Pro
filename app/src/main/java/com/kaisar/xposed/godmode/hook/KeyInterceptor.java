@@ -2,6 +2,7 @@ package com.kaisar.xposed.godmode.hook;
 
 import static com.kaisar.xposed.godmode.GodModeApplication.TAG;
 
+import com.kaisar.xposed.godmode.injection.editor.EditorInteractionMode;
 import com.kaisar.xposed.godmode.injection.editor.gesture.BlockHandler;
 import com.kaisar.xposed.godmode.injection.editor.gesture.PreviewHandler;
 import android.app.Activity;
@@ -60,9 +61,12 @@ public final class KeyInterceptor extends XC_MethodHook
     private static final int OVERLAY_COLOR_REPEATABLE = Color.argb(150, 255, 165, 0);
     private static KeyInterceptor sInstance;
 
-    public static final int MODE_INITIAL = 0;
-    public static final int MODE_REMOVE = 1;
-    public static final int MODE_MODIFY = 2;
+    /** @deprecated 使用 {@link EditorInteractionMode#INITIAL} */
+    @Deprecated public static final int MODE_INITIAL = EditorInteractionMode.INITIAL;
+    /** @deprecated 使用 {@link EditorInteractionMode#REMOVE} */
+    @Deprecated public static final int MODE_REMOVE = EditorInteractionMode.REMOVE;
+    /** @deprecated 使用 {@link EditorInteractionMode#MODIFY} */
+    @Deprecated public static final int MODE_MODIFY = EditorInteractionMode.MODIFY;
     private static volatile int sInteractionMode = MODE_INITIAL;
 
     public static int getInteractionMode() { return sInteractionMode; }
@@ -253,12 +257,8 @@ public final class KeyInterceptor extends XC_MethodHook
         Logger.i(TAG, "[KeyEventHook] showNodeSelectPanel for " + activity.getPackageName());
         List<WeakReference<View>> viewNodes = ViewHelper.buildViewNodes(activity.getWindow().getDecorView());
         final ViewGroup container = (ViewGroup) activity.getWindow().getDecorView();
-        mNodePanel.show(viewNodes, activity, container, this);
+        mNodePanel.show(viewNodes, activity, container, OVERLAY_COLOR, this);
         if (!mNodePanel.isKeySelecting()) return; // show() failed
-        MaskView mask = mNodePanel.getMaskView();
-        if (mask != null) {
-            mask.setMaskOverlay(OVERLAY_COLOR);
-        }
         ToolbarVisibilityController.apply(mNodePanel.getPanelView());
         mNodePanel.wireButtons(activity, container, mNodePanelCallbacks);
         updateInfoFlowModeButton();

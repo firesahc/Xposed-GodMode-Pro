@@ -12,6 +12,7 @@ import android.widget.TextView;
 import androidx.appcompat.widget.TooltipCompat;
 
 import com.kaisar.xposed.godmode.R;
+import com.kaisar.xposed.godmode.injection.editor.EditorInteractionMode;
 import com.kaisar.xposed.godmode.injection.ModuleResources;
 import com.kaisar.xposed.godmode.injection.editor.overlay.MaskView;
 import com.kaisar.xposed.godmode.injection.util.GmResources;
@@ -27,10 +28,7 @@ import java.util.List;
  */
 public class NodeSelectorPanel {
 
-    // 交互模式（与 KeyInterceptor 的 MODE_* 对应，待 P3.2 统一为 EditorInteractionMode）
-    private static final int MODE_INITIAL = 0;
-    private static final int MODE_REMOVE = 1;
-    private static final int MODE_MODIFY = 2;
+    // 交互模式（复用 EditorInteractionMode 常量）
 
     /**
      * 节点选择器面板的按钮回调接口。
@@ -56,19 +54,21 @@ public class NodeSelectorPanel {
 
     /**
      * 显示节点选择面板。
-     * @param viewNodes 视图树节点列表
-     * @param activity  当前 Activity
-     * @param container DecorView 容器
+     * @param viewNodes    视图树节点列表
+     * @param activity     当前 Activity
+     * @param container    DecorView 容器
+     * @param overlayColor MaskView 遮罩颜色
      * @param seekBarListener SeekBar 变化回调
      */
     public void show(List<WeakReference<View>> viewNodes, Activity activity,
-            ViewGroup container, SeekBar.OnSeekBarChangeListener seekBarListener) {
+            ViewGroup container, int overlayColor,
+            SeekBar.OnSeekBarChangeListener seekBarListener) {
         mViewNodes = viewNodes;
         mCurrentIndex = 0;
         mHasUserSelection = false;
         try {
             mMaskView = MaskView.makeMaskView(activity);
-            mMaskView.setMaskOverlay(0x3A8BC34B); // OVERLAY_COLOR ARGB
+            mMaskView.setMaskOverlay(overlayColor);
             mMaskView.attachToContainer(container);
             ModuleResources.injectInto(activity.getResources());
             LayoutInflater inflater = LayoutInflater.from(activity);
@@ -155,7 +155,7 @@ public class NodeSelectorPanel {
             removeMenu.setVisibility(wasVisible ? View.GONE : View.VISIBLE);
             modifyMenu.setVisibility(View.GONE);
             modifyModeBtn.setEnabled(wasVisible);
-            callbacks.onModeChanged(wasVisible ? MODE_INITIAL : MODE_REMOVE);
+            callbacks.onModeChanged(wasVisible ? EditorInteractionMode.INITIAL : EditorInteractionMode.REMOVE);
         });
 
         modifyModeBtn.setOnClickListener(v -> {
@@ -163,7 +163,7 @@ public class NodeSelectorPanel {
             modifyMenu.setVisibility(wasVisible ? View.GONE : View.VISIBLE);
             removeMenu.setVisibility(View.GONE);
             removeModeBtn.setEnabled(wasVisible);
-            callbacks.onModeChanged(wasVisible ? MODE_INITIAL : MODE_MODIFY);
+            callbacks.onModeChanged(wasVisible ? EditorInteractionMode.INITIAL : EditorInteractionMode.MODIFY);
         });
 
         // 面板位置切换

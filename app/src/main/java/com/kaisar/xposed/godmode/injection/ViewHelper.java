@@ -24,7 +24,10 @@ import com.kaisar.xposed.godmode.engine.matcher.CompositeMatcher;
 import com.kaisar.xposed.godmode.engine.traversal.ViewTraversal;
 import com.kaisar.xposed.godmode.engine.util.FieldMapper;
 import com.kaisar.xposed.godmode.engine.util.GmConstants;
+import com.kaisar.xposed.godmode.injection.editor.BitmapUtils;
+import com.kaisar.xposed.godmode.injection.editor.ViewRuleFactory;
 import com.kaisar.xposed.godmode.injection.util.Logger;
+import com.kaisar.xposed.godmode.injection.util.ViewUtils;
 import com.kaisar.xposed.godmode.rule.ViewRule;
 import com.kaisar.xposed.godmode.util.Preconditions;
 
@@ -40,8 +43,13 @@ import de.robv.android.xposed.XposedHelpers;
 
 /**
  * Created by jrsen on 17-10-13.
+ *
+ * @deprecated 此类正在拆解中，新代码请直接调用具体的工具类：
+ * <ul>
+ *   <li>{@link BitmapUtils} — 位图操作</li>
+ * </ul>
  */
-
+@Deprecated
 public final class ViewHelper {
 
     private static final int MAX_REPEATABLE_RESULTS = 50;
@@ -202,7 +210,9 @@ public final class ViewHelper {
         return score;
     }
 
-    private static View matchView(View view, ViewRule rule, boolean strictMode) {
+    /** @deprecated 临时公开，待移至 ViewFinder */
+    @Deprecated
+    public static View matchView(View view, ViewRule rule, boolean strictMode) {
         try {
             Preconditions.checkNotNull(view, "view can't be null");
             Preconditions.checkNotNull(rule, "rule can't be null");
@@ -253,20 +263,22 @@ public final class ViewHelper {
         return ViewTraversal.findViewByDepth(activity.getWindow().getDecorView(), depths);
     }
 
+    /** @deprecated 委托至 {@link ViewUtils#findTopParentViewByChildView} */
+    @Deprecated
     public static View findTopParentViewByChildView(View v) {
-        return ViewTraversal.findTopParentView(v);
+        return ViewUtils.findTopParentViewByChildView(v);
     }
 
+    /** @deprecated 委托至 {@link ViewUtils#findViewRootImplByChildView} */
+    @Deprecated
     public static Object findViewRootImplByChildView(ViewParent parent) {
-        if (parent.getParent() == null) {
-            return !(parent instanceof ViewGroup) ? parent : null;
-        } else {
-            return findViewRootImplByChildView(parent.getParent());
-        }
+        return ViewUtils.findViewRootImplByChildView(parent);
     }
 
+    /** @deprecated 委托至 {@link ViewUtils#getViewHierarchyDepth} */
+    @Deprecated
     public static int[] getViewHierarchyDepth(View view) {
-        return ViewTraversal.getViewHierarchyDepth(view);
+        return ViewUtils.getViewHierarchyDepth(view);
     }
 
     public static ViewGroup findRecyclerViewAncestor(View view) {
@@ -294,7 +306,9 @@ public final class ViewHelper {
         return path.toArray(new String[0]);
     }
 
-    private static View findViewByItemPath(View root, String[] path, int index) {
+    /** @deprecated 临时公开，待移至 ViewFinder */
+    @Deprecated
+    public static View findViewByItemPath(View root, String[] path, int index) {
         if (index >= path.length) return root;
         String entry = path[index];
         int colonPos = entry.indexOf(':');
@@ -396,7 +410,9 @@ public final class ViewHelper {
         return Collections.emptyList();
     }
 
-    private static void populateRepeatableInfo(View v, ViewRule rule) {
+    /** @deprecated 临时公开，待移至 ViewRuleFactory */
+    @Deprecated
+    public static void populateRepeatableInfo(View v, ViewRule rule) {
         try {
             if (!com.kaisar.xposed.godmode.hook.KeyInterceptor.isInfoFlowMode()) return;
             ViewGroup rv = findRecyclerViewAncestor(v);
@@ -429,230 +445,70 @@ public final class ViewHelper {
         }
     }
 
+    /** @deprecated 委托至 {@link ViewRuleFactory#makeRule} */
+    @Deprecated
     public static ViewRule makeRule(View v) throws PackageManager.NameNotFoundException {
-        Activity activity = getAttachedActivityFromView(v);
-        Objects.requireNonNull(activity, "Can't found attached activity");
-        int[] out = new int[2];
-        v.getLocationInWindow(out);
-        int x = out[0];
-        int y = out[1];
-        int width = v.getWidth();
-        int height = v.getHeight();
-
-        int[] viewHierarchyDepth = getViewHierarchyDepth(v);
-        String activityClassName = activity.getComponentName().getClassName();
-        String viewClassName = v.getClass().getName();
-        Context context = v.getContext();
-        Resources res = context.getResources();
-        String resourceName = null;
-        try {
-            resourceName = v.getId() != View.NO_ID ? res.getResourceName(v.getId()) : null;
-        } catch (Resources.NotFoundException ignore) {
-            //the resource id may be declared in the plugin apk
-        }
-        String text = (v instanceof TextView && !TextUtils.isEmpty(((TextView) v).getText())) ? ((TextView) v).getText().toString() : "";
-        String description = (!TextUtils.isEmpty(v.getContentDescription())) ? v.getContentDescription().toString() : "";
-        String alias = !TextUtils.isEmpty(text) ? text : description;
-        String packageName = context.getPackageName();
-        PackageInfo packageInfo = context.getPackageManager().getPackageInfo(packageName, 0);
-        String label = packageInfo.applicationInfo.loadLabel(context.getPackageManager()).toString();
-        String versionName = packageInfo.versionName;
-        int versionCode = packageInfo.versionCode;
-        ViewRule rule = new ViewRule(label, packageName, versionName, versionCode, BuildConfig.VERSION_CODE, "", alias, x, y, width, height, viewHierarchyDepth, activityClassName, viewClassName, resourceName, text, description, View.INVISIBLE, System.currentTimeMillis());
-        populateRepeatableInfo(v, rule);
-        return rule;
+        return ViewRuleFactory.makeRule(v);
     }
 
+    /** @deprecated 委托至 {@link ViewRuleFactory#makeRemoveRule} */
+    @Deprecated
     public static ViewRule makeRemoveRule(View v) throws PackageManager.NameNotFoundException {
-        // ruleTag is left null to indicate remove rule (backward compat with old JSON)
-        return makeRule(v);
+        return ViewRuleFactory.makeRemoveRule(v);
     }
 
+    /** @deprecated 委托至 {@link ViewRuleFactory#makeModifyRule} */
+    @Deprecated
     public static ViewRule makeModifyRule(View view) {
-        Activity act = getAttachedActivityFromView(view);
-        ViewRule rule = new ViewRule("",
-                act != null ? act.getPackageName() : "",
-                "", 0, 0, "", "", 0, 0, 0, 0,
-                getViewHierarchyDepth(view),
-                act != null ? act.getComponentName().getClassName() : "",
-                view.getClass().getName(), "", "", "",
-                View.VISIBLE, System.currentTimeMillis());
-        rule.ruleTag = "modify";
-        rule.captureOriginals(view);
-        fillCoordinates(rule, view);
-        populateRepeatableInfo(view, rule);
-        return rule;
+        return ViewRuleFactory.makeModifyRule(view);
     }
 
+    /** @deprecated 委托至 {@link ViewRuleFactory#fillCoordinates} */
+    @Deprecated
     public static void fillCoordinates(ViewRule rule, View v) {
-        int[] out = new int[2];
-        v.getLocationInWindow(out);
-        rule.x = out[0];
-        rule.y = out[1];
-        rule.width = v.getWidth();
-        rule.height = v.getHeight();
+        ViewRuleFactory.fillCoordinates(rule, v);
     }
 
+    /** @deprecated 委托至 {@link ViewUtils#getAttachedActivityFromView} */
+    @Deprecated
     public static Activity getAttachedActivityFromView(View view) {
-        Activity activity = getActivityFromViewContext(view.getContext());
-        if (activity != null) {
-            return activity;
-        } else {
-            ViewParent parent = view.getParent();
-            return parent instanceof ViewGroup ? getAttachedActivityFromView((View) parent) : null;
-        }
+        return ViewUtils.getAttachedActivityFromView(view);
     }
 
-    private static Activity getActivityFromViewContext(Context context) {
-        return getActivityFromViewContext(context, 0);
-    }
-
-    private static Activity getActivityFromViewContext(Context context, int depth) {
-        if (depth > 20) return null; // Prevent infinite recursion
-        if (context == null) return null;
-        if (context instanceof Activity) {
-            return (Activity) context;
-        } else if (context instanceof ContextWrapper) {
-            Context baseContext = ((ContextWrapper) context).getBaseContext();
-            if (baseContext == context) {
-                try {
-                    baseContext = (Context) XposedHelpers.getObjectField(context, "mBase");
-                } catch (Exception e) {
-                    return null;
-                }
-            }
-            return getActivityFromViewContext(baseContext, depth + 1);
-        }
-        return null;
-    }
-
+    /** @deprecated 委托至 {@link BitmapUtils#snapshotView} */
+    @Deprecated
     public static Bitmap snapshotView(View view) {
-        if (view == null || view.getWidth() <= 0 || view.getHeight() <= 0) return null;
-        Bitmap b = Bitmap.createBitmap(view.getWidth(), view.getHeight(), Bitmap.Config.ARGB_8888);
-        Canvas c = new Canvas(b);
-        c.translate(-view.getScrollX(), -view.getScrollY());
-        view.draw(c);
-        return b;
+        return BitmapUtils.snapshotView(view);
     }
 
+    /** @deprecated 委托至 {@link BitmapUtils#drawRuleMask} */
+    @Deprecated
     public static void drawRuleMask(Bitmap bitmap, ViewRule rule) {
-        Paint markPaint = new Paint();
-        markPaint.setColor(Color.RED);
-        markPaint.setAlpha(100);
-        Canvas canvas = new Canvas(bitmap);
-        canvas.drawRect(rule.x, rule.y, rule.x + rule.width, rule.y + rule.height, markPaint);
+        BitmapUtils.drawRuleMask(bitmap, rule);
     }
 
+    /** @deprecated 委托至 {@link BitmapUtils#cloneViewAsBitmap} */
+    @Deprecated
     public static Bitmap cloneViewAsBitmap(View view) {
-        Bitmap bitmap = snapshotView(view);
-
-        Paint paint = new Paint();
-        paint.setAntiAlias(false);
-
-        // Draw optical bounds
-        paint.setColor(Color.RED);
-        paint.setStyle(Paint.Style.STROKE);
-
-        Canvas canvas = new Canvas(bitmap);
-        drawRect(canvas, paint, 0, 0, canvas.getWidth() - 1, canvas.getHeight() - 1);
-
-        // Draw clip bounds
-        paint.setColor(Color.rgb(63, 127, 255));
-        paint.setStyle(Paint.Style.FILL);
-
-        Context context = view.getContext();
-        int lineLength = dipsToPixels(context, 8);
-        int lineWidth = dipsToPixels(context, 1);
-        drawRectCorners(canvas, 0, 0, canvas.getWidth(), canvas.getHeight(),
-                paint, lineLength, lineWidth);
-        return bitmap;
+        return BitmapUtils.cloneViewAsBitmap(view);
     }
 
-    private static int dipsToPixels(Context context, int dips) {
-        float scale = context.getResources().getDisplayMetrics().density;
-        return (int) (dips * scale + 0.5f);
-    }
-
-    private static void drawRect(Canvas canvas, Paint paint, int x1, int y1, int x2, int y2) {
-        float[] debugLines = new float[16];
-
-        debugLines[0] = x1;
-        debugLines[1] = y1;
-        debugLines[2] = x2;
-        debugLines[3] = y1;
-
-        debugLines[4] = x2;
-        debugLines[5] = y1;
-        debugLines[6] = x2;
-        debugLines[7] = y2;
-
-        debugLines[8] = x2;
-        debugLines[9] = y2;
-        debugLines[10] = x1;
-        debugLines[11] = y2;
-
-        debugLines[12] = x1;
-        debugLines[13] = y2;
-        debugLines[14] = x1;
-        debugLines[15] = y1;
-
-        canvas.drawLines(debugLines, paint);
-    }
-
-    private static void drawRectCorners(Canvas canvas, int x1, int y1, int x2, int y2, Paint paint,
-                                        int lineLength, int lineWidth) {
-        drawCorner(canvas, paint, x1, y1, lineLength, lineLength, lineWidth);
-        drawCorner(canvas, paint, x1, y2, lineLength, -lineLength, lineWidth);
-        drawCorner(canvas, paint, x2, y1, -lineLength, lineLength, lineWidth);
-        drawCorner(canvas, paint, x2, y2, -lineLength, -lineLength, lineWidth);
-    }
-
-    private static void drawCorner(Canvas c, Paint paint, int x1, int y1, int dx, int dy, int lw) {
-        fillRect(c, paint, x1, y1, x1 + dx, y1 + lw * sign(dy));
-        fillRect(c, paint, x1, y1, x1 + lw * sign(dx), y1 + dy);
-    }
-
-    private static void fillRect(Canvas canvas, Paint paint, int x1, int y1, int x2, int y2) {
-        if (x1 != x2 && y1 != y2) {
-            if (x1 > x2) {
-                int tmp = x1;
-                x1 = x2;
-                x2 = tmp;
-            }
-            if (y1 > y2) {
-                int tmp = y1;
-                y1 = y2;
-                y2 = tmp;
-            }
-            canvas.drawRect(x1, y1, x2, y2, paint);
-        }
-    }
-
-    private static int sign(int x) {
-        return (x >= 0) ? 1 : -1;
-    }
-
+    /** @deprecated 委托至 {@link ViewUtils#buildViewNodes} */
+    @Deprecated
     public static List<WeakReference<View>> buildViewNodes(View view) {
-        return ViewTraversal.buildViewNodes(view);
+        return ViewUtils.buildViewNodes(view);
     }
 
+    /** @deprecated 委托至 {@link ViewUtils#getLocationInWindow} */
+    @Deprecated
     public static Rect getLocationInWindow(View v) {
-        int[] out = new int[2];
-        v.getLocationInWindow(out);
-        int l = out[0];
-        int t = out[1];
-        int r = l + v.getWidth();
-        int b = t + v.getHeight();
-        return new Rect(l, t, r, b);
+        return ViewUtils.getLocationInWindow(v);
     }
 
+    /** @deprecated 委托至 {@link ViewUtils#getViewKey} */
+    @Deprecated
     public static String getViewKey(View view) {
-        Activity act = getAttachedActivityFromView(view);
-        String actName = act != null ? act.getComponentName().getClassName() : "unknown";
-        int[] depth = getViewHierarchyDepth(view);
-        StringBuilder sb = new StringBuilder(actName);
-        for (int d : depth) sb.append('_').append(d);
-        return sb.toString();
+        return ViewUtils.getViewKey(view);
     }
 
 }

@@ -24,33 +24,64 @@ import java.util.List;
  *   <li>ruleTag 为 null 或空 → 移除规则，委托 {@link RemoveApplier}</li>
  *   <li>ruleTag 非空 → 修改规则，委托 {@link ModifyApplier}</li>
  * </ul>
+ * <p>
+ * 通过 {@link #getDefault()} 获取共享实例。
  */
 public final class ViewController {
 
-    private static RuleApplier sModifyApplier;
-    private static RuleApplier sRemoveApplier;
+    private static volatile ViewController sInstance;
 
-    private static RuleApplier getModifyApplier() {
-        if (sModifyApplier == null) {
-            sModifyApplier = new ModifyApplier(
+    private RuleApplier mModifyApplier;
+    private RuleApplier mRemoveApplier;
+
+    // =========================================================================
+    // 单例访问
+    // =========================================================================
+
+    /** 获取共享实例（延迟初始化，线程安全）。 */
+    public static ViewController getDefault() {
+        if (sInstance == null) {
+            synchronized (ViewController.class) {
+                if (sInstance == null) {
+                    sInstance = new ViewController();
+                }
+            }
+        }
+        return sInstance;
+    }
+
+    private ViewController() {}
+
+    // =========================================================================
+    // Applier 懒加载
+    // =========================================================================
+
+    private RuleApplier getModifyApplier() {
+        if (mModifyApplier == null) {
+            mModifyApplier = new ModifyApplier(
                     path -> GodModeManager.getDefault().openImageFileDescriptor(path));
         }
-        return sModifyApplier;
+        return mModifyApplier;
     }
 
-    private static RuleApplier getRemoveApplier() {
-        if (sRemoveApplier == null) {
-            sRemoveApplier = new RemoveApplier();
+    private RuleApplier getRemoveApplier() {
+        if (mRemoveApplier == null) {
+            mRemoveApplier = new RemoveApplier();
         }
-        return sRemoveApplier;
+        return mRemoveApplier;
     }
 
-    public static void clearBlockedCache() {
-        if (sRemoveApplier != null) sRemoveApplier.clearCache();
-        if (sModifyApplier != null) sModifyApplier.clearCache();
+    // =========================================================================
+    // 公开 API
+    // =========================================================================
+
+    /** 清空已屏蔽视图的缓存。 */
+    public void clearBlockedCache() {
+        if (mRemoveApplier != null) mRemoveApplier.clearCache();
+        if (mModifyApplier != null) mModifyApplier.clearCache();
     }
 
-    /** 将 app 模块的 ViewRule（Transport 版）转换为 engine 的 ViewRule（Computation 版）。 */
+    /** 将 app 模块的 ViewRule 转换为 engine 的 ViewRule。 */
     private static com.kaisar.xposed.godmode.engine.rule.ViewRule toEngineRule(ViewRule appRule) {
         com.kaisar.xposed.godmode.engine.rule.ViewRule engineRule =
                 new com.kaisar.xposed.godmode.engine.rule.ViewRule();
@@ -58,7 +89,8 @@ public final class ViewController {
         return engineRule;
     }
 
-    public static void applyRuleBatch(Activity activity, List<ViewRule> rules) {
+    /** 批量应用规则。 */
+    public void applyRuleBatch(Activity activity, List<ViewRule> rules) {
         int appliedCount = 0;
         for (ViewRule rule : rules) {
             try {
@@ -75,7 +107,8 @@ public final class ViewController {
                 Preconditions.checkNotNull(view, "apply rule fail not match any view");
                 if (applyRule(view, rule)) appliedCount++;
             } catch (NullPointerException e) {
-                Logger.w(TAG, "[ViewController] Failed: " + activity + "#" + rule.viewClass + " block failed: " + e.getMessage());
+                Logger.w(TAG, "[ViewController] Failed: " + activity + "#" + rule.viewClass
+                        + " block failed: " + e.getMessage());
             }
         }
         if (appliedCount > 0) {
@@ -83,7 +116,8 @@ public final class ViewController {
         }
     }
 
-    public static boolean applyRule(View v, ViewRule viewRule) {
+    /** 应用单条规则。 */
+    public boolean applyRule(View v, ViewRule viewRule) {
         if (v == null || viewRule == null) return false;
         com.kaisar.xposed.godmode.engine.rule.ViewRule engineRule = toEngineRule(viewRule);
         if (viewRule.isModifyRule()) {
@@ -93,7 +127,8 @@ public final class ViewController {
         }
     }
 
-    public static void revokeRuleBatch(Activity activity, List<ViewRule> rules) {
+    /** 批量撤销规则。 */
+    public void revokeRuleBatch(Activity activity, List<ViewRule> rules) {
         for (ViewRule rule : rules) {
             try {
                 if (rule.isRepeatable()) {
@@ -109,12 +144,14 @@ public final class ViewController {
                 Preconditions.checkNotNull(view, "revoke rule fail can't found block view");
                 revokeRule(view, rule);
             } catch (NullPointerException e) {
-                Logger.w(TAG, "[ViewController] revoke rule fail (act=" + activity + "): " + e.getMessage());
+                Logger.w(TAG, "[ViewController] revoke rule fail (act=" + activity + "): "
+                        + e.getMessage());
             }
         }
     }
 
-    public static void revokeRule(View v, ViewRule viewRule) {
+    /** 撤销单条规则。 */
+    public void revokeRule(View v, ViewRule viewRule) {
         if (v == null || viewRule == null) return;
         com.kaisar.xposed.godmode.engine.rule.ViewRule engineRule = toEngineRule(viewRule);
         if (viewRule.isModifyRule()) {
@@ -123,8 +160,4 @@ public final class ViewController {
             getRemoveApplier().revoke(v, engineRule);
         }
     }
-
-    private ViewController() {
-    }
-
 }

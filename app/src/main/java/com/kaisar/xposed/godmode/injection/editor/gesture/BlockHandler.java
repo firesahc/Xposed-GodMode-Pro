@@ -65,7 +65,7 @@ public final class BlockHandler {
                 @Override
                 public void onAnimationStart(View animView, Animator animation) {
                     viewRule.visibility = View.GONE;
-                    ViewController.applyRule(view, viewRule);
+                    ViewController.getDefault().applyRule(view, viewRule);
                 }
 
                 @Override

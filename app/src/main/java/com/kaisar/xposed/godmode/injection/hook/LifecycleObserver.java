@@ -80,7 +80,7 @@ public final class LifecycleObserver extends XC_MethodHook {
         // 规则未变化时跳过，避免不必要的撤销→再应用导致的闪回
         // 触发场景：IPC addObserver 推送的规则与 onPostResume 中已应用的规则完全相同时
         if (newActRules.equals(sActRules)) return;
-        ViewController.clearBlockedCache();
+        ViewController.getDefault().clearBlockedCache();
         Set<Map.Entry<String, List<ViewRule>>> entries = newActRules.entrySet();
         for (Map.Entry<String, List<ViewRule>> entry : entries) {
             String key = entry.getKey();
@@ -105,8 +105,8 @@ public final class LifecycleObserver extends XC_MethodHook {
                 }
                 for (Activity activity : sActivities.keySet()) {
                     if (TextUtils.equals(activity.getComponentName().getClassName(), entry.getKey())) {
-                        if (!revRemove.isEmpty()) ViewController.revokeRuleBatch(activity, revRemove);
-                        if (!revModify.isEmpty()) ViewController.revokeRuleBatch(activity, revModify);
+                        if (!revRemove.isEmpty()) ViewController.getDefault().revokeRuleBatch(activity, revRemove);
+                        if (!revModify.isEmpty()) ViewController.getDefault().revokeRuleBatch(activity, revModify);
                     }
                 }
             }
@@ -120,7 +120,7 @@ public final class LifecycleObserver extends XC_MethodHook {
             for (Activity activity : sActivities.keySet()) {
                 if (TextUtils.equals(activity.getComponentName().getClassName(), entry.getKey())) {
                     if (!rules.isEmpty()) {
-                        ViewController.applyRuleBatch(activity, rules);
+                        ViewController.getDefault().applyRuleBatch(activity, rules);
                     }
                 }
             }
@@ -192,7 +192,7 @@ public final class LifecycleObserver extends XC_MethodHook {
                 List<ViewRule> rules = sActRules.get(activity.getComponentName().getClassName());
                 if (rules != null && !rules.isEmpty()) {
                     if (!rules.isEmpty()) {
-                        ViewController.applyRuleBatch(activity, rules);
+                        ViewController.getDefault().applyRuleBatch(activity, rules);
                     }
                 }
             } catch (Exception e) {
