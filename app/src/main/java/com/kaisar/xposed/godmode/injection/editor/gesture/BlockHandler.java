@@ -9,7 +9,8 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Toast;
 
-import com.kaisar.xposed.godmode.injection.ViewHelper;
+import com.kaisar.xposed.godmode.injection.editor.ViewRuleFactory;
+import com.kaisar.xposed.godmode.injection.editor.BitmapUtils;
 import com.kaisar.xposed.godmode.injection.ViewController;
 import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
 import com.kaisar.xposed.godmode.injection.editor.overlay.ParticleView;
@@ -57,7 +58,7 @@ public final class BlockHandler {
             final ViewGroup container, final Bitmap snapshot,
             final int blockedViewIndex, final OnBlockListener listener) {
         try {
-            final ViewRule viewRule = ViewHelper.makeRemoveRule(view);
+            final ViewRule viewRule = ViewRuleFactory.makeRemoveRule(view);
             final ParticleView particleView = new ParticleView(activity);
             particleView.setDuration(1000);
             particleView.attachToContainer(container);
@@ -71,7 +72,7 @@ public final class BlockHandler {
                 @Override
                 public void onAnimationEnd(View animView, Animator animation) {
                     try {
-                        ViewHelper.drawRuleMask(snapshot, viewRule);
+                        BitmapUtils.drawRuleMask(snapshot, viewRule);
                         particleView.detachFromContainer();
                     } catch (Exception e) {
                         Logger.e("BlockHandler", "drawRuleMask / detach fail", e);

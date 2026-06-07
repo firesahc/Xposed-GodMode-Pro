@@ -9,7 +9,8 @@ import android.view.View;
 import android.view.ViewGroup;
 
 import com.kaisar.xposed.godmode.injection.ViewController;
-import com.kaisar.xposed.godmode.injection.ViewHelper;
+import com.kaisar.xposed.godmode.injection.editor.ViewRuleFactory;
+import com.kaisar.xposed.godmode.injection.editor.BitmapUtils;
 import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
 import com.kaisar.xposed.godmode.injection.editor.overlay.CancelView;
 import com.kaisar.xposed.godmode.injection.editor.overlay.MaskView;
@@ -17,6 +18,8 @@ import com.kaisar.xposed.godmode.injection.editor.overlay.ParticleView;
 import com.kaisar.xposed.godmode.engine.pool.ThreadPools;
 import com.kaisar.xposed.godmode.engine.util.CommonUtils;
 import com.kaisar.xposed.godmode.injection.util.Logger;
+import com.kaisar.xposed.godmode.injection.util.ViewUtils;
+
 import com.kaisar.xposed.godmode.rule.ViewRule;
 import com.kaisar.xposed.godmode.util.Preconditions;
 
@@ -36,11 +39,11 @@ public final class RemoveGestureHandler {
         RemoveState state = new RemoveState();
         try {
             Activity activity = Preconditions.checkNotNull(
-                    ViewHelper.getAttachedActivityFromView(v));
+                    ViewUtils.getAttachedActivityFromView(v));
             ViewGroup container = (ViewGroup) activity.getWindow().getDecorView();
-            state.snapshot = ViewHelper.snapshotView(
-                    ViewHelper.findTopParentViewByChildView(v));
-            state.viewRule = ViewHelper.makeRemoveRule(v);
+            state.snapshot = BitmapUtils.snapshotView(
+                    ViewUtils.findTopParentViewByChildView(v));
+            state.viewRule = ViewRuleFactory.makeRemoveRule(v);
 
             state.cancelView = new CancelView(activity);
             state.cancelView.attachToContainer(container);
@@ -48,7 +51,7 @@ public final class RemoveGestureHandler {
             state.maskView = MaskView.makeMaskView(activity);
             state.maskView.setMaskOverlay(v);
             state.maskView.setMarkColor(MARK_COLOR);
-            state.maskView.updateOverlayBounds(ViewHelper.getLocationInWindow(v));
+            state.maskView.updateOverlayBounds(ViewUtils.getLocationInWindow(v));
             state.maskView.attachToContainer(container);
 
             ViewController.getDefault().applyRule(v, state.viewRule);
@@ -61,7 +64,7 @@ public final class RemoveGestureHandler {
 
     /** 完成移除拖拽：已取消则还原，已确认则粒子动画 → IPC 持久化 */
     public static void finishDrag(View v, RemoveState state) {
-        Activity activity = ViewHelper.getAttachedActivityFromView(v);
+        Activity activity = ViewUtils.getAttachedActivityFromView(v);
         if (activity == null) return;
 
         if (state.cancelView != null) state.cancelView.detachFromContainer();
@@ -83,7 +86,7 @@ public final class RemoveGestureHandler {
                 public void onAnimationStart(View animView, Animator animation) {
                     state.viewRule.visibility = View.GONE;
                     ViewController.getDefault().applyRule(v, state.viewRule);
-                    ViewHelper.drawRuleMask(state.snapshot, state.viewRule);
+                    BitmapUtils.drawRuleMask(state.snapshot, state.viewRule);
                     state.maskView.detachFromContainer();
                     ThreadPools.IO.execute(() -> {
                         try {

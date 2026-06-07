@@ -3,7 +3,8 @@ package com.kaisar.xposed.godmode.injection.editor.gesture;
 import android.graphics.Rect;
 import android.view.View;
 
-import com.kaisar.xposed.godmode.injection.ViewHelper;
+import com.kaisar.xposed.godmode.injection.editor.ViewRuleFactory;
+import com.kaisar.xposed.godmode.injection.util.ViewUtils;
 import com.kaisar.xposed.godmode.injection.ViewController;
 import com.kaisar.xposed.godmode.injection.editor.overlay.MaskView;
 import com.kaisar.xposed.godmode.injection.util.Logger;
@@ -39,7 +40,7 @@ public final class PreviewHandler {
     public void startPreview(View view, MaskView maskView, Runnable onStateChanged) {
         if (view == null) return;
         try {
-            mPreviewRule = ViewHelper.makeRemoveRule(view);
+            mPreviewRule = ViewRuleFactory.makeRemoveRule(view);
             mPreviewRule.visibility = View.GONE;
             ViewController.getDefault().applyRule(view, mPreviewRule);
             mPreviewView = view;
@@ -68,7 +69,7 @@ public final class PreviewHandler {
         mIsPreviewing = false;
         if (onStateChanged != null) onStateChanged.run();
         if (maskView != null && selectedView != null) {
-            maskView.updateOverlayBounds(ViewHelper.getLocationInWindow(selectedView));
+            maskView.updateOverlayBounds(ViewUtils.getLocationInWindow(selectedView));
         }
     }
 }

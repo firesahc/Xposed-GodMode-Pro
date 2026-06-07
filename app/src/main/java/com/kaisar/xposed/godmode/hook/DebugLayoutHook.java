@@ -1,6 +1,7 @@
 package com.kaisar.xposed.godmode.hook;
 
 import static com.kaisar.xposed.godmode.GodModeApplication.TAG;
+import static com.kaisar.xposed.godmode.engine.util.GmConstants.TAG_GM_CMP;
 
 import android.graphics.Canvas;
 import android.graphics.Paint;
@@ -8,7 +9,6 @@ import android.os.Build;
 import android.view.View;
 import android.view.ViewGroup;
 
-import com.kaisar.xposed.godmode.injection.ViewHelper;
 import com.kaisar.xposed.godmode.injection.util.Logger;
 import com.kaisar.xposed.godmode.injection.util.Property;
 
@@ -102,7 +102,7 @@ public final class DebugLayoutHook {
                 @Override
                 protected void beforeHookedMethod(MethodHookParam param) {
                     View view = (View) param.thisObject;
-                    if (ViewHelper.TAG_GM_CMP.equals(view.getTag())) {
+                    if (TAG_GM_CMP.equals(view.getTag())) {
                         param.setResult(null);
                     }
                 }

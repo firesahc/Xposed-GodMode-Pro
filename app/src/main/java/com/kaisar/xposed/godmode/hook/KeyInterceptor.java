@@ -21,8 +21,11 @@ import android.widget.Toast;
 import androidx.appcompat.widget.TooltipCompat;
 
 import com.kaisar.xposed.godmode.R;
+import com.kaisar.xposed.godmode.engine.matcher.ViewFinder;
+import com.kaisar.xposed.godmode.engine.traversal.ViewTraversal;
 import com.kaisar.xposed.godmode.injection.GodModeInjector;
-import com.kaisar.xposed.godmode.injection.ViewHelper;
+import com.kaisar.xposed.godmode.injection.editor.BitmapUtils;
+import com.kaisar.xposed.godmode.injection.util.ViewUtils;
 
 import com.kaisar.xposed.godmode.injection.util.GmResources;
 import com.kaisar.xposed.godmode.injection.util.Logger;
@@ -255,7 +258,7 @@ public final class KeyInterceptor extends XC_MethodHook
 
     private void showNodeSelectPanel(final Activity activity) {
         Logger.i(TAG, "[KeyEventHook] showNodeSelectPanel for " + activity.getPackageName());
-        List<WeakReference<View>> viewNodes = ViewHelper.buildViewNodes(activity.getWindow().getDecorView());
+        List<WeakReference<View>> viewNodes = ViewTraversal.buildViewNodes(activity.getWindow().getDecorView());
         final ViewGroup container = (ViewGroup) activity.getWindow().getDecorView();
         mNodePanel.show(viewNodes, activity, container, OVERLAY_COLOR, this);
         if (!mNodePanel.isKeySelecting()) return; // show() failed
@@ -294,8 +297,8 @@ public final class KeyInterceptor extends XC_MethodHook
 
             // 隐藏 GM 覆盖层以获取干净截图
             hideGmOverlays(View.INVISIBLE);
-            final Bitmap snapshot = ViewHelper.snapshotView(
-                    ViewHelper.findTopParentViewByChildView(view));
+        final Bitmap snapshot = BitmapUtils.snapshotView(
+                ViewUtils.findTopParentViewByChildView(view));
             hideGmOverlays(View.VISIBLE);
 
             BlockHandler.execute(activity, view, container, snapshot, blockedViewIndex,
@@ -404,12 +407,12 @@ public final class KeyInterceptor extends XC_MethodHook
             if (fromUser) mNodePanel.setHasUserSelection(true);
             View view = viewNodes.get(mNodePanel.getCurrentIndex()).get();
             if (view != null && maskView != null) {
-                if (ViewHelper.isInRecyclerView(view)) {
+                if (ViewFinder.isInRecyclerView(view)) {
                     maskView.setMaskOverlay(OVERLAY_COLOR_REPEATABLE);
                 } else {
                     maskView.setMaskOverlay(OVERLAY_COLOR);
                 }
-                maskView.updateOverlayBounds(ViewHelper.getLocationInWindow(view));
+                maskView.updateOverlayBounds(ViewUtils.getLocationInWindow(view));
             }
         }
     }

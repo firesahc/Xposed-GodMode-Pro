@@ -1,7 +1,7 @@
 package com.kaisar.xposed.godmode.hook;
 
 import static com.kaisar.xposed.godmode.GodModeApplication.TAG;
-import static com.kaisar.xposed.godmode.injection.ViewHelper.TAG_GM_CMP;
+import static com.kaisar.xposed.godmode.engine.util.GmConstants.TAG_GM_CMP;
 
 import android.graphics.Rect;
 import android.os.Handler;
@@ -13,7 +13,7 @@ import android.view.ViewConfiguration;
 import android.view.ViewParent;
 import android.view.WindowManager;
 
-import com.kaisar.xposed.godmode.injection.ViewHelper;
+import com.kaisar.xposed.godmode.injection.util.ViewUtils;
 import com.kaisar.xposed.godmode.injection.editor.gesture.GestureDispatcher;
 import com.kaisar.xposed.godmode.injection.editor.gesture.ModifyGestureHandler;
 import com.kaisar.xposed.godmode.injection.editor.gesture.RemoveGestureHandler;
@@ -100,7 +100,7 @@ public final class TouchInterceptor extends XC_MethodHook implements Property.On
     }
 
     private WindowManager.LayoutParams getWindowLayoutParams(View v) {
-        Object viewRootImpl = ViewHelper.findViewRootImplByChildView(v.getParent());
+        Object viewRootImpl = ViewUtils.findViewRootImplByChildView(v.getParent());
         if (viewRootImpl == null) return null;
         try {
             return (WindowManager.LayoutParams)
@@ -130,7 +130,7 @@ public final class TouchInterceptor extends XC_MethodHook implements Property.On
     private boolean handleRemoveTouch(View v, MotionEvent event, int action) {
         if (action == MotionEvent.ACTION_DOWN) {
             if (!beginTouch(v, false)) return false;
-            Rect bounds = ViewHelper.getLocationInWindow(v);
+            Rect bounds = ViewUtils.getLocationInWindow(v);
             mDeltaX = event.getRawX() - bounds.left;
             mDeltaY = event.getRawY() - bounds.top;
 
