@@ -109,6 +109,42 @@ public class NodeSelectorPanel {
         }
     }
 
+    /** 供 SeekBar.onProgressChanged 内部使用，不触发 setProgress 循环。 */
+    public void setCurrentIndexSilent(int index) {
+        if (mViewNodes != null && index >= 0 && index < mViewNodes.size()) {
+            mCurrentIndex = index;
+        }
+    }
+
     public int getCurrentIndex() { return mCurrentIndex; }
     public boolean isShowing() { return mPanelView != null; }
+
+    public List<WeakReference<View>> getViewNodes() { return mViewNodes; }
+
+    // ---- 导航 ----
+
+    /** 按 delta 步进导航（+1 或 -1），更新 SeekBar，不做越界。 */
+    public void navigate(int delta) {
+        if (mViewNodes == null || mSeekBar == null) return;
+        int next = mCurrentIndex + delta;
+        if (next < 0 || next >= mViewNodes.size()) return;
+        mCurrentIndex = next;
+        mSeekBar.setProgress(next);
+    }
+
+    public void navigateNext() { navigate(+1); }
+    public void navigatePrevious() { navigate(-1); }
+
+    /** 移除后更新节点列表和 SeekBar。 */
+    public void updateAfterRemove(int removedIndex) {
+        if (mViewNodes == null || mSeekBar == null) return;
+        if (removedIndex >= 0 && removedIndex < mViewNodes.size()) {
+            mViewNodes.remove(removedIndex);
+        }
+        mSeekBar.setMax(Math.max(mViewNodes.size() - 1, 0));
+        mCurrentIndex = Math.min(removedIndex, Math.max(mViewNodes.size() - 1, 0));
+        if (mCurrentIndex >= 0) {
+            mSeekBar.setProgress(mCurrentIndex);
+        }
+    }
 }
