@@ -51,7 +51,7 @@ public final class RemoveGestureHandler {
             state.maskView.updateOverlayBounds(ViewHelper.getLocationInWindow(v));
             state.maskView.attachToContainer(container);
 
-            ViewController.applyRule(v, state.viewRule);
+            ViewController.getDefault().applyRule(v, state.viewRule);
         } catch (PackageManager.NameNotFoundException | NullPointerException e) {
             Logger.e(TAG, "[EventHandler] startRemoveDrag fail", e);
             return null;
@@ -70,7 +70,7 @@ public final class RemoveGestureHandler {
             // 已取消
             state.maskView.detachFromContainer();
             state.viewRule.visibility = View.VISIBLE;
-            ViewController.revokeRule(v, state.viewRule);
+            ViewController.getDefault().revokeRule(v, state.viewRule);
             CommonUtils.recycleNullableBitmap(state.snapshot);
         } else {
             // 已确认：粒子爆炸 → IPC 持久化
@@ -82,7 +82,7 @@ public final class RemoveGestureHandler {
                 @Override
                 public void onAnimationStart(View animView, Animator animation) {
                     state.viewRule.visibility = View.GONE;
-                    ViewController.applyRule(v, state.viewRule);
+                    ViewController.getDefault().applyRule(v, state.viewRule);
                     ViewHelper.drawRuleMask(state.snapshot, state.viewRule);
                     state.maskView.detachFromContainer();
                     ThreadPools.IO.execute(() -> {

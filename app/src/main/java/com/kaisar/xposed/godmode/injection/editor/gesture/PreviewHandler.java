@@ -41,7 +41,7 @@ public final class PreviewHandler {
         try {
             mPreviewRule = ViewHelper.makeRemoveRule(view);
             mPreviewRule.visibility = View.GONE;
-            ViewController.applyRule(view, mPreviewRule);
+            ViewController.getDefault().applyRule(view, mPreviewRule);
             mPreviewView = view;
             mIsPreviewing = true;
             if (onStateChanged != null) onStateChanged.run();
@@ -61,7 +61,7 @@ public final class PreviewHandler {
     public void restorePreview(MaskView maskView, View selectedView, Runnable onStateChanged) {
         if (mPreviewView != null && mPreviewRule != null) {
             mPreviewRule.visibility = View.VISIBLE;
-            ViewController.revokeRule(mPreviewView, mPreviewRule);
+            ViewController.getDefault().revokeRule(mPreviewView, mPreviewRule);
             mPreviewView = null;
             mPreviewRule = null;
         }
