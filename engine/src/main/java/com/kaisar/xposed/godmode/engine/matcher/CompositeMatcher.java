@@ -73,18 +73,29 @@ public final class CompositeMatcher implements IMatcher, MatchStrategy {
             return null;
         }
 
-        // 3. 全树搜索：递归遍历所有可见视图，选取得分最高者
-        List<View> candidates = matchAllViews(root, rule);
-        View best = null;
-        int bestScore = 0;
-        for (View v : candidates) {
-            int s = computeScore(v, rule);
-            if (s > bestScore) {
-                bestScore = s;
-                best = v;
+        // 3. repeatable 规则：按 itemPath 在 RecyclerView 中精确定位
+        // 遍历整树找到 RecyclerView，对每个调用 RecyclerMatcher 按 itemPath 匹配，
+        // 避免全树模糊搜索误匹配非目标视图。
+        if (rule.itemPath != null && rule.itemPath.length > 0
+                && rule.itemRootClass != null) {
+            List<View> rvResults = new ArrayList<>();
+            collectRecyclerMatches(root, rule, rvResults);
+            if (!rvResults.isEmpty()) {
+                View best = null;
+                int bestScore = 0;
+                for (View v : rvResults) {
+                    int s = computeScore(v, rule);
+                    if (s > bestScore) {
+                        bestScore = s;
+                        best = v;
+                    }
+                }
+                if (bestScore >= threshold) return best;
             }
         }
-        return bestScore >= threshold ? best : null;
+
+        // 4. 无可靠匹配 — 返回 null，由调用方处理兜底
+        return null;
     }
 
     @Override
@@ -93,6 +104,26 @@ public final class CompositeMatcher implements IMatcher, MatchStrategy {
         if (root == null || rule == null) return results;
         collectMatches(root, rule, results, 0);
         return results;
+    }
+
+    /**
+     * 递归遍历视图树，收集所有 RecyclerView 中按 itemPath 匹配的视图。
+     * 仅用于 repeatable 规则的精确匹配，不进行模糊评分搜索。
+     */
+    private static void collectRecyclerMatches(View view, ViewRule rule, List<View> results) {
+        if (results.size() >= GmConstants.MAX_REPEATABLE_RESULTS) return;
+        if (view.getClass().getName().contains("RecyclerView")
+                && view instanceof ViewGroup) {
+            List<View> matched = RecyclerMatcher.findViewsInRecycler(view, rule, (ViewGroup) view);
+            results.addAll(matched);
+        }
+        if (view instanceof ViewGroup) {
+            ViewGroup vg = (ViewGroup) view;
+            for (int i = 0; i < vg.getChildCount()
+                    && results.size() < GmConstants.MAX_REPEATABLE_RESULTS; i++) {
+                collectRecyclerMatches(vg.getChildAt(i), rule, results);
+            }
+        }
     }
 
     private void collectMatches(View view, ViewRule rule, List<View> results, int depth) {
