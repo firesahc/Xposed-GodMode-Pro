@@ -86,7 +86,7 @@ public final class KeyInterceptor extends XC_MethodHook
     // =========================================================================
 
     private final NodeSelectorPanel mNodePanel = new NodeSelectorPanel();
-    final PropertyEditorPanel mModifyController = new PropertyEditorPanel();
+    final PropertyEditorPanel mPropertyEditor = new PropertyEditorPanel();
     private Activity mCurrentActivity;
 
     // =========================================================================
@@ -155,7 +155,7 @@ public final class KeyInterceptor extends XC_MethodHook
     public static void selectViewByTap(View tappedView) {
         KeyInterceptor instance = sInstance;
         if (instance == null || !instance.mNodePanel.isKeySelecting()
-                || instance.mModifyController.isShowing()) return;
+                || instance.mPropertyEditor.isShowing()) return;
 
         List<WeakReference<View>> nodes = instance.mNodePanel.getViewNodes();
         if (nodes == null) return;
@@ -211,7 +211,7 @@ public final class KeyInterceptor extends XC_MethodHook
     }
 
     private void navigate(int delta) {
-        if (mModifyController.isShowing()) return;
+        if (mPropertyEditor.isShowing()) return;
         mNodePanel.navigate(delta);
     }
 
@@ -260,15 +260,15 @@ public final class KeyInterceptor extends XC_MethodHook
             if (!mNodePanel.hasUserSelection()) return;
             View selectedView = mNodePanel.getSelectedView();
             if (selectedView != null) {
-                mModifyController.show(selectedView, activity, container);
+                mPropertyEditor.show(selectedView, activity, container);
             }
         });
 
         // 保存修改按钮
         View btnSaveModify = panelView.findViewById(R.id.save_modify);
-        btnSaveModify.setOnClickListener(v -> mModifyController.saveAll(
+        btnSaveModify.setOnClickListener(v -> mPropertyEditor.saveAll(
                 activity, mNodePanel.getPanelView(), mNodePanel.getMaskView(),
-                mModifyController.getPanelView()));
+                mPropertyEditor.getPanelView()));
 
         // 模式切换：移除模式
         View removeModeBtn = panelView.findViewById(R.id.remove_mode_btn);
@@ -315,7 +315,7 @@ public final class KeyInterceptor extends XC_MethodHook
 
     private void dismissNodeSelectPanel() {
         Logger.i(TAG, "[KeyEventHook] dismissNodeSelectPanel");
-        mModifyController.cancel();
+        mPropertyEditor.cancel();
         restorePreview();
         sInteractionMode = MODE_INITIAL;
         mNodePanel.dismiss();
@@ -382,7 +382,7 @@ public final class KeyInterceptor extends XC_MethodHook
     private void hideGmOverlays(int visibility) {
         View panelView = mNodePanel.getPanelView();
         if (panelView != null) panelView.setVisibility(visibility);
-        View modifyPanel = mModifyController.getPanelView();
+        View modifyPanel = mPropertyEditor.getPanelView();
         if (modifyPanel != null) modifyPanel.setVisibility(visibility);
         MaskView maskView = mNodePanel.getMaskView();
         if (maskView != null) maskView.setVisibility(visibility);
@@ -481,7 +481,7 @@ public final class KeyInterceptor extends XC_MethodHook
 
     @Override
     public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-        if (mModifyController.isShowing()) return;
+        if (mPropertyEditor.isShowing()) return;
         List<WeakReference<View>> viewNodes = mNodePanel.getViewNodes();
         MaskView maskView = mNodePanel.getMaskView();
         if (viewNodes != null && progress < viewNodes.size()) {
