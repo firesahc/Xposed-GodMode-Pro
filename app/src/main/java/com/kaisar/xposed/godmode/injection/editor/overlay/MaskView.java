@@ -1,6 +1,6 @@
 package com.kaisar.xposed.godmode.injection.editor.overlay;
 
-import static com.kaisar.xposed.godmode.injection.ViewHelper.TAG_GM_CMP;
+import static com.kaisar.xposed.godmode.engine.util.GmConstants.TAG_GM_CMP;
 
 import android.content.Context;
 import android.graphics.Bitmap;
@@ -17,7 +17,7 @@ import android.view.ViewGroup;
 
 import androidx.annotation.Nullable;
 
-import com.kaisar.xposed.godmode.injection.ViewHelper;
+import com.kaisar.xposed.godmode.injection.editor.BitmapUtils;
 
 public final class MaskView extends View implements OverlayWidget {
 
@@ -61,7 +61,7 @@ public final class MaskView extends View implements OverlayWidget {
     @Override public View getView() { return this; }
 
     public void setMaskOverlay(View view) {
-        Bitmap bitmap = ViewHelper.cloneViewAsBitmap(view);
+        Bitmap bitmap = BitmapUtils.cloneViewAsBitmap(view);
         mMaskDrawable = new BitmapDrawable(getResources(), bitmap);
     }
 

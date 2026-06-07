@@ -1,6 +1,6 @@
 package com.kaisar.xposed.godmode.injection.editor.overlay;
 
-import static com.kaisar.xposed.godmode.injection.ViewHelper.TAG_GM_CMP;
+import static com.kaisar.xposed.godmode.engine.util.GmConstants.TAG_GM_CMP;
 
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;

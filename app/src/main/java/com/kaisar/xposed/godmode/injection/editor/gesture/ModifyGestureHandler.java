@@ -5,8 +5,10 @@ import android.view.HapticFeedbackConstants;
 import android.view.View;
 import android.view.ViewGroup;
 
-import com.kaisar.xposed.godmode.injection.ViewHelper;
+import com.kaisar.xposed.godmode.injection.editor.ViewRuleFactory;
+import com.kaisar.xposed.godmode.injection.editor.BitmapUtils;
 import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
+import com.kaisar.xposed.godmode.injection.util.ViewUtils;
 import com.kaisar.xposed.godmode.engine.util.CommonUtils;
 import com.kaisar.xposed.godmode.rule.ViewRule;
 
@@ -79,15 +81,15 @@ public final class ModifyGestureHandler {
         int deltaY = finalMarginY - state.startMarginY;
 
         if (deltaX != 0 || deltaY != 0) {
-            ViewRule rule = ViewHelper.makeModifyRule(state.dragTarget);
+            ViewRule rule = ViewRuleFactory.makeModifyRule(state.dragTarget);
             rule.origLeftMargin = state.startMarginX;
             rule.origTopMargin = state.startMarginY;
             rule.modXOffset = deltaX;
             rule.modYOffset = deltaY;
-            ViewHelper.fillCoordinates(rule, state.dragTarget);
-            Bitmap snapshot = ViewHelper.snapshotView(
-                    ViewHelper.findTopParentViewByChildView(state.dragTarget));
-            ViewHelper.drawRuleMask(snapshot, rule);
+            ViewRuleFactory.fillCoordinates(rule, state.dragTarget);
+            Bitmap snapshot = BitmapUtils.snapshotView(
+                    ViewUtils.findTopParentViewByChildView(state.dragTarget));
+            BitmapUtils.drawRuleMask(snapshot, rule);
             GodModeManager.getDefault().writeRule(packageName, rule, snapshot);
             CommonUtils.recycleNullableBitmap(snapshot);
         }

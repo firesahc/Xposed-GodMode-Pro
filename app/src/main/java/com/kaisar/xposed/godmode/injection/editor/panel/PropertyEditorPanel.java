@@ -22,6 +22,9 @@ import android.widget.Toast;
 import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.injection.ModuleResources;
 import com.kaisar.xposed.godmode.injection.ViewHelper;
+import com.kaisar.xposed.godmode.injection.editor.ViewRuleFactory;
+import com.kaisar.xposed.godmode.injection.editor.BitmapUtils;
+import com.kaisar.xposed.godmode.injection.util.ViewUtils;
 import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
 import com.kaisar.xposed.godmode.injection.util.GmResources;
 import com.kaisar.xposed.godmode.injection.util.Logger;
@@ -270,8 +273,8 @@ public class PropertyEditorPanel {
         mSavedText = null;
         mOriginalImageBitmap = null;
         mPendingImageBitmap = null;
-        mModifyingViewDepth = ViewHelper.getViewHierarchyDepth(view);
-        Activity act = ViewHelper.getAttachedActivityFromView(view);
+        mModifyingViewDepth = ViewUtils.getViewHierarchyDepth(view);
+        Activity act = ViewUtils.getAttachedActivityFromView(view);
         mModifyingViewActClass = act != null ? act.getComponentName().getClassName() : null;
 
         ViewGroup.LayoutParams lp = view.getLayoutParams();
@@ -335,7 +338,7 @@ public class PropertyEditorPanel {
             }
         }
 
-        String viewKey = ViewHelper.getViewKey(mTargetView);
+        String viewKey = ViewUtils.getViewKey(mTargetView);
         mTempModifications.remove(viewKey);
     }
 
@@ -343,10 +346,10 @@ public class PropertyEditorPanel {
     private boolean verifyViewIdentity(View view) {
         if (!view.isAttachedToWindow()) return false;
         if (mModifyingViewDepth == null || mModifyingViewActClass == null) return true;
-        Activity currentAct = ViewHelper.getAttachedActivityFromView(view);
+        Activity currentAct = ViewUtils.getAttachedActivityFromView(view);
         if (currentAct == null) return false;
         if (!mModifyingViewActClass.equals(currentAct.getComponentName().getClassName())) return false;
-        int[] currentDepth = ViewHelper.getViewHierarchyDepth(view);
+        int[] currentDepth = ViewUtils.getViewHierarchyDepth(view);
         return java.util.Arrays.equals(mModifyingViewDepth, currentDepth);
     }
 
@@ -359,10 +362,10 @@ public class PropertyEditorPanel {
         int h = heightSeek.getProgress();
         float a = alphaSeek.getProgress() / 255f;
 
-        String viewKey = ViewHelper.getViewKey(view);
+        String viewKey = ViewUtils.getViewKey(view);
         ViewRule rule = mTempModifications.get(viewKey);
         if (rule == null) {
-            rule = ViewHelper.makeModifyRule(view);
+            rule = ViewRuleFactory.makeModifyRule(view);
             // 用 saveViewState 中捕获的原始值覆盖 originals
             rule.origWidth = mSavedWidth > 0 ? mSavedWidth : mSavedPixelWidth;
             rule.origHeight = mSavedHeight > 0 ? mSavedHeight : mSavedPixelHeight;
@@ -446,8 +449,8 @@ public class PropertyEditorPanel {
                         ? ViewHelper.findViewBestMatch(activity, rule)
                         : ViewHelper.findViewByDepth(activity, rule.depth);
                 if (view != null) {
-                    Bitmap snapshot = ViewHelper.snapshotView(ViewHelper.findTopParentViewByChildView(view));
-                    ViewHelper.drawRuleMask(snapshot, rule);
+                    Bitmap snapshot = BitmapUtils.snapshotView(ViewUtils.findTopParentViewByChildView(view));
+                    BitmapUtils.drawRuleMask(snapshot, rule);
                     snapshots.put(rule, snapshot);
                 }
             } catch (Exception e) {
@@ -527,10 +530,10 @@ public class PropertyEditorPanel {
 
                                     mPendingImageBitmap = bitmap;
                                     ((ImageView) targetView).setImageBitmap(bitmap);
-                                    String viewKey = ViewHelper.getViewKey(targetView);
+                                    String viewKey = ViewUtils.getViewKey(targetView);
                                     ViewRule rule = mTempModifications.get(viewKey);
                                     if (rule == null) {
-                                        rule = ViewHelper.makeModifyRule(targetView);
+                                        rule = ViewRuleFactory.makeModifyRule(targetView);
                                         mTempModifications.put(viewKey, rule);
                                     }
                                     rule.modImagePath = "pending";

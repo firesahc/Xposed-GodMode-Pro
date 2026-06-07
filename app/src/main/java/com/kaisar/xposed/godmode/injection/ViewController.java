@@ -8,6 +8,7 @@ import android.view.View;
 import com.kaisar.xposed.godmode.engine.applier.ModifyApplier;
 import com.kaisar.xposed.godmode.engine.applier.RemoveApplier;
 import com.kaisar.xposed.godmode.engine.applier.RuleApplier;
+import com.kaisar.xposed.godmode.engine.matcher.ViewFinder;
 import com.kaisar.xposed.godmode.engine.util.FieldMapper;
 import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
 import com.kaisar.xposed.godmode.injection.util.Logger;
@@ -95,7 +96,7 @@ public final class ViewController {
         for (ViewRule rule : rules) {
             try {
                 if (rule.isRepeatable()) {
-                    List<View> views = ViewHelper.findAllViewsBestMatch(activity, rule);
+                    List<View> views = ViewFinder.findAllViewsBestMatch(activity, toEngineRule(rule));
                     if (views != null) {
                         for (View v : views) {
                             if (v != null && applyRule(v, rule)) appliedCount++;
@@ -103,7 +104,7 @@ public final class ViewController {
                     }
                     continue;
                 }
-                View view = ViewHelper.findViewBestMatch(activity, rule);
+                View view = ViewFinder.findViewBestMatch(activity, toEngineRule(rule));
                 Preconditions.checkNotNull(view, "apply rule fail not match any view");
                 if (applyRule(view, rule)) appliedCount++;
             } catch (NullPointerException e) {
@@ -132,7 +133,7 @@ public final class ViewController {
         for (ViewRule rule : rules) {
             try {
                 if (rule.isRepeatable()) {
-                    List<View> views = ViewHelper.findAllViewsBestMatch(activity, rule);
+                    List<View> views = ViewFinder.findAllViewsBestMatch(activity, toEngineRule(rule));
                     if (views != null) {
                         for (View v : views) {
                             if (v != null) revokeRule(v, rule);
@@ -140,7 +141,7 @@ public final class ViewController {
                     }
                     continue;
                 }
-                View view = ViewHelper.findViewBestMatch(activity, rule);
+                View view = ViewFinder.findViewBestMatch(activity, toEngineRule(rule));
                 Preconditions.checkNotNull(view, "revoke rule fail can't found block view");
                 revokeRule(view, rule);
             } catch (NullPointerException e) {
