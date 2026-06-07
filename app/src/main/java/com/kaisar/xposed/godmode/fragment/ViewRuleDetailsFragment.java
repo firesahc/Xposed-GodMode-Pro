@@ -28,6 +28,7 @@ import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
 import com.kaisar.xposed.godmode.injection.util.Logger;
 import com.kaisar.xposed.godmode.model.SharedViewModel;
 import com.kaisar.xposed.godmode.preference.ImageViewPreference;
+import com.kaisar.xposed.godmode.engine.pool.ThreadPools;
 import com.kaisar.xposed.godmode.rule.ViewRule;
 import com.kaisar.xposed.godmode.util.Preconditions;
 
@@ -202,7 +203,7 @@ public final class ViewRuleDetailsFragment extends PreferenceFragmentCompat impl
         if (mHandler == null) {
             mHandler = new Handler(Looper.getMainLooper());
         }
-        new Thread(() -> {
+        ThreadPools.IMAGE_LOADER.execute(() -> {
             if (!isAdded()) return;
             Bitmap bitmap = loadRuleImageBitmap(mViewRule);
             mHandler.post(() -> {
@@ -210,7 +211,7 @@ public final class ViewRuleDetailsFragment extends PreferenceFragmentCompat impl
                     mImagePreference.setImageBitmap(bitmap);
                 }
             });
-        }).start();
+        });
     }
 
     @Nullable

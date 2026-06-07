@@ -14,6 +14,7 @@ import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
 import com.kaisar.xposed.godmode.injection.editor.overlay.CancelView;
 import com.kaisar.xposed.godmode.injection.editor.overlay.MaskView;
 import com.kaisar.xposed.godmode.injection.editor.overlay.ParticleView;
+import com.kaisar.xposed.godmode.engine.pool.ThreadPools;
 import com.kaisar.xposed.godmode.engine.util.CommonUtils;
 import com.kaisar.xposed.godmode.injection.util.Logger;
 import com.kaisar.xposed.godmode.rule.ViewRule;
@@ -84,7 +85,7 @@ public final class RemoveGestureHandler {
                     ViewController.applyRule(v, state.viewRule);
                     ViewHelper.drawRuleMask(state.snapshot, state.viewRule);
                     state.maskView.detachFromContainer();
-                    new Thread(() -> {
+                    ThreadPools.IO.execute(() -> {
                         try {
                             GodModeManager.getDefault().writeRule(
                                     v.getContext().getPackageName(),
@@ -93,7 +94,7 @@ public final class RemoveGestureHandler {
                             Logger.e(TAG, "[EventHandler] write rule fail", e);
                         }
                         CommonUtils.recycleNullableBitmap(state.snapshot);
-                    }, "gm-write").start();
+                    });
                 }
                 @Override
                 public void onAnimationEnd(View animView, Animator animation) {
