@@ -18,7 +18,7 @@ import com.kaisar.xposed.godmode.engine.event.EventBus;
 import com.kaisar.xposed.godmode.engine.event.RulesChangedEvent;
 import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
 import com.kaisar.xposed.godmode.injection.bridge.ManagerObserver;
-import com.kaisar.xposed.godmode.injection.hook.ActivityLifecycleHook;
+import com.kaisar.xposed.godmode.injection.hook.LifecycleObserver;
 import com.kaisar.xposed.godmode.hook.DebugLayoutHook;
 import com.kaisar.xposed.godmode.hook.KeyInterceptor;
 import com.kaisar.xposed.godmode.hook.TouchInterceptor;
@@ -149,15 +149,14 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
         Logger.d(TAG, "[GodMode] injection complete for: " + packageName);
     }
 
-    /** 连接 ActivityLifecycleHook、EventHandlerHook、DispatchKeyEventHook 和调试布局 Hook */
+    /** 连接 Hook：生命周期、触摸、按键、调试布局 */
     private void registerHooks() {
         Logger.d(TAG, "[GodMode] registering hooks...");
-        // Activity 生命周期 Hook — 在 Activity 恢复/销毁时应用/撤销规则
-        ActivityLifecycleHook lifecycleHook = new ActivityLifecycleHook();
-        actRuleProp.addOnPropertyChangeListener(lifecycleHook);     // Property 路径
-        sEventBus.register(lifecycleHook);                          // EventBus 路径
-        XposedHelpers.findAndHookMethod(Activity.class, "onPostResume", lifecycleHook);
-        XposedHelpers.findAndHookMethod(Activity.class, "onDestroy", lifecycleHook);
+        // Activity 生命周期 Hook — 在 Activity 恢复/销毁时应用/撤销规则（仅 EventBus 路径）
+        LifecycleObserver lifecycleObserver = new LifecycleObserver();
+        sEventBus.register(lifecycleObserver);                          // EventBus 路径
+        XposedHelpers.findAndHookMethod(Activity.class, "onPostResume", lifecycleObserver);
+        XposedHelpers.findAndHookMethod(Activity.class, "onDestroy", lifecycleObserver);
 
         // 调试布局 Hook — 编辑模式激活时显示视图边界
         DebugLayoutHook.install(switchProp);

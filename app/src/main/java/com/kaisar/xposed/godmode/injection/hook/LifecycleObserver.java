@@ -9,12 +9,11 @@ import android.text.TextUtils;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
 
+import com.kaisar.xposed.godmode.engine.event.RulesChangedEvent;
 import com.kaisar.xposed.godmode.engine.event.Subscribe;
 import com.kaisar.xposed.godmode.injection.RuleModificationHelper;
 import com.kaisar.xposed.godmode.injection.ViewController;
-import com.kaisar.xposed.godmode.engine.event.RulesChangedEvent;
 import com.kaisar.xposed.godmode.injection.util.Logger;
-import com.kaisar.xposed.godmode.injection.util.Property;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.ViewRule;
 import com.kaisar.xposed.godmode.util.Preconditions;
@@ -28,7 +27,12 @@ import java.util.WeakHashMap;
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedHelpers;
 
-public final class ActivityLifecycleHook extends XC_MethodHook implements Property.OnPropertyChangeListener<ActRules> {
+/**
+ * 监听 Activity 生命周期，在 Activity 恢复/销毁时应用/撤销规则。
+ * <p>
+ * 通过 EventBus 订阅 {@link RulesChangedEvent} 接收规则变更通知。
+ */
+public final class LifecycleObserver extends XC_MethodHook {
 
     private static final WeakHashMap<Activity, OnLayoutChangeListener> sActivities = new WeakHashMap<>();
     private static final ActRules sActRules = new ActRules();
@@ -50,12 +54,10 @@ public final class ActivityLifecycleHook extends XC_MethodHook implements Proper
                 decorView.post(listener::applyRuleIfMatchCondition);
                 // 确保在规则已到达但 sActivities 尚为空（规则早于 onPostResume）
                 // 或视图在初次 applyRuleIfMatchCondition 时尚未就绪时有一个延迟重试。
-                // 如果 onPropertyChange 中新规则的循环没有触发（sActivities 为空），
-                // 此处的 scheduleRuleReapplication 会在规则添加后提供唯一的重试窗口。
                 scheduleRuleReapplication(activity);
             }
             installRecyclerViewHooks(activity);
-            Logger.d(TAG, "[ActivityLifecycle] resume: " + activity.getClass().getSimpleName() + " (total=" + sActivities.size() + ")");
+            Logger.d(TAG, "[Lifecycle] resume: " + activity.getClass().getSimpleName() + " (total=" + sActivities.size() + ")");
         } else if ("onDestroy".equals(methodName)) {
             OnLayoutChangeListener listener = sActivities.remove(activity);
             decorView.getViewTreeObserver().removeOnGlobalLayoutListener(listener);
@@ -63,19 +65,18 @@ public final class ActivityLifecycleHook extends XC_MethodHook implements Proper
                 Runnable r = sPendingReapply.remove(activity);
                 if (r != null) sDebounceHandler.removeCallbacks(r);
             }
-            Logger.d(TAG, "[ActivityLifecycle] destroy: " + activity.getClass().getSimpleName() + " (total=" + sActivities.size() + ")");
+            Logger.d(TAG, "[Lifecycle] destroy: " + activity.getClass().getSimpleName() + " (total=" + sActivities.size() + ")");
         }
     }
 
-    // EventBus 路径 — 与 Property 监听并存，双轨运行
+    /**
+     * 接收规则变更通知（EventBus 路径）。
+     * 撤销旧规则，应用新规则，然后为所有已跟踪 Activity 调度延迟重试。
+     */
     @SuppressWarnings("unchecked")
     @Subscribe
     public void onRulesChanged(RulesChangedEvent event) {
-        onPropertyChange((ActRules) event.rules);
-    }
-
-    @Override
-    public void onPropertyChange(ActRules newActRules) {
+        ActRules newActRules = (ActRules) event.rules;
         if (newActRules == null) return;
         // 规则未变化时跳过，避免不必要的撤销→再应用导致的闪回
         // 触发场景：IPC addObserver 推送的规则与 onPostResume 中已应用的规则完全相同时
@@ -172,9 +173,9 @@ public final class ActivityLifecycleHook extends XC_MethodHook implements Proper
                 }
             });
             sRecyclerViewHooksInstalled = true;
-            Logger.i(TAG, "[ActivityLifecycle] DynamicContent: RecyclerView adapter hook installed");
+            Logger.i(TAG, "[Lifecycle] DynamicContent: RecyclerView adapter hook installed");
         } catch (Throwable t) {
-            Logger.d(TAG, "[ActivityLifecycle] DynamicContent: RecyclerView hook skipped: " + t.getMessage());
+            Logger.d(TAG, "[Lifecycle] DynamicContent: RecyclerView hook skipped: " + t.getMessage());
         }
     }
 
@@ -210,7 +211,7 @@ public final class ActivityLifecycleHook extends XC_MethodHook implements Proper
                     }
                 }
             } catch (Exception e) {
-                Logger.w(TAG, "[ActivityLifecycle] OnLayoutChange: applyRuleIfMatchCondition failed: " + e.getMessage());
+                Logger.w(TAG, "[Lifecycle] OnLayoutChange: applyRuleIfMatchCondition failed: " + e.getMessage());
             } finally {
                 mApplying = false;
             }

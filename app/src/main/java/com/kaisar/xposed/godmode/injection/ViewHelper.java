@@ -20,7 +20,9 @@ import android.view.ViewParent;
 import android.widget.TextView;
 
 import com.kaisar.xposed.godmode.BuildConfig;
+import com.kaisar.xposed.godmode.engine.matcher.CompositeMatcher;
 import com.kaisar.xposed.godmode.engine.traversal.ViewTraversal;
+import com.kaisar.xposed.godmode.engine.util.FieldMapper;
 import com.kaisar.xposed.godmode.engine.util.GmConstants;
 import com.kaisar.xposed.godmode.injection.util.Logger;
 import com.kaisar.xposed.godmode.rule.ViewRule;
@@ -46,12 +48,32 @@ public final class ViewHelper {
     private static final Map<Activity, List<WeakReference<ViewGroup>>> sRecyclerViewCache
         = new WeakHashMap<>();
 
+    /** engine 组合匹配器 — 优先尝试，兜底使用现有匹配逻辑 */
+    private static final CompositeMatcher sMatcher = new CompositeMatcher();
+
     public static final String TAG_GM_CMP = GmConstants.TAG_GM_CMP;
+
+    /** 将 app 模块 ViewRule 转换为 engine 模块 ViewRule（通过 FieldMapper 按字段名拷贝） */
+    private static com.kaisar.xposed.godmode.engine.rule.ViewRule toEngine(ViewRule appRule) {
+        com.kaisar.xposed.godmode.engine.rule.ViewRule engineRule =
+                new com.kaisar.xposed.godmode.engine.rule.ViewRule();
+        FieldMapper.copyFields(appRule, engineRule);
+        return engineRule;
+    }
 
     public static View findViewBestMatch(Activity activity, ViewRule rule) {
         if (activity == null || activity.getWindow() == null) return null;
         ViewGroup decorView = (ViewGroup) activity.getWindow().getDecorView();
-        // 多策略匹配：resourceName + depth + viewClass 为主锚点，text/description 为辅助
+
+        // 优先尝试 engine 组合匹配器
+        try {
+            View matched = sMatcher.matchView(decorView, toEngine(rule));
+            if (matched != null) return matched;
+        } catch (Exception e) {
+            Logger.w(TAG, "[ViewHelper] engine matcher failed, falling back to legacy: " + e.getMessage());
+        }
+
+        // 兜底：原有匹配逻辑
         boolean strictMode = false;
         try {
             ClassLoader cl = activity.getClassLoader();
