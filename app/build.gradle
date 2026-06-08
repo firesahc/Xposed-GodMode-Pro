@@ -1,6 +1,6 @@
 plugins {
-    id 'com.android.application'
-    id 'androidx.navigation.safeargs'
+    alias libs.plugins.android.application
+    alias libs.plugins.navigation.safe.args
 }
 
 android {
@@ -36,22 +36,19 @@ dependencies {
     implementation fileTree(include: ['*.jar'], dir: 'libs')
     implementation project(path: ':engine')
     implementation project(path: ':libxservicemanager')
-    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-    implementation 'androidx.navigation:navigation-fragment:2.7.7'
-    implementation 'androidx.navigation:navigation-ui:2.7.7'
-    androidTestImplementation('androidx.test.espresso:espresso-core:3.3.0', {
+    implementation libs.androidx.constraintlayout
+    implementation libs.bundles.navigation
+    androidTestImplementation(libs.espresso.core) {
         exclude group: 'com.android.support', module: 'support-annotations'
-    })
-    implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation "androidx.viewpager2:viewpager2:1.0.0"
-    implementation "androidx.fragment:fragment:1.6.2"
-    implementation 'androidx.legacy:legacy-support-v4:1.0.0'
+    }
+    implementation libs.androidx.appcompat
+    implementation libs.androidx.viewpager2
+    implementation libs.androidx.fragment
+    implementation libs.androidx.preference
     compileOnly fileTree(include: ['*.jar'], dir: 'src/main/lib')
-    implementation 'com.google.code.gson:gson:2.10.1'
-    implementation 'androidx.legacy:legacy-support-v13:1.0.0'
-    implementation 'androidx.legacy:legacy-preference-v14:1.0.0'
-    implementation 'com.google.android.material:material:1.11.0'
-    implementation 'com.github.bumptech.glide:glide:4.16.0'
-    implementation 'dev.rikka.rikkax.insets:insets:1.2.0'
-    annotationProcessor 'com.github.bumptech.glide:compiler:4.16.0'
+    implementation libs.gson
+    implementation libs.material
+    implementation libs.glide
+    implementation libs.rikka.insets
+    annotationProcessor libs.glide.compiler
 }

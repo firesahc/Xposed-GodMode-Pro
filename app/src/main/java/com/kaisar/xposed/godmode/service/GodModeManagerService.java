@@ -118,6 +118,9 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
             case CLEAN_ORPHANS:
                 handleCleanOrphans();
                 break;
+            case MSG_DEBOUNCE_WRITE:
+                mPersistManager.handleDebouncedWrite((String) msg.obj);
+                break;
         }
         return true;
     }

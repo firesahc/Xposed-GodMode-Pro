@@ -2,7 +2,10 @@ package com.kaisar.xposed.godmode.engine.pool;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -29,8 +32,11 @@ public final class ThreadPools {
     public static final ExecutorService IO = Executors.newFixedThreadPool(
             2, new DaemonThreadFactory("GM-IO"));
 
-    /** 通用线程池 — 适用于轻量计算、匹配遍历等 */
-    public static final ExecutorService GENERAL = Executors.newCachedThreadPool(
+    /** 通用线程池 — 适用于轻量计算、匹配遍历等（有界队列，最大线程数=CPU*2） */
+    public static final ExecutorService GENERAL = new ThreadPoolExecutor(
+            0, Runtime.getRuntime().availableProcessors() * 2,
+            60L, TimeUnit.SECONDS,
+            new LinkedBlockingQueue<>(256),
             new DaemonThreadFactory("GM-General"));
 
     /**

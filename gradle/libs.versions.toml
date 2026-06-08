@@ -1,0 +1,47 @@
+[versions]
+agp = "8.4.0"
+navigation = "2.7.7"
+constraintlayout = "2.1.4"
+appcompat = "1.6.1"
+viewpager2 = "1.0.0"
+fragment = "1.6.2"
+gson = "2.10.1"
+material = "1.11.0"
+glide = "4.16.0"
+rikka-insets = "1.2.0"
+annotation = "1.5.0"
+preference = "1.2.1"
+espresso = "3.3.0"
+
+[libraries]
+# AndroidX
+androidx-constraintlayout = { group = "androidx.constraintlayout", name = "constraintlayout", version.ref = "constraintlayout" }
+androidx-navigation-fragment = { group = "androidx.navigation", name = "navigation-fragment", version.ref = "navigation" }
+androidx-navigation-ui = { group = "androidx.navigation", name = "navigation-ui", version.ref = "navigation" }
+androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
+androidx-viewpager2 = { group = "androidx.viewpager2", name = "viewpager2", version.ref = "viewpager2" }
+androidx-fragment = { group = "androidx.fragment", name = "fragment", version.ref = "fragment" }
+androidx-annotation = { group = "androidx.annotation", name = "annotation", version.ref = "annotation" }
+androidx-preference = { group = "androidx.preference", name = "preference", version.ref = "preference" }
+
+# Google
+material = { group = "com.google.android.material", name = "material", version.ref = "material" }
+gson = { group = "com.google.code.gson", name = "gson", version.ref = "gson" }
+
+# Glide
+glide = { group = "com.github.bumptech.glide", name = "glide", version.ref = "glide" }
+glide-compiler = { group = "com.github.bumptech.glide", name = "compiler", version.ref = "glide" }
+
+# Rikka
+rikka-insets = { group = "dev.rikka.rikkax.insets", name = "insets", version.ref = "rikka-insets" }
+
+# Testing
+espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espresso" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+android-library = { id = "com.android.library", version.ref = "agp" }
+navigation-safe-args = { id = "androidx.navigation.safeargs", version.ref = "navigation" }
+
+[bundles]
+navigation = ["androidx-navigation-fragment", "androidx-navigation-ui"]
