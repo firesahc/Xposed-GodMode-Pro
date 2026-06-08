@@ -11,7 +11,7 @@ import android.widget.TextView;
 
 import com.kaisar.xposed.godmode.BuildConfig;
 import com.kaisar.xposed.godmode.engine.matcher.ViewFinder;
-import com.kaisar.xposed.godmode.engine.util.RuleMapper;
+import com.kaisar.xposed.godmode.engine.rule.RuleMapper;
 import com.kaisar.xposed.godmode.injection.GodModeInjector;
 import com.kaisar.xposed.godmode.injection.util.ViewUtils;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
@@ -19,20 +19,20 @@ import com.kaisar.xposed.godmode.rule.RuleRecord;
 import java.util.Objects;
 
 /**
- * 视图规则构造工厂 — 从视图创建屏蔽/修改规则。
+ * 瑙嗗浘瑙勫垯鏋勯€犲伐鍘?鈥?浠庤鍥惧垱寤哄睆钄?淇敼瑙勫垯銆?
  * <p>
- * 从 {@code ViewHelper} 拆分，职责单一。
+ * 浠?{@code ViewHelper} 鎷嗗垎锛岃亴璐ｅ崟涓€銆?
  */
 public final class RuleRecordFactory {
 
     private RuleRecordFactory() {}
 
     /**
-     * 从视图创建屏蔽规则（通用）。
+     * 浠庤鍥惧垱寤哄睆钄借鍒欙紙閫氱敤锛夈€?
      *
-     * @param v 目标视图
-     * @return 构造完成的 RuleRecord
-     * @throws PackageManager.NameNotFoundException 无法获取包信息时抛出
+     * @param v 鐩爣瑙嗗浘
+     * @return 鏋勯€犲畬鎴愮殑 RuleRecord
+     * @throws PackageManager.NameNotFoundException 鏃犳硶鑾峰彇鍖呬俊鎭椂鎶涘嚭
      */
     public static RuleRecord makeRule(View v) throws PackageManager.NameNotFoundException {
         Activity activity = ViewUtils.getAttachedActivityFromView(v);
@@ -75,21 +75,21 @@ public final class RuleRecordFactory {
     }
 
     /**
-     * 创建移除规则（ruleTag 留空以兼容旧 JSON 格式）。
+     * 鍒涘缓绉婚櫎瑙勫垯锛坮uleTag 鐣欑┖浠ュ吋瀹规棫 JSON 鏍煎紡锛夈€?
      *
-     * @param v 目标视图
-     * @return 构造完成的 RuleRecord
-     * @throws PackageManager.NameNotFoundException 无法获取包信息时抛出
+     * @param v 鐩爣瑙嗗浘
+     * @return 鏋勯€犲畬鎴愮殑 RuleRecord
+     * @throws PackageManager.NameNotFoundException 鏃犳硶鑾峰彇鍖呬俊鎭椂鎶涘嚭
      */
     public static RuleRecord makeRemoveRule(View v) throws PackageManager.NameNotFoundException {
         return makeRule(v);
     }
 
     /**
-     * 创建修改规则。
+     * 鍒涘缓淇敼瑙勫垯銆?
      *
-     * @param view 目标视图
-     * @return 构造完成的 RuleRecord（ruleTag="modify"）
+     * @param view 鐩爣瑙嗗浘
+     * @return 鏋勯€犲畬鎴愮殑 RuleRecord锛坮uleTag="modify"锛?
      */
     public static RuleRecord makeModifyRule(View view) {
         Activity act = ViewUtils.getAttachedActivityFromView(view);
@@ -108,10 +108,10 @@ public final class RuleRecordFactory {
     }
 
     /**
-     * 将视图的当前位置/尺寸写入规则。
+     * 灏嗚鍥剧殑褰撳墠浣嶇疆/灏哄鍐欏叆瑙勫垯銆?
      *
-     * @param rule 目标规则
-     * @param v    当前视图
+     * @param rule 鐩爣瑙勫垯
+     * @param v    褰撳墠瑙嗗浘
      */
     public static void fillCoordinates(RuleRecord rule, View v) {
         int[] out = new int[2];
@@ -123,15 +123,15 @@ public final class RuleRecordFactory {
     }
 
     // =========================================================================
-    // 以下方法从 ViewHelper 内联迁移（ViewHelper @Deprecated 即将退役）
+    // 浠ヤ笅鏂规硶浠?ViewHelper 鍐呰仈杩佺Щ锛圴iewHelper @Deprecated 鍗冲皢閫€褰癸級
     // =========================================================================
 
-    /** 将 app 模块 RuleRecord 转换为 engine 模块 RuleMatchSpec */
+    /** 灏?app 妯″潡 RuleRecord 杞崲涓?engine 妯″潡 RuleMatchSpec */
     private static com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec toEngine(RuleRecord appRule) {
         return RuleMapper.toEngine(appRule);
     }
 
-    /** 填充可重复规则信息（itemPath、itemRootClass、parentClass） */
+    /** 濉厖鍙噸澶嶈鍒欎俊鎭紙itemPath銆乮temRootClass銆乸arentClass锛?*/
     private static void populateRepeatableInfo(View v, RuleRecord rule) {
         boolean isInfoFlowMode = GodModeInjector.getEditorOrchestrator().isInfoFlowMode();
         com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec engineRule = toEngine(rule);

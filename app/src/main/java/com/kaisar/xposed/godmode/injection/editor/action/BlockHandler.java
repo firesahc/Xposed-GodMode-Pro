@@ -10,49 +10,49 @@ import android.view.ViewGroup;
 import android.widget.Toast;
 
 import com.kaisar.xposed.godmode.injection.editor.RuleRecordFactory;
-import com.kaisar.xposed.godmode.injection.editor.BitmapUtils;
+import com.kaisar.xposed.godmode.injection.util.BitmapUtils;
 import com.kaisar.xposed.godmode.injection.ViewController;
 import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
 import com.kaisar.xposed.godmode.injection.editor.overlay.ParticleView;
-import com.kaisar.xposed.godmode.injection.util.Logger;
+import com.kaisar.xposed.godmode.util.Logger;
 import com.kaisar.xposed.godmode.injection.util.TaskExecutor;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 
 /**
- * 屏蔽（移除）操作处理器 — 粒子动画播放 + IPC 规则写入。
+ * 鐏炲繗鏂€閿涘牏些闂勩倧绱氶幙宥勭稊婢跺嫮鎮婇崳?閳?缁帒鐡欓崝銊ф暰閹绢厽鏂?+ IPC 鐟欏嫬鍨崘娆忓弳閵?
  * <p>
- * 从 {@code KeyInterceptor.performBlock()} 提取，职责单一：
+ * 娴?{@code KeyInterceptor.performBlock()} 閹绘劕褰囬敍宀冧捍鐠愶絽宕熸稉鈧敍?
  * <ul>
- *   <li>创建 {@link ParticleView} 并播放爆炸粒子动画</li>
- *   <li>动画开始时应用移除规则（{@link ViewController#applyRule}）</li>
- *   <li>动画结束时绘制规则遮罩、通过 IPC 写入规则文件</li>
+ *   <li>閸掓稑缂?{@link ParticleView} 楠炶埖鎸遍弨鍓у瀻閻愬摜鐭戠€涙劕濮╅悽?/li>
+ *   <li>閸斻劎鏁惧鈧慨瀣鎼存梻鏁ょ粔濠氭珟鐟欏嫬鍨敍鍧紷link ViewController#applyRule}閿?/li>
+ *   <li>閸斻劎鏁剧紒鎾存将閺冨墎绮崚鎯邦潐閸掓瑩浼勭純鈹库偓渚€鈧俺绻?IPC 閸愭瑥鍙嗙憴鍕灟閺傚洣娆?/li>
  * </ul>
  * <p>
- * 调用方负责视图获取、校验、截图及面板生命周期回调。
+ * 鐠嬪啰鏁ら弬纭呯鐠愶綀顫嬮崶鎹愬箯閸欐牓鈧焦鐗庢灞烩偓浣瑰焻閸ユ儳寮烽棃銏℃緲閻㈢喎鎳￠崨銊︽埂閸ョ偠鐨熼妴?
  */
 public final class BlockHandler {
 
     private BlockHandler() {}
 
     /**
-     * 屏蔽操作完成/失败回调。
+     * 鐏炲繗鏂€閹垮秳缍旂€瑰本鍨?婢惰精瑙﹂崶鐐剁殶閵?
      */
     public interface OnBlockListener {
-        /** 粒子动画结束、规则写入已提交后调用。 */
+        /** 缁帒鐡欓崝銊ф暰缂佹挻娼妴浣筋潐閸掓瑥鍟撻崗銉ュ嚒閹绘劒姘﹂崥搴ょ殶閻劊鈧?*/
         void onAnimationEnd(int blockedViewIndex);
-        /** 操作过程中发生异常。 */
+        /** 閹垮秳缍旀潻鍥┾柤娑擃厼褰傞悽鐔风磽鐢悶鈧?*/
         void onError(String message);
     }
 
     /**
-     * 执行屏蔽操作：粒子动画 + IPC 写入。
+     * 閹笛嗩攽鐏炲繗鏂€閹垮秳缍旈敍姘辩煈鐎涙劕濮╅悽?+ IPC 閸愭瑥鍙嗛妴?
      *
-     * @param activity         当前 Activity
-     * @param view             被屏蔽的目标视图
-     * @param container        DecorView 容器（ParticleView 附着目标）
-     * @param snapshot         屏蔽前干净截图（已隐藏 GM 覆盖层后截取）
-     * @param blockedViewIndex 被屏蔽视图在节点列表中的索引
-     * @param listener         回调
+     * @param activity         瑜版挸澧?Activity
+     * @param view             鐞氼偄鐫嗛拕鐣屾畱閻╊喗鐖ｇ憴鍡楁禈
+     * @param container        DecorView 鐎圭懓娅掗敍鍦rticleView 闂勫嫮娼冮惄顔界垼閿?
+     * @param snapshot         鐏炲繗鏂€閸撳秴鍏遍崙鈧幋顏勬禈閿涘牆鍑￠梾鎰 GM 鐟曞棛娲婄仦鍌氭倵閹搭亜褰囬敍?
+     * @param blockedViewIndex 鐞氼偄鐫嗛拕鍊燁潒閸ユ儳婀懞鍌滃仯閸掓銆冩稉顓犳畱缁便垹绱?
+     * @param listener         閸ョ偠鐨?
      */
     public static void execute(final Activity activity, final View view,
             final ViewGroup container, final Bitmap snapshot,

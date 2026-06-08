@@ -1,18 +1,15 @@
 package com.kaisar.xposed.godmode.injection.util;
 
-import com.kaisar.xposed.godmode.engine.pool.ThreadPools;
+import com.kaisar.xposed.godmode.engine.util.ThreadPools;
 
 /**
- * 应用层任务执行器 — 封装 {@link ThreadPools}，提供统一的异步任务入口。
- * <p>
- * 所有异步 I/O、图片加载、后台计算均通过此门面提交，
- * 避免直接操作线程或分散的 ExecutorService 引用。
- * <p>
- * 线程模型委托至 engine 层的 {@link ThreadPools}：
- * <ul>
- *   <li>{@link #IO} — 文件读写、规则持久化等 I/O 密集型任务</li>
- *   <li>{@link #IMAGE_LOADER} — 图片解码、Bitmap 处理</li>
- *   <li>{@link #GENERAL} — 轻量计算、匹配遍历</li>
+ * 搴旂敤灞備换鍔℃墽琛屽櫒 鈥?灏佽 {@link ThreadPools}锛屾彁渚涚粺涓€鐨勫紓姝ヤ换鍔″叆鍙ｃ€? * <p>
+ * 鎵€鏈夊紓姝?I/O銆佸浘鐗囧姞杞姐€佸悗鍙拌绠楀潎閫氳繃姝ら棬闈㈡彁浜わ紝
+ * 閬垮厤鐩存帴鎿嶄綔绾跨▼鎴栧垎鏁ｇ殑 ExecutorService 寮曠敤銆? * <p>
+ * 绾跨▼妯″瀷濮旀墭鑷?engine 灞傜殑 {@link ThreadPools}锛? * <ul>
+ *   <li>{@link #IO} 鈥?鏂囦欢璇诲啓銆佽鍒欐寔涔呭寲绛?I/O 瀵嗛泦鍨嬩换鍔?/li>
+ *   <li>{@link #IMAGE_LOADER} 鈥?鍥剧墖瑙ｇ爜銆丅itmap 澶勭悊</li>
+ *   <li>{@link #GENERAL} 鈥?杞婚噺璁＄畻銆佸尮閰嶉亶鍘?/li>
  * </ul>
  */
 public final class TaskExecutor {
@@ -20,17 +17,17 @@ public final class TaskExecutor {
     private TaskExecutor() {
     }
 
-    /** I/O 线程池 — 文件读写、JSON 序列化、规则持久化等。 */
+    /** I/O 绾跨▼姹?鈥?鏂囦欢璇诲啓銆丣SON 搴忓垪鍖栥€佽鍒欐寔涔呭寲绛夈€?*/
     public static void executeIo(Runnable task) {
         ThreadPools.IO.execute(task);
     }
 
-    /** 图片加载线程池 — Bitmap 解码、图片 I/O 等。 */
+    /** 鍥剧墖鍔犺浇绾跨▼姹?鈥?Bitmap 瑙ｇ爜銆佸浘鐗?I/O 绛夈€?*/
     public static void executeImageLoad(Runnable task) {
         ThreadPools.IMAGE_LOADER.execute(task);
     }
 
-    /** 通用线程池 — 轻量计算、视图遍历等。 */
+    /** 閫氱敤绾跨▼姹?鈥?杞婚噺璁＄畻銆佽鍥鹃亶鍘嗙瓑銆?*/
     public static void executeGeneral(Runnable task) {
         ThreadPools.GENERAL.execute(task);
     }

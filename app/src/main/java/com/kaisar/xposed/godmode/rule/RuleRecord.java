@@ -17,26 +17,26 @@ import com.kaisar.xposed.godmode.engine.rule.RuleFields;
 import java.util.Arrays;
 
 /**
- * app 模块的规则记录 — Parcelable（IPC 序列化）+ Gson @SerializedName（持久化）。
+ * app 妯″潡鐨勮鍒欒褰?鈥?Parcelable锛圛PC 搴忓垪鍖栵級+ Gson @SerializedName锛堟寔涔呭寲锛夈€?
  * <p>
- * 实现 {@link RuleFields} 接口以提供编译期安全的字段访问，
- * 配合 {@link com.kaisar.xposed.godmode.engine.util.RuleMapper} 实现类型安全的 app→engine 转换。
+ * 瀹炵幇 {@link RuleFields} 鎺ュ彛浠ユ彁渚涚紪璇戞湡瀹夊叏鐨勫瓧娈佃闂紝
+ * 閰嶅悎 {@link com.kaisar.xposed.godmode.engine.rule.RuleMapper} 瀹炵幇绫诲瀷瀹夊叏鐨?app鈫抏ngine 杞崲銆?
  * <p>
- * 【同步保障】对方文件: {@code engine/.../engine/rule/RuleMatchSpec.java}（纯 POJO 版）
- * <br>引擎字段总数: 37 &nbsp;|&nbsp; app 字段总数: 37
- * <br>若此处增减字段，请同步修改对方文件的同名字段、Parcel 读写、clone() 和 equals()/hashCode()。
+ * 銆愬悓姝ヤ繚闅溿€戝鏂规枃浠? {@code engine/.../engine/rule/RuleMatchSpec.java}锛堢函 POJO 鐗堬級
+ * <br>寮曟搸瀛楁鎬绘暟: 37 &nbsp;|&nbsp; app 瀛楁鎬绘暟: 37
+ * <br>鑻ユ澶勫鍑忓瓧娈碉紝璇峰悓姝ヤ慨鏀瑰鏂规枃浠剁殑鍚屽悕瀛楁銆丳arcel 璇诲啓銆乧lone() 鍜?equals()/hashCode()銆?
  *
  * @see RuleFields
- * @see com.kaisar.xposed.godmode.engine.util.RuleMapper
+ * @see com.kaisar.xposed.godmode.engine.rule.RuleMapper
  */
 @Keep
 public final class RuleRecord implements RuleFields, Parcelable, Cloneable {
 
-    // 规则标识字段: 非空=修改规则，null/空=移除规则
+    // 瑙勫垯鏍囪瘑瀛楁: 闈炵┖=淇敼瑙勫垯锛宯ull/绌?绉婚櫎瑙勫垯
     @SerializedName("rule_tag")
     public String ruleTag;
 
-    // --- 移除规则字段 ---
+    // --- 绉婚櫎瑙勫垯瀛楁 ---
     @SerializedName("label")
     public String label;
     @SerializedName("package_name")
@@ -84,7 +84,7 @@ public final class RuleRecord implements RuleFields, Parcelable, Cloneable {
     @SerializedName("timestamp")
     public long timestamp;
 
-    // --- 修改规则字段 ---
+    // --- 淇敼瑙勫垯瀛楁 ---
     @SerializedName("mod_width")
     public int modWidth = -1;
     @SerializedName("mod_height")
@@ -100,7 +100,7 @@ public final class RuleRecord implements RuleFields, Parcelable, Cloneable {
     @SerializedName("mod_img_path")
     public String modImagePath;
 
-    // --- 原始值 (用于应用修改时计算) ---
+    // --- 鍘熷鍊?(鐢ㄤ簬搴旂敤淇敼鏃惰绠? ---
     @SerializedName("orig_width")
     public int origWidth;
     @SerializedName("orig_height")
@@ -115,7 +115,7 @@ public final class RuleRecord implements RuleFields, Parcelable, Cloneable {
     public int origTopMargin;
 
     // =========================================================================
-    // RuleFields 接口实现 — 37 个 getter（委托到 public 字段）
+    // RuleFields 鎺ュ彛瀹炵幇 鈥?37 涓?getter锛堝鎵樺埌 public 瀛楁锛?
     // =========================================================================
 
     @Override public String getRuleTag() { return ruleTag; }
@@ -157,7 +157,7 @@ public final class RuleRecord implements RuleFields, Parcelable, Cloneable {
     @Override public int getOrigTopMargin() { return origTopMargin; }
 
     // =========================================================================
-    // 构造方法
+    // 鏋勯€犳柟娉?
     // =========================================================================
 
     @SuppressWarnings("unused")
@@ -323,7 +323,7 @@ public final class RuleRecord implements RuleFields, Parcelable, Cloneable {
     }
 
     // =========================================================================
-    // 业务方法
+    // 涓氬姟鏂规硶
     // =========================================================================
 
     public int getViewId(Resources res) {
@@ -369,7 +369,7 @@ public final class RuleRecord implements RuleFields, Parcelable, Cloneable {
     public boolean isPositionModified() { return modXOffset != 0 || modYOffset != 0; }
     public boolean isTextModified() { return modText != null; }
     public boolean isImageModified() { return modImagePath != null; }
-    /** @deprecated 使用 {@link #isRepeatable()} 替代 */
+    /** @deprecated 浣跨敤 {@link #isRepeatable()} 鏇夸唬 */
     @Deprecated public boolean isRepeatableRule() { return repeatable; }
 
     public boolean hasModifications() {
@@ -378,7 +378,7 @@ public final class RuleRecord implements RuleFields, Parcelable, Cloneable {
     }
 
     // =========================================================================
-    // equals / hashCode（完全不动，保持原有窄匹配语义）
+    // equals / hashCode锛堝畬鍏ㄤ笉鍔紝淇濇寔鍘熸湁绐勫尮閰嶈涔夛級
     // =========================================================================
 
     @Override

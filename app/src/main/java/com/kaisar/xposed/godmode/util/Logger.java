@@ -1,4 +1,4 @@
-package com.kaisar.xposed.godmode.injection.util;
+package com.kaisar.xposed.godmode.util;
 
 import android.util.Log;
 

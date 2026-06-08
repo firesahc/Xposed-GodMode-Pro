@@ -10,7 +10,7 @@ import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.TextView;
 
-import com.kaisar.xposed.godmode.engine.pool.ThreadPools;
+import com.kaisar.xposed.godmode.engine.util.ThreadPools;
 import com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec;
 
 import java.lang.ref.SoftReference;
@@ -20,20 +20,20 @@ import java.util.Map;
 import java.util.WeakHashMap;
 
 /**
- * 修改规则应用器 — 修改视图尺寸/透明度/位置/文本/图片，支持撤销。
- * 从 RuleModificationHelper 提取的核心逻辑。
+ * 淇敼瑙勫垯搴旂敤鍣?鈥?淇敼瑙嗗浘灏哄/閫忔槑搴?浣嶇疆/鏂囨湰/鍥剧墖锛屾敮鎸佹挙閿€銆?
+ * 浠?RuleModificationHelper 鎻愬彇鐨勬牳蹇冮€昏緫銆?
  * <p>
- * 使用 SoftReference 缓存已加载的图片 Bitmap，避免重复 IPC 请求。
+ * 浣跨敤 SoftReference 缂撳瓨宸插姞杞界殑鍥剧墖 Bitmap锛岄伩鍏嶉噸澶?IPC 璇锋眰銆?
  */
 public final class ModifyApplier implements RuleApplier {
 
-    // 复用 ThreadPools.IMAGE_LOADER 而非创建独立线程池
+    // 澶嶇敤 ThreadPools.IMAGE_LOADER 鑰岄潪鍒涘缓鐙珛绾跨▼姹?
     private static final Handler MAIN_HANDLER = new Handler(Looper.getMainLooper());
     private final WeakHashMap<View, Integer> mAppliedViews = new WeakHashMap<>();
     private final Map<String, SoftReference<Bitmap>> mBitmapCache =
             Collections.synchronizedMap(new HashMap<>());
 
-    /** 图片加载器接口 — 由调用方注入以实现跨进程图片加载 */
+    /** 鍥剧墖鍔犺浇鍣ㄦ帴鍙?鈥?鐢辫皟鐢ㄦ柟娉ㄥ叆浠ュ疄鐜拌法杩涚▼鍥剧墖鍔犺浇 */
     public interface ImageLoader {
         ParcelFileDescriptor openImageFileDescriptor(String path) throws Exception;
     }
@@ -44,7 +44,7 @@ public final class ModifyApplier implements RuleApplier {
         this.mImageLoader = imageLoader;
     }
 
-    // ---- 应用 ----
+    // ---- 搴旂敤 ----
 
     @Override
     public boolean apply(View view, RuleMatchSpec rule) {
@@ -64,7 +64,7 @@ public final class ModifyApplier implements RuleApplier {
     }
 
     private boolean isAlreadyApplied(View view, RuleMatchSpec rule) {
-        // 使用引用相等性检查 hashCode（int），避免自动装箱
+        // 浣跨敤寮曠敤鐩哥瓑鎬ф鏌?hashCode锛坕nt锛夛紝閬垮厤鑷姩瑁呯
         Integer appliedHash = mAppliedViews.get(view);
         return appliedHash != null && appliedHash == rule.hashCode();
     }
@@ -100,7 +100,7 @@ public final class ModifyApplier implements RuleApplier {
         }
     }
 
-    // ---- 撤销 ----
+    // ---- 鎾ら攢 ----
 
     @Override
     public boolean revoke(View view, RuleMatchSpec rule) {
@@ -129,7 +129,7 @@ public final class ModifyApplier implements RuleApplier {
         mBitmapCache.clear();
     }
 
-    // ---- 图片加载 ----
+    // ---- 鍥剧墖鍔犺浇 ----
 
     private void loadAndSetImage(ImageView targetView, String imagePath) {
         SoftReference<Bitmap> cached = mBitmapCache.get(imagePath);

@@ -1,4 +1,4 @@
-package com.kaisar.xposed.godmode.injection.util;
+package com.kaisar.xposed.godmode.injection.editor.toolbar;
 
 import android.text.TextUtils;
 

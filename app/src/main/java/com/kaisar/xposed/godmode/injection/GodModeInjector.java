@@ -21,11 +21,11 @@ import com.kaisar.xposed.godmode.injection.editor.EditorOrchestrator;
 import com.kaisar.xposed.godmode.injection.entry.ActivityKeyHook;
 import com.kaisar.xposed.godmode.injection.entry.DebugLayoutHook;
 import com.kaisar.xposed.godmode.injection.entry.TouchHook;
-import com.kaisar.xposed.godmode.injection.lifecycle.LifecycleObserver;
+import com.kaisar.xposed.godmode.injection.LifecycleObserver;
 import com.kaisar.xposed.godmode.injection.util.BlockListChecker;
 import com.kaisar.xposed.godmode.injection.util.GmResources;
-import com.kaisar.xposed.godmode.injection.util.Logger;
-import com.kaisar.xposed.godmode.engine.util.Property;
+import com.kaisar.xposed.godmode.util.Logger;
+import com.kaisar.xposed.godmode.engine.Property;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.service.GodModeManagerService;
 import com.kaisar.xservicemanager.XServiceManager;
@@ -38,41 +38,41 @@ import de.robv.android.xposed.XposedHelpers;
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
 
 /**
- * GodMode 的 Xposed 入口。
+ * GodMode 闁?Xposed 闁稿繈鍎辫ぐ娑㈠Υ?
  * <p>
- * 在 {@link IXposedHookZygoteInit} 阶段加载模块自身资源以便注入到目标应用。
- * 在 {@link IXposedHookLoadPackage} 阶段：
+ * 闁?{@link IXposedHookZygoteInit} 闂傚啳鍩栭宀勫礉閻樼儤绁版俊顖椻偓铏仴闁煎浜ｉ棅鈺冩導閸曨剛鐖卞ù鐘劙缁岃泛鈻旈妸銉ュ汲闁告帗澹嗗ú浼村冀閸パ呭畨闁活潿鍔婇埀?
+ * 闁?{@link IXposedHookLoadPackage} 闂傚啳鍩栭宀勬晬?
  * <ul>
- *   <li>对于 {@code "android"}（system_server）：通过剪贴板劫持将
- *       {@link GodModeManagerService} 注册为系统服务。</li>
- *   <li>对于目标应用：Hook Activity 生命周期、触摸事件、按键事件，
- *       并注册 IPC 观察者以接收规则变更。</li>
+ *   <li>閻庣敻鈧稓鑹?{@code "android"}闁挎稑婢儁stem_server闁挎稑顧€缁变即鏌呭宕囩畺闁告搩浜ｉ崚娑㈠级閸喖袥闁归晲绀侀惃?
+ *       {@link GodModeManagerService} 婵炲鍔岄崬鑺ョ▔閾忓綊鍏囩紓浣哄枑濠€鍥礉鎺抽埀?/li>
+ *   <li>閻庣敻鈧稓鑹鹃柣鈺婂枟閻栵絾鎯旈弮鍌涙殢闁挎稒顑杘ok Activity 闁汇垻鍠庨幊锟犲川閵婏附鍩傞柕鍡曟祰琚濋柟浠嬫櫜缁ㄣ劍绂掗煬娴嬪亾娴ｇ懓鐦婚梺娆惧枙缁ㄣ劍绂掔拋鍦
+ *       妤犵偠鍩栭弫鐐哄礃?IPC 閻熸瑥鍊搁惂鍌炴嚀閸涱兛绨伴柟鎭掑劜閺佸湱鎲撮崟顐㈢仧闁告瑦蓱濞插潡濡?/li>
  * </ul>
  */
 public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHookZygoteInit {
 
     // =========================================================================
-    // 可观察状态 — 将编辑模式和规则变更传播到各个 Hook
+    // 闁告瑯鍨甸～鍥┾偓鐢靛枔婵悂骞€?闁?閻忓繐妫涚槐顏呮綇閹寸伣浣割嚕韫囨挻瀚查悷娆忓閸垶宕ｅΟ缁樼函濞磋偐濮甸幐閬嶅礆閺夋寧鍊楀☉?Hook
     // =========================================================================
 
-    // 初始化为安全默认值，防止在观察者回调到达前出现 null 拆箱 NPE。
-    // Property 的 AtomicReference 默认为 null，所有读取方需能处理未初始化状态。
+    // 闁告帗绻傞～鎰板礌閺嶏箒绀嬮悗鐟邦槸閸欏繑顪€濡鍚囬柛濠勩€嬬槐婵嬫⒓閸欏鍓鹃柛锔哄姀椤洨鈧數鍠曢埀顒€鎳庡ú鏍嫬閸愩劌鐓傞弶鍫熷劤婢х娀宕欓搹鐟扮疀 null 闁瑰嘲妫涢?NPE闁?
+    // Property 闁?AtomicReference 濮掓稒顭堥缁樼▔?null闁挎稑鏈晶宥夊嫉婢跺寒鍤㈤柛娆愮墬閺岀喖妫侀埀顒勬嚄閽樺妲遍柣鐐叉濠€顓㈠礆濠靛棭娼楅柛鏍ㄧ墱婵悂骞€娴ｇ鍋?
     public final static Property<Boolean> switchProp = new Property<>(false);
     public static volatile XC_LoadPackage.LoadPackageParam loadPackageParam;
 
-    // 双轨事件系统 — EventBus 与 Property 并行运行，逐步迁移监听方
+    // 闁告瑥鐭佸鐑樼鐎ｂ晜顐界紒顖濆吹缁?闁?EventBus 濞?Property 妤犵偞鍎奸、鎴炴交閹邦垼鏀介柨娑樼焸閳ь剚鍔栭鐐存交娴ｇ洅鈺呮儎閹存繃鍎旈柡?
     private static final EventBus sEventBus = EventBus.getDefault();
 
     private static volatile State state = State.UNKNOWN;
     private static final EditorOrchestrator sEditorOrchestrator = new EditorOrchestrator(switchProp);
 
-    /** 供子组件获取 EditorOrchestrator 实例 */
+    /** 濞撴碍绋戦悺娆戠磼閸曨亝顐介柤鎯у槻瑜?EditorOrchestrator 閻庡湱鍋樼欢?*/
     public static EditorOrchestrator getEditorOrchestrator() { return sEditorOrchestrator; }
 
     private enum State { UNKNOWN, ALLOWED, BLOCKED }
 
     // =========================================================================
-    // 模块资源 — 在 initZygote 中加载，注入到目标应用的 AssetManager（委托 ModuleResources）
+    // 婵☆垪鈧櫕鍋ラ悹褍瀚花?闁?闁?initZygote 濞戞搩鍘兼慨鐐存姜閺傘倗绀夋繛澶堝妼閸欏棝宕氶幍顔界獥闁哄秴娲ょ花鏌ユ偨閵娧勭暠 AssetManager闁挎稑鐗嗛～娆撳箥?ModuleResources闁?
     // =========================================================================
 
     @Override
@@ -82,7 +82,7 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
     }
 
     // =========================================================================
-    // 加载包 — 每个已加载应用的入口
+    // 闁告梻濮惧ù鍥礌?闁?婵絽绻嬮柌婊冾啅閹绘帒顫ｉ弶鐐舵缁ㄦ煡鎮介妸褎鐣遍柛蹇嬪劚瑜?
     // =========================================================================
 
     @Override
@@ -103,7 +103,7 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
         }
     }
 
-    /** 在 system_server 内部将 GodModeManagerService 注册为系统服务 */
+    /** 闁?system_server 闁告劕鎳橀崕瀵镐焊?GodModeManagerService 婵炲鍔岄崬鑺ョ▔閾忓綊鍏囩紓浣哄枑濠€鍥礉?*/
     private void bootstrapSystemService() {
         Logger.i(TAG, "[GodMode] inject GodModeManagerService as system service.");
         XServiceManager.initForSystemServer();
@@ -111,7 +111,7 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
                 (XServiceManager.ServiceFetcher<Binder>) GodModeManagerService::new);
     }
 
-    /** 向目标应用注入 Hook：Activity 生命周期、触摸、按键事件、IPC 观察者 */
+    /** 闁告碍鍨瑰ú浼村冀閸パ呭畨闁活潿鍔嶉弫鐐哄礂?Hook闁挎稒顑媍tivity 闁汇垻鍠庨幊锟犲川閵婏附鍩傞柕鍡曟祰琚濋柟鑺ユ偠閳ь兛鐒︾€垫粓鏌ㄩ鑽ょ殤濞寸姾缈伴埀顑挎诞PC 閻熸瑥鍊搁惂鍌炴嚀?*/
     private void injectIntoTargetApp(XC_LoadPackage.LoadPackageParam lpp, String packageName) {
         Logger.i(TAG, "[GodMode] inject into app: " + packageName);
         hookActivityOnResume();
@@ -121,7 +121,7 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
         Logger.d(TAG, "[GodMode] injection complete for: " + packageName);
     }
 
-    /** Hook Activity.onResume 保持 mCurrentActivity 指向当前可见 Activity */
+    /** Hook Activity.onResume 濞ｅ洦绻冪€?mCurrentActivity 闁圭娲ら幃婊嗐亹閹惧啿顤呴柛娆樺灥椤?Activity */
     private static void hookActivityOnResume() {
         XposedHelpers.findAndHookMethod(Activity.class, "onResume", new XC_MethodHook() {
             @Override
@@ -131,7 +131,7 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
         });
     }
 
-    /** Hook Activity.onCreate：注入模块资源，编辑模式已开启时延迟显示面板 */
+    /** Hook Activity.onCreate闁挎稒纰嶉弫鐐哄礂閵壩翠線宕稿Δ鍕偒婵犙勫姧缁辨繄绱撻弽顒傚竼婵☆垪鈧磭纭€鐎瑰憡褰冪槐鎴﹀触椤栨稒顦х€点倖鍎肩换婊堝及閸撗佷粵闂傚牄鍨哄?*/
     private static void hookActivityOnCreate() {
         XposedHelpers.findAndHookMethod(Activity.class, "onCreate", Bundle.class, new XC_MethodHook() {
             @Override
@@ -139,7 +139,7 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
                 Activity activity = (Activity) param.thisObject;
                 ModuleResources.injectInto(activity.getResources());
                 if (switchProp.get()) {
-                    // post 到 DecorView 确保 setContentView 已完成、视图树完整后再显示面板
+                    // post 闁?DecorView 缁绢収鍠曠换?setContentView 鐎瑰憡褰冮悾顒勫箣閹扳斁鍋撴担绛嬫綊闁搞儳鍋撻悥鑼偓鐟版湰閺嗭綁宕ユ惔鈥虫櫃闁哄嫬澧介妵姘舵閵忊剝绶?
                     activity.getWindow().getDecorView().post(() -> sEditorOrchestrator.setDisplay(true));
                 }
                 super.afterHookedMethod(param);
@@ -147,41 +147,41 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
         });
     }
 
-    /** 连接 Hook：生命周期、触摸、按键、调试布局 */
+    /** 閺夆晝鍋炵敮?Hook闁挎稒姘ㄩ弫鎾诲川閽樺鍣柡鍫㈠枂閳ь兛娴囪闁硅姤鎮堕埀顑跨劍鐎垫粓鏌ㄩ琛″亾娴ｇ晫娈堕悹鍥ㄦ礀缁旈浠﹂埀?*/
     private void registerHooks() {
         Logger.d(TAG, "[GodMode] registering hooks...");
-        // Activity 生命周期 Hook — 在 Activity 恢复/销毁时应用/撤销规则（仅 EventBus 路径）
+        // Activity 闁汇垻鍠庨幊锟犲川閵婏附鍩?Hook 闁?闁?Activity 闁诡厹鍨归ˇ?闂佸簱鍋撴慨锝勭劍濡炲倹鎯旈弮鍌涙殢/闁逛勘鍊濋弨銏㈡喆閸曨偄鐏熼柨娑樼墔缁?EventBus 閻犱警鍨扮欢鐐烘晬?
         LifecycleObserver lifecycleObserver = new LifecycleObserver();
-        sEventBus.register(lifecycleObserver);                          // EventBus 路径
+        sEventBus.register(lifecycleObserver);                          // EventBus 閻犱警鍨扮欢?
         XposedHelpers.findAndHookMethod(Activity.class, "onPostResume", lifecycleObserver);
         XposedHelpers.findAndHookMethod(Activity.class, "onDestroy", lifecycleObserver);
 
-        // 调试布局 Hook — 编辑模式激活时显示视图边界
+        // 閻犲鍟抽惁顖滄暜閸愩劎婀?Hook 闁?缂傚倹鐗炵欢顐⑽熼垾宕囩婵犵鍋撴繛鑼帛濡炲倿寮伴崜褋浠涢悷娆忔濞存ɑ娼忛崷顓熸珪
         DebugLayoutHook.install(switchProp);
 
-        // 触摸事件 Hook — 拦截点击/拖拽以进行移除和修改操作
+        // 閻熸瑱闄勯幊婊勭鐎ｂ晜顐?Hook 闁?闁瑰嚖闄勯崺鍛存倷閻熸澘姣?闁归攱鐗楃€氭寧绂掗妷銊х閻炴稑鐬间簺闂傚嫨鍊曢幏鐗堢┍椤旇姤鏆柟鍨С缂?
         TouchHook touchHook = new TouchHook(sEditorOrchestrator);
         switchProp.addOnPropertyChangeListener(sEditorOrchestrator);
         XposedHelpers.findAndHookMethod(View.class, "dispatchTouchEvent",
                 MotionEvent.class, touchHook);
 
-        // 按键事件 Hook — 音量键切换节点选择器面板
+        // 闁圭顦甸弫顓熺鐎ｂ晜顐?Hook 闁?闂傚﹥濞婇崳娲煥椤旂厧鐎奸柟骞垮灱婵☆參鎮欒ぐ鎺嗗亾婢跺顏ラ柛锝冨姂濞间即寮?
         ActivityKeyHook keyHook = new ActivityKeyHook(sEditorOrchestrator);
         XposedHelpers.findAndHookMethod(Activity.class, "dispatchKeyEvent",
                 KeyEvent.class, keyHook);
     }
 
-    /** 注册 IPC 观察者，使服务端的规则更新能到达应用内 */
+    /** 婵炲鍔岄崬?IPC 閻熸瑥鍊搁惂鍌炴嚀閸滃啰绀夊ù锝嗗濠€鍥礉閿涘嫷浼傞柣銊ュ椤宕氬▎鎰函闁哄倹濯介崗姗€宕氶幏灞惧涧閹煎瓨姊婚弫銈夊礃?*/
     private void registerObserver(String packageName) {
         GodModeManager gmManager = GodModeManager.getDefault();
         Logger.d(TAG, "[GodMode] registering observer for: " + packageName);
-        // addObserver 立即通过 IPC 回调推送当前状态（onEditModeChanged + onViewRuleChanged），
-        // 无需再手动设置 switchProp / actRuleProp。避免在 BLOCKED 应用中出现短暂的错误激活窗口。
+        // addObserver 缂佹柨顑呭畵鍡涙焻濮樺磭绠?IPC 闁搞儳鍋犻惃鐔煎箳閵娾斁鍋撴担鍝ョЪ闁告挸绉舵慨鎼佸箑娓氬﹦绀刼nEditModeChanged + onViewRuleChanged闁挎稑顧€缁?
+        // 闁哄啰濞€濞撳爼宕樺鍡楊杹闁告柣鍔忛鏇犵磾?switchProp / actRuleProp闁靛棗鍊挎导鈺呭礂瀹ュ懏韬?BLOCKED 閹煎瓨姊婚弫銈嗙▔椤撶偛姣夐柣婊勫閻擃參寮抽崒婊勭暠闂佹寧鐟ㄩ銈呪攽閳ь剙煤閼姐倗宕堕柛娆欑祷閳?
         gmManager.addObserver(packageName, new ManagerObserver());
     }
 
     // =========================================================================
-    // 公开通知方法 — 由 ManagerObserver 在规则/编辑模式变更时调用
+    // 闁稿浚鍓欑槐鎴︽焻濮樿京鍙€闁哄倽顫夌涵?闁?闁?ManagerObserver 闁革负鍔忛～澶愬礆?缂傚倹鐗炵欢顐⑽熼垾宕囩闁告瑦蓱濞插潡寮幆鎵闁?
     // =========================================================================
 
     public static void notifyEditModeChanged(boolean enable) {
@@ -196,8 +196,8 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
         Logger.i(TAG, "[GodMode] edit mode " + enable + " state=" + state
                 + " pkg=" + loadPackageParam.packageName);
         if (state == State.ALLOWED) {
-            switchProp.set(enable);                        // 旧路径
-            sEventBus.post(new EditModeEvent(enable));     // 新路径
+            switchProp.set(enable);                        // 闁哄唲鍡欑唴鐎?
+            sEventBus.post(new EditModeEvent(enable));     // 闁哄倹濯介惌鎯ь嚗?
         }
         sEditorOrchestrator.setDisplay(enable);
     }
@@ -208,5 +208,5 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
                 loadPackageParam != null ? loadPackageParam.packageName : "", actRules));
     }
 
-    // 资源注入委托给 ModuleResources — 见 injectIntoTargetApp 中的 ModuleResources.injectInto() 调用
+    // 閻犙冨缁喖鈻旈妸銉ュ汲濠殿喗姊规晶顓犵磼?ModuleResources 闁?閻?injectIntoTargetApp 濞戞搩鍘惧▓?ModuleResources.injectInto() 閻犲鍟伴弫?
 }

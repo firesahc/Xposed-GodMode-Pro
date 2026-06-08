@@ -9,8 +9,8 @@ import android.os.Build;
 import android.view.View;
 import android.view.ViewGroup;
 
-import com.kaisar.xposed.godmode.injection.util.Logger;
-import com.kaisar.xposed.godmode.engine.util.Property;
+import com.kaisar.xposed.godmode.util.Logger;
+import com.kaisar.xposed.godmode.engine.Property;
 
 import java.util.Optional;
 
@@ -20,11 +20,8 @@ import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
 
 /**
- * 安装 Hook 以启用 Android 隐藏的"调试布局"功能。
- * <p>
- * 当 GodMode 编辑模式激活时，显示每个 View 的边距/内边距/焦点覆盖层，
- * 帮助用户在选中过程中看清视图边界。同时禁止 GM 覆盖层视图自身的调试绘制。
- */
+ * 鐎瑰顥?Hook 娴犮儱鎯庨悽?Android 闂呮劘妫岄惃?鐠嬪啳鐦敮鍐ㄧ湰"閸旂喕鍏橀妴? * <p>
+ * 瑜?GodMode 缂傛牞绶Ο鈥崇础濠碘偓濞茬粯妞傞敍灞炬▔缁€鐑樼槨娑?View 閻ㄥ嫯绔熺捄?閸愬懓绔熺捄?閻掞妇鍋ｇ憰鍡欐磰鐏炲偊绱? * 鐢喖濮悽銊﹀煕閸︺劑鈧鑵戞潻鍥┾柤娑擃厾婀呭〒鍛邦潒閸ユ崘绔熼悾灞烩偓鍌氭倱閺冨墎顩﹀?GM 鐟曞棛娲婄仦鍌濐潒閸ユ崘鍤滈煬顐ゆ畱鐠嬪啳鐦紒妯哄煑閵? */
 public final class DebugLayoutHook {
 
     private DebugLayoutHook() {}
@@ -117,8 +114,7 @@ public final class DebugLayoutHook {
     }
 
     // =========================================================================
-    // 内部 Hook 类
-    // =========================================================================
+    // 閸愬懘鍎?Hook 缁?    // =========================================================================
 
     private static abstract class BaseDebugHook extends XC_MethodHook implements Property.OnPropertyChangeListener<Boolean> {
 

@@ -1,4 +1,4 @@
-package com.kaisar.xposed.godmode;
+package com.kaisar.xposed.godmode.service;
 
 import android.app.Notification;
 import android.app.NotificationChannel;

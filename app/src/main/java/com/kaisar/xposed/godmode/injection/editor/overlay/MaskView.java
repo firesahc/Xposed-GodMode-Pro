@@ -17,7 +17,7 @@ import android.view.ViewGroup;
 
 import androidx.annotation.Nullable;
 
-import com.kaisar.xposed.godmode.injection.editor.BitmapUtils;
+import com.kaisar.xposed.godmode.injection.util.BitmapUtils;
 
 public final class MaskView extends View implements OverlayWidget {
 

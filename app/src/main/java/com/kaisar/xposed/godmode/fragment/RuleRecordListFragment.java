@@ -38,7 +38,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.bumptech.glide.Glide;
 import com.google.android.material.snackbar.Snackbar;
 import com.kaisar.xposed.godmode.R;
-import com.kaisar.xposed.godmode.injection.util.Logger;
+import com.kaisar.xposed.godmode.util.Logger;
 import com.kaisar.xposed.godmode.model.SharedViewModel;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 import com.kaisar.xposed.godmode.util.AppInfoHelper;
@@ -385,7 +385,7 @@ public final class RuleRecordListFragment extends Fragment {
                 return false;
             }
         }
-        // Handle filter icon click — compare by title string since it's a programmatic MenuItem
+        // Handle filter icon click 鈥?compare by title string since it's a programmatic MenuItem
         if (item.getTitle() != null && item.getTitle().equals(getString(R.string.filter_dialog_title))) {
             showFilterDialog();
             return true;
@@ -435,7 +435,7 @@ public final class RuleRecordListFragment extends Fragment {
                     updateFilteredList();
                     Snackbar.make(requireView(), R.string.snack_bar_msg_revert_rule_fail, Snackbar.LENGTH_SHORT).show();
                 } else {
-                    // 部分失败：重新加载完整数据
+                    // 閮ㄥ垎澶辫触锛氶噸鏂板姞杞藉畬鏁存暟鎹?
                     mSharedViewModel.loadAppRules();
                     if (failed > 0) {
                         Toast.makeText(requireContext(),

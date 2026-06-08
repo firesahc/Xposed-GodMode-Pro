@@ -3,27 +3,27 @@ package com.kaisar.xposed.godmode.engine.rule;
 import java.util.Arrays;
 
 /**
- * 引擎匹配规范 — View 匹配 (computeScore) + 属性应用 (ModifyApplier/RemoveApplier) + 缓存去重 (深 equals)。
+ * 寮曟搸鍖归厤瑙勮寖 鈥?View 鍖归厤 (computeScore) + 灞炴€у簲鐢?(ModifyApplier/RemoveApplier) + 缂撳瓨鍘婚噸 (娣?equals)銆?
  * <p>
- * 实现 {@link RuleFields} 接口以提供编译期安全的字段访问，
- * 配合 {@link com.kaisar.xposed.godmode.engine.util.RuleMapper} 实现类型安全的 app→engine 转换。
+ * 瀹炵幇 {@link RuleFields} 鎺ュ彛浠ユ彁渚涚紪璇戞湡瀹夊叏鐨勫瓧娈佃闂紝
+ * 閰嶅悎 {@link com.kaisar.xposed.godmode.engine.rule.RuleMapper} 瀹炵幇绫诲瀷瀹夊叏鐨?app鈫抏ngine 杞崲銆?
  * <p>
- * 【同步保障】对方文件: {@code app/.../rule/RuleRecord.java}（Parcelable 版，带 @SerializedName）
- * <br>引擎字段总数: 37 &nbsp;|&nbsp; app 字段总数: 37
- * <br>若此处增减字段，请同步修改对方文件的同名字段、Parcel 读写、clone() 和 equals()/hashCode()。
+ * 銆愬悓姝ヤ繚闅溿€戝鏂规枃浠? {@code app/.../rule/RuleRecord.java}锛圥arcelable 鐗堬紝甯?@SerializedName锛?
+ * <br>寮曟搸瀛楁鎬绘暟: 37 &nbsp;|&nbsp; app 瀛楁鎬绘暟: 37
+ * <br>鑻ユ澶勫鍑忓瓧娈碉紝璇峰悓姝ヤ慨鏀瑰鏂规枃浠剁殑鍚屽悕瀛楁銆丳arcel 璇诲啓銆乧lone() 鍜?equals()/hashCode()銆?
  * <p>
- * 区分移除规则和修改规则的方式：{@code ruleTag} 为 null 或空字符串 = 移除规则，非空 = 修改规则。
+ * 鍖哄垎绉婚櫎瑙勫垯鍜屼慨鏀硅鍒欑殑鏂瑰紡锛歿@code ruleTag} 涓?null 鎴栫┖瀛楃涓?= 绉婚櫎瑙勫垯锛岄潪绌?= 淇敼瑙勫垯銆?
  *
  * @see RuleFields
- * @see com.kaisar.xposed.godmode.engine.util.RuleMapper
+ * @see com.kaisar.xposed.godmode.engine.rule.RuleMapper
  */
 public final class RuleMatchSpec implements RuleFields, Cloneable {
 
-    // ===== 规则标识 =====
-    /** 规则标签 — null/空=移除规则，非空=修改规则 */
+    // ===== 瑙勫垯鏍囪瘑 =====
+    /** 瑙勫垯鏍囩 鈥?null/绌?绉婚櫎瑙勫垯锛岄潪绌?淇敼瑙勫垯 */
     public String ruleTag;
 
-    // ===== 移除规则字段 =====
+    // ===== 绉婚櫎瑙勫垯瀛楁 =====
     public String label;
     public String packageName;
     public String matchVersionName;
@@ -48,7 +48,7 @@ public final class RuleMatchSpec implements RuleFields, Cloneable {
     public int visibility;
     public long timestamp;
 
-    // ===== 修改规则字段 =====
+    // ===== 淇敼瑙勫垯瀛楁 =====
     public int modWidth = -1;
     public int modHeight = -1;
     public float modAlpha = -1f;
@@ -57,7 +57,7 @@ public final class RuleMatchSpec implements RuleFields, Cloneable {
     public String modText;
     public String modImagePath;
 
-    // ===== 原始值（用于撤销修改） =====
+    // ===== 鍘熷鍊硷紙鐢ㄤ簬鎾ら攢淇敼锛?=====
     public int origWidth;
     public int origHeight;
     public float origAlpha = 1f;
@@ -65,12 +65,12 @@ public final class RuleMatchSpec implements RuleFields, Cloneable {
     public int origLeftMargin;
     public int origTopMargin;
 
-    /** 无参构造（供 FieldMapper / RuleMapper 使用） */
+    /** 鏃犲弬鏋勯€狅紙渚?FieldMapper / RuleMapper 浣跨敤锛?*/
     public RuleMatchSpec() {
     }
 
     // =========================================================================
-    // RuleFields 接口实现 — 37 个 getter（委托到 public 字段）
+    // RuleFields 鎺ュ彛瀹炵幇 鈥?37 涓?getter锛堝鎵樺埌 public 瀛楁锛?
     // =========================================================================
 
     @Override public String getRuleTag() { return ruleTag; }
@@ -112,7 +112,7 @@ public final class RuleMatchSpec implements RuleFields, Cloneable {
     @Override public int getOrigTopMargin() { return origTopMargin; }
 
     // =========================================================================
-    // hashCode / equals / clone（完全不动，保持原有语义）
+    // hashCode / equals / clone锛堝畬鍏ㄤ笉鍔紝淇濇寔鍘熸湁璇箟锛?
     // =========================================================================
 
     @Override
