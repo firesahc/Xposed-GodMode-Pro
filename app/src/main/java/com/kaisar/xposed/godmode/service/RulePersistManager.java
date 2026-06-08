@@ -8,6 +8,7 @@ import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.os.Environment;
 import android.os.Handler;
+import android.os.Message;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
@@ -26,6 +27,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.WeakHashMap;
 
 /**
  * 规则持久化管理器 — JSON 原子写入 + Bitmap 保存 + 孤儿文件清理。
@@ -47,6 +49,10 @@ final class RulePersistManager {
     private final Logger mLogger;
     private final Handler mHandle;
     private final RuleCacheManager mCacheManager;
+    /** 防抖写入延迟 (ms) — 多次快速变更合并为一次写入 */
+    private static final long DEBOUNCE_DELAY_MS = 300L;
+    /** 防抖队列 — 待写入的包名 */
+    private final Map<String, String> mPendingWrites = new WeakHashMap<>();
 
     RulePersistManager(Gson gson, Logger logger, Handler handle, RuleCacheManager cacheManager) {
         this.mGson = gson;
@@ -102,6 +108,19 @@ final class RulePersistManager {
 
     /** 原子写入规则 JSON：.tmp → rename → chmod */
     void safePersistRules(String packageName, String json) throws IOException {
+        synchronized (mPendingWrites) {
+            if (mPendingWrites.containsKey(packageName)) {
+                // 已有待写入任务 — 更新 JSON 并延迟写入（防抖）
+                mPendingWrites.put(packageName, json);
+                scheduleDebouncedWrite(packageName);
+                return;
+            }
+            mPendingWrites.put(packageName, json);
+        }
+        doPersist(packageName, json);
+    }
+
+    private void doPersist(String packageName, String json) throws IOException {
         File appDataDir = new File(getBaseDir(), packageName);
         if (!appDataDir.exists() && !appDataDir.mkdirs()) {
             throw new IOException("Failed to create dir: " + appDataDir);
@@ -116,6 +135,32 @@ final class RulePersistManager {
             throw new IOException("Failed to atomically rename rule file: " + ruleFile);
         }
         FileUtils.setPermissions(ruleFile, S_IRWXU | S_IRWXG | S_IRWXO, -1, -1);
+        synchronized (mPendingWrites) {
+            mPendingWrites.remove(packageName);
+        }
+    }
+
+    static final int MSG_DEBOUNCE_WRITE = 0x1000;
+
+    private void scheduleDebouncedWrite(String packageName) {
+        // 移除之前为此包调度的防抖消息，重置计时器
+        Message msg = mHandle.obtainMessage(MSG_DEBOUNCE_WRITE, packageName);
+        mHandle.removeMessages(MSG_DEBOUNCE_WRITE, packageName);
+        mHandle.sendMessageDelayed(msg, DEBOUNCE_DELAY_MS);
+    }
+
+    /** 由 Handler 调用的防抖写入 */
+    void handleDebouncedWrite(String packageName) {
+        String json;
+        synchronized (mPendingWrites) {
+            json = mPendingWrites.get(packageName);
+            if (json == null) return;
+        }
+        try {
+            doPersist(packageName, json);
+        } catch (IOException e) {
+            mLogger.w("debounced persist failed for " + packageName, e);
+        }
     }
 
     /** 保存 Bitmap 为 .webp 文件，处理 HARDWARE → ARGB_8888 转换 */

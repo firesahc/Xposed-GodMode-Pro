@@ -5,7 +5,7 @@
 // 与 app 模块通过共享 POJO (不依赖 Parcelable) 解耦
 // =========================================================================
 plugins {
-    id 'com.android.library'
+    alias libs.plugins.android.library
 }
 
 android {
@@ -34,5 +34,5 @@ android {
 }
 
 dependencies {
-    implementation 'androidx.annotation:annotation:1.5.0'
+    implementation libs.androidx.annotation
 }
