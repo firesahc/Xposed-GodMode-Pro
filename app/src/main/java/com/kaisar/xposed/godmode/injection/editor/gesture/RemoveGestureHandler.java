@@ -22,7 +22,7 @@ import com.kaisar.xposed.godmode.injection.util.Logger;
 import com.kaisar.xposed.godmode.injection.util.ViewUtils;
 
 import com.kaisar.xposed.godmode.rule.ViewRule;
-import com.kaisar.xposed.godmode.util.Preconditions;
+import com.kaisar.xposed.godmode.engine.util.Preconditions;
 
 /**
  * 移除手势处理器 — 长按拖拽移除 + 粒子爆炸动画 + IPC 持久化。

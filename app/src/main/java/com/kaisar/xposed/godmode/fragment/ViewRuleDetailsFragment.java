@@ -31,7 +31,7 @@ import com.kaisar.xposed.godmode.preference.ImageViewPreference;
 import com.kaisar.xposed.godmode.injection.util.TaskExecutor;
 import com.kaisar.xposed.godmode.engine.pool.ThreadPools;
 import com.kaisar.xposed.godmode.rule.ViewRule;
-import com.kaisar.xposed.godmode.util.Preconditions;
+import com.kaisar.xposed.godmode.engine.util.Preconditions;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;

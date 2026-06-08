@@ -13,7 +13,7 @@ import com.kaisar.xposed.godmode.engine.util.FieldMapper;
 import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
 import com.kaisar.xposed.godmode.injection.util.Logger;
 import com.kaisar.xposed.godmode.rule.ViewRule;
-import com.kaisar.xposed.godmode.util.Preconditions;
+import com.kaisar.xposed.godmode.engine.util.Preconditions;
 
 import java.util.List;
 
