@@ -27,10 +27,17 @@ final class ObserverManager {
     private final HashMap<String, IBinder> mRegisteredObserverMap = new HashMap<>();
     private final Logger mLogger;
     private final Handler mHandle;
+    private final int mCleanObserversMsgCode;
 
-    ObserverManager(Logger logger, Handler handle) {
+    /**
+     * @param logger               日志记录器
+     * @param handle               Handler 用于调度清理消息
+     * @param cleanObserversMsgCode Handler 消息代码，由调用方传入（解耦对 GodModeManagerService 的依赖）
+     */
+    ObserverManager(Logger logger, Handler handle, int cleanObserversMsgCode) {
         this.mLogger = logger;
         this.mHandle = handle;
+        this.mCleanObserversMsgCode = cleanObserversMsgCode;
     }
 
     // ---- 观察者注册/注销 ----
@@ -90,9 +97,9 @@ final class ObserverManager {
     // ---- 死观察者清理 ----
 
     void scheduleDeadObserverCleanup() {
-        if (!mHandle.hasMessages(GodModeManagerService.CLEAN_OBSERVERS)) {
+        if (!mHandle.hasMessages(mCleanObserversMsgCode)) {
             mHandle.sendEmptyMessageDelayed(
-                    GodModeManagerService.CLEAN_OBSERVERS, CLEAN_INTERVAL);
+                    mCleanObserversMsgCode, CLEAN_INTERVAL);
         }
     }
 

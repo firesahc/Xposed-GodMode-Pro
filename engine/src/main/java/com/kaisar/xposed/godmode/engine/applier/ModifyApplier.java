@@ -49,38 +49,55 @@ public final class ModifyApplier implements RuleApplier {
     @Override
     public boolean apply(View view, RuleMatchSpec rule) {
         if (view == null || rule == null || !view.isAttachedToWindow()) return false;
-
-        Integer appliedHash = mAppliedViews.get(view);
-        if (appliedHash != null && appliedHash == rule.hashCode()) return false;
+        if (isAlreadyApplied(view, rule)) return false;
 
         ViewGroup.LayoutParams lp = view.getLayoutParams();
-        if (rule.modWidth > 0 && lp != null) {
-            lp.width = rule.modWidth;
-        }
-        if (rule.modHeight > 0 && lp != null) {
-            lp.height = rule.modHeight;
-        }
-        if (rule.modAlpha >= 0f) {
-            view.setAlpha(rule.modAlpha);
-        }
-        if (rule.modXOffset != 0 || rule.modYOffset != 0) {
-            if (lp instanceof ViewGroup.MarginLayoutParams) {
-                ViewGroup.MarginLayoutParams mlp = (ViewGroup.MarginLayoutParams) lp;
-                mlp.leftMargin = rule.origLeftMargin + rule.modXOffset;
-                mlp.topMargin = rule.origTopMargin + rule.modYOffset;
-            }
-        }
+        applyDimensions(rule, lp);
+        applyAlpha(view, rule);
+        applyOffset(rule, lp);
         if (lp != null) view.setLayoutParams(lp);
+        applyText(view, rule);
+        applyImage(view, rule);
+
+        mAppliedViews.put(view, rule.hashCode());
+        return true;
+    }
+
+    private static boolean isAlreadyApplied(View view, RuleMatchSpec rule) {
+        // 使用引用相等性检查 hashCode（int），避免自动装箱
+        Integer appliedHash = mAppliedViews.get(view);
+        return appliedHash != null && appliedHash == rule.hashCode();
+    }
+
+    private static void applyDimensions(RuleMatchSpec rule, ViewGroup.LayoutParams lp) {
+        if (lp == null) return;
+        if (rule.modWidth > 0) lp.width = rule.modWidth;
+        if (rule.modHeight > 0) lp.height = rule.modHeight;
+    }
+
+    private static void applyAlpha(View view, RuleMatchSpec rule) {
+        if (rule.modAlpha >= 0f) view.setAlpha(rule.modAlpha);
+    }
+
+    private static void applyOffset(RuleMatchSpec rule, ViewGroup.LayoutParams lp) {
+        if ((rule.modXOffset == 0 && rule.modYOffset == 0)
+                || !(lp instanceof ViewGroup.MarginLayoutParams)) return;
+        ViewGroup.MarginLayoutParams mlp = (ViewGroup.MarginLayoutParams) lp;
+        mlp.leftMargin = rule.origLeftMargin + rule.modXOffset;
+        mlp.topMargin = rule.origTopMargin + rule.modYOffset;
+    }
+
+    private static void applyText(View view, RuleMatchSpec rule) {
         if (rule.modText != null && !rule.modText.isEmpty() && view instanceof TextView) {
             ((TextView) view).setText(rule.modText);
         }
+    }
+
+    private void applyImage(View view, RuleMatchSpec rule) {
         if (rule.modImagePath != null && !rule.modImagePath.isEmpty()
                 && view instanceof ImageView) {
             loadAndSetImage((ImageView) view, rule.modImagePath);
         }
-
-        mAppliedViews.put(view, rule.hashCode());
-        return true;
     }
 
     // ---- 撤销 ----

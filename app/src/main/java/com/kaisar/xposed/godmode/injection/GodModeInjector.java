@@ -117,38 +117,37 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
     /** 向目标应用注入 Hook：Activity 生命周期、触摸、按键事件、IPC 观察者 */
     private void injectIntoTargetApp(XC_LoadPackage.LoadPackageParam lpp, String packageName) {
         Logger.i(TAG, "[GodMode] inject into app: " + packageName);
+        hookActivityOnResume();
+        hookActivityOnCreate();
+        registerHooks();
+        registerObserver(packageName);
+        Logger.d(TAG, "[GodMode] injection complete for: " + packageName);
+    }
 
-        // Hook Activity.onResume 以保持 mCurrentActivity 指向当前可见 Activity。
-        // 仅跟踪 Activity.onCreate 不足——用户导航到子页面再返回后，
-        // 原 Activity.onResume 触发但 mCurrentActivity 仍指向已销毁的 Activity，
-        // 导致工具栏显示在错误的（或已销毁的）窗口上，buildViewNodes 返回零元素。
+    /** Hook Activity.onResume 保持 mCurrentActivity 指向当前可见 Activity */
+    private static void hookActivityOnResume() {
         XposedHelpers.findAndHookMethod(Activity.class, "onResume", new XC_MethodHook() {
             @Override
             protected void afterHookedMethod(MethodHookParam param) {
                 sKeyInterceptor.setActivity((Activity) param.thisObject);
             }
         });
+    }
 
-        // Hook Activity.onCreate：注入模块资源，并在编辑模式已开启时延迟显示面板。
-        // setActivity 移至 onResume hook，避免与 onResume 形成重复调用。
+    /** Hook Activity.onCreate：注入模块资源，编辑模式已开启时延迟显示面板 */
+    private static void hookActivityOnCreate() {
         XposedHelpers.findAndHookMethod(Activity.class, "onCreate", Bundle.class, new XC_MethodHook() {
             @Override
             protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                 Activity activity = (Activity) param.thisObject;
                 ModuleResources.injectInto(activity.getResources());
                 if (switchProp.get()) {
-                    // post 到 DecorView 以确保 setContentView 已完成、视图树完整后再显示面板。
-                    // AppCompatActivity 在 super.onCreate() 返回之后才调用 setContentView()，
-                    // 直接调用 buildViewNodes 会得到只有系统占位元素的残缺视图树。
+                    // post 到 DecorView 确保 setContentView 已完成、视图树完整后再显示面板
                     activity.getWindow().getDecorView().post(() -> sKeyInterceptor.setdisplay(true));
                 }
                 super.afterHookedMethod(param);
             }
         });
-
-        registerHooks();
-        registerObserver(packageName);
-        Logger.d(TAG, "[GodMode] injection complete for: " + packageName);
     }
 
     /** 连接 Hook：生命周期、触摸、按键、调试布局 */
