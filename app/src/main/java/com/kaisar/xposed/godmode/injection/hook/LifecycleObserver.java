@@ -33,11 +33,11 @@ import de.robv.android.xposed.XposedHelpers;
  */
 public final class LifecycleObserver extends XC_MethodHook {
 
-    private static final WeakHashMap<Activity, OnLayoutChangeListener> sActivities = new WeakHashMap<>();
-    private static final ActRules sActRules = new ActRules();
-    private static final Handler sDebounceHandler = new Handler(Looper.getMainLooper());
-    private static final java.util.Map<Activity, Runnable> sPendingReapply = new java.util.WeakHashMap<>();
-    private static boolean sRecyclerViewHooksInstalled;
+    private final WeakHashMap<Activity, OnLayoutChangeListener> mActivities = new WeakHashMap<>();
+    private final ActRules mActRules = new ActRules();
+    private final Handler mDebounceHandler = new Handler(Looper.getMainLooper());
+    private final java.util.Map<Activity, Runnable> mPendingReapply = new java.util.WeakHashMap<>();
+    private boolean mRecyclerViewHooksInstalled;
 
     @Override
     protected void afterHookedMethod(MethodHookParam param) throws Throwable {
@@ -46,25 +46,25 @@ public final class LifecycleObserver extends XC_MethodHook {
         String methodName = param.method.getName();
         ViewGroup decorView = (ViewGroup) activity.getWindow().getDecorView();
         if ("onPostResume".equals(methodName)) {
-            if (!sActivities.containsKey(activity)) {
+            if (!mActivities.containsKey(activity)) {
                 OnLayoutChangeListener listener = new OnLayoutChangeListener(activity);
                 decorView.getViewTreeObserver().addOnGlobalLayoutListener(listener);
-                sActivities.put(activity, listener);
+                mActivities.put(activity, listener);
                 decorView.post(listener::applyRuleIfMatchCondition);
-                // 确保在规则已到达但 sActivities 尚为空（规则早于 onPostResume）
+                // 确保在规则已到达但 mActivities 尚为空（规则早于 onPostResume）
                 // 或视图在初次 applyRuleIfMatchCondition 时尚未就绪时有一个延迟重试。
                 scheduleRuleReapplication(activity);
             }
             installRecyclerViewHooks(activity);
-            Logger.d(TAG, "[Lifecycle] resume: " + activity.getClass().getSimpleName() + " (total=" + sActivities.size() + ")");
+            Logger.d(TAG, "[Lifecycle] resume: " + activity.getClass().getSimpleName() + " (total=" + mActivities.size() + ")");
         } else if ("onDestroy".equals(methodName)) {
-            OnLayoutChangeListener listener = sActivities.remove(activity);
+            OnLayoutChangeListener listener = mActivities.remove(activity);
             decorView.getViewTreeObserver().removeOnGlobalLayoutListener(listener);
-            synchronized (sPendingReapply) {
-                Runnable r = sPendingReapply.remove(activity);
-                if (r != null) sDebounceHandler.removeCallbacks(r);
+            synchronized (mPendingReapply) {
+                Runnable r = mPendingReapply.remove(activity);
+                if (r != null) mDebounceHandler.removeCallbacks(r);
             }
-            Logger.d(TAG, "[Lifecycle] destroy: " + activity.getClass().getSimpleName() + " (total=" + sActivities.size() + ")");
+            Logger.d(TAG, "[Lifecycle] destroy: " + activity.getClass().getSimpleName() + " (total=" + mActivities.size() + ")");
         }
     }
 
@@ -79,21 +79,21 @@ public final class LifecycleObserver extends XC_MethodHook {
         if (newActRules == null) return;
         // 规则未变化时跳过，避免不必要的撤销→再应用导致的闪回
         // 触发场景：IPC addObserver 推送的规则与 onPostResume 中已应用的规则完全相同时
-        if (newActRules.equals(sActRules)) return;
+        if (newActRules.equals(mActRules)) return;
         ViewController.getDefault().clearBlockedCache();
         Set<Map.Entry<String, List<ViewRule>>> entries = newActRules.entrySet();
         for (Map.Entry<String, List<ViewRule>> entry : entries) {
             String key = entry.getKey();
-            List<ViewRule> oldRules = sActRules.get(key);
+            List<ViewRule> oldRules = mActRules.get(key);
             List<ViewRule> newRules = entry.getValue();
             if (newRules != null && oldRules != null) {
                 oldRules.removeAll(newRules);
-                if (oldRules.isEmpty()) sActRules.remove(key);
+                if (oldRules.isEmpty()) mActRules.remove(key);
             }
         }
         // revoke old rules
-        if (!sActRules.isEmpty()) {
-            entries = sActRules.entrySet();
+        if (!mActRules.isEmpty()) {
+            entries = mActRules.entrySet();
             for (Map.Entry<String, List<ViewRule>> entry : entries) {
                 List<ViewRule> rules = entry.getValue();
                 if (rules == null || rules.isEmpty()) continue;
@@ -103,7 +103,7 @@ public final class LifecycleObserver extends XC_MethodHook {
                     if (r.isModifyRule()) revModify.add(r);
                     else revRemove.add(r);
                 }
-                for (Activity activity : sActivities.keySet()) {
+                for (Activity activity : mActivities.keySet()) {
                     if (TextUtils.equals(activity.getComponentName().getClassName(), entry.getKey())) {
                         if (!revRemove.isEmpty()) ViewController.getDefault().revokeRuleBatch(activity, revRemove);
                         if (!revModify.isEmpty()) ViewController.getDefault().revokeRuleBatch(activity, revModify);
@@ -112,12 +112,12 @@ public final class LifecycleObserver extends XC_MethodHook {
             }
         }
         // apply new rules
-        sActRules.clear();
-        sActRules.putAll(newActRules);
-        entries = sActRules.entrySet();
+        mActRules.clear();
+        mActRules.putAll(newActRules);
+        entries = mActRules.entrySet();
         for (Map.Entry<String, List<ViewRule>> entry : entries) {
             List<ViewRule> rules = entry.getValue();
-            for (Activity activity : sActivities.keySet()) {
+            for (Activity activity : mActivities.keySet()) {
                 if (TextUtils.equals(activity.getComponentName().getClassName(), entry.getKey())) {
                     if (!rules.isEmpty()) {
                         ViewController.getDefault().applyRuleBatch(activity, rules);
@@ -130,46 +130,46 @@ public final class LifecycleObserver extends XC_MethodHook {
         // 如果视图尚不可用，applyRuleBatch 会静默失败，
         // 而 onGlobalLayout 在静态 UI 上可能永远不会再次触发。
         // scheduleRuleReapplication（200ms 消抖）提供重试窗口以捕获动态创建的视图。
-        for (Activity activity : sActivities.keySet()) {
+        for (Activity activity : mActivities.keySet()) {
             scheduleRuleReapplication(activity);
         }
     }
 
-    private static void scheduleRuleReapplication(final Activity activity) {
-        synchronized (sPendingReapply) {
-            Runnable existing = sPendingReapply.get(activity);
-            if (existing != null) sDebounceHandler.removeCallbacks(existing);
+    private void scheduleRuleReapplication(final Activity activity) {
+        synchronized (mPendingReapply) {
+            Runnable existing = mPendingReapply.get(activity);
+            if (existing != null) mDebounceHandler.removeCallbacks(existing);
             Runnable r = () -> {
-                synchronized (sPendingReapply) { sPendingReapply.remove(activity); }
+                synchronized (mPendingReapply) { mPendingReapply.remove(activity); }
                 // 不清理缓存：重应用应增量补充未覆盖的规则，而非破坏已生效的修改
-                OnLayoutChangeListener listener = sActivities.get(activity);
+                OnLayoutChangeListener listener = mActivities.get(activity);
                 if (listener != null) listener.applyRuleIfMatchCondition();
             };
-            sPendingReapply.put(activity, r);
-            sDebounceHandler.postDelayed(r, 200);
+            mPendingReapply.put(activity, r);
+            mDebounceHandler.postDelayed(r, 200);
         }
     }
 
-    private static void installRecyclerViewHooks(Activity activity) {
-        if (sRecyclerViewHooksInstalled) return;
+    private void installRecyclerViewHooks(Activity activity) {
+        if (mRecyclerViewHooksInstalled) return;
         try {
             Class<?> adapterClass = XposedHelpers.findClass("androidx.recyclerview.widget.RecyclerView$Adapter", activity.getClassLoader());
             XposedHelpers.findAndHookMethod(adapterClass, "notifyDataSetChanged", new XC_MethodHook() {
                 @Override
                 protected void afterHookedMethod(MethodHookParam param) {
-                    for (Activity act : sActivities.keySet()) {
+                    for (Activity act : mActivities.keySet()) {
                         if (act != null && !act.isFinishing()) scheduleRuleReapplication(act);
                     }
                 }
             });
-            sRecyclerViewHooksInstalled = true;
+            mRecyclerViewHooksInstalled = true;
             Logger.i(TAG, "[Lifecycle] DynamicContent: RecyclerView adapter hook installed");
         } catch (Throwable t) {
             Logger.d(TAG, "[Lifecycle] DynamicContent: RecyclerView hook skipped: " + t.getMessage());
         }
     }
 
-    static final class OnLayoutChangeListener implements ViewTreeObserver.OnGlobalLayoutListener {
+    final class OnLayoutChangeListener implements ViewTreeObserver.OnGlobalLayoutListener {
 
         final WeakReference<Activity> activityReference;
         private volatile boolean mApplying; // 防重入标志
@@ -189,7 +189,7 @@ public final class LifecycleObserver extends XC_MethodHook {
             mApplying = true;
             try {
                 Activity activity = Preconditions.checkNotNull(activityReference.get());
-                List<ViewRule> rules = sActRules.get(activity.getComponentName().getClassName());
+                List<ViewRule> rules = mActRules.get(activity.getComponentName().getClassName());
                 if (rules != null && !rules.isEmpty()) {
                     if (!rules.isEmpty()) {
                         ViewController.getDefault().applyRuleBatch(activity, rules);

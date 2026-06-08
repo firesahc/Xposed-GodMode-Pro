@@ -452,7 +452,9 @@ public class PropertyEditorPanel {
                     com.kaisar.xposed.godmode.engine.rule.ViewRule engineRule =
                             new com.kaisar.xposed.godmode.engine.rule.ViewRule();
                     FieldMapper.copyFields(rule, engineRule);
-                    view = ViewFinder.findViewBestMatch(activity, engineRule);
+                    view = ViewFinder.findViewBestMatch(
+                            (ViewGroup) activity.getWindow().getDecorView(), engineRule,
+                            activity.getPackageManager(), activity.getPackageName());
                 } else {
                     view = activity != null && activity.getWindow() != null && rule.depth != null
                             ? ViewTraversal.findViewByDepth(activity.getWindow().getDecorView(), rule.depth)

@@ -1,9 +1,13 @@
 package com.kaisar.xposed.godmode.engine.util;
 
+import android.util.Log;
+
 import androidx.annotation.NonNull;
 
 import java.lang.reflect.Field;
 import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -15,6 +19,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class FieldMapper {
 
+    private static final String TAG = "FieldMapper";
     private static final ConcurrentHashMap<Class<?>, Field[]> sFieldCache = new ConcurrentHashMap<>();
 
     private FieldMapper() {
@@ -60,6 +65,19 @@ public final class FieldMapper {
         java.util.Map<String, Field> targetMap = new java.util.HashMap<>();
         for (Field tf : targetFields) {
             targetMap.put(tf.getName(), tf);
+        }
+
+        // DEBUG: 检测 source 有但 target 没有的字段（双重 ViewRule 不同步警告）
+        if (Log.isLoggable(TAG, Log.DEBUG)) {
+            Set<String> sourceNames = new HashSet<>();
+            for (Field sf : sourceFields) sourceNames.add(sf.getName());
+            for (String name : sourceNames) {
+                if (!targetMap.containsKey(name)) {
+                    Log.d(TAG, "copyFields: source has field '" + name + "' but target '"
+                            + target.getClass().getSimpleName() + "' does not (type="
+                            + source.getClass().getSimpleName() + ")");
+                }
+            }
         }
 
         for (Field sf : sourceFields) {

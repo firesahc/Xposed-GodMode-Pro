@@ -4,6 +4,7 @@ import static com.kaisar.xposed.godmode.GodModeApplication.TAG;
 
 import android.app.Activity;
 import android.view.View;
+import android.view.ViewGroup;
 
 import com.kaisar.xposed.godmode.engine.applier.ModifyApplier;
 import com.kaisar.xposed.godmode.engine.applier.RemoveApplier;
@@ -93,10 +94,16 @@ public final class ViewController {
     /** 批量应用规则。 */
     public void applyRuleBatch(Activity activity, List<ViewRule> rules) {
         int appliedCount = 0;
+        ViewGroup decorView = activity != null && activity.getWindow() != null
+                ? (ViewGroup) activity.getWindow().getDecorView() : null;
+        if (decorView == null) return;
+        String packageName = activity.getPackageName();
         for (ViewRule rule : rules) {
             try {
+                com.kaisar.xposed.godmode.engine.rule.ViewRule engineRule = toEngineRule(rule);
                 if (rule.isRepeatable()) {
-                    List<View> views = ViewFinder.findAllViewsBestMatch(activity, toEngineRule(rule));
+                    List<View> views = ViewFinder.findAllViewsBestMatch(decorView, engineRule,
+                            activity.getPackageManager(), packageName);
                     if (views != null) {
                         for (View v : views) {
                             if (v != null && applyRule(v, rule)) appliedCount++;
@@ -104,7 +111,8 @@ public final class ViewController {
                     }
                     continue;
                 }
-                View view = ViewFinder.findViewBestMatch(activity, toEngineRule(rule));
+                View view = ViewFinder.findViewBestMatch(decorView, engineRule,
+                        activity.getPackageManager(), packageName);
                 Preconditions.checkNotNull(view, "apply rule fail not match any view");
                 if (applyRule(view, rule)) appliedCount++;
             } catch (NullPointerException e) {
@@ -130,10 +138,16 @@ public final class ViewController {
 
     /** 批量撤销规则。 */
     public void revokeRuleBatch(Activity activity, List<ViewRule> rules) {
+        ViewGroup decorView = activity != null && activity.getWindow() != null
+                ? (ViewGroup) activity.getWindow().getDecorView() : null;
+        if (decorView == null) return;
+        String packageName = activity.getPackageName();
         for (ViewRule rule : rules) {
             try {
+                com.kaisar.xposed.godmode.engine.rule.ViewRule engineRule = toEngineRule(rule);
                 if (rule.isRepeatable()) {
-                    List<View> views = ViewFinder.findAllViewsBestMatch(activity, toEngineRule(rule));
+                    List<View> views = ViewFinder.findAllViewsBestMatch(decorView, engineRule,
+                            activity.getPackageManager(), packageName);
                     if (views != null) {
                         for (View v : views) {
                             if (v != null) revokeRule(v, rule);
@@ -141,7 +155,8 @@ public final class ViewController {
                     }
                     continue;
                 }
-                View view = ViewFinder.findViewBestMatch(activity, toEngineRule(rule));
+                View view = ViewFinder.findViewBestMatch(decorView, engineRule,
+                        activity.getPackageManager(), packageName);
                 Preconditions.checkNotNull(view, "revoke rule fail can't found block view");
                 revokeRule(view, rule);
             } catch (NullPointerException e) {
