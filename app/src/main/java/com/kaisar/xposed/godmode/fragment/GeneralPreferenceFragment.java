@@ -109,8 +109,7 @@ public final class GeneralPreferenceFragment extends PreferenceFragmentCompat im
             icon = aInfo.loadIcon(pm);
             label = aInfo.loadLabel(pm);
         } catch (PackageManager.NameNotFoundException e) {
-            // 应用未安装 — 使用默认图标和包名
-            icon = ResourcesCompat.getDrawable(getResources(), R.mipmap.ic_god, requireContext().getTheme());
+            icon = loadDefaultAppIcon();
             label = packageName;
         }
         Preference preference = new Preference(category.getContext()) {
@@ -136,6 +135,11 @@ public final class GeneralPreferenceFragment extends PreferenceFragmentCompat im
         preference.setKey(packageName);
         preference.setOnPreferenceClickListener(this);
         category.addPreference(preference);
+    }
+
+    private Drawable loadDefaultAppIcon() {
+        return ResourcesCompat.getDrawable(getResources(),
+                R.mipmap.ic_god, requireContext().getTheme());
     }
 
     @Override
@@ -210,8 +214,7 @@ public final class GeneralPreferenceFragment extends PreferenceFragmentCompat im
         SharedPreferences sp = PreferenceManager.getDefaultSharedPreferences(requireContext());
         sp.edit().putBoolean(getString(R.string.pref_key_master), enable).apply();
         if (!enable) {
-            GodModeManager.getDefault().setEditMode(false);
-            sp.edit().putBoolean(getString(R.string.pref_key_editor), false).apply();
+            GodModeHelper.setEditModeEnabled(requireContext(), false);
         }
         GodModeHelper.startNotificationService(requireContext());
     }
