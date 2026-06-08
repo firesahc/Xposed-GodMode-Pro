@@ -3,18 +3,21 @@ package com.kaisar.xposed.godmode.engine.rule;
 import java.util.Arrays;
 
 /**
- * 引擎轻量版 ViewRule — 纯 POJO，不依赖 Parcelable 或 Gson 注解。
+ * 引擎匹配规范 — View 匹配 (computeScore) + 属性应用 (ModifyApplier/RemoveApplier) + 缓存去重 (深 equals)。
+ * <p>
+ * 实现 {@link RuleFields} 接口以提供编译期安全的字段访问，
+ * 配合 {@link com.kaisar.xposed.godmode.engine.util.RuleMapper} 实现类型安全的 app→engine 转换。
  * <p>
  * 【同步保障】对方文件: {@code app/.../rule/ViewRule.java}（Parcelable 版，带 @SerializedName）
  * <br>引擎字段总数: 37 &nbsp;|&nbsp; app 字段总数: 37
  * <br>若此处增减字段，请同步修改对方文件的同名字段、Parcel 读写、clone() 和 equals()/hashCode()。
  * <p>
- * 字段与 app 模块的 {@code com.kaisar.xposed.godmode.rule.ViewRule} 对齐，
- * 通过 {@link com.kaisar.xposed.godmode.engine.util.FieldMapper} 实现双向转换。
- * <p>
  * 区分移除规则和修改规则的方式：{@code ruleTag} 为 null 或空字符串 = 移除规则，非空 = 修改规则。
+ *
+ * @see RuleFields
+ * @see com.kaisar.xposed.godmode.engine.util.RuleMapper
  */
-public final class ViewRule implements Cloneable {
+public final class RuleMatchSpec implements RuleFields, Cloneable {
 
     // ===== 规则标识 =====
     /** 规则标签 — null/空=移除规则，非空=修改规则 */
@@ -62,16 +65,55 @@ public final class ViewRule implements Cloneable {
     public int origLeftMargin;
     public int origTopMargin;
 
-    /** 无参构造（供 FieldMapper 使用） */
-    public ViewRule() {
+    /** 无参构造（供 FieldMapper / RuleMapper 使用） */
+    public RuleMatchSpec() {
     }
 
-    /**
-     * 判断此规则是否为可重复匹配规则（如 RecyclerView 列表项）。
-     */
-    public boolean isRepeatable() {
-        return repeatable;
-    }
+    // =========================================================================
+    // RuleFields 接口实现 — 37 个 getter（委托到 public 字段）
+    // =========================================================================
+
+    @Override public String getRuleTag() { return ruleTag; }
+    @Override public String getLabel() { return label; }
+    @Override public String getPackageName() { return packageName; }
+    @Override public String getMatchVersionName() { return matchVersionName; }
+    @Override public int getMatchVersionCode() { return matchVersionCode; }
+    @Override public int getVersionCode() { return versionCode; }
+    @Override public String getImagePath() { return imagePath; }
+    @Override public String getAlias() { return alias; }
+    @Override public int getX() { return x; }
+    @Override public int getY() { return y; }
+    @Override public int getWidth() { return width; }
+    @Override public int getHeight() { return height; }
+    @Override public int[] getDepth() { return depth; }
+    @Override public String getActivityClass() { return activityClass; }
+    @Override public String getViewClass() { return viewClass; }
+    @Override public String getResourceName() { return resourceName; }
+    @Override public String[] getItemPath() { return itemPath; }
+    @Override public String getItemRootClass() { return itemRootClass; }
+    @Override public String getParentClass() { return parentClass; }
+    @Override public boolean isRepeatable() { return repeatable; }
+    @Override public String getText() { return text; }
+    @Override public String getDescription() { return description; }
+    @Override public int getVisibility() { return visibility; }
+    @Override public long getTimestamp() { return timestamp; }
+    @Override public int getModWidth() { return modWidth; }
+    @Override public int getModHeight() { return modHeight; }
+    @Override public float getModAlpha() { return modAlpha; }
+    @Override public int getModXOffset() { return modXOffset; }
+    @Override public int getModYOffset() { return modYOffset; }
+    @Override public String getModText() { return modText; }
+    @Override public String getModImagePath() { return modImagePath; }
+    @Override public int getOrigWidth() { return origWidth; }
+    @Override public int getOrigHeight() { return origHeight; }
+    @Override public float getOrigAlpha() { return origAlpha; }
+    @Override public String getOrigText() { return origText; }
+    @Override public int getOrigLeftMargin() { return origLeftMargin; }
+    @Override public int getOrigTopMargin() { return origTopMargin; }
+
+    // =========================================================================
+    // hashCode / equals / clone（完全不动，保持原有语义）
+    // =========================================================================
 
     @Override
     public int hashCode() {
@@ -94,7 +136,7 @@ public final class ViewRule implements Cloneable {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        ViewRule other = (ViewRule) o;
+        RuleMatchSpec other = (RuleMatchSpec) o;
 
         if (repeatable != other.repeatable) return false;
         if (!equalsNullable(activityClass, other.activityClass)) return false;
@@ -112,9 +154,9 @@ public final class ViewRule implements Cloneable {
 
     @Override
     @SuppressWarnings("MethodDoesntCallSuperMethod")
-    public ViewRule clone() {
+    public RuleMatchSpec clone() {
         try {
-            ViewRule cloned = (ViewRule) super.clone();
+            RuleMatchSpec cloned = (RuleMatchSpec) super.clone();
             if (depth != null) cloned.depth = depth.clone();
             if (itemPath != null) cloned.itemPath = itemPath.clone();
             return cloned;

@@ -4,7 +4,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewParent;
 
-import com.kaisar.xposed.godmode.engine.rule.ViewRule;
+import com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec;
 import com.kaisar.xposed.godmode.engine.traversal.ViewTraversal;
 
 import java.util.ArrayList;
@@ -22,7 +22,7 @@ final class RecyclerMatcher implements MatchStrategy {
     }
 
     @Override
-    public int computeScore(View view, ViewRule rule) {
+    public int computeScore(View view, RuleMatchSpec rule) {
         if (!rule.isRepeatable()) return 0;
         if (ViewTraversal.isInRecyclerView(view)) {
             return 50; // RecyclerView 上下文匹配
@@ -33,7 +33,7 @@ final class RecyclerMatcher implements MatchStrategy {
     /**
      * 在 RecyclerView 中查找所有匹配列表项中的目标视图。
      */
-    static List<View> findViewsInRecycler(View root, ViewRule rule,
+    static List<View> findViewsInRecycler(View root, RuleMatchSpec rule,
             ViewGroup recyclerView) {
         List<View> results = new ArrayList<>();
         if (rule.itemPath == null || rule.itemPath.length == 0) return results;

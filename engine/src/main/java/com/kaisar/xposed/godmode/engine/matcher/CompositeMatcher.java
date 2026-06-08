@@ -4,7 +4,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewParent;
 
-import com.kaisar.xposed.godmode.engine.rule.ViewRule;
+import com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec;
 import com.kaisar.xposed.godmode.engine.traversal.ViewTraversal;
 import com.kaisar.xposed.godmode.engine.util.GmConstants;
 
@@ -42,7 +42,7 @@ public final class CompositeMatcher implements IMatcher, MatchStrategy {
     // ---- IMatcher 实现 ----
 
     @Override
-    public View matchView(View root, ViewRule rule) {
+    public View matchView(View root, RuleMatchSpec rule) {
         if (root == null || rule == null) return null;
 
         boolean strictMode = false; // 由调用方通过外部检测设置，此处使用宽松模式
@@ -99,7 +99,7 @@ public final class CompositeMatcher implements IMatcher, MatchStrategy {
     }
 
     @Override
-    public List<View> matchAllViews(View root, ViewRule rule) {
+    public List<View> matchAllViews(View root, RuleMatchSpec rule) {
         List<View> results = new ArrayList<>();
         if (root == null || rule == null) return results;
         collectMatches(root, rule, results, 0);
@@ -110,7 +110,7 @@ public final class CompositeMatcher implements IMatcher, MatchStrategy {
      * 递归遍历视图树，收集所有 RecyclerView 中按 itemPath 匹配的视图。
      * 仅用于 repeatable 规则的精确匹配，不进行模糊评分搜索。
      */
-    private static void collectRecyclerMatches(View view, ViewRule rule, List<View> results) {
+    private static void collectRecyclerMatches(View view, RuleMatchSpec rule, List<View> results) {
         if (results.size() >= GmConstants.MAX_REPEATABLE_RESULTS) return;
         if (view.getClass().getName().contains("RecyclerView")
                 && view instanceof ViewGroup) {
@@ -126,7 +126,7 @@ public final class CompositeMatcher implements IMatcher, MatchStrategy {
         }
     }
 
-    private void collectMatches(View view, ViewRule rule, List<View> results, int depth) {
+    private void collectMatches(View view, RuleMatchSpec rule, List<View> results, int depth) {
         if (results.size() >= GmConstants.MAX_REPEATABLE_RESULTS) return;
         if (view.getVisibility() != View.VISIBLE
                 || GmConstants.TAG_GM_CMP.equals(view.getTag())) return;
@@ -148,7 +148,7 @@ public final class CompositeMatcher implements IMatcher, MatchStrategy {
     // ---- MatchStrategy 实现 — 聚合所有子策略得分 ----
 
     @Override
-    public int computeScore(View view, ViewRule rule) {
+    public int computeScore(View view, RuleMatchSpec rule) {
         int total = 0;
         // 视图类名匹配 — 最基础条件
         if (view.getClass().getName().equals(rule.viewClass)) {

@@ -1,7 +1,7 @@
 package com.kaisar.xposed.godmode.engine.util;
 
 import com.kaisar.xposed.godmode.engine.rule.RuleFields;
-import com.kaisar.xposed.godmode.engine.rule.ViewRule;
+import com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec;
 
 import androidx.annotation.NonNull;
 
@@ -13,8 +13,6 @@ import androidx.annotation.NonNull;
  * <p>
  * 新增字段时，{@link RuleFields} 接口新增 getter → 此类的 toEngine() 编译报错 → 强制开发者更新。
  * <p>
- * 当前转换目标为 {@link ViewRule}，Phase 1 重命名为 {@code RuleMatchSpec} 后将同步更新。
- *
  * @see RuleFields
  * @see FieldMapper
  */
@@ -24,27 +22,27 @@ public final class RuleMapper {
     }
 
     /**
-     * 将 RuleFields 转换为引擎模块的 ViewRule（将重命名为 RuleMatchSpec）。
+     * 将 RuleFields 转换为引擎模块的 RuleMatchSpec。
      *
      * @param source 源数据（来自 app 模块的 RuleRecord 等实现类）
-     * @return 填充完成的引擎 ViewRule
+     * @return 填充完成的引擎 RuleMatchSpec
      */
     @NonNull
-    public static ViewRule toEngine(@NonNull RuleFields source) {
-        ViewRule dst = new ViewRule();
+    public static RuleMatchSpec toEngine(@NonNull RuleFields source) {
+        RuleMatchSpec dst = new RuleMatchSpec();
         copyTo(source, dst);
         return dst;
     }
 
     /**
-     * 将 RuleFields 的字段逐个拷贝到目标 ViewRule。
+     * 将 RuleFields 的字段逐个拷贝到目标 RuleMatchSpec。
      * <p>
      * 每行一个字段，全部显式赋值。新增字段时编译器强制更新此处。
      *
      * @param src 源数据
-     * @param dst 目标引擎 ViewRule
+     * @param dst 目标引擎 RuleMatchSpec
      */
-    public static void copyTo(@NonNull RuleFields src, @NonNull ViewRule dst) {
+    public static void copyTo(@NonNull RuleFields src, @NonNull RuleMatchSpec dst) {
         // ===== 规则标识 =====
         dst.ruleTag = src.getRuleTag();
 

@@ -449,8 +449,8 @@ public class PropertyEditorPanel {
             try {
                 View view;
                 if (rule.repeatable) {
-                    com.kaisar.xposed.godmode.engine.rule.ViewRule engineRule =
-                            new com.kaisar.xposed.godmode.engine.rule.ViewRule();
+                    com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec engineRule =
+                            new com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec();
                     FieldMapper.copyFields(rule, engineRule);
                     view = ViewFinder.findViewBestMatch(
                             (ViewGroup) activity.getWindow().getDecorView(), engineRule,

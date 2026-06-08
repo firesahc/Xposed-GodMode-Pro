@@ -4,7 +4,7 @@ import android.content.res.Resources;
 import android.text.TextUtils;
 import android.view.View;
 
-import com.kaisar.xposed.godmode.engine.rule.ViewRule;
+import com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec;
 
 /**
  * 按 android:resourceName 匹配。
@@ -18,7 +18,7 @@ final class ResourceMatcher implements MatchStrategy {
     }
 
     @Override
-    public int computeScore(View view, ViewRule rule) {
+    public int computeScore(View view, RuleMatchSpec rule) {
         if (TextUtils.isEmpty(rule.resourceName)) return 0;
         try {
             String resName = view.getResources().getResourceName(view.getId());

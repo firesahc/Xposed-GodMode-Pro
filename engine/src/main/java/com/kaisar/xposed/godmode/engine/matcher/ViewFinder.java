@@ -11,7 +11,7 @@ import android.view.ViewGroup;
 import android.view.ViewParent;
 import android.widget.TextView;
 
-import com.kaisar.xposed.godmode.engine.rule.ViewRule;
+import com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec;
 import com.kaisar.xposed.godmode.engine.traversal.ViewTraversal;
 import com.kaisar.xposed.godmode.engine.util.GmConstants;
 
@@ -23,9 +23,9 @@ import java.util.Map;
 import java.util.WeakHashMap;
 
 /**
- * 视图查找器 — 使用 engine 的 ViewRule 进行视图匹配/搜索。
+ * 视图查找器 — 使用 engine 的 RuleMatchSpec 进行视图匹配/搜索。
  * <p>
- * 职责：从当前 Activity 的视图树中根据 ViewRule 定位匹配的视图。
+ * 职责：从当前 Activity 的视图树中根据 RuleMatchSpec 定位匹配的视图。
  * 同时支持 {@link CompositeMatcher}（engine 组合匹配）和传统深度/文本/资源名匹配。
  * <p>
  * 替代 {@code com.kaisar.xposed.godmode.injection.ViewHelper} 中的视图搜索职责。
@@ -51,12 +51,12 @@ public final class ViewFinder {
      * 根据规则匹配视图 — 优先使用 {@link CompositeMatcher}，失败时回退到传统匹配。
      *
      * @param decorView   当前 Activity 的 DecorView
-     * @param rule        engine ViewRule
+     * @param rule        engine RuleMatchSpec
      * @param pm          PackageManager（用于 strict mode 检查）
      * @param packageName 目标包名
      * @return 匹配的视图，或 null
      */
-    public static View findViewBestMatch(ViewGroup decorView, ViewRule rule,
+    public static View findViewBestMatch(ViewGroup decorView, RuleMatchSpec rule,
                                           PackageManager pm, String packageName) {
         // 优先尝试 engine 组合匹配器
         try {
@@ -126,10 +126,10 @@ public final class ViewFinder {
     /**
      * 根据规则匹配视图 — 优先使用 {@link CompositeMatcher}，失败时回退到传统匹配。
      *
-     * @deprecated 使用 {@link #findViewBestMatch(ViewGroup, ViewRule, PackageManager, String)}
+     * @deprecated 使用 {@link #findViewBestMatch(ViewGroup, RuleMatchSpec, PackageManager, String)}
      */
     @Deprecated
-    public static View findViewBestMatch(Activity activity, ViewRule rule) {
+    public static View findViewBestMatch(Activity activity, RuleMatchSpec rule) {
         if (activity == null || activity.getWindow() == null) return null;
         return findViewBestMatch((ViewGroup) activity.getWindow().getDecorView(), rule,
                 activity.getPackageManager(), activity.getPackageName());
@@ -139,12 +139,12 @@ public final class ViewFinder {
      * 查找所有匹配的视图 — repeatable 规则优先搜索 RecyclerView。
      *
      * @param decorView   当前 Activity 的 DecorView
-     * @param rule        engine ViewRule
+     * @param rule        engine RuleMatchSpec
      * @param pm          PackageManager（用于 strict mode 检查）
      * @param packageName 目标包名
      * @return 匹配的视图列表
      */
-    public static List<View> findAllViewsBestMatch(ViewGroup decorView, ViewRule rule,
+    public static List<View> findAllViewsBestMatch(ViewGroup decorView, RuleMatchSpec rule,
                                                     PackageManager pm, String packageName) {
         if (rule.isRepeatable()) {
             List<View> results = findViewsInRecyclers(decorView, rule);
@@ -162,10 +162,10 @@ public final class ViewFinder {
     /**
      * 查找所有匹配的视图 — repeatable 规则优先搜索 RecyclerView。
      *
-     * @deprecated 使用 {@link #findAllViewsBestMatch(ViewGroup, ViewRule, PackageManager, String)}
+     * @deprecated 使用 {@link #findAllViewsBestMatch(ViewGroup, RuleMatchSpec, PackageManager, String)}
      */
     @Deprecated
-    public static List<View> findAllViewsBestMatch(Activity activity, ViewRule rule) {
+    public static List<View> findAllViewsBestMatch(Activity activity, RuleMatchSpec rule) {
         if (activity == null || activity.getWindow() == null) return Collections.emptyList();
         return findAllViewsBestMatch((ViewGroup) activity.getWindow().getDecorView(), rule,
                 activity.getPackageManager(), activity.getPackageName());
@@ -233,7 +233,7 @@ public final class ViewFinder {
     /**
      * 评分匹配视图（宽松阈值 30，严格模式 80）。
      */
-    public static View matchView(View view, ViewRule rule, boolean strictMode) {
+    public static View matchView(View view, RuleMatchSpec rule, boolean strictMode) {
         try {
             if (view == null || rule == null) return null;
             int score = computeMatchScore(view, rule);
@@ -252,7 +252,7 @@ public final class ViewFinder {
      * @param rule           待填充的规则
      * @param isInfoFlowMode 是否处于信息流模式（由调用方提供）
      */
-    public static void populateRepeatableInfo(View v, ViewRule rule, boolean isInfoFlowMode) {
+    public static void populateRepeatableInfo(View v, RuleMatchSpec rule, boolean isInfoFlowMode) {
         try {
             if (!isInfoFlowMode) return;
             ViewGroup rv = findRecyclerViewAncestor(v);
@@ -293,10 +293,10 @@ public final class ViewFinder {
      * 在 DecorView 中按 RecyclerView 匹配 repeatable 规则。
      *
      * @param decorView 当前 Activity 的 DecorView
-     * @param rule      engine ViewRule
+     * @param rule      engine RuleMatchSpec
      * @return 匹配的视图列表
      */
-    public static List<View> findViewsInRecyclers(ViewGroup decorView, ViewRule rule) {
+    public static List<View> findViewsInRecyclers(ViewGroup decorView, RuleMatchSpec rule) {
         List<View> results = new ArrayList<>();
         List<WeakReference<ViewGroup>> cached = sRecyclerViewCache.get(decorView);
         if (cached != null) {
@@ -319,15 +319,15 @@ public final class ViewFinder {
     /**
      * 在 Activity 中按 RecyclerView 匹配 repeatable 规则。
      *
-     * @deprecated 使用 {@link #findViewsInRecyclers(ViewGroup, ViewRule)}
+     * @deprecated 使用 {@link #findViewsInRecyclers(ViewGroup, RuleMatchSpec)}
      */
     @Deprecated
-    public static List<View> findViewsInRecyclers(Activity activity, ViewRule rule) {
+    public static List<View> findViewsInRecyclers(Activity activity, RuleMatchSpec rule) {
         if (activity == null || activity.getWindow() == null) return Collections.emptyList();
         return findViewsInRecyclers((ViewGroup) activity.getWindow().getDecorView(), rule);
     }
 
-    private static void collectRecyclerViewMatches(ViewGroup parent, ViewRule rule,
+    private static void collectRecyclerViewMatches(ViewGroup parent, RuleMatchSpec rule,
             List<View> results, List<ViewGroup> foundRecyclers) {
         if (results.size() >= MAX_REPEATABLE_RESULTS) return;
         if (parent.getClass().getName().contains("RecyclerView")) {
@@ -342,7 +342,7 @@ public final class ViewFinder {
         }
     }
 
-    private static void scanRecyclerViewItems(ViewGroup recyclerView, ViewRule rule,
+    private static void scanRecyclerViewItems(ViewGroup recyclerView, RuleMatchSpec rule,
             List<View> results) {
         for (int i = 0; i < recyclerView.getChildCount()
                 && results.size() < MAX_REPEATABLE_RESULTS; i++) {
@@ -356,7 +356,7 @@ public final class ViewFinder {
     }
 
     private static void collectViewsByItemPath(View parent, String[] itemPath, int index,
-            ViewRule rule, List<View> results) {
+            RuleMatchSpec rule, List<View> results) {
         if (results.size() >= MAX_REPEATABLE_RESULTS) return;
         String entry = itemPath[index];
         int colonPos = entry.indexOf(':');
@@ -384,7 +384,7 @@ public final class ViewFinder {
     // 传统匹配（legacy fallback）
     // =========================================================================
 
-    private static boolean checkStrictMode(PackageManager pm, String packageName, ViewRule rule) {
+    private static boolean checkStrictMode(PackageManager pm, String packageName, RuleMatchSpec rule) {
         try {
             PackageInfo packageInfo = pm.getPackageInfo(packageName, 0);
             return packageInfo.versionCode == rule.matchVersionCode;
@@ -394,7 +394,7 @@ public final class ViewFinder {
         return false;
     }
 
-    private static boolean isDepthMatch(View view, ViewRule rule, boolean strictMode) {
+    private static boolean isDepthMatch(View view, RuleMatchSpec rule, boolean strictMode) {
         try {
             String viewClass = view.getClass().getName();
             if (!TextUtils.isEmpty(rule.viewClass)
@@ -414,7 +414,7 @@ public final class ViewFinder {
         }
     }
 
-    private static View matchByAnchoredStrategy(ViewRule rule, boolean strictMode,
+    private static View matchByAnchoredStrategy(RuleMatchSpec rule, boolean strictMode,
             View depthView) {
         ViewParent parent = depthView.getParent();
         if (!(parent instanceof ViewGroup)) return null;
@@ -428,7 +428,7 @@ public final class ViewFinder {
         return null;
     }
 
-    private static int computeMatchScore(View view, ViewRule rule) {
+    private static int computeMatchScore(View view, RuleMatchSpec rule) {
         int score = 0;
         if (view.getClass().getName().equals(rule.viewClass)) score += 30;
         if (!TextUtils.isEmpty(rule.resourceName)) {
@@ -453,7 +453,7 @@ public final class ViewFinder {
         return score;
     }
 
-    private static boolean verifySingleElement(View view, ViewRule rule) {
+    private static boolean verifySingleElement(View view, RuleMatchSpec rule) {
         return computeMatchScore(view, rule) >= 80;
     }
 
@@ -498,7 +498,7 @@ public final class ViewFinder {
     /**
      * 根据资源名获取资源 ID（兼容 engines 侧无 R 类的场景）。
      */
-    private static int getViewId(ViewRule rule, Resources resources) {
+    private static int getViewId(RuleMatchSpec rule, Resources resources) {
         if (rule.resourceName == null || resources == null) return View.NO_ID;
         return resources.getIdentifier(rule.resourceName, "id", rule.packageName);
     }

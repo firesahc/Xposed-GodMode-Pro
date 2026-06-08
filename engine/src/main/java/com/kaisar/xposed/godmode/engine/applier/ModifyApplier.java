@@ -10,7 +10,7 @@ import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.TextView;
 
-import com.kaisar.xposed.godmode.engine.rule.ViewRule;
+import com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec;
 
 import java.lang.ref.SoftReference;
 import java.util.Collections;
@@ -48,7 +48,7 @@ public final class ModifyApplier implements RuleApplier {
     // ---- 应用 ----
 
     @Override
-    public boolean apply(View view, ViewRule rule) {
+    public boolean apply(View view, RuleMatchSpec rule) {
         if (view == null || rule == null || !view.isAttachedToWindow()) return false;
 
         Integer appliedHash = mAppliedViews.get(view);
@@ -87,7 +87,7 @@ public final class ModifyApplier implements RuleApplier {
     // ---- 撤销 ----
 
     @Override
-    public boolean revoke(View view, ViewRule rule) {
+    public boolean revoke(View view, RuleMatchSpec rule) {
         ViewGroup.LayoutParams lp = view.getLayoutParams();
         if (lp != null) {
             if (rule.origWidth > 0) lp.width = rule.origWidth;
@@ -114,7 +114,7 @@ public final class ModifyApplier implements RuleApplier {
     }
 
     /** 清除与指定规则相关的已应用视图记录 */
-    public void clearForRule(ViewRule rule) {
+    public void clearForRule(RuleMatchSpec rule) {
         int hash = rule.hashCode();
         synchronized (mAppliedViews) {
             mAppliedViews.entrySet().removeIf(e ->
