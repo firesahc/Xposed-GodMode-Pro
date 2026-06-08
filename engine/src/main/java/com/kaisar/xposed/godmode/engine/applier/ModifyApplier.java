@@ -10,8 +10,9 @@ import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.TextView;
 
-import com.kaisar.xposed.godmode.engine.util.ThreadPools;
 import com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec;
+import com.kaisar.xposed.godmode.engine.util.Logger;
+import com.kaisar.xposed.godmode.engine.util.ThreadPools;
 
 import java.lang.ref.SoftReference;
 import java.util.Collections;

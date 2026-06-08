@@ -5,7 +5,6 @@ import android.view.ViewGroup;
 import android.view.ViewParent;
 
 import com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec;
-import com.kaisar.xposed.godmode.engine.matcher.ViewTraversal;
 import com.kaisar.xposed.godmode.engine.util.GmConstants;
 
 import java.util.ArrayList;

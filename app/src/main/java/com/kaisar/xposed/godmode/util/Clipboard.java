@@ -4,6 +4,8 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 
+import com.kaisar.xposed.godmode.engine.util.Logger;
+
 import java.util.Objects;
 
 /**
@@ -19,7 +21,7 @@ public final class Clipboard {
             clipboard.setPrimaryClip(clip);
             return true;
         } catch (Throwable e) {
-            Logger\.w\("Clipboard", "put content failed", e);
+            Logger.w("Clipboard", "put content failed", e);
             return false;
         }
     }

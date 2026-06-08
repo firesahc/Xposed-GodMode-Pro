@@ -9,6 +9,9 @@ import android.widget.Toast;
 
 import androidx.preference.PreferenceManager;
 
+import com.kaisar.xposed.godmode.GodModeHelper;
+import com.kaisar.xposed.godmode.R;
+
 public final class QuickSettingsService extends TileService implements SharedPreferences.OnSharedPreferenceChangeListener {
 
     @Override

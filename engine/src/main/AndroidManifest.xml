@@ -1,4 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest>
     <!-- engine 模块 — 纯Java库，无Android组件声明 -->
 </manifest>

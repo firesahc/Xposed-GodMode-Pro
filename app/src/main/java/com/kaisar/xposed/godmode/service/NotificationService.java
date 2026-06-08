@@ -19,6 +19,9 @@ import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 import androidx.preference.PreferenceManager;
 
+import com.kaisar.xposed.godmode.GodModeHelper;
+import com.kaisar.xposed.godmode.R;
+import com.kaisar.xposed.godmode.SettingsActivity;
 import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
 
 public final class NotificationService extends Service implements SharedPreferences.OnSharedPreferenceChangeListener {

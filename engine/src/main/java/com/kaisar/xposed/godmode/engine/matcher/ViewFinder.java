@@ -4,15 +4,14 @@ import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.res.Resources;
 import android.text.TextUtils;
-import com.kaisar.xposed.godmode.engine.util.Logger;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewParent;
 import android.widget.TextView;
 
 import com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec;
-import com.kaisar.xposed.godmode.engine.matcher.ViewTraversal;
 import com.kaisar.xposed.godmode.engine.util.GmConstants;
+import com.kaisar.xposed.godmode.engine.util.Logger;
 
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
