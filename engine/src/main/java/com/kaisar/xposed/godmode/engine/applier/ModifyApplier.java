@@ -63,7 +63,7 @@ public final class ModifyApplier implements RuleApplier {
         return true;
     }
 
-    private static boolean isAlreadyApplied(View view, RuleMatchSpec rule) {
+    private boolean isAlreadyApplied(View view, RuleMatchSpec rule) {
         // 使用引用相等性检查 hashCode（int），避免自动装箱
         Integer appliedHash = mAppliedViews.get(view);
         return appliedHash != null && appliedHash == rule.hashCode();
@@ -167,8 +167,7 @@ public final class ModifyApplier implements RuleApplier {
                 if (bitmap != null) return bitmap;
             }
         } catch (Exception e) {
-            com.kaisar.xposed.godmode.injection.util.Logger.w(
-                    "ModifyApplier", "loadModImage failed: " + imagePath, e);
+            android.util.Log.w("ModifyApplier", "loadModImage failed: " + imagePath, e);
         }
         return null;
     }

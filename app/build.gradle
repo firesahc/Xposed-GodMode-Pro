@@ -28,10 +28,6 @@ android {
     }
 }
 
-repositories {
-    maven { url 'https://maven.aliyun.com/repository/public' }
-}
-
 dependencies {
     implementation fileTree(include: ['*.jar'], dir: 'libs')
     implementation project(path: ':engine')
