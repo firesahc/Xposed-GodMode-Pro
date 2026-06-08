@@ -3,32 +3,9 @@
 // 包含模块: :app (Xposed模块+设置UI), :libxservicemanager (系统服务注入库)
 // AGP 8.4.0, compileSdk 35, Java 8
 // =========================================================================
-buildscript {
-    repositories {
-        maven { url 'https://maven.aliyun.com/repository/google' }
-        maven { url 'https://maven.aliyun.com/repository/public' }
-        maven { url 'https://maven.aliyun.com/repository/central' }
-        mavenCentral()
-        google()
-    }
-    dependencies {
-        classpath 'com.android.tools.build:gradle:8.4.0'
-        classpath "androidx.navigation:navigation-safe-args-gradle-plugin:2.7.7"
-
-        // NOTE: Do not place your application dependencies here; they belong
-        // in the individual module build.gradle files
-    }
-}
-
-allprojects {
-    repositories {
-        maven { url 'https://maven.aliyun.com/repository/google' }
-        maven { url 'https://maven.aliyun.com/repository/public' }
-        maven { url 'https://maven.aliyun.com/repository/central' }
-        mavenCentral()
-        google()
-    }
-}
+// 插件版本由 gradle/libs.versions.toml 版本目录统一管理，
+// 不再需要 buildscript { dependencies { classpath ... } } 声明
+// 仓库由 settings.gradle 的 dependencyResolutionManagement 集中管理
 
 task clean(type: Delete) {
     delete rootProject.buildDir

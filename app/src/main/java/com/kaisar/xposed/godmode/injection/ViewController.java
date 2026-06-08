@@ -116,6 +116,9 @@ public final class ViewController {
                     continue;
                 }
                 if (applyRule(view, rule)) appliedCount++;
+            } catch (Exception e) {
+                Logger.w(TAG, "[ViewController] apply rule failed", e);
+            }
         }
         if (appliedCount > 0) {
             Logger.d(TAG, "[ViewController] applied " + appliedCount + " rules for " + activity);
@@ -160,6 +163,9 @@ public final class ViewController {
                     continue;
                 }
                 revokeRule(view, rule);
+            } catch (Exception e) {
+                Logger.w(TAG, "[ViewController] revoke rule failed", e);
+            }
         }
     }
 

@@ -144,7 +144,7 @@ final class ObserverManager {
                     }
                 } catch (Exception e) {
                     mLogger.w("notify observer failed", e);
-                    continue; // 一个观察者异常不中断其他观察者
+                }
             }
             mRemoteCallbackList.finishBroadcast();
         }

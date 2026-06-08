@@ -28,10 +28,10 @@ final class WorkflowOrchestrator implements Handler.Callback {
     static final class WriteRuleMsg {
         final String packageName;
         final RuleRecord viewRule;
-        @android.annotation.Nullable final Bitmap snapshot;
-        @android.annotation.Nullable final String oldImagePath;
-        @android.annotation.Nullable final String json;
-        @android.annotation.Nullable final ActRules snapshotRules;
+        @androidx.annotation.Nullable final Bitmap snapshot;
+        @androidx.annotation.Nullable final String oldImagePath;
+        @androidx.annotation.Nullable final String json;
+        @androidx.annotation.Nullable final ActRules snapshotRules;
 
         /** 带位图构造 */
         WriteRuleMsg(String packageName, RuleRecord viewRule, Bitmap snapshot, String oldImagePath) {
@@ -302,7 +302,7 @@ final class WorkflowOrchestrator implements Handler.Callback {
                 return;
             }
             if (newImagePath == null) {
-                mLogger.w("write rule aborted: save snapshot returned null");
+                mLogger.w("write rule aborted: save snapshot returned null", (String) null);
                 return;
             }
             mHandle.obtainMessage(UPDATE_IMAGE_PATH,
