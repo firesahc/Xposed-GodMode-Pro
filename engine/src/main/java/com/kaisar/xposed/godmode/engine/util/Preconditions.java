@@ -1,4 +1,4 @@
-package com.kaisar.xposed.godmode.util;
+package com.kaisar.xposed.godmode.engine.util;
 
 import android.text.TextUtils;
 

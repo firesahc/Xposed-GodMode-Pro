@@ -27,7 +27,6 @@ import com.kaisar.xposed.godmode.injection.editor.ViewRuleFactory;
 import com.kaisar.xposed.godmode.injection.util.Logger;
 import com.kaisar.xposed.godmode.injection.util.ViewUtils;
 import com.kaisar.xposed.godmode.rule.ViewRule;
-import com.kaisar.xposed.godmode.util.Preconditions;
 
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
