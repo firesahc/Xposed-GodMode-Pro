@@ -13,6 +13,7 @@ import android.view.ViewConfiguration;
 import android.view.ViewParent;
 import android.view.WindowManager;
 
+import com.kaisar.xposed.godmode.engine.EditorInteractionMode;
 import com.kaisar.xposed.godmode.injection.util.ViewUtils;
 import com.kaisar.xposed.godmode.injection.editor.gesture.GestureDispatcher;
 import com.kaisar.xposed.godmode.injection.editor.gesture.ModifyGestureHandler;
@@ -46,6 +47,12 @@ public final class TouchInterceptor extends XC_MethodHook implements Property.On
     private static final int LONG_PRESS_TIMEOUT = ViewConfiguration.getLongPressTimeout();
 
     // =========================================================================
+    // KeyInterceptor 实例引用（构造注入）
+    // =========================================================================
+
+    private final KeyInterceptor mKeyInterceptor;
+
+    // =========================================================================
     // 编辑器状态
     // =========================================================================
 
@@ -74,6 +81,14 @@ public final class TouchInterceptor extends XC_MethodHook implements Property.On
 
     private float mDeltaX, mDeltaY;
     private float mDragStartRawX, mDragStartRawY;
+
+    // =========================================================================
+    // 构造器 — 注入 KeyInterceptor 实例
+    // =========================================================================
+
+    public TouchInterceptor(KeyInterceptor keyInterceptor) {
+        this.mKeyInterceptor = keyInterceptor;
+    }
 
     // =========================================================================
     // Hook 入口
@@ -111,13 +126,13 @@ public final class TouchInterceptor extends XC_MethodHook implements Property.On
     }
 
     private boolean dispatchTouchEvent(View v, MotionEvent event) {
-        int mode = KeyInterceptor.getInteractionMode();
+        int mode = mKeyInterceptor.getInteractionMode();
         int action = event.getActionMasked();
 
-        if (mode == KeyInterceptor.MODE_INITIAL) {
+        if (mode == EditorInteractionMode.INITIAL) {
             return true;
         }
-        if (mode == KeyInterceptor.MODE_MODIFY) {
+        if (mode == EditorInteractionMode.MODIFY) {
             return handleModifyTouch(v, event);
         }
         return handleRemoveTouch(v, event, action);
@@ -149,8 +164,8 @@ public final class TouchInterceptor extends XC_MethodHook implements Property.On
                 RemoveGestureHandler.finishDrag(v, mRemoveState);
                 RemoveGestureHandler.clearState(mRemoveState);
                 mRemoveState = null;
-            } else if (action == MotionEvent.ACTION_UP && KeyInterceptor.isKeySelecting()) {
-                KeyInterceptor.selectViewByTap(v);
+            } else if (action == MotionEvent.ACTION_UP && mKeyInterceptor.isKeySelecting()) {
+                mKeyInterceptor.selectViewByTap(v);
             }
             endTouch(v);
         }
@@ -181,7 +196,7 @@ public final class TouchInterceptor extends XC_MethodHook implements Property.On
                 ModifyGestureHandler.finalizeDrag(mModifyState, v.getContext().getPackageName());
                 mModifyState = null;
             } else if (action == MotionEvent.ACTION_UP && !mLongClick) {
-                KeyInterceptor.selectViewByTap(v);
+                mKeyInterceptor.selectViewByTap(v);
             }
             endTouch(v);
         }
@@ -226,7 +241,7 @@ public final class TouchInterceptor extends XC_MethodHook implements Property.On
     /** 长按触发：根据模式启动移除或修改拖拽 */
     private void onLongPress(View v, boolean isModifyMode) {
         if (isModifyMode) {
-            View target = KeyInterceptor.getSelectedView();
+            View target = mKeyInterceptor.getSelectedView();
             if (target != null) {
                 mModifyState = ModifyGestureHandler.startDrag(target);
             }

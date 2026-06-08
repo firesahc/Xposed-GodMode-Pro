@@ -12,7 +12,7 @@ import android.widget.TextView;
 import com.kaisar.xposed.godmode.BuildConfig;
 import com.kaisar.xposed.godmode.engine.matcher.ViewFinder;
 import com.kaisar.xposed.godmode.engine.util.FieldMapper;
-import com.kaisar.xposed.godmode.hook.KeyInterceptor;
+import com.kaisar.xposed.godmode.injection.GodModeInjector;
 import com.kaisar.xposed.godmode.injection.util.ViewUtils;
 import com.kaisar.xposed.godmode.rule.ViewRule;
 
@@ -136,7 +136,7 @@ public final class ViewRuleFactory {
 
     /** 填充可重复规则信息（itemPath、itemRootClass、parentClass） */
     private static void populateRepeatableInfo(View v, ViewRule rule) {
-        boolean isInfoFlowMode = KeyInterceptor.isInfoFlowMode();
+        boolean isInfoFlowMode = GodModeInjector.getKeyInterceptor().isInfoFlowMode();
         com.kaisar.xposed.godmode.engine.rule.ViewRule engineRule = toEngine(rule);
         ViewFinder.populateRepeatableInfo(v, engineRule, isInfoFlowMode);
         if (engineRule.repeatable) {
