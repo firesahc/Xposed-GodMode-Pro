@@ -14,7 +14,7 @@ import com.kaisar.xposed.godmode.engine.event.Subscribe;
 import com.kaisar.xposed.godmode.injection.ViewController;
 import com.kaisar.xposed.godmode.injection.util.Logger;
 import com.kaisar.xposed.godmode.rule.ActRules;
-import com.kaisar.xposed.godmode.rule.ViewRule;
+import com.kaisar.xposed.godmode.rule.RuleRecord;
 import com.kaisar.xposed.godmode.engine.util.Preconditions;
 
 import java.lang.ref.WeakReference;
@@ -81,11 +81,11 @@ public final class LifecycleObserver extends XC_MethodHook {
         // 触发场景：IPC addObserver 推送的规则与 onPostResume 中已应用的规则完全相同时
         if (newActRules.equals(mActRules)) return;
         ViewController.getDefault().clearBlockedCache();
-        Set<Map.Entry<String, List<ViewRule>>> entries = newActRules.entrySet();
-        for (Map.Entry<String, List<ViewRule>> entry : entries) {
+        Set<Map.Entry<String, List<RuleRecord>>> entries = newActRules.entrySet();
+        for (Map.Entry<String, List<RuleRecord>> entry : entries) {
             String key = entry.getKey();
-            List<ViewRule> oldRules = mActRules.get(key);
-            List<ViewRule> newRules = entry.getValue();
+            List<RuleRecord> oldRules = mActRules.get(key);
+            List<RuleRecord> newRules = entry.getValue();
             if (newRules != null && oldRules != null) {
                 oldRules.removeAll(newRules);
                 if (oldRules.isEmpty()) mActRules.remove(key);
@@ -94,12 +94,12 @@ public final class LifecycleObserver extends XC_MethodHook {
         // revoke old rules
         if (!mActRules.isEmpty()) {
             entries = mActRules.entrySet();
-            for (Map.Entry<String, List<ViewRule>> entry : entries) {
-                List<ViewRule> rules = entry.getValue();
+            for (Map.Entry<String, List<RuleRecord>> entry : entries) {
+                List<RuleRecord> rules = entry.getValue();
                 if (rules == null || rules.isEmpty()) continue;
-                List<ViewRule> revRemove = new java.util.ArrayList<>();
-                List<ViewRule> revModify = new java.util.ArrayList<>();
-                for (ViewRule r : rules) {
+                List<RuleRecord> revRemove = new java.util.ArrayList<>();
+                List<RuleRecord> revModify = new java.util.ArrayList<>();
+                for (RuleRecord r : rules) {
                     if (r.isModifyRule()) revModify.add(r);
                     else revRemove.add(r);
                 }
@@ -115,8 +115,8 @@ public final class LifecycleObserver extends XC_MethodHook {
         mActRules.clear();
         mActRules.putAll(newActRules);
         entries = mActRules.entrySet();
-        for (Map.Entry<String, List<ViewRule>> entry : entries) {
-            List<ViewRule> rules = entry.getValue();
+        for (Map.Entry<String, List<RuleRecord>> entry : entries) {
+            List<RuleRecord> rules = entry.getValue();
             for (Activity activity : mActivities.keySet()) {
                 if (TextUtils.equals(activity.getComponentName().getClassName(), entry.getKey())) {
                     if (!rules.isEmpty()) {
@@ -189,7 +189,7 @@ public final class LifecycleObserver extends XC_MethodHook {
             mApplying = true;
             try {
                 Activity activity = Preconditions.checkNotNull(activityReference.get());
-                List<ViewRule> rules = mActRules.get(activity.getComponentName().getClassName());
+                List<RuleRecord> rules = mActRules.get(activity.getComponentName().getClassName());
                 if (rules != null && !rules.isEmpty()) {
                     if (!rules.isEmpty()) {
                         ViewController.getDefault().applyRuleBatch(activity, rules);

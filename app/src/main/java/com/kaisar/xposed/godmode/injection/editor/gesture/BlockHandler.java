@@ -9,7 +9,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Toast;
 
-import com.kaisar.xposed.godmode.injection.editor.ViewRuleFactory;
+import com.kaisar.xposed.godmode.injection.editor.RuleRecordFactory;
 import com.kaisar.xposed.godmode.injection.editor.BitmapUtils;
 import com.kaisar.xposed.godmode.injection.ViewController;
 import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
@@ -17,7 +17,7 @@ import com.kaisar.xposed.godmode.injection.editor.overlay.ParticleView;
 import com.kaisar.xposed.godmode.injection.util.Logger;
 import com.kaisar.xposed.godmode.injection.util.TaskExecutor;
 import com.kaisar.xposed.godmode.engine.pool.ThreadPools;
-import com.kaisar.xposed.godmode.rule.ViewRule;
+import com.kaisar.xposed.godmode.rule.RuleRecord;
 
 /**
  * 屏蔽（移除）操作处理器 — 粒子动画播放 + IPC 规则写入。
@@ -59,7 +59,7 @@ public final class BlockHandler {
             final ViewGroup container, final Bitmap snapshot,
             final int blockedViewIndex, final OnBlockListener listener) {
         try {
-            final ViewRule viewRule = ViewRuleFactory.makeRemoveRule(view);
+            final RuleRecord viewRule = RuleRecordFactory.makeRemoveRule(view);
             final ParticleView particleView = new ParticleView(activity);
             particleView.setDuration(1000);
             particleView.attachToContainer(container);

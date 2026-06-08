@@ -9,7 +9,7 @@ import com.kaisar.xposed.godmode.IGodModeManager;
 import com.kaisar.xposed.godmode.IObserver;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.AppRules;
-import com.kaisar.xposed.godmode.rule.ViewRule;
+import com.kaisar.xposed.godmode.rule.RuleRecord;
 import com.kaisar.xservicemanager.XServiceManager;
 
 import de.robv.android.xposed.XposedBridge;
@@ -98,7 +98,7 @@ public final class GodModeManager {
         }
     }
 
-    public boolean writeRule(String packageName, ViewRule viewRule, Bitmap bitmap) {
+    public boolean writeRule(String packageName, RuleRecord viewRule, Bitmap bitmap) {
         try {
             return mGMM.writeRule(packageName, viewRule, bitmap);
         } catch (RemoteException e) {
@@ -107,7 +107,7 @@ public final class GodModeManager {
         }
     }
 
-    public boolean updateRule(String packageName, ViewRule viewRule) {
+    public boolean updateRule(String packageName, RuleRecord viewRule) {
         try {
             return mGMM.updateRule(packageName, viewRule);
         } catch (RemoteException e) {
@@ -116,7 +116,7 @@ public final class GodModeManager {
         }
     }
 
-    public boolean deleteRule(String packageName, ViewRule viewRule) {
+    public boolean deleteRule(String packageName, RuleRecord viewRule) {
         try {
             return mGMM.deleteRule(packageName, viewRule);
         } catch (RemoteException e) {

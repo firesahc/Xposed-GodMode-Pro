@@ -1,10 +1,10 @@
 package com.kaisar.xposed.godmode.engine.rule;
 
 /**
- * 字段契约接口 — 定义 ViewRule/RuleRecord 的全部字段的 getter。
+ * 字段契约接口 — 定义 RuleRecord/RuleMatchSpec 的全部字段的 getter。
  * <p>
  * 实现类：{@link RuleMatchSpec}（引擎模块）、
-     * {@link com.kaisar.xposed.godmode.rule.ViewRule RuleRecord}（app 模块）
+     * {@link com.kaisar.xposed.godmode.rule.RuleRecord}（app 模块）
  * <p>
  * 【编译期安全】新增字段时，必须在此接口中添加 getter → 所有实现类编译报错。
  */
@@ -58,7 +58,7 @@ public interface RuleFields {
     /**
      * 判断此规则是否与另一规则定位到同一个 View。
      * <p>
-     * 替代 app 模块中 {@code ViewRule.equals()} 的窄匹配语义，
+     * 替代 app 模块中 {@code RuleRecord.equals()} 的窄匹配语义，
      * 用于集合查找（indexOf / remove / contains）场景。
      * 不比较修改规则字段、时间戳等业务无关属性。
      * <p>

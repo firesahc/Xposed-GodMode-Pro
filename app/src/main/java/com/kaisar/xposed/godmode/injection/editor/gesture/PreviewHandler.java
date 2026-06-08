@@ -3,12 +3,12 @@ package com.kaisar.xposed.godmode.injection.editor.gesture;
 import android.graphics.Rect;
 import android.view.View;
 
-import com.kaisar.xposed.godmode.injection.editor.ViewRuleFactory;
+import com.kaisar.xposed.godmode.injection.editor.RuleRecordFactory;
 import com.kaisar.xposed.godmode.injection.util.ViewUtils;
 import com.kaisar.xposed.godmode.injection.ViewController;
 import com.kaisar.xposed.godmode.injection.editor.overlay.MaskView;
 import com.kaisar.xposed.godmode.injection.util.Logger;
-import com.kaisar.xposed.godmode.rule.ViewRule;
+import com.kaisar.xposed.godmode.rule.RuleRecord;
 
 /**
  * 预览操作处理器 — 在确认移除前临时隐藏视图。
@@ -22,7 +22,7 @@ import com.kaisar.xposed.godmode.rule.ViewRule;
 public final class PreviewHandler {
 
     private View mPreviewView;
-    private ViewRule mPreviewRule;
+    private RuleRecord mPreviewRule;
     private boolean mIsPreviewing;
 
     /** 当前是否处于预览状态。 */
@@ -40,7 +40,7 @@ public final class PreviewHandler {
     public void startPreview(View view, MaskView maskView, Runnable onStateChanged) {
         if (view == null) return;
         try {
-            mPreviewRule = ViewRuleFactory.makeRemoveRule(view);
+            mPreviewRule = RuleRecordFactory.makeRemoveRule(view);
             mPreviewRule.visibility = View.GONE;
             ViewController.getDefault().applyRule(view, mPreviewRule);
             mPreviewView = view;

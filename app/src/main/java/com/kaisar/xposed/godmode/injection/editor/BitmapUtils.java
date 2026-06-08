@@ -7,7 +7,7 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.view.View;
 
-import com.kaisar.xposed.godmode.rule.ViewRule;
+import com.kaisar.xposed.godmode.rule.RuleRecord;
 
 /**
  * 位图操作工具 — 视图截图、规则遮罩绘制、调试边框绘制。
@@ -39,7 +39,7 @@ public final class BitmapUtils {
      * @param bitmap 截图
      * @param rule   视图规则（提供 x/y/width/height）
      */
-    public static void drawRuleMask(Bitmap bitmap, ViewRule rule) {
+    public static void drawRuleMask(Bitmap bitmap, RuleRecord rule) {
         Paint markPaint = new Paint();
         markPaint.setColor(Color.RED);
         markPaint.setAlpha(100);

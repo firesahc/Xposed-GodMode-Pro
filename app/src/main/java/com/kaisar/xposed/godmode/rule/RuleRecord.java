@@ -12,18 +12,25 @@ import androidx.annotation.Keep;
 import androidx.annotation.NonNull;
 
 import com.google.gson.annotations.SerializedName;
+import com.kaisar.xposed.godmode.engine.rule.RuleFields;
 
 import java.util.Arrays;
 
 /**
- * app 模块的 ViewRule — Parcelable（IPC 序列化）+ Gson @SerializedName（持久化）。
+ * app 模块的规则记录 — Parcelable（IPC 序列化）+ Gson @SerializedName（持久化）。
  * <p>
- * 【同步保障】对方文件: {@code engine/.../engine/rule/ViewRule.java}（纯 POJO 版）
+ * 实现 {@link RuleFields} 接口以提供编译期安全的字段访问，
+ * 配合 {@link com.kaisar.xposed.godmode.engine.util.RuleMapper} 实现类型安全的 app→engine 转换。
+ * <p>
+ * 【同步保障】对方文件: {@code engine/.../engine/rule/RuleMatchSpec.java}（纯 POJO 版）
  * <br>引擎字段总数: 37 &nbsp;|&nbsp; app 字段总数: 37
- * <br>若此处增减字段，请同步修改对方文件的同名字段和 clone()/equals()/hashCode()。
+ * <br>若此处增减字段，请同步修改对方文件的同名字段、Parcel 读写、clone() 和 equals()/hashCode()。
+ *
+ * @see RuleFields
+ * @see com.kaisar.xposed.godmode.engine.util.RuleMapper
  */
 @Keep
-public final class ViewRule implements Parcelable, Cloneable {
+public final class RuleRecord implements RuleFields, Parcelable, Cloneable {
 
     // 规则标识字段: 非空=修改规则，null/空=移除规则
     @SerializedName("rule_tag")
@@ -107,14 +114,60 @@ public final class ViewRule implements Parcelable, Cloneable {
     @SerializedName("orig_top_margin")
     public int origTopMargin;
 
+    // =========================================================================
+    // RuleFields 接口实现 — 37 个 getter（委托到 public 字段）
+    // =========================================================================
+
+    @Override public String getRuleTag() { return ruleTag; }
+    @Override public String getLabel() { return label; }
+    @Override public String getPackageName() { return packageName; }
+    @Override public String getMatchVersionName() { return matchVersionName; }
+    @Override public int getMatchVersionCode() { return matchVersionCode; }
+    @Override public int getVersionCode() { return versionCode; }
+    @Override public String getImagePath() { return imagePath; }
+    @Override public String getAlias() { return alias; }
+    @Override public int getX() { return x; }
+    @Override public int getY() { return y; }
+    @Override public int getWidth() { return width; }
+    @Override public int getHeight() { return height; }
+    @Override public int[] getDepth() { return depth; }
+    @Override public String getActivityClass() { return activityClass; }
+    @Override public String getViewClass() { return viewClass; }
+    @Override public String getResourceName() { return resourceName; }
+    @Override public String[] getItemPath() { return itemPath; }
+    @Override public String getItemRootClass() { return itemRootClass; }
+    @Override public String getParentClass() { return parentClass; }
+    @Override public boolean isRepeatable() { return repeatable; }
+    @Override public String getText() { return text; }
+    @Override public String getDescription() { return description; }
+    @Override public int getVisibility() { return visibility; }
+    @Override public long getTimestamp() { return timestamp; }
+    @Override public int getModWidth() { return modWidth; }
+    @Override public int getModHeight() { return modHeight; }
+    @Override public float getModAlpha() { return modAlpha; }
+    @Override public int getModXOffset() { return modXOffset; }
+    @Override public int getModYOffset() { return modYOffset; }
+    @Override public String getModText() { return modText; }
+    @Override public String getModImagePath() { return modImagePath; }
+    @Override public int getOrigWidth() { return origWidth; }
+    @Override public int getOrigHeight() { return origHeight; }
+    @Override public float getOrigAlpha() { return origAlpha; }
+    @Override public String getOrigText() { return origText; }
+    @Override public int getOrigLeftMargin() { return origLeftMargin; }
+    @Override public int getOrigTopMargin() { return origTopMargin; }
+
+    // =========================================================================
+    // 构造方法
+    // =========================================================================
+
     @SuppressWarnings("unused")
-    private ViewRule() {
+    private RuleRecord() {
     }
 
-    public ViewRule(String label, String packageName, String matchVersionName, int matchVersionCode,
-                    int versionCode, String imagePath, String alias, int x, int y, int width, int height,
-                    int[] depth, String activityClass, String viewClass, String resourceName,
-                    String text, String description, int visibility, long timestamp) {
+    public RuleRecord(String label, String packageName, String matchVersionName, int matchVersionCode,
+                      int versionCode, String imagePath, String alias, int x, int y, int width, int height,
+                      int[] depth, String activityClass, String viewClass, String resourceName,
+                      String text, String description, int visibility, long timestamp) {
         this.label = label;
         this.packageName = packageName;
         this.matchVersionName = matchVersionName;
@@ -136,7 +189,7 @@ public final class ViewRule implements Parcelable, Cloneable {
         this.timestamp = timestamp;
     }
 
-    protected ViewRule(Parcel in) {
+    protected RuleRecord(Parcel in) {
         ruleTag = in.readString();
         label = in.readString();
         packageName = in.readString();
@@ -175,6 +228,10 @@ public final class ViewRule implements Parcelable, Cloneable {
         parentClass = in.readString();
         repeatable = in.readByte() != 0;
     }
+
+    // =========================================================================
+    // Parcelable
+    // =========================================================================
 
     @Override
     public void writeToParcel(Parcel dest, int flags) {
@@ -222,22 +279,26 @@ public final class ViewRule implements Parcelable, Cloneable {
         return 0;
     }
 
-    public static final Creator<ViewRule> CREATOR = new Creator<ViewRule>() {
+    public static final Creator<RuleRecord> CREATOR = new Creator<RuleRecord>() {
         @Override
-        public ViewRule createFromParcel(Parcel in) {
-            return new ViewRule(in);
+        public RuleRecord createFromParcel(Parcel in) {
+            return new RuleRecord(in);
         }
 
         @Override
-        public ViewRule[] newArray(int size) {
-            return new ViewRule[size];
+        public RuleRecord[] newArray(int size) {
+            return new RuleRecord[size];
         }
     };
 
+    // =========================================================================
+    // Clone
+    // =========================================================================
+
     @NonNull
     @Override
-    public ViewRule clone() {
-        ViewRule v = new ViewRule(label, packageName, matchVersionName, matchVersionCode, versionCode,
+    public RuleRecord clone() {
+        RuleRecord v = new RuleRecord(label, packageName, matchVersionName, matchVersionCode, versionCode,
                 imagePath, alias, x, y, width, height, depth, activityClass, viewClass,
                 resourceName, text, description, visibility, timestamp);
         v.ruleTag = ruleTag;
@@ -260,6 +321,10 @@ public final class ViewRule implements Parcelable, Cloneable {
         v.repeatable = repeatable;
         return v;
     }
+
+    // =========================================================================
+    // 业务方法
+    // =========================================================================
 
     public int getViewId(Resources res) {
         if (!TextUtils.isEmpty(resourceName)) {
@@ -304,18 +369,23 @@ public final class ViewRule implements Parcelable, Cloneable {
     public boolean isPositionModified() { return modXOffset != 0 || modYOffset != 0; }
     public boolean isTextModified() { return modText != null; }
     public boolean isImageModified() { return modImagePath != null; }
-    public boolean isRepeatable() { return repeatable; }
+    /** @deprecated 使用 {@link #isRepeatable()} 替代 */
+    @Deprecated public boolean isRepeatableRule() { return repeatable; }
 
     public boolean hasModifications() {
         return isWidthModified() || isHeightModified() || isAlphaModified()
                 || isPositionModified() || isTextModified() || isImageModified();
     }
 
+    // =========================================================================
+    // equals / hashCode（完全不动，保持原有窄匹配语义）
+    // =========================================================================
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        ViewRule that = (ViewRule) o;
+        RuleRecord that = (RuleRecord) o;
         if (!activityClass.equals(that.activityClass)) return false;
         if (!viewClass.equals(that.viewClass)) return false;
         if (repeatable && that.repeatable) {
@@ -336,10 +406,14 @@ public final class ViewRule implements Parcelable, Cloneable {
         return result;
     }
 
+    // =========================================================================
+    // toString
+    // =========================================================================
+
     @NonNull
     @Override
     public String toString() {
-        final StringBuilder sb = new StringBuilder("ViewRule{");
+        final StringBuilder sb = new StringBuilder("RuleRecord{");
         sb.append("ruleTag='").append(ruleTag).append('\'');
         sb.append(", label='").append(label).append('\'');
         sb.append(", packageName='").append(packageName).append('\'');

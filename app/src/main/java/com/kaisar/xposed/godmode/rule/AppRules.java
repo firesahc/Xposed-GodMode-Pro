@@ -22,7 +22,7 @@ public final class AppRules extends HashMap<String, ActRules> implements Parcela
         HashMap<?, ?> hashMap = in.readHashMap(getClass().getClassLoader());
         for (Entry<?, ?> entry : hashMap.entrySet()) {
             String key = (String) entry.getKey();
-            @SuppressWarnings("unchecked") HashMap<String, List<ViewRule>> value = (HashMap<String, List<ViewRule>>) entry.getValue();
+            @SuppressWarnings("unchecked") HashMap<String, List<RuleRecord>> value = (HashMap<String, List<RuleRecord>>) entry.getValue();
             ActRules actRules = new ActRules(value.size());
             actRules.putAll(value);
             put(key, actRules);

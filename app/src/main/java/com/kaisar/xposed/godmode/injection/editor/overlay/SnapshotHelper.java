@@ -6,7 +6,7 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.view.View;
 
-import com.kaisar.xposed.godmode.rule.ViewRule;
+import com.kaisar.xposed.godmode.rule.RuleRecord;
 
 /**
  * 截图与规则遮罩绘制工具。
@@ -36,7 +36,7 @@ public final class SnapshotHelper {
      * @param bitmap 目标位图（就地修改）
      * @param rule   包含位置和尺寸信息的规则
      */
-    public static void drawRuleMask(Bitmap bitmap, ViewRule rule) {
+    public static void drawRuleMask(Bitmap bitmap, RuleRecord rule) {
         if (bitmap == null || rule == null) return;
         Paint markPaint = new Paint();
         markPaint.setColor(Color.RED);

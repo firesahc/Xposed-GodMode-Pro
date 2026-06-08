@@ -8,7 +8,7 @@ import java.util.Map;
  * <p>
  * 注：rules 字段使用原始 Map 类型而非 ActRules，
  * 避免 engine 模块对 app 模块的类型依赖。
- * ActRules extends {@code HashMap<String, List<ViewRule>>}，
+ * ActRules extends {@code HashMap<String, List<RuleRecord>>}，
  * 发布方可直接传入 ActRules 实例（自动向上转型）。
  */
 public final class RulesChangedEvent {

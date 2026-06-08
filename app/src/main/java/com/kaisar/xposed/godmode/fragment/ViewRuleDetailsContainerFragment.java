@@ -26,13 +26,13 @@ import androidx.viewpager2.widget.ViewPager2.OnPageChangeCallback;
 import com.google.android.material.snackbar.Snackbar;
 import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.model.SharedViewModel;
-import com.kaisar.xposed.godmode.rule.ViewRule;
+import com.kaisar.xposed.godmode.rule.RuleRecord;
 import com.kaisar.xposed.godmode.util.AppInfoHelper;
 
 import java.util.ArrayList;
 import java.util.List;
 
-public final class ViewRuleDetailsContainerFragment extends Fragment {
+public final class RuleRecordDetailsContainerFragment extends Fragment {
 
     private int mCurIndex;
 
@@ -45,7 +45,7 @@ public final class ViewRuleDetailsContainerFragment extends Fragment {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setHasOptionsMenu(true);
-        ViewRuleDetailsContainerFragmentArgs args = ViewRuleDetailsContainerFragmentArgs.fromBundle(requireArguments());
+        RuleRecordDetailsContainerFragmentArgs args = RuleRecordDetailsContainerFragmentArgs.fromBundle(requireArguments());
         mCurIndex = args.getCurIndex();
         mSharedViewModel = new ViewModelProvider(requireActivity()).get(SharedViewModel.class);
         mBackupLauncher = registerForActivityResult(new ActivityResultContracts.CreateDocument(), this::onBackupFileSelected);
@@ -53,10 +53,10 @@ public final class ViewRuleDetailsContainerFragment extends Fragment {
 
     private void onBackupFileSelected(Uri uri) {
         if (uri == null) return;
-        List<ViewRule> rules = mSharedViewModel.actRules.getValue();
+        List<RuleRecord> rules = mSharedViewModel.actRules.getValue();
         if (rules != null && !rules.isEmpty()) {
-            ViewRule viewRule = rules.get(mCurIndex);
-            List<ViewRule> viewRules = rules.subList(mCurIndex, mCurIndex + 1);
+            RuleRecord viewRule = rules.get(mCurIndex);
+            List<RuleRecord> viewRules = rules.subList(mCurIndex, mCurIndex + 1);
             mSharedViewModel.backupRules(uri, viewRule.packageName, viewRules, new SharedViewModel.ResultCallback() {
                 @Override
                 public void onSuccess(int count) {
@@ -73,7 +73,7 @@ public final class ViewRuleDetailsContainerFragment extends Fragment {
         }
     }
 
-    public ViewRuleDetailsContainerFragment() {
+    public RuleRecordDetailsContainerFragment() {
     }
 
     private final OnPageChangeCallback mCallback = new OnPageChangeCallback() {
@@ -110,7 +110,7 @@ public final class ViewRuleDetailsContainerFragment extends Fragment {
             } else {
                 DetailFragmentStateAdapter adapter = (DetailFragmentStateAdapter) mViewPager.getAdapter();
                 if (adapter == null) return;
-                List<ViewRule> oldData = adapter.getData();
+                List<RuleRecord> oldData = adapter.getData();
                 DiffUtil.DiffResult diffResult = DiffUtil.calculateDiff(new DiffUtil.Callback() {
                     @Override public int getOldListSize() { return oldData.size(); }
                     @Override public int getNewListSize() { return newData.size(); }
@@ -135,9 +135,9 @@ public final class ViewRuleDetailsContainerFragment extends Fragment {
 
     @Override
     public boolean onOptionsItemSelected(@NonNull MenuItem item) {
-        List<ViewRule> viewRules = mSharedViewModel.actRules.getValue();
+        List<RuleRecord> viewRules = mSharedViewModel.actRules.getValue();
         if (viewRules != null && !viewRules.isEmpty() && mCurIndex < viewRules.size()) {
-            ViewRule viewRule = viewRules.get(mCurIndex);
+            RuleRecord viewRule = viewRules.get(mCurIndex);
             if (item.getItemId() == R.id.menu_delete_rule) {
                 mSharedViewModel.deleteRule(viewRule);
                 NavHostFragment.findNavController(this).popBackStack();
@@ -159,17 +159,17 @@ public final class ViewRuleDetailsContainerFragment extends Fragment {
 
     static final class DetailFragmentStateAdapter extends FragmentStateAdapter {
 
-        final List<ViewRule> mData = new ArrayList<>();
+        final List<RuleRecord> mData = new ArrayList<>();
 
         public DetailFragmentStateAdapter(@NonNull Fragment fragment) {
             super(fragment);
         }
 
-        public List<ViewRule> getData() {
+        public List<RuleRecord> getData() {
             return mData;
         }
 
-        public void setData(List<ViewRule> data) {
+        public void setData(List<RuleRecord> data) {
             mData.clear();
             mData.addAll(data);
         }
@@ -177,9 +177,9 @@ public final class ViewRuleDetailsContainerFragment extends Fragment {
         @NonNull
         @Override
         public Fragment createFragment(int position) {
-            ViewRule viewRule = mData.get(position);
-            ViewRuleDetailsFragment fragment = new ViewRuleDetailsFragment();
-            fragment.setViewRule(viewRule);
+            RuleRecord viewRule = mData.get(position);
+            RuleRecordDetailsFragment fragment = new RuleRecordDetailsFragment();
+            fragment.setRuleRecord(viewRule);
             return fragment;
         }
 

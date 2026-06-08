@@ -24,14 +24,14 @@ import com.kaisar.xposed.godmode.injection.ModuleResources;
 import com.kaisar.xposed.godmode.engine.matcher.ViewFinder;
 import com.kaisar.xposed.godmode.engine.traversal.ViewTraversal;
 import com.kaisar.xposed.godmode.engine.util.FieldMapper;
-import com.kaisar.xposed.godmode.injection.editor.ViewRuleFactory;
+import com.kaisar.xposed.godmode.injection.editor.RuleRecordFactory;
 import com.kaisar.xposed.godmode.injection.editor.BitmapUtils;
 import com.kaisar.xposed.godmode.injection.util.ViewUtils;
 import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
 import com.kaisar.xposed.godmode.injection.util.GmResources;
 import com.kaisar.xposed.godmode.injection.util.Logger;
 import com.kaisar.xposed.godmode.injection.util.TaskExecutor;
-import com.kaisar.xposed.godmode.rule.ViewRule;
+import com.kaisar.xposed.godmode.rule.RuleRecord;
 
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -66,7 +66,7 @@ public class PropertyEditorPanel {
     private HashMap<String, Bitmap> mPendingModBitmaps = new HashMap<>();
 
     // 待保存的修改规则
-    final HashMap<String, ViewRule> mTempModifications = new HashMap<>();
+    final HashMap<String, RuleRecord> mTempModifications = new HashMap<>();
 
     // 在实时预览修改前捕获的视图原始状态
     private ViewGroup.MarginLayoutParams mSavedLayoutParams;
@@ -357,7 +357,7 @@ public class PropertyEditorPanel {
 
     // ---- 应用修改 / 保存 ----
 
-    /** 从当前 UI 状态构建 ViewRule 并存入临时修改集合 */
+    /** 从当前 UI 状态构建 RuleRecord 并存入临时修改集合 */
     private void applyModification(View view, SeekBar widthSeek, SeekBar heightSeek,
                                     SeekBar alphaSeek, EditText textInput) {
         int w = widthSeek.getProgress();
@@ -365,9 +365,9 @@ public class PropertyEditorPanel {
         float a = alphaSeek.getProgress() / 255f;
 
         String viewKey = ViewUtils.getViewKey(view);
-        ViewRule rule = mTempModifications.get(viewKey);
+        RuleRecord rule = mTempModifications.get(viewKey);
         if (rule == null) {
-            rule = ViewRuleFactory.makeModifyRule(view);
+            rule = RuleRecordFactory.makeModifyRule(view);
             // 用 saveViewState 中捕获的原始值覆盖 originals
             rule.origWidth = mSavedWidth > 0 ? mSavedWidth : mSavedPixelWidth;
             rule.origHeight = mSavedHeight > 0 ? mSavedHeight : mSavedPixelHeight;
@@ -413,7 +413,7 @@ public class PropertyEditorPanel {
             return;
         }
         String pkg = activity.getPackageName();
-        for (ViewRule rule : mTempModifications.values()) {
+        for (RuleRecord rule : mTempModifications.values()) {
             if ("pending".equals(rule.modImagePath)) {
                 StringBuilder sb = new StringBuilder(rule.activityClass);
                 if (rule.depth != null) {
@@ -443,9 +443,9 @@ public class PropertyEditorPanel {
         if (modifyPanel != null) modifyPanel.setVisibility(View.INVISIBLE);
         if (maskView != null) maskView.setVisibility(View.INVISIBLE);
 
-        final List<ViewRule> rulesToSave = new ArrayList<>(mTempModifications.values());
-        final HashMap<ViewRule, Bitmap> snapshots = new HashMap<>();
-        for (ViewRule rule : rulesToSave) {
+        final List<RuleRecord> rulesToSave = new ArrayList<>(mTempModifications.values());
+        final HashMap<RuleRecord, Bitmap> snapshots = new HashMap<>();
+        for (RuleRecord rule : rulesToSave) {
             try {
                 View view;
                 if (rule.repeatable) {
@@ -477,7 +477,7 @@ public class PropertyEditorPanel {
         android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
         TaskExecutor.executeIo(() -> {
             boolean allOk = true;
-            for (ViewRule rule : rulesToSave) {
+            for (RuleRecord rule : rulesToSave) {
                 Bitmap snapshot = snapshots.get(rule);
                 try {
                     if (!GodModeManager.getDefault().writeRule(pkg, rule, snapshot)) {
@@ -545,9 +545,9 @@ public class PropertyEditorPanel {
                                     mPendingImageBitmap = bitmap;
                                     ((ImageView) targetView).setImageBitmap(bitmap);
                                     String viewKey = ViewUtils.getViewKey(targetView);
-                                    ViewRule rule = mTempModifications.get(viewKey);
+                                    RuleRecord rule = mTempModifications.get(viewKey);
                                     if (rule == null) {
-                                        rule = ViewRuleFactory.makeModifyRule(targetView);
+                                        rule = RuleRecordFactory.makeModifyRule(targetView);
                                         mTempModifications.put(viewKey, rule);
                                     }
                                     rule.modImagePath = "pending";

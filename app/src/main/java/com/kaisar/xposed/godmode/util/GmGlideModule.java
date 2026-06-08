@@ -25,7 +25,7 @@ import com.bumptech.glide.signature.ObjectKey;
 import static com.kaisar.xposed.godmode.engine.util.CommonUtils.recycleNullableBitmap;
 
 import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
-import com.kaisar.xposed.godmode.rule.ViewRule;
+import com.kaisar.xposed.godmode.rule.RuleRecord;
 
 import java.io.ByteArrayOutputStream;
 import java.io.FileNotFoundException;
@@ -36,14 +36,14 @@ public class GmGlideModule extends AppGlideModule {
 
     @Override
     public void registerComponents(@NonNull Context context, @NonNull Glide glide, @NonNull Registry registry) {
-        registry.prepend(ViewRule.class, Bitmap.class, new RuleModelLoaderFactory());
+        registry.prepend(RuleRecord.class, Bitmap.class, new RuleModelLoaderFactory());
     }
 
-    static class RuleModelLoaderFactory implements ModelLoaderFactory<ViewRule, Bitmap> {
+    static class RuleModelLoaderFactory implements ModelLoaderFactory<RuleRecord, Bitmap> {
 
         @NonNull
         @Override
-        public ModelLoader<ViewRule, Bitmap> build(@NonNull MultiModelLoaderFactory multiFactory) {
+        public ModelLoader<RuleRecord, Bitmap> build(@NonNull MultiModelLoaderFactory multiFactory) {
             return new RuleModelLoader();
         }
 
@@ -52,30 +52,30 @@ public class GmGlideModule extends AppGlideModule {
         }
     }
 
-    static class RuleModelLoader implements ModelLoader<ViewRule, Bitmap> {
+    static class RuleModelLoader implements ModelLoader<RuleRecord, Bitmap> {
 
         @Override
-        public LoadData<Bitmap> buildLoadData(@NonNull ViewRule viewRule, int width, int height, @NonNull Options options) {
+        public LoadData<Bitmap> buildLoadData(@NonNull RuleRecord viewRule, int width, int height, @NonNull Options options) {
             return new LoadData<>(new ObjectKey(viewRule), new RuleDataFetcher(viewRule));
         }
 
         @Override
-        public boolean handles(@NonNull ViewRule viewRule) {
+        public boolean handles(@NonNull RuleRecord viewRule) {
             return true;
         }
     }
 
     static class RuleDataFetcher implements DataFetcher<Bitmap> {
 
-        final ViewRule mViewRule;
+        final RuleRecord mRuleRecord;
 
-        public RuleDataFetcher(ViewRule viewRule) {
-            mViewRule = viewRule;
+        public RuleDataFetcher(RuleRecord viewRule) {
+            mRuleRecord = viewRule;
         }
 
         @Override
         public void loadData(@NonNull Priority priority, @NonNull DataCallback<? super Bitmap> callback) {
-            ParcelFileDescriptor pfd = GodModeManager.getDefault().openImageFileDescriptor(mViewRule.imagePath);
+            ParcelFileDescriptor pfd = GodModeManager.getDefault().openImageFileDescriptor(mRuleRecord.imagePath);
             if (pfd != null) {
                 try {
                     InputStream in = new ParcelFileDescriptor.AutoCloseInputStream(pfd);
@@ -86,11 +86,11 @@ public class GmGlideModule extends AppGlideModule {
                         buffer.write(temp, 0, n);
                     }
                     Bitmap bitmap = BitmapFactory.decodeByteArray(buffer.toByteArray(), 0, buffer.size());
-                if (mViewRule.x >= 0 && mViewRule.y >= 0 && mViewRule.width > 0 && mViewRule.height > 0
+                if (mRuleRecord.x >= 0 && mRuleRecord.y >= 0 && mRuleRecord.width > 0 && mRuleRecord.height > 0
                         && bitmap != null
-                        && mViewRule.x + mViewRule.width <= bitmap.getWidth()
-                        && mViewRule.y + mViewRule.height <= bitmap.getHeight()) {
-                    Bitmap croppedBitmap = Bitmap.createBitmap(bitmap, mViewRule.x, mViewRule.y, mViewRule.width, mViewRule.height);
+                        && mRuleRecord.x + mRuleRecord.width <= bitmap.getWidth()
+                        && mRuleRecord.y + mRuleRecord.height <= bitmap.getHeight()) {
+                    Bitmap croppedBitmap = Bitmap.createBitmap(bitmap, mRuleRecord.x, mRuleRecord.y, mRuleRecord.width, mRuleRecord.height);
                     Bitmap markedBitmap = Bitmap.createBitmap(croppedBitmap.getWidth(), croppedBitmap.getHeight(), Bitmap.Config.ARGB_8888);
                     Canvas canvas = new Canvas(markedBitmap);
                     canvas.drawBitmap(croppedBitmap, 0, 0, null);
@@ -108,7 +108,7 @@ public class GmGlideModule extends AppGlideModule {
                     callback.onLoadFailed(e);
                 }
             } else {
-                callback.onLoadFailed(new FileNotFoundException(mViewRule.imagePath));
+                callback.onLoadFailed(new FileNotFoundException(mRuleRecord.imagePath));
             }
         }
 
