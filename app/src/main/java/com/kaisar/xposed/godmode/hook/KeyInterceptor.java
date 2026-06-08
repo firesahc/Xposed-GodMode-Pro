@@ -29,7 +29,7 @@ import com.kaisar.xposed.godmode.injection.util.ViewUtils;
 
 import com.kaisar.xposed.godmode.injection.util.GmResources;
 import com.kaisar.xposed.godmode.injection.util.Logger;
-import com.kaisar.xposed.godmode.injection.util.Property;
+import com.kaisar.xposed.godmode.engine.util.Property;
 import com.kaisar.xposed.godmode.injection.util.ToolbarVisibilityController;
 import com.kaisar.xposed.godmode.injection.editor.overlay.MaskView;
 

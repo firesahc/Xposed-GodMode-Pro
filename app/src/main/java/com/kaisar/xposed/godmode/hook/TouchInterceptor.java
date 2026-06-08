@@ -18,7 +18,7 @@ import com.kaisar.xposed.godmode.injection.editor.gesture.GestureDispatcher;
 import com.kaisar.xposed.godmode.injection.editor.gesture.ModifyGestureHandler;
 import com.kaisar.xposed.godmode.injection.editor.gesture.RemoveGestureHandler;
 import com.kaisar.xposed.godmode.injection.util.Logger;
-import com.kaisar.xposed.godmode.injection.util.Property;
+import com.kaisar.xposed.godmode.engine.util.Property;
 
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedHelpers;

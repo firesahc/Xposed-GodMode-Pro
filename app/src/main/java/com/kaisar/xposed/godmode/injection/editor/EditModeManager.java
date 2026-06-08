@@ -1,7 +1,7 @@
 package com.kaisar.xposed.godmode.injection.editor;
 
 import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
-import com.kaisar.xposed.godmode.injection.util.Property;
+import com.kaisar.xposed.godmode.engine.util.Property;
 
 /**
  * 编辑模式管理器 — 统一编辑模式状态切换逻辑。
