@@ -15,6 +15,13 @@ import com.google.gson.annotations.SerializedName;
 
 import java.util.Arrays;
 
+/**
+ * app 模块的 ViewRule — Parcelable（IPC 序列化）+ Gson @SerializedName（持久化）。
+ * <p>
+ * 【同步保障】对方文件: {@code engine/.../engine/rule/ViewRule.java}（纯 POJO 版）
+ * <br>引擎字段总数: 37 &nbsp;|&nbsp; app 字段总数: 37
+ * <br>若此处增减字段，请同步修改对方文件的同名字段和 clone()/equals()/hashCode()。
+ */
 @Keep
 public final class ViewRule implements Parcelable, Cloneable {
 

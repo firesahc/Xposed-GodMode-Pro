@@ -5,6 +5,10 @@ import java.util.Arrays;
 /**
  * 引擎轻量版 ViewRule — 纯 POJO，不依赖 Parcelable 或 Gson 注解。
  * <p>
+ * 【同步保障】对方文件: {@code app/.../rule/ViewRule.java}（Parcelable 版，带 @SerializedName）
+ * <br>引擎字段总数: 37 &nbsp;|&nbsp; app 字段总数: 37
+ * <br>若此处增减字段，请同步修改对方文件的同名字段、Parcel 读写、clone() 和 equals()/hashCode()。
+ * <p>
  * 字段与 app 模块的 {@code com.kaisar.xposed.godmode.rule.ViewRule} 对齐，
  * 通过 {@link com.kaisar.xposed.godmode.engine.util.FieldMapper} 实现双向转换。
  * <p>

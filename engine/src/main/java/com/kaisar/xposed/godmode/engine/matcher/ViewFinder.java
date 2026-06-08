@@ -1,6 +1,6 @@
 package com.kaisar.xposed.godmode.engine.matcher;
 
-import android.app.Activity;
+import android.app.Activity; // kept for @Deprecated backward-compat methods only
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.res.Resources;
@@ -35,7 +35,7 @@ public final class ViewFinder {
     private static final String TAG = "ViewFinder";
     private static final int MAX_REPEATABLE_RESULTS = GmConstants.MAX_REPEATABLE_RESULTS;
 
-    private static final Map<Activity, List<WeakReference<ViewGroup>>> sRecyclerViewCache
+    private static final Map<ViewGroup, List<WeakReference<ViewGroup>>> sRecyclerViewCache
             = new WeakHashMap<>();
 
     private static final CompositeMatcher sMatcher = new CompositeMatcher();
@@ -50,14 +50,14 @@ public final class ViewFinder {
     /**
      * 根据规则匹配视图 — 优先使用 {@link CompositeMatcher}，失败时回退到传统匹配。
      *
-     * @param activity 当前 Activity
-     * @param rule     engine ViewRule
+     * @param decorView   当前 Activity 的 DecorView
+     * @param rule        engine ViewRule
+     * @param pm          PackageManager（用于 strict mode 检查）
+     * @param packageName 目标包名
      * @return 匹配的视图，或 null
      */
-    public static View findViewBestMatch(Activity activity, ViewRule rule) {
-        if (activity == null || activity.getWindow() == null) return null;
-        ViewGroup decorView = (ViewGroup) activity.getWindow().getDecorView();
-
+    public static View findViewBestMatch(ViewGroup decorView, ViewRule rule,
+                                          PackageManager pm, String packageName) {
         // 优先尝试 engine 组合匹配器
         try {
             View matched = sMatcher.matchView(decorView, rule);
@@ -67,7 +67,7 @@ public final class ViewFinder {
         }
 
         // 兜底：传统匹配
-        boolean strictMode = checkStrictMode(activity, rule);
+        boolean strictMode = checkStrictMode(pm, packageName, rule);
 
         if (rule.depth != null && rule.depth.length > 0) {
             Log.d(TAG, "match view by depth (primary anchor)");
@@ -91,7 +91,7 @@ public final class ViewFinder {
 
         if (!TextUtils.isEmpty(rule.resourceName)) {
             Log.d(TAG, "match view by resource name (primary anchor)");
-            View viewByRes = activity.findViewById(getViewId(rule, activity.getResources()));
+            View viewByRes = decorView.findViewById(getViewId(rule, decorView.getResources()));
             if (viewByRes != null) {
                 View matched = matchView(viewByRes, rule, strictMode);
                 if (matched != null) return matched;
@@ -124,20 +124,51 @@ public final class ViewFinder {
     }
 
     /**
-     * 查找所有匹配的视图 — repeatable 规则优先搜索 RecyclerView。
+     * 根据规则匹配视图 — 优先使用 {@link CompositeMatcher}，失败时回退到传统匹配。
+     *
+     * @deprecated 使用 {@link #findViewBestMatch(ViewGroup, ViewRule, PackageManager, String)}
      */
-    public static List<View> findAllViewsBestMatch(Activity activity, ViewRule rule) {
+    @Deprecated
+    public static View findViewBestMatch(Activity activity, ViewRule rule) {
+        if (activity == null || activity.getWindow() == null) return null;
+        return findViewBestMatch((ViewGroup) activity.getWindow().getDecorView(), rule,
+                activity.getPackageManager(), activity.getPackageName());
+    }
+
+    /**
+     * 查找所有匹配的视图 — repeatable 规则优先搜索 RecyclerView。
+     *
+     * @param decorView   当前 Activity 的 DecorView
+     * @param rule        engine ViewRule
+     * @param pm          PackageManager（用于 strict mode 检查）
+     * @param packageName 目标包名
+     * @return 匹配的视图列表
+     */
+    public static List<View> findAllViewsBestMatch(ViewGroup decorView, ViewRule rule,
+                                                    PackageManager pm, String packageName) {
         if (rule.isRepeatable()) {
-            List<View> results = findViewsInRecyclers(activity, rule);
+            List<View> results = findViewsInRecyclers(decorView, rule);
             if (!results.isEmpty()) return results;
         }
-        View single = findViewBestMatch(activity, rule);
+        View single = findViewBestMatch(decorView, rule, pm, packageName);
         if (single != null) {
             List<View> list = new ArrayList<>();
             list.add(single);
             return list;
         }
         return Collections.emptyList();
+    }
+
+    /**
+     * 查找所有匹配的视图 — repeatable 规则优先搜索 RecyclerView。
+     *
+     * @deprecated 使用 {@link #findAllViewsBestMatch(ViewGroup, ViewRule, PackageManager, String)}
+     */
+    @Deprecated
+    public static List<View> findAllViewsBestMatch(Activity activity, ViewRule rule) {
+        if (activity == null || activity.getWindow() == null) return Collections.emptyList();
+        return findAllViewsBestMatch((ViewGroup) activity.getWindow().getDecorView(), rule,
+                activity.getPackageManager(), activity.getPackageName());
     }
 
     /**
@@ -259,12 +290,15 @@ public final class ViewFinder {
     // =========================================================================
 
     /**
-     * 在 Activity 中按 RecyclerView 匹配 repeatable 规则。
+     * 在 DecorView 中按 RecyclerView 匹配 repeatable 规则。
+     *
+     * @param decorView 当前 Activity 的 DecorView
+     * @param rule      engine ViewRule
+     * @return 匹配的视图列表
      */
-    public static List<View> findViewsInRecyclers(Activity activity, ViewRule rule) {
-        if (activity == null || activity.getWindow() == null) return Collections.emptyList();
+    public static List<View> findViewsInRecyclers(ViewGroup decorView, ViewRule rule) {
         List<View> results = new ArrayList<>();
-        List<WeakReference<ViewGroup>> cached = sRecyclerViewCache.get(activity);
+        List<WeakReference<ViewGroup>> cached = sRecyclerViewCache.get(decorView);
         if (cached != null) {
             for (WeakReference<ViewGroup> ref : cached) {
                 ViewGroup rv = ref.get();
@@ -275,12 +309,22 @@ public final class ViewFinder {
             if (!results.isEmpty()) return results;
         }
         List<ViewGroup> foundRecyclers = new ArrayList<>();
-        ViewGroup decorView = (ViewGroup) activity.getWindow().getDecorView();
         collectRecyclerViewMatches(decorView, rule, results, foundRecyclers);
         List<WeakReference<ViewGroup>> cacheEntry = new ArrayList<>();
         for (ViewGroup rv : foundRecyclers) cacheEntry.add(new WeakReference<>(rv));
-        sRecyclerViewCache.put(activity, cacheEntry);
+        sRecyclerViewCache.put(decorView, cacheEntry);
         return results;
+    }
+
+    /**
+     * 在 Activity 中按 RecyclerView 匹配 repeatable 规则。
+     *
+     * @deprecated 使用 {@link #findViewsInRecyclers(ViewGroup, ViewRule)}
+     */
+    @Deprecated
+    public static List<View> findViewsInRecyclers(Activity activity, ViewRule rule) {
+        if (activity == null || activity.getWindow() == null) return Collections.emptyList();
+        return findViewsInRecyclers((ViewGroup) activity.getWindow().getDecorView(), rule);
     }
 
     private static void collectRecyclerViewMatches(ViewGroup parent, ViewRule rule,
@@ -340,21 +384,12 @@ public final class ViewFinder {
     // 传统匹配（legacy fallback）
     // =========================================================================
 
-    private static boolean checkStrictMode(Activity activity, ViewRule rule) {
+    private static boolean checkStrictMode(PackageManager pm, String packageName, ViewRule rule) {
         try {
-            ClassLoader cl = activity.getClassLoader();
-            Class<?> buildConfigClass = cl.loadClass(
-                    activity.getPackageName() + ".BuildConfig");
-            int versionCode = buildConfigClass.getField("VERSION_CODE").getInt(null);
-            return versionCode == rule.matchVersionCode;
-        } catch (Exception ignore) {
-            try {
-                PackageInfo packageInfo = activity.getPackageManager()
-                        .getPackageInfo(activity.getPackageName(), 0);
-                return packageInfo.versionCode == rule.matchVersionCode;
-            } catch (PackageManager.NameNotFoundException e) {
-                Log.w(TAG, "Failed to get package info for strict mode check", e);
-            }
+            PackageInfo packageInfo = pm.getPackageInfo(packageName, 0);
+            return packageInfo.versionCode == rule.matchVersionCode;
+        } catch (PackageManager.NameNotFoundException e) {
+            Log.w(TAG, "Failed to get package info for strict mode check", e);
         }
         return false;
     }
