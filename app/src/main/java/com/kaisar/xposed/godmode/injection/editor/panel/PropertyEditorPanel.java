@@ -21,7 +21,9 @@ import android.widget.Toast;
 
 import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.injection.ModuleResources;
-import com.kaisar.xposed.godmode.injection.ViewHelper;
+import com.kaisar.xposed.godmode.engine.matcher.ViewFinder;
+import com.kaisar.xposed.godmode.engine.traversal.ViewTraversal;
+import com.kaisar.xposed.godmode.engine.util.FieldMapper;
 import com.kaisar.xposed.godmode.injection.editor.ViewRuleFactory;
 import com.kaisar.xposed.godmode.injection.editor.BitmapUtils;
 import com.kaisar.xposed.godmode.injection.util.ViewUtils;
@@ -445,9 +447,17 @@ public class PropertyEditorPanel {
         final HashMap<ViewRule, Bitmap> snapshots = new HashMap<>();
         for (ViewRule rule : rulesToSave) {
             try {
-                View view = rule.repeatable
-                        ? ViewHelper.findViewBestMatch(activity, rule)
-                        : ViewHelper.findViewByDepth(activity, rule.depth);
+                View view;
+                if (rule.repeatable) {
+                    com.kaisar.xposed.godmode.engine.rule.ViewRule engineRule =
+                            new com.kaisar.xposed.godmode.engine.rule.ViewRule();
+                    FieldMapper.copyFields(rule, engineRule);
+                    view = ViewFinder.findViewBestMatch(activity, engineRule);
+                } else {
+                    view = activity != null && activity.getWindow() != null && rule.depth != null
+                            ? ViewTraversal.findViewByDepth(activity.getWindow().getDecorView(), rule.depth)
+                            : null;
+                }
                 if (view != null) {
                     Bitmap snapshot = BitmapUtils.snapshotView(ViewUtils.findTopParentViewByChildView(view));
                     BitmapUtils.drawRuleMask(snapshot, rule);
@@ -513,8 +523,10 @@ public class PropertyEditorPanel {
 
                                     View targetView = null;
                                     if (mModifyingViewDepth != null && mModifyingViewActClass != null
-                                            && mModifyingViewActClass.equals(currentActivity.getComponentName().getClassName())) {
-                                        targetView = ViewHelper.findViewByDepth(currentActivity, mModifyingViewDepth);
+                                            && mModifyingViewActClass.equals(currentActivity.getComponentName().getClassName())
+                                            && currentActivity.getWindow() != null) {
+                                        targetView = ViewTraversal.findViewByDepth(
+                                                currentActivity.getWindow().getDecorView(), mModifyingViewDepth);
                                         if (targetView instanceof ImageView) {
                                             mPendingImageView = (ImageView) targetView;
                                             mTargetView = targetView;

@@ -10,7 +10,9 @@ import android.view.View;
 import android.widget.TextView;
 
 import com.kaisar.xposed.godmode.BuildConfig;
-import com.kaisar.xposed.godmode.injection.ViewHelper;
+import com.kaisar.xposed.godmode.engine.matcher.ViewFinder;
+import com.kaisar.xposed.godmode.engine.util.FieldMapper;
+import com.kaisar.xposed.godmode.hook.KeyInterceptor;
 import com.kaisar.xposed.godmode.injection.util.ViewUtils;
 import com.kaisar.xposed.godmode.rule.ViewRule;
 
@@ -68,7 +70,7 @@ public final class ViewRuleFactory {
                 x, y, width, height, viewHierarchyDepth,
                 activityClassName, viewClassName, resourceName, text, description,
                 View.INVISIBLE, System.currentTimeMillis());
-        ViewHelper.populateRepeatableInfo(v, rule);
+        populateRepeatableInfo(v, rule);
         return rule;
     }
 
@@ -101,7 +103,7 @@ public final class ViewRuleFactory {
         rule.ruleTag = "modify";
         rule.captureOriginals(view);
         fillCoordinates(rule, view);
-        ViewHelper.populateRepeatableInfo(view, rule);
+        populateRepeatableInfo(view, rule);
         return rule;
     }
 
@@ -118,6 +120,31 @@ public final class ViewRuleFactory {
         rule.y = out[1];
         rule.width = v.getWidth();
         rule.height = v.getHeight();
+    }
+
+    // =========================================================================
+    // 以下方法从 ViewHelper 内联迁移（ViewHelper @Deprecated 即将退役）
+    // =========================================================================
+
+    /** 将 app 模块 ViewRule 转换为 engine 模块 ViewRule */
+    private static com.kaisar.xposed.godmode.engine.rule.ViewRule toEngine(ViewRule appRule) {
+        com.kaisar.xposed.godmode.engine.rule.ViewRule engineRule =
+                new com.kaisar.xposed.godmode.engine.rule.ViewRule();
+        FieldMapper.copyFields(appRule, engineRule);
+        return engineRule;
+    }
+
+    /** 填充可重复规则信息（itemPath、itemRootClass、parentClass） */
+    private static void populateRepeatableInfo(View v, ViewRule rule) {
+        boolean isInfoFlowMode = KeyInterceptor.isInfoFlowMode();
+        com.kaisar.xposed.godmode.engine.rule.ViewRule engineRule = toEngine(rule);
+        ViewFinder.populateRepeatableInfo(v, engineRule, isInfoFlowMode);
+        if (engineRule.repeatable) {
+            rule.itemPath = engineRule.itemPath;
+            rule.itemRootClass = engineRule.itemRootClass;
+            rule.parentClass = engineRule.parentClass;
+            rule.repeatable = true;
+        }
     }
 }
 
