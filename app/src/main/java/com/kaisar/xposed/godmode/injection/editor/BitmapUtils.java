@@ -40,6 +40,7 @@ public final class BitmapUtils {
      * @param rule   视图规则（提供 x/y/width/height）
      */
     public static void drawRuleMask(Bitmap bitmap, RuleRecord rule) {
+        if (bitmap == null || rule == null) return;
         Paint markPaint = new Paint();
         markPaint.setColor(Color.RED);
         markPaint.setAlpha(100);

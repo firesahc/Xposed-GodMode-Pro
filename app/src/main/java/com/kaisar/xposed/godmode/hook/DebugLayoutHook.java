@@ -134,8 +134,12 @@ public final class DebugLayoutHook {
 
         @Override
         protected void beforeHookedMethod(MethodHookParam param) {
-            if (mDebugLayout && "debug.layout".equals(param.args[0])) {
-                param.setResult(true);
+            try {
+                if (mDebugLayout && "debug.layout".equals(param.args[0])) {
+                    param.setResult(true);
+                }
+            } catch (Throwable t) {
+                Logger.w(TAG, "[DebugLayout] LegacyHook error (suppressed): " + t.getMessage());
             }
         }
     }
@@ -144,8 +148,12 @@ public final class DebugLayoutHook {
 
         @Override
         protected void beforeHookedMethod(MethodHookParam param) {
-            if (mDebugLayout && "debug.layout".equals(param.args[0])) {
-                param.setResult("true");
+            try {
+                if (mDebugLayout && "debug.layout".equals(param.args[0])) {
+                    param.setResult("true");
+                }
+            } catch (Throwable t) {
+                Logger.w(TAG, "[DebugLayout] ModernHook error (suppressed): " + t.getMessage());
             }
         }
     }
@@ -154,8 +162,12 @@ public final class DebugLayoutHook {
 
         @Override
         protected void beforeHookedMethod(MethodHookParam param) {
-            if (mDebugLayout) {
-                param.setResult(Optional.of(true));
+            try {
+                if (mDebugLayout) {
+                    param.setResult(Optional.of(true));
+                }
+            } catch (Throwable t) {
+                Logger.w(TAG, "[DebugLayout] DisplayHook error (suppressed): " + t.getMessage());
             }
         }
     }

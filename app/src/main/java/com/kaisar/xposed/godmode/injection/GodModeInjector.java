@@ -61,12 +61,12 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
     // 初始化为安全默认值，防止在观察者回调到达前出现 null 拆箱 NPE。
     // Property 的 AtomicReference 默认为 null，所有读取方需能处理未初始化状态。
     public final static Property<Boolean> switchProp = new Property<>(false);
-    public static XC_LoadPackage.LoadPackageParam loadPackageParam;
+    public static volatile XC_LoadPackage.LoadPackageParam loadPackageParam;
 
     // 双轨事件系统 — EventBus 与 Property 并行运行，逐步迁移监听方
     private static final EventBus sEventBus = EventBus.getDefault();
 
-    private static State state = State.UNKNOWN;
+    private static volatile State state = State.UNKNOWN;
     private static final KeyInterceptor sKeyInterceptor = new KeyInterceptor();
 
     /** 供子组件获取 KeyInterceptor 实例 */

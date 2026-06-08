@@ -43,10 +43,10 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
     private static final int WRITE_RULE = 0x00002;
     private static final int DELETE_RULE = 0x00004;
     private static final int DELETE_RULES = 0x00008;
-    private static final int UPDATE_RULE = 0x000016;
-    static final int CLEAN_OBSERVERS = 0x000032;
-    private static final int CLEAN_ORPHANS = 0x000064;
-    private static final int UPDATE_IMAGE_PATH = 0x000128;
+    private static final int UPDATE_RULE = 0x000010;
+    static final int CLEAN_OBSERVERS = 0x000020;
+    private static final int CLEAN_ORPHANS = 0x000040;
+    private static final int UPDATE_IMAGE_PATH = 0x000080;
 
     private static final long ORPHAN_CLEAN_INTERVAL = 120_000L;
 
@@ -245,7 +245,8 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
     // ===================================================================
 
     @Override
-    public boolean hasLight() {
+    public boolean hasLight() throws RemoteException {
+        mPermissionEnforcer.enforcePermission("has light fail permission denied");
         return true;
     }
 
@@ -261,7 +262,8 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
     }
 
     @Override
-    public boolean isInEditMode() {
+    public boolean isInEditMode() throws RemoteException {
+        mPermissionEnforcer.enforcePermission("is in edit mode fail permission denied");
         return mInEditMode;
     }
 
@@ -423,7 +425,8 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
     // ---- 工具栏偏好 ----
 
     @Override
-    public String getToolbarHiddenItems() {
+    public String getToolbarHiddenItems() throws RemoteException {
+        mPermissionEnforcer.enforcePermission("get toolbar hidden items fail permission denied");
         return mToolbarHiddenItems;
     }
 

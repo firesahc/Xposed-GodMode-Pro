@@ -84,7 +84,7 @@ public final class KeyInterceptor extends XC_MethodHook
     private final NodeSelectorPanel mNodePanel = new NodeSelectorPanel();
     final PropertyEditorPanel mPropertyEditor = new PropertyEditorPanel();
     private final SeekBarHandler mSeekBarHandler = new SeekBarHandler(mNodePanel, mPropertyEditor);
-    private Activity mCurrentActivity;
+    private WeakReference<Activity> mCurrentActivityRef = new WeakReference<>(null);
 
     /** 节点选择器面板按钮回调 */
     private final NodeSelectorPanel.Callbacks mNodePanelCallbacks =
@@ -123,14 +123,15 @@ public final class KeyInterceptor extends XC_MethodHook
     private final class VolumeKeyHook extends XC_MethodHook {
         @Override
         protected void beforeHookedMethod(MethodHookParam param) {
-            if (!GodModeInjector.switchProp.get() || TouchInterceptor.mDragging) return;
+            if (!GodModeInjector.switchProp.get() || TouchInterceptor.isDragging()) return;
             KeyEvent event = (KeyEvent) param.args[0];
             int action = event.getAction();
             int keyCode = event.getKeyCode();
             if (action == KeyEvent.ACTION_UP &&
                     (keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN)) {
-                if (!mNodePanel.isKeySelecting() && mCurrentActivity != null) {
-                    showNodeSelectPanel(mCurrentActivity);
+                Activity act = mCurrentActivityRef.get();
+                if (!mNodePanel.isKeySelecting() && act != null) {
+                    showNodeSelectPanel(act);
                 } else if (mNodePanel.isKeySelecting()) {
                     dismissNodeSelectPanel();
                 }
@@ -161,19 +162,21 @@ public final class KeyInterceptor extends XC_MethodHook
     // =========================================================================
 
     public void setActivity(final Activity a) {
-        if (mCurrentActivity != null && mCurrentActivity != a && mNodePanel.isKeySelecting()) {
+        Activity current = mCurrentActivityRef.get();
+        if (current != null && current != a && mNodePanel.isKeySelecting()) {
             dismissNodeSelectPanel();
         }
-        mCurrentActivity = a;
+        mCurrentActivityRef = new WeakReference<>(a);
     }
 
     public void setdisplay(Boolean display) {
-        if (mCurrentActivity == null) return;
+        Activity act = mCurrentActivityRef.get();
+        if (act == null) return;
         if (display == null) return;
         if (display && !GodModeInjector.switchProp.get()) return;
         if (display) {
             if (!mNodePanel.isKeySelecting()) {
-                showNodeSelectPanel(mCurrentActivity);
+                showNodeSelectPanel(act);
             }
         } else {
             dismissNodeSelectPanel();
@@ -223,7 +226,10 @@ public final class KeyInterceptor extends XC_MethodHook
     private void toggleInfoFlowMode() {
         mInfoFlowMode = !mInfoFlowMode;
         updateInfoFlowModeButton();
-        Toast.makeText(mCurrentActivity, GmResources.getString(mInfoFlowMode ? R.string.accessibility_info_flow_on : R.string.accessibility_info_flow_off), Toast.LENGTH_SHORT).show();
+        Activity act = mCurrentActivityRef.get();
+        if (act != null) {
+            Toast.makeText(act, GmResources.getString(mInfoFlowMode ? R.string.accessibility_info_flow_on : R.string.accessibility_info_flow_off), Toast.LENGTH_SHORT).show();
+        }
     }
     private void updateInfoFlowModeButton() {
         View panelView = mNodePanel.getPanelView();
