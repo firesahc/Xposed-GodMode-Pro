@@ -12,7 +12,7 @@ import android.widget.TextView;
 import androidx.appcompat.widget.TooltipCompat;
 
 import com.kaisar.xposed.godmode.R;
-import com.kaisar.xposed.godmode.injection.editor.EditorInteractionMode;
+import com.kaisar.xposed.godmode.engine.EditorInteractionMode;
 import com.kaisar.xposed.godmode.injection.ModuleResources;
 import com.kaisar.xposed.godmode.injection.editor.overlay.MaskView;
 import com.kaisar.xposed.godmode.injection.util.GmResources;

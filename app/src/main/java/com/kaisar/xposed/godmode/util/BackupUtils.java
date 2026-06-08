@@ -18,6 +18,7 @@ import com.google.gson.JsonObject;
 import com.kaisar.xposed.godmode.GodModeApplication;
 import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
 import com.kaisar.xposed.godmode.engine.util.FileUtils;
+import com.kaisar.xposed.godmode.engine.util.ZipUtils;
 import com.kaisar.xposed.godmode.injection.util.Logger;
 import com.kaisar.xposed.godmode.rule.ViewRule;
 
