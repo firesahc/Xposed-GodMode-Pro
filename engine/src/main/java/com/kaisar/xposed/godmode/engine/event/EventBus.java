@@ -1,5 +1,7 @@
 package com.kaisar.xposed.godmode.engine.event;
 
+import android.util.Log;
+
 import java.lang.ref.WeakReference;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -82,7 +84,9 @@ public final class EventBus {
             try {
                 ref.method.invoke(subscriber, event);
             } catch (IllegalAccessException | InvocationTargetException e) {
-                // 订阅者方法执行异常 — 静默跳过
+                Log.w("EventBus", "Subscriber " + subscriber.getClass().getSimpleName()
+                        + "#" + ref.method.getName() + " threw: "
+                        + (e.getCause() != null ? e.getCause().getMessage() : e.getMessage()));
             }
         }
         if (dead != null) {

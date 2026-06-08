@@ -146,9 +146,12 @@ public final class ModifyApplier implements RuleApplier {
     private Bitmap loadModImage(String imagePath) {
         try (ParcelFileDescriptor pfd = mImageLoader.openImageFileDescriptor(imagePath)) {
             if (pfd != null) {
-                return BitmapFactory.decodeFileDescriptor(pfd.getFileDescriptor());
+                Bitmap bitmap = BitmapFactory.decodeFileDescriptor(pfd.getFileDescriptor());
+                if (bitmap != null) return bitmap;
             }
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            com.kaisar.xposed.godmode.injection.util.Logger.w(
+                    "ModifyApplier", "loadModImage failed: " + imagePath, e);
         }
         return null;
     }

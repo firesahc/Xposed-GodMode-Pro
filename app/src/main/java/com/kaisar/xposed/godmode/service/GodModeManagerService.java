@@ -123,33 +123,57 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
     }
 
     private void handleWriteRule(Message msg) {
+        // 步骤1：提取参数
+        Object[] args;
+        String packageName;
+        RuleRecord viewRule;
+        Bitmap snapshot;
+        String oldImagePath;
         try {
-            Object[] args = (Object[]) msg.obj;
-            String packageName = (String) args[0];
-            RuleRecord viewRule = (RuleRecord) args[1];
-            Bitmap snapshot = (Bitmap) args[2];
-            String oldImagePath = args.length > 3 ? (String) args[3] : null;
-            if (snapshot != null) {
+            args = (Object[]) msg.obj;
+            packageName = (String) args[0];
+            viewRule = (RuleRecord) args[1];
+            snapshot = (Bitmap) args[2];
+            oldImagePath = args.length > 3 ? (String) args[3] : null;
+        } catch (Exception e) {
+            mLogger.w("write rule: extract args failed", e);
+            return;
+        }
+        if (snapshot != null) {
+            // 步骤2a：删除旧图片文件
+            try {
                 if (oldImagePath != null && !android.text.TextUtils.isEmpty(oldImagePath)) {
                     FileUtils.delete(oldImagePath);
                 }
-                String newImagePath = mPersistManager.saveBitmap(snapshot,
-        mPersistManager.getAppDataDir(packageName));
-                if (newImagePath == null) {
-                    mLogger.w("write rule aborted: save snapshot failed", (Throwable) null);
-                    return;
-                }
-                mHandle.obtainMessage(UPDATE_IMAGE_PATH,
-                        new Object[]{packageName, viewRule, newImagePath}).sendToTarget();
-            } else {
+            } catch (Exception e) {
+                mLogger.w("write rule: delete old image failed", e);
+            }
+            // 步骤2b：保存新位图
+            String newImagePath;
+            try {
+                newImagePath = mPersistManager.saveBitmap(snapshot,
+                        mPersistManager.getAppDataDir(packageName));
+            } catch (Exception e) {
+                mLogger.w("write rule: save bitmap failed", e);
+                return;
+            }
+            if (newImagePath == null) {
+                mLogger.w("write rule aborted: save snapshot returned null");
+                return;
+            }
+            mHandle.obtainMessage(UPDATE_IMAGE_PATH,
+                    new Object[]{packageName, viewRule, newImagePath}).sendToTarget();
+        } else {
+            // 步骤2c：无位图 — 直接持久化规则 JSON 并通知观察者
+            try {
                 String json = (String) args[4];
                 ActRules snapshotRules = (ActRules) args[5];
                 mObserverManager.notifyObserverRuleChanged(packageName, snapshotRules);
                 mPersistManager.safePersistRules(packageName, json);
                 scheduleOrphanCleanup();
+            } catch (Exception e) {
+                mLogger.w("write rule: persist failed", e);
             }
-        } catch (Exception e) {
-            mLogger.w("write rule failed", e);
         }
     }
 

@@ -110,12 +110,12 @@ public final class ViewController {
                 }
                 View view = ViewFinder.findViewBestMatch(decorView, engineRule,
                         activity.getPackageManager(), packageName);
-                Preconditions.checkNotNull(view, "apply rule fail not match any view");
+                if (view == null) {
+                    Logger.w(TAG, "[ViewController] Failed: " + activity + "#" + rule.viewClass
+                            + " block failed: not match any view");
+                    continue;
+                }
                 if (applyRule(view, rule)) appliedCount++;
-            } catch (NullPointerException e) {
-                Logger.w(TAG, "[ViewController] Failed: " + activity + "#" + rule.viewClass
-                        + " block failed: " + e.getMessage());
-            }
         }
         if (appliedCount > 0) {
             Logger.d(TAG, "[ViewController] applied " + appliedCount + " rules for " + activity);
@@ -154,12 +154,12 @@ public final class ViewController {
                 }
                 View view = ViewFinder.findViewBestMatch(decorView, engineRule,
                         activity.getPackageManager(), packageName);
-                Preconditions.checkNotNull(view, "revoke rule fail can't found block view");
+                if (view == null) {
+                    Logger.w(TAG, "[ViewController] revoke rule fail (act=" + activity
+                            + "): not match any view");
+                    continue;
+                }
                 revokeRule(view, rule);
-            } catch (NullPointerException e) {
-                Logger.w(TAG, "[ViewController] revoke rule fail (act=" + activity + "): "
-                        + e.getMessage());
-            }
         }
     }
 

@@ -476,26 +476,33 @@ public class PropertyEditorPanel {
         android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
         TaskExecutor.executeIo(() -> {
             boolean allOk = true;
+            List<String> failedRules = new ArrayList<>();
             for (RuleRecord rule : rulesToSave) {
                 Bitmap snapshot = snapshots.get(rule);
                 try {
                     if (!GodModeManager.getDefault().writeRule(pkg, rule, snapshot)) {
                         allOk = false;
+                        failedRules.add(rule.activityClass + "#" + rule.viewClass);
                     }
                 } catch (Exception e) {
-                    Logger.e(TAG, "[ModifyPanel] saveAll: writeRule failed", e);
+                    Logger.e(TAG, "[ModifyPanel] saveAll: writeRule failed for "
+                            + rule.activityClass + "#" + rule.viewClass, e);
                     allOk = false;
+                    failedRules.add(rule.activityClass + "#" + rule.viewClass);
                 } finally {
                     recycleNullableBitmap(snapshot);
                 }
             }
             boolean finalAllOk = allOk;
+            String finalFailed = failedRules.isEmpty() ? "" :
+                    "失败: " + String.join(", ", failedRules);
             mainHandler.post(() -> {
                 if (nodeSelectorPanel != null) nodeSelectorPanel.setVisibility(View.VISIBLE);
                 if (modifyPanel != null) modifyPanel.setVisibility(View.VISIBLE);
                 if (maskView != null) maskView.setVisibility(View.VISIBLE);
                 Toast.makeText(activity,
-                        finalAllOk ? "修改已保存" : "部分修改保存失败", Toast.LENGTH_SHORT).show();
+                        finalAllOk ? "修改已保存" : "部分修改保存失败\n" + finalFailed,
+                        Toast.LENGTH_LONG).show();
             });
         });
     }
