@@ -51,7 +51,7 @@
             android:label="@string/toolbar_settings_title" />
     <fragment
             android:id="@+id/viewRuleListFragment"
-            android:name="com.kaisar.xposed.godmode.fragment.ViewRuleListFragment"
+            android:name="com.kaisar.xposed.godmode.fragment.RuleRecordListFragment"
             android:label="@string/title_app_rule">
         <action
                 android:id="@+id/action_viewRuleListFragment_to_viewRuleDetailsContainerFragment"
@@ -63,7 +63,7 @@
     </fragment>
     <fragment
             android:id="@+id/viewRuleDetailsContainerFragment"
-            android:name="com.kaisar.xposed.godmode.fragment.ViewRuleDetailsContainerFragment"
+            android:name="com.kaisar.xposed.godmode.fragment.RuleRecordDetailsContainerFragment"
             android:label="@string/title_rule_details">
         <argument
                 android:name="curIndex"

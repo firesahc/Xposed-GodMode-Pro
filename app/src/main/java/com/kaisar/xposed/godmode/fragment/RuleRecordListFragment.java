@@ -330,7 +330,7 @@ public final class RuleRecordListFragment extends Fragment {
             int rulePos = mAllRules.indexOf(rule);
             if (rulePos >= 0) {
                 NavHostFragment.findNavController(RuleRecordListFragment.this).navigate(
-                        RuleRecordListFragmentDirections.actionRuleRecordListFragmentToRuleRecordDetailsContainerFragment(rulePos));
+                        RuleRecordListFragmentDirections.actionViewRuleListFragmentToViewRuleDetailsContainerFragment(rulePos));
             }
         }
 
