@@ -13,7 +13,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * 反射字段映射器。
  * 用于 app 模块 ViewRule（Parcelable, 带 @SerializedName）与
- * engine 模块 ViewRule（纯 POJO）之间的字段级双向转换。
+ * engine 模块 RuleMatchSpec（纯 POJO）之间的字段级双向转换。
  * <p>
  * 内部使用 ConcurrentHashMap 缓存 Class → Field[] 映射，避免重复反射开销。
  */
@@ -67,7 +67,7 @@ public final class FieldMapper {
             targetMap.put(tf.getName(), tf);
         }
 
-        // DEBUG: 检测 source 有但 target 没有的字段（双重 ViewRule 不同步警告）
+        // DEBUG: 检测 source 有但 target 没有的字段（双重 RuleMatchSpec/RuleRecord 不同步警告）
         if (Log.isLoggable(TAG, Log.DEBUG)) {
             Set<String> sourceNames = new HashSet<>();
             for (Field sf : sourceFields) sourceNames.add(sf.getName());

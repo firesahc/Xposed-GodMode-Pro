@@ -127,9 +127,9 @@ public final class ViewRuleFactory {
     // =========================================================================
 
     /** 将 app 模块 ViewRule 转换为 engine 模块 ViewRule */
-    private static com.kaisar.xposed.godmode.engine.rule.ViewRule toEngine(ViewRule appRule) {
-        com.kaisar.xposed.godmode.engine.rule.ViewRule engineRule =
-                new com.kaisar.xposed.godmode.engine.rule.ViewRule();
+    private static com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec toEngine(ViewRule appRule) {
+        com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec engineRule =
+                new com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec();
         FieldMapper.copyFields(appRule, engineRule);
         return engineRule;
     }
@@ -137,7 +137,7 @@ public final class ViewRuleFactory {
     /** 填充可重复规则信息（itemPath、itemRootClass、parentClass） */
     private static void populateRepeatableInfo(View v, ViewRule rule) {
         boolean isInfoFlowMode = GodModeInjector.getKeyInterceptor().isInfoFlowMode();
-        com.kaisar.xposed.godmode.engine.rule.ViewRule engineRule = toEngine(rule);
+        com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec engineRule = toEngine(rule);
         ViewFinder.populateRepeatableInfo(v, engineRule, isInfoFlowMode);
         if (engineRule.repeatable) {
             rule.itemPath = engineRule.itemPath;

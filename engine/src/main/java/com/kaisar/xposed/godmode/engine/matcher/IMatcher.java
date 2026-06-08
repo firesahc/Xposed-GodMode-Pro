@@ -2,7 +2,7 @@ package com.kaisar.xposed.godmode.engine.matcher;
 
 import android.view.View;
 
-import com.kaisar.xposed.godmode.engine.rule.ViewRule;
+import com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec;
 
 import java.util.List;
 
@@ -13,8 +13,8 @@ import java.util.List;
 public interface IMatcher {
 
     /** 在视图树中查找单个最佳匹配视图 */
-    View matchView(View root, ViewRule rule);
+    View matchView(View root, RuleMatchSpec rule);
 
     /** 在视图树中查找所有匹配的视图（支持 RecyclerView 等重复结构） */
-    List<View> matchAllViews(View root, ViewRule rule);
+    List<View> matchAllViews(View root, RuleMatchSpec rule);
 }

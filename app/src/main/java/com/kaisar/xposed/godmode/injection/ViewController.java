@@ -84,9 +84,9 @@ public final class ViewController {
     }
 
     /** 将 app 模块的 ViewRule 转换为 engine 的 ViewRule。 */
-    private static com.kaisar.xposed.godmode.engine.rule.ViewRule toEngineRule(ViewRule appRule) {
-        com.kaisar.xposed.godmode.engine.rule.ViewRule engineRule =
-                new com.kaisar.xposed.godmode.engine.rule.ViewRule();
+    private static com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec toEngineRule(ViewRule appRule) {
+        com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec engineRule =
+                new com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec();
         FieldMapper.copyFields(appRule, engineRule);
         return engineRule;
     }
@@ -100,7 +100,7 @@ public final class ViewController {
         String packageName = activity.getPackageName();
         for (ViewRule rule : rules) {
             try {
-                com.kaisar.xposed.godmode.engine.rule.ViewRule engineRule = toEngineRule(rule);
+                com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec engineRule = toEngineRule(rule);
                 if (rule.isRepeatable()) {
                     List<View> views = ViewFinder.findAllViewsBestMatch(decorView, engineRule,
                             activity.getPackageManager(), packageName);
@@ -128,7 +128,7 @@ public final class ViewController {
     /** 应用单条规则。 */
     public boolean applyRule(View v, ViewRule viewRule) {
         if (v == null || viewRule == null) return false;
-        com.kaisar.xposed.godmode.engine.rule.ViewRule engineRule = toEngineRule(viewRule);
+        com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec engineRule = toEngineRule(viewRule);
         if (viewRule.isModifyRule()) {
             return getModifyApplier().apply(v, engineRule);
         } else {
@@ -144,7 +144,7 @@ public final class ViewController {
         String packageName = activity.getPackageName();
         for (ViewRule rule : rules) {
             try {
-                com.kaisar.xposed.godmode.engine.rule.ViewRule engineRule = toEngineRule(rule);
+                com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec engineRule = toEngineRule(rule);
                 if (rule.isRepeatable()) {
                     List<View> views = ViewFinder.findAllViewsBestMatch(decorView, engineRule,
                             activity.getPackageManager(), packageName);
@@ -169,7 +169,7 @@ public final class ViewController {
     /** 撤销单条规则。 */
     public void revokeRule(View v, ViewRule viewRule) {
         if (v == null || viewRule == null) return;
-        com.kaisar.xposed.godmode.engine.rule.ViewRule engineRule = toEngineRule(viewRule);
+        com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec engineRule = toEngineRule(viewRule);
         if (viewRule.isModifyRule()) {
             getModifyApplier().revoke(v, engineRule);
         } else {

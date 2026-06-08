@@ -5,7 +5,7 @@ import android.util.SparseArray;
 import android.view.View;
 import android.view.ViewGroup;
 
-import com.kaisar.xposed.godmode.engine.rule.ViewRule;
+import com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec;
 
 import java.lang.ref.WeakReference;
 
@@ -19,7 +19,7 @@ public final class RemoveApplier implements RuleApplier {
             = new SparseArray<>();
 
     @Override
-    public boolean apply(View view, ViewRule rule) {
+    public boolean apply(View view, RuleMatchSpec rule) {
         if (view == null || rule == null) return false;
         int cacheKey = rule.isRepeatable() ? identityKey(rule) : rule.hashCode();
         Pair<WeakReference<View>, ViewProperty> viewInfo = mBlockedViewCache.get(cacheKey);
@@ -52,7 +52,7 @@ public final class RemoveApplier implements RuleApplier {
     }
 
     @Override
-    public boolean revoke(View view, ViewRule rule) {
+    public boolean revoke(View view, RuleMatchSpec rule) {
         int cacheKey = rule.isRepeatable() ? identityKey(rule) : rule.hashCode();
         Pair<WeakReference<View>, ViewProperty> viewInfo = mBlockedViewCache.get(cacheKey);
         if (viewInfo != null && viewInfo.first.get() == view) {
@@ -80,7 +80,7 @@ public final class RemoveApplier implements RuleApplier {
         mBlockedViewCache.clear();
     }
 
-    private static int identityKey(ViewRule rule) {
+    private static int identityKey(RuleMatchSpec rule) {
         int result = rule.activityClass != null ? rule.activityClass.hashCode() : 0;
         result = 31 * result + (rule.viewClass != null ? rule.viewClass.hashCode() : 0);
         result = 31 * result + java.util.Objects.hashCode(rule.resourceName);
