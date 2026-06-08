@@ -38,6 +38,79 @@ import java.io.FileNotFoundException;
  */
 public final class GodModeManagerService extends IGodModeManager.Stub implements Handler.Callback {
 
+    // ===== POJO 消息类（替代 Object[] 传参） =====
+
+    /** WRITE_RULE 消息载荷 */
+    static final class WriteRuleMsg {
+        final String packageName;
+        final RuleRecord viewRule;
+        @android.annotation.Nullable final Bitmap snapshot;
+        @android.annotation.Nullable final String oldImagePath;
+        @android.annotation.Nullable final String json;
+        @android.annotation.Nullable final ActRules snapshotRules;
+
+        /** 带位图构造 */
+        WriteRuleMsg(String packageName, RuleRecord viewRule, Bitmap snapshot, String oldImagePath) {
+            this.packageName = packageName;
+            this.viewRule = viewRule;
+            this.snapshot = snapshot;
+            this.oldImagePath = oldImagePath;
+            this.json = null;
+            this.snapshotRules = null;
+        }
+
+        /** 无位图构造（直接 JSON） */
+        WriteRuleMsg(String packageName, RuleRecord viewRule, String json, ActRules snapshotRules) {
+            this.packageName = packageName;
+            this.viewRule = viewRule;
+            this.snapshot = null;
+            this.oldImagePath = null;
+            this.json = json;
+            this.snapshotRules = snapshotRules;
+        }
+    }
+
+    /** UPDATE_IMAGE_PATH 消息载荷 */
+    static final class UpdateImagePathMsg {
+        final String packageName;
+        final RuleRecord viewRule;
+        final String newImagePath;
+
+        UpdateImagePathMsg(String packageName, RuleRecord viewRule, String newImagePath) {
+            this.packageName = packageName;
+            this.viewRule = viewRule;
+            this.newImagePath = newImagePath;
+        }
+    }
+
+    /** DELETE_RULE 消息载荷 */
+    static final class DeleteRuleMsg {
+        final String packageName;
+        final String json;
+        final ActRules snapshotRules;
+        final String imagePath;
+
+        DeleteRuleMsg(String packageName, String json, ActRules snapshotRules, String imagePath) {
+            this.packageName = packageName;
+            this.json = json;
+            this.snapshotRules = snapshotRules;
+            this.imagePath = imagePath;
+        }
+    }
+
+    /** UPDATE_RULE 消息载荷 */
+    static final class UpdateRuleMsg {
+        final String packageName;
+        final String json;
+        final ActRules snapshotRules;
+
+        UpdateRuleMsg(String packageName, String json, ActRules snapshotRules) {
+            this.packageName = packageName;
+            this.json = json;
+            this.snapshotRules = snapshotRules;
+        }
+    }
+
     // ===== 消息代码（ObserverManager 引用 CLEAN_OBSERVERS） =====
     static final int LOAD_RULES = 0x00001;
     private static final int WRITE_RULE = 0x00002;
@@ -126,36 +199,20 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
     }
 
     private void handleWriteRule(Message msg) {
-        // 步骤1：提取参数
-        Object[] args;
-        String packageName;
-        RuleRecord viewRule;
-        Bitmap snapshot;
-        String oldImagePath;
-        try {
-            args = (Object[]) msg.obj;
-            packageName = (String) args[0];
-            viewRule = (RuleRecord) args[1];
-            snapshot = (Bitmap) args[2];
-            oldImagePath = args.length > 3 ? (String) args[3] : null;
-        } catch (Exception e) {
-            mLogger.w("write rule: extract args failed", e);
-            return;
-        }
-        if (snapshot != null) {
-            // 步骤2a：删除旧图片文件
+        WriteRuleMsg m = (WriteRuleMsg) msg.obj;
+        if (m.snapshot != null) {
+            // 带位图：删除旧图 → 保存新图 → 更新 imagePath
             try {
-                if (oldImagePath != null && !android.text.TextUtils.isEmpty(oldImagePath)) {
-                    FileUtils.delete(oldImagePath);
+                if (m.oldImagePath != null && !android.text.TextUtils.isEmpty(m.oldImagePath)) {
+                    FileUtils.delete(m.oldImagePath);
                 }
             } catch (Exception e) {
                 mLogger.w("write rule: delete old image failed", e);
             }
-            // 步骤2b：保存新位图
             String newImagePath;
             try {
-                newImagePath = mPersistManager.saveBitmap(snapshot,
-                        mPersistManager.getAppDataDir(packageName));
+                newImagePath = mPersistManager.saveBitmap(m.snapshot,
+                        mPersistManager.getAppDataDir(m.packageName));
             } catch (Exception e) {
                 mLogger.w("write rule: save bitmap failed", e);
                 return;
@@ -165,14 +222,12 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
                 return;
             }
             mHandle.obtainMessage(UPDATE_IMAGE_PATH,
-                    new Object[]{packageName, viewRule, newImagePath}).sendToTarget();
+                    new UpdateImagePathMsg(m.packageName, m.viewRule, newImagePath)).sendToTarget();
         } else {
-            // 步骤2c：无位图 — 直接持久化规则 JSON 并通知观察者
+            // 无位图：直接持久化规则 JSON 并通知观察者
             try {
-                String json = (String) args[4];
-                ActRules snapshotRules = (ActRules) args[5];
-                mObserverManager.notifyObserverRuleChanged(packageName, snapshotRules);
-                mPersistManager.safePersistRules(packageName, json);
+                mObserverManager.notifyObserverRuleChanged(m.packageName, m.snapshotRules);
+                mPersistManager.safePersistRules(m.packageName, m.json);
                 scheduleOrphanCleanup();
             } catch (Exception e) {
                 mLogger.w("write rule: persist failed", e);
@@ -182,14 +237,11 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
 
     private void handleUpdateImagePath(Message msg) {
         try {
-            Object[] args = (Object[]) msg.obj;
-            String packageName = (String) args[0];
-            RuleRecord viewRule = (RuleRecord) args[1];
-            String newImagePath = (String) args[2];
+            UpdateImagePathMsg m = (UpdateImagePathMsg) msg.obj;
             RuleCacheManager.CacheResult cr =
-                    mCacheManager.updateImagePath(packageName, viewRule, newImagePath);
-            mObserverManager.notifyObserverRuleChanged(packageName, cr.snapshotRules);
-            mPersistManager.safePersistRules(packageName, cr.json);
+                    mCacheManager.updateImagePath(m.packageName, m.viewRule, m.newImagePath);
+            mObserverManager.notifyObserverRuleChanged(m.packageName, cr.snapshotRules);
+            mPersistManager.safePersistRules(m.packageName, cr.json);
             scheduleOrphanCleanup();
         } catch (Exception e) {
             mLogger.w("update image path failed", e);
@@ -198,14 +250,10 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
 
     private void handleDeleteRule(Message msg) {
         try {
-            Object[] args = (Object[]) msg.obj;
-            String packageName = (String) args[0];
-            String json = (String) args[1];
-            ActRules snapshotRules = (ActRules) args[2];
-            String imagePath = (String) args[3];
-            FileUtils.delete(imagePath);
-            mObserverManager.notifyObserverRuleChanged(packageName, snapshotRules);
-            mPersistManager.safePersistRules(packageName, json);
+            DeleteRuleMsg m = (DeleteRuleMsg) msg.obj;
+            FileUtils.delete(m.imagePath);
+            mObserverManager.notifyObserverRuleChanged(m.packageName, m.snapshotRules);
+            mPersistManager.safePersistRules(m.packageName, m.json);
             scheduleOrphanCleanup();
         } catch (Exception e) {
             mLogger.w("delete rule failed", e);
@@ -224,12 +272,9 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
 
     private void handleUpdateRule(Message msg) {
         try {
-            Object[] args = (Object[]) msg.obj;
-            String packageName = (String) args[0];
-            String json = (String) args[1];
-            ActRules snapshotRules = (ActRules) args[2];
-            mPersistManager.safePersistRules(packageName, json);
-            mObserverManager.notifyObserverRuleChanged(packageName, snapshotRules);
+            UpdateRuleMsg m = (UpdateRuleMsg) msg.obj;
+            mPersistManager.safePersistRules(m.packageName, m.json);
+            mObserverManager.notifyObserverRuleChanged(m.packageName, m.snapshotRules);
         } catch (Exception e) {
             mLogger.w("update rule failed", e);
         }
@@ -347,15 +392,10 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
         try {
             RuleCacheManager.CacheResult cr =
                     mCacheManager.applyRuleToCache(packageName, viewRule, true);
-            if (snapshot != null) {
-                mHandle.obtainMessage(WRITE_RULE,
-                        new Object[]{packageName, viewRule, snapshot, cr.oldImagePath})
-                        .sendToTarget();
-            } else {
-                mHandle.obtainMessage(WRITE_RULE,
-                        new Object[]{packageName, viewRule, null, null, cr.json,
-                                cr.snapshotRules}).sendToTarget();
-            }
+            Object writeMsg = snapshot != null
+                    ? new WriteRuleMsg(packageName, viewRule, snapshot, cr.oldImagePath)
+                    : new WriteRuleMsg(packageName, viewRule, cr.json, cr.snapshotRules);
+            mHandle.obtainMessage(WRITE_RULE, writeMsg).sendToTarget();
             return true;
         } catch (Exception e) {
             mLogger.w("write rule failed", e);
@@ -371,7 +411,7 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
             RuleCacheManager.CacheResult cr =
                     mCacheManager.applyRuleToCache(packageName, viewRule, false);
             mHandle.obtainMessage(UPDATE_RULE,
-                    new Object[]{packageName, cr.json, cr.snapshotRules}).sendToTarget();
+                    new UpdateRuleMsg(packageName, cr.json, cr.snapshotRules)).sendToTarget();
             return true;
         } catch (Exception e) {
             mLogger.w("update rule failed", e);
@@ -389,7 +429,7 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
             RuleCacheManager.DeleteResult dr = mCacheManager.deleteRule(packageName, viewRule);
             if (dr == null) return false;
             mHandle.obtainMessage(DELETE_RULE,
-                    new Object[]{packageName, dr.json, dr.snapshotRules, dr.imagePath})
+                    new DeleteRuleMsg(packageName, dr.json, dr.snapshotRules, dr.imagePath))
                     .sendToTarget();
             return true;
         } catch (Exception e) {
