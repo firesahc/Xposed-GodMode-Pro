@@ -7,6 +7,7 @@ import android.content.res.Resources;
 import android.content.res.XModuleResources;
 import android.os.Binder;
 import android.os.Bundle;
+import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
 
@@ -16,10 +17,11 @@ import com.kaisar.xposed.godmode.engine.event.EventBus;
 import com.kaisar.xposed.godmode.engine.event.RulesChangedEvent;
 import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
 import com.kaisar.xposed.godmode.injection.bridge.ManagerObserver;
-import com.kaisar.xposed.godmode.injection.hook.LifecycleObserver;
-import com.kaisar.xposed.godmode.hook.DebugLayoutHook;
-import com.kaisar.xposed.godmode.hook.KeyInterceptor;
-import com.kaisar.xposed.godmode.hook.TouchInterceptor;
+import com.kaisar.xposed.godmode.injection.editor.EditorOrchestrator;
+import com.kaisar.xposed.godmode.injection.entry.ActivityKeyHook;
+import com.kaisar.xposed.godmode.injection.entry.DebugLayoutHook;
+import com.kaisar.xposed.godmode.injection.entry.TouchHook;
+import com.kaisar.xposed.godmode.injection.lifecycle.LifecycleObserver;
 import com.kaisar.xposed.godmode.injection.util.BlockListChecker;
 import com.kaisar.xposed.godmode.injection.util.GmResources;
 import com.kaisar.xposed.godmode.injection.util.Logger;
@@ -62,10 +64,10 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
     private static final EventBus sEventBus = EventBus.getDefault();
 
     private static volatile State state = State.UNKNOWN;
-    private static final KeyInterceptor sKeyInterceptor = new KeyInterceptor();
+    private static final EditorOrchestrator sEditorOrchestrator = new EditorOrchestrator(switchProp);
 
-    /** 供子组件获取 KeyInterceptor 实例 */
-    public static KeyInterceptor getKeyInterceptor() { return sKeyInterceptor; }
+    /** 供子组件获取 EditorOrchestrator 实例 */
+    public static EditorOrchestrator getEditorOrchestrator() { return sEditorOrchestrator; }
 
     private enum State { UNKNOWN, ALLOWED, BLOCKED }
 
@@ -124,7 +126,7 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
         XposedHelpers.findAndHookMethod(Activity.class, "onResume", new XC_MethodHook() {
             @Override
             protected void afterHookedMethod(MethodHookParam param) {
-                sKeyInterceptor.setActivity((Activity) param.thisObject);
+                sEditorOrchestrator.setActivity((Activity) param.thisObject);
             }
         });
     }
@@ -138,7 +140,7 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
                 ModuleResources.injectInto(activity.getResources());
                 if (switchProp.get()) {
                     // post 到 DecorView 确保 setContentView 已完成、视图树完整后再显示面板
-                    activity.getWindow().getDecorView().post(() -> sKeyInterceptor.setDisplay(true));
+                    activity.getWindow().getDecorView().post(() -> sEditorOrchestrator.setDisplay(true));
                 }
                 super.afterHookedMethod(param);
             }
@@ -158,13 +160,15 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
         DebugLayoutHook.install(switchProp);
 
         // 触摸事件 Hook — 拦截点击/拖拽以进行移除和修改操作
-        TouchInterceptor touchInterceptor = new TouchInterceptor(getKeyInterceptor());
-        switchProp.addOnPropertyChangeListener(touchInterceptor);
+        TouchHook touchHook = new TouchHook(sEditorOrchestrator);
+        switchProp.addOnPropertyChangeListener(sEditorOrchestrator);
         XposedHelpers.findAndHookMethod(View.class, "dispatchTouchEvent",
-                MotionEvent.class, touchInterceptor);
+                MotionEvent.class, touchHook);
 
         // 按键事件 Hook — 音量键切换节点选择器面板
-        switchProp.addOnPropertyChangeListener(sKeyInterceptor);
+        ActivityKeyHook keyHook = new ActivityKeyHook(sEditorOrchestrator);
+        XposedHelpers.findAndHookMethod(Activity.class, "dispatchKeyEvent",
+                KeyEvent.class, keyHook);
     }
 
     /** 注册 IPC 观察者，使服务端的规则更新能到达应用内 */
@@ -195,7 +199,7 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
             switchProp.set(enable);                        // 旧路径
             sEventBus.post(new EditModeEvent(enable));     // 新路径
         }
-        sKeyInterceptor.setDisplay(enable);
+        sEditorOrchestrator.setDisplay(enable);
     }
 
     public static void notifyViewRulesChanged(ActRules actRules) {

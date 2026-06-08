@@ -1,4 +1,4 @@
-package com.kaisar.xposed.godmode.injection.editor.gesture;
+package com.kaisar.xposed.godmode.injection.editor.action;
 
 import static com.kaisar.xposed.godmode.engine.util.CommonUtils.recycleNullableBitmap;
 

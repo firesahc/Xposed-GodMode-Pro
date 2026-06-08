@@ -1,4 +1,4 @@
-package com.kaisar.xposed.godmode.injection.hook;
+package com.kaisar.xposed.godmode.injection.lifecycle;
 
 import static com.kaisar.xposed.godmode.GodModeApplication.TAG;
 
