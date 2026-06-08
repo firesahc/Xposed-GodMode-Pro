@@ -3,7 +3,7 @@ package com.kaisar.xposed.godmode;
 import com.kaisar.xposed.godmode.IObserver;
 import com.kaisar.xposed.godmode.rule.AppRules;
 import com.kaisar.xposed.godmode.rule.ActRules;
-import com.kaisar.xposed.godmode.rule.ViewRule;
+import com.kaisar.xposed.godmode.rule.RuleRecord;
 import android.graphics.Bitmap;
 import android.os.ParcelFileDescriptor;
 
@@ -23,11 +23,11 @@ interface IGodModeManager {
 
     ActRules getRules(String packageName);
 
-    boolean writeRule(String packageName, in ViewRule viewRule, in Bitmap bitmap);
+    boolean writeRule(String packageName, in RuleRecord viewRule, in Bitmap bitmap);
 
-    boolean updateRule(String packageName, in ViewRule viewRule);
+    boolean updateRule(String packageName, in RuleRecord viewRule);
 
-    boolean deleteRule(String packageName, in ViewRule viewRule);
+    boolean deleteRule(String packageName, in RuleRecord viewRule);
 
     boolean deleteRules(String packageName);
 

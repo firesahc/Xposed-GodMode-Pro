@@ -12,7 +12,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 反射字段映射器。
- * 用于 app 模块 ViewRule（Parcelable, 带 @SerializedName）与
+ * 用于 app 模块 RuleRecord（Parcelable, 带 @SerializedName）与
  * engine 模块 RuleMatchSpec（纯 POJO）之间的字段级双向转换。
  * <p>
  * 内部使用 ConcurrentHashMap 缓存 Class → Field[] 映射，避免重复反射开销。

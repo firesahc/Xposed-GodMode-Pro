@@ -13,7 +13,7 @@ import com.kaisar.xposed.godmode.engine.matcher.ViewFinder;
 import com.kaisar.xposed.godmode.engine.util.FieldMapper;
 import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
 import com.kaisar.xposed.godmode.injection.util.Logger;
-import com.kaisar.xposed.godmode.rule.ViewRule;
+import com.kaisar.xposed.godmode.rule.RuleRecord;
 import com.kaisar.xposed.godmode.engine.util.Preconditions;
 
 import java.util.List;
@@ -21,7 +21,7 @@ import java.util.List;
 /**
  * 视图控制器 — 使用 engine/applier 体系应用/撤销规则。
  * <p>
- * 根据 {@link ViewRule#ruleTag} 自动路由：
+ * 根据 {@link RuleRecord#ruleTag} 自动路由：
  * <ul>
  *   <li>ruleTag 为 null 或空 → 移除规则，委托 {@link RemoveApplier}</li>
  *   <li>ruleTag 非空 → 修改规则，委托 {@link ModifyApplier}</li>
@@ -83,8 +83,8 @@ public final class ViewController {
         if (mModifyApplier != null) mModifyApplier.clearCache();
     }
 
-    /** 将 app 模块的 ViewRule 转换为 engine 的 ViewRule。 */
-    private static com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec toEngineRule(ViewRule appRule) {
+    /** 将 app 模块的 RuleRecord 转换为 engine 的 RuleRecord。 */
+    private static com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec toEngineRule(RuleRecord appRule) {
         com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec engineRule =
                 new com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec();
         FieldMapper.copyFields(appRule, engineRule);
@@ -92,13 +92,13 @@ public final class ViewController {
     }
 
     /** 批量应用规则。 */
-    public void applyRuleBatch(Activity activity, List<ViewRule> rules) {
+    public void applyRuleBatch(Activity activity, List<RuleRecord> rules) {
         int appliedCount = 0;
         ViewGroup decorView = activity != null && activity.getWindow() != null
                 ? (ViewGroup) activity.getWindow().getDecorView() : null;
         if (decorView == null) return;
         String packageName = activity.getPackageName();
-        for (ViewRule rule : rules) {
+        for (RuleRecord rule : rules) {
             try {
                 com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec engineRule = toEngineRule(rule);
                 if (rule.isRepeatable()) {
@@ -126,7 +126,7 @@ public final class ViewController {
     }
 
     /** 应用单条规则。 */
-    public boolean applyRule(View v, ViewRule viewRule) {
+    public boolean applyRule(View v, RuleRecord viewRule) {
         if (v == null || viewRule == null) return false;
         com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec engineRule = toEngineRule(viewRule);
         if (viewRule.isModifyRule()) {
@@ -137,12 +137,12 @@ public final class ViewController {
     }
 
     /** 批量撤销规则。 */
-    public void revokeRuleBatch(Activity activity, List<ViewRule> rules) {
+    public void revokeRuleBatch(Activity activity, List<RuleRecord> rules) {
         ViewGroup decorView = activity != null && activity.getWindow() != null
                 ? (ViewGroup) activity.getWindow().getDecorView() : null;
         if (decorView == null) return;
         String packageName = activity.getPackageName();
-        for (ViewRule rule : rules) {
+        for (RuleRecord rule : rules) {
             try {
                 com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec engineRule = toEngineRule(rule);
                 if (rule.isRepeatable()) {
@@ -167,7 +167,7 @@ public final class ViewController {
     }
 
     /** 撤销单条规则。 */
-    public void revokeRule(View v, ViewRule viewRule) {
+    public void revokeRule(View v, RuleRecord viewRule) {
         if (v == null || viewRule == null) return;
         com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec engineRule = toEngineRule(viewRule);
         if (viewRule.isModifyRule()) {

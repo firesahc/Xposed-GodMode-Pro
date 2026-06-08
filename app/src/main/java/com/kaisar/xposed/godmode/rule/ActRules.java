@@ -12,7 +12,7 @@ import java.util.List;
  * Created by jrsen on 17-10-14.
  */
 @Keep
-public final class ActRules extends HashMap<String, List<ViewRule>> implements Parcelable {
+public final class ActRules extends HashMap<String, List<RuleRecord>> implements Parcelable {
 
     public ActRules() {
     }

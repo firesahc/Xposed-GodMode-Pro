@@ -9,7 +9,7 @@ import android.view.View;
 import android.view.ViewGroup;
 
 import com.kaisar.xposed.godmode.injection.ViewController;
-import com.kaisar.xposed.godmode.injection.editor.ViewRuleFactory;
+import com.kaisar.xposed.godmode.injection.editor.RuleRecordFactory;
 import com.kaisar.xposed.godmode.injection.editor.BitmapUtils;
 import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
 import com.kaisar.xposed.godmode.injection.editor.overlay.CancelView;
@@ -21,7 +21,7 @@ import com.kaisar.xposed.godmode.engine.util.CommonUtils;
 import com.kaisar.xposed.godmode.injection.util.Logger;
 import com.kaisar.xposed.godmode.injection.util.ViewUtils;
 
-import com.kaisar.xposed.godmode.rule.ViewRule;
+import com.kaisar.xposed.godmode.rule.RuleRecord;
 import com.kaisar.xposed.godmode.engine.util.Preconditions;
 
 /**
@@ -44,7 +44,7 @@ public final class RemoveGestureHandler {
             ViewGroup container = (ViewGroup) activity.getWindow().getDecorView();
             state.snapshot = BitmapUtils.snapshotView(
                     ViewUtils.findTopParentViewByChildView(v));
-            state.viewRule = ViewRuleFactory.makeRemoveRule(v);
+            state.viewRule = RuleRecordFactory.makeRemoveRule(v);
 
             state.cancelView = new CancelView(activity);
             state.cancelView.attachToContainer(container);
@@ -122,7 +122,7 @@ public final class RemoveGestureHandler {
     /** 移除模式状态容器 */
     public static final class RemoveState {
         public Bitmap snapshot;
-        public ViewRule viewRule;
+        public RuleRecord viewRule;
         public MaskView maskView;
         public CancelView cancelView;
     }

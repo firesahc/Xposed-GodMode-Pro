@@ -4,7 +4,7 @@ import com.google.gson.Gson;
 import com.kaisar.xposed.godmode.injection.util.Logger;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.AppRules;
-import com.kaisar.xposed.godmode.rule.ViewRule;
+import com.kaisar.xposed.godmode.rule.RuleRecord;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -64,13 +64,13 @@ final class RuleCacheManager {
      * 将规则写入内存缓存并返回序列化结果。
      * 供 writeRule / updateRule 复用。
      */
-    CacheResult applyRuleToCache(String packageName, ViewRule viewRule, boolean captureOldImagePath) {
+    CacheResult applyRuleToCache(String packageName, RuleRecord viewRule, boolean captureOldImagePath) {
         synchronized (mAppRulesCache) {
             ActRules actRules = mAppRulesCache.get(packageName);
             if (actRules == null) {
                 mAppRulesCache.put(packageName, actRules = new ActRules());
             }
-            List<ViewRule> viewRules = actRules.computeIfAbsent(viewRule.activityClass, k -> new ArrayList<>());
+            List<RuleRecord> viewRules = actRules.computeIfAbsent(viewRule.activityClass, k -> new ArrayList<>());
             int index = viewRules.indexOf(viewRule);
             String oldImagePath = null;
             if (index >= 0) {
@@ -91,11 +91,11 @@ final class RuleCacheManager {
      * 从缓存中删除单条规则。
      * @return 被删除规则的 imagePath，如未找到则返回 null
      */
-    DeleteResult deleteRule(String packageName, ViewRule viewRule) {
+    DeleteResult deleteRule(String packageName, RuleRecord viewRule) {
         synchronized (mAppRulesCache) {
             ActRules actRules = mAppRulesCache.get(packageName);
             if (actRules == null) return null;
-            List<ViewRule> viewRules = actRules.get(viewRule.activityClass);
+            List<RuleRecord> viewRules = actRules.get(viewRule.activityClass);
             if (viewRules == null) return null;
             boolean removed = viewRules.remove(viewRule);
             if (!removed) return null;
@@ -125,11 +125,11 @@ final class RuleCacheManager {
     /**
      * 更新缓存中指定 app 规则集合的 imagePath 字段，返回序列化结果。
      */
-    CacheResult updateImagePath(String packageName, ViewRule viewRule, String newImagePath) {
+    CacheResult updateImagePath(String packageName, RuleRecord viewRule, String newImagePath) {
         synchronized (mAppRulesCache) {
             ActRules actRules = mAppRulesCache.get(packageName);
             if (actRules != null) {
-                List<ViewRule> rules = actRules.get(viewRule.activityClass);
+                List<RuleRecord> rules = actRules.get(viewRule.activityClass);
                 if (rules != null) {
                     int idx = rules.indexOf(viewRule);
                     if (idx >= 0) {
@@ -154,8 +154,8 @@ final class RuleCacheManager {
             java.util.Set<String> referenced = new java.util.HashSet<>();
             ActRules actRules = mAppRulesCache.get(packageName);
             if (actRules != null) {
-                for (List<ViewRule> rules : actRules.values()) {
-                    for (ViewRule rule : rules) {
+                for (List<RuleRecord> rules : actRules.values()) {
+                    for (RuleRecord rule : rules) {
                         if (!android.text.TextUtils.isEmpty(rule.imagePath))
                             referenced.add(rule.imagePath);
                         if (!android.text.TextUtils.isEmpty(rule.modImagePath))
@@ -173,7 +173,7 @@ final class RuleCacheManager {
     ActRules snapshotActRules(ActRules source) {
         if (source == null) return new ActRules();
         ActRules copy = new ActRules();
-        for (Map.Entry<String, List<ViewRule>> entry : source.entrySet()) {
+        for (Map.Entry<String, List<RuleRecord>> entry : source.entrySet()) {
             copy.put(entry.getKey(), new ArrayList<>(entry.getValue()));
         }
         return copy;

@@ -27,7 +27,7 @@ import com.kaisar.xposed.godmode.injection.util.Logger;
 import com.kaisar.xposed.godmode.model.SharedViewModel;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.AppRules;
-import com.kaisar.xposed.godmode.rule.ViewRule;
+import com.kaisar.xposed.godmode.rule.RuleRecord;
 import com.kaisar.xposed.godmode.util.AppInfoHelper;
 
 import java.util.ArrayList;
@@ -271,8 +271,8 @@ public final class SettingsFragment extends PreferenceFragmentCompat implements
         }
 
         // Collect all rules for this package
-        List<ViewRule> rules = new ArrayList<>();
-        for (List<ViewRule> ruleList : actRules.values()) {
+        List<RuleRecord> rules = new ArrayList<>();
+        for (List<RuleRecord> ruleList : actRules.values()) {
             rules.addAll(ruleList);
         }
 

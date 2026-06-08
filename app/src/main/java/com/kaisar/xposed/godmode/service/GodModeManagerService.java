@@ -22,7 +22,7 @@ import com.kaisar.xposed.godmode.engine.util.FileUtils;
 import com.kaisar.xposed.godmode.injection.util.Logger;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.AppRules;
-import com.kaisar.xposed.godmode.rule.ViewRule;
+import com.kaisar.xposed.godmode.rule.RuleRecord;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -126,7 +126,7 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
         try {
             Object[] args = (Object[]) msg.obj;
             String packageName = (String) args[0];
-            ViewRule viewRule = (ViewRule) args[1];
+            RuleRecord viewRule = (RuleRecord) args[1];
             Bitmap snapshot = (Bitmap) args[2];
             String oldImagePath = args.length > 3 ? (String) args[3] : null;
             if (snapshot != null) {
@@ -157,7 +157,7 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
         try {
             Object[] args = (Object[]) msg.obj;
             String packageName = (String) args[0];
-            ViewRule viewRule = (ViewRule) args[1];
+            RuleRecord viewRule = (RuleRecord) args[1];
             String newImagePath = (String) args[2];
             RuleCacheManager.CacheResult cr =
                     mCacheManager.updateImagePath(packageName, viewRule, newImagePath);
@@ -309,7 +309,7 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
     // ---- 规则写入 ----
 
     @Override
-    public boolean writeRule(String packageName, ViewRule viewRule, Bitmap snapshot)
+    public boolean writeRule(String packageName, RuleRecord viewRule, Bitmap snapshot)
             throws RemoteException {
         mPermissionEnforcer.enforcePermission(
                 new String[]{packageName, BuildConfig.APPLICATION_ID},
@@ -335,7 +335,7 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
     }
 
     @Override
-    public boolean updateRule(String packageName, ViewRule viewRule) throws RemoteException {
+    public boolean updateRule(String packageName, RuleRecord viewRule) throws RemoteException {
         mPermissionEnforcer.enforcePermission("update rule fail permission denied");
         if (!mStarted) return false;
         try {
@@ -353,7 +353,7 @@ public final class GodModeManagerService extends IGodModeManager.Stub implements
     // ---- 规则删除 ----
 
     @Override
-    public boolean deleteRule(String packageName, ViewRule viewRule) throws RemoteException {
+    public boolean deleteRule(String packageName, RuleRecord viewRule) throws RemoteException {
         mPermissionEnforcer.enforcePermission("delete rule fail permission denied");
         if (!mStarted) return false;
         try {

@@ -14,7 +14,7 @@ import com.kaisar.xposed.godmode.engine.matcher.ViewFinder;
 import com.kaisar.xposed.godmode.engine.util.FieldMapper;
 import com.kaisar.xposed.godmode.injection.GodModeInjector;
 import com.kaisar.xposed.godmode.injection.util.ViewUtils;
-import com.kaisar.xposed.godmode.rule.ViewRule;
+import com.kaisar.xposed.godmode.rule.RuleRecord;
 
 import java.util.Objects;
 
@@ -23,18 +23,18 @@ import java.util.Objects;
  * <p>
  * 从 {@code ViewHelper} 拆分，职责单一。
  */
-public final class ViewRuleFactory {
+public final class RuleRecordFactory {
 
-    private ViewRuleFactory() {}
+    private RuleRecordFactory() {}
 
     /**
      * 从视图创建屏蔽规则（通用）。
      *
      * @param v 目标视图
-     * @return 构造完成的 ViewRule
+     * @return 构造完成的 RuleRecord
      * @throws PackageManager.NameNotFoundException 无法获取包信息时抛出
      */
-    public static ViewRule makeRule(View v) throws PackageManager.NameNotFoundException {
+    public static RuleRecord makeRule(View v) throws PackageManager.NameNotFoundException {
         Activity activity = ViewUtils.getAttachedActivityFromView(v);
         Objects.requireNonNull(activity, "Can't found attached activity");
         int[] out = new int[2];
@@ -65,7 +65,7 @@ public final class ViewRuleFactory {
         String label = packageInfo.applicationInfo.loadLabel(context.getPackageManager()).toString();
         String versionName = packageInfo.versionName;
         int versionCode = packageInfo.versionCode;
-        ViewRule rule = new ViewRule(label, packageName, versionName, versionCode,
+        RuleRecord rule = new RuleRecord(label, packageName, versionName, versionCode,
                 BuildConfig.VERSION_CODE, "", alias,
                 x, y, width, height, viewHierarchyDepth,
                 activityClassName, viewClassName, resourceName, text, description,
@@ -78,10 +78,10 @@ public final class ViewRuleFactory {
      * 创建移除规则（ruleTag 留空以兼容旧 JSON 格式）。
      *
      * @param v 目标视图
-     * @return 构造完成的 ViewRule
+     * @return 构造完成的 RuleRecord
      * @throws PackageManager.NameNotFoundException 无法获取包信息时抛出
      */
-    public static ViewRule makeRemoveRule(View v) throws PackageManager.NameNotFoundException {
+    public static RuleRecord makeRemoveRule(View v) throws PackageManager.NameNotFoundException {
         return makeRule(v);
     }
 
@@ -89,11 +89,11 @@ public final class ViewRuleFactory {
      * 创建修改规则。
      *
      * @param view 目标视图
-     * @return 构造完成的 ViewRule（ruleTag="modify"）
+     * @return 构造完成的 RuleRecord（ruleTag="modify"）
      */
-    public static ViewRule makeModifyRule(View view) {
+    public static RuleRecord makeModifyRule(View view) {
         Activity act = ViewUtils.getAttachedActivityFromView(view);
-        ViewRule rule = new ViewRule("",
+        RuleRecord rule = new RuleRecord("",
                 act != null ? act.getPackageName() : "",
                 "", 0, 0, "", "", 0, 0, 0, 0,
                 ViewUtils.getViewHierarchyDepth(view),
@@ -113,7 +113,7 @@ public final class ViewRuleFactory {
      * @param rule 目标规则
      * @param v    当前视图
      */
-    public static void fillCoordinates(ViewRule rule, View v) {
+    public static void fillCoordinates(RuleRecord rule, View v) {
         int[] out = new int[2];
         v.getLocationInWindow(out);
         rule.x = out[0];
@@ -126,8 +126,8 @@ public final class ViewRuleFactory {
     // 以下方法从 ViewHelper 内联迁移（ViewHelper @Deprecated 即将退役）
     // =========================================================================
 
-    /** 将 app 模块 ViewRule 转换为 engine 模块 ViewRule */
-    private static com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec toEngine(ViewRule appRule) {
+    /** 将 app 模块 RuleRecord 转换为 engine 模块 RuleRecord */
+    private static com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec toEngine(RuleRecord appRule) {
         com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec engineRule =
                 new com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec();
         FieldMapper.copyFields(appRule, engineRule);
@@ -135,7 +135,7 @@ public final class ViewRuleFactory {
     }
 
     /** 填充可重复规则信息（itemPath、itemRootClass、parentClass） */
-    private static void populateRepeatableInfo(View v, ViewRule rule) {
+    private static void populateRepeatableInfo(View v, RuleRecord rule) {
         boolean isInfoFlowMode = GodModeInjector.getKeyInterceptor().isInfoFlowMode();
         com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec engineRule = toEngine(rule);
         ViewFinder.populateRepeatableInfo(v, engineRule, isInfoFlowMode);

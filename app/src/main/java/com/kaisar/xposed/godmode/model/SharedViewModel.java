@@ -18,7 +18,7 @@ import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
 import com.kaisar.xposed.godmode.injection.util.Logger;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.AppRules;
-import com.kaisar.xposed.godmode.rule.ViewRule;
+import com.kaisar.xposed.godmode.rule.RuleRecord;
 import com.kaisar.xposed.godmode.util.BackupUtils;
 
 import java.util.ArrayList;
@@ -32,7 +32,7 @@ public class SharedViewModel extends ViewModel {
     private final Handler mMainHandler = new Handler(Looper.getMainLooper());
     private final ExecutorService mExecutor = Executors.newSingleThreadExecutor();
     public final MutableLiveData<AppRules> appRules = new MutableLiveData<>();
-    public final MutableLiveData<List<ViewRule>> actRules = new MutableLiveData<>();
+    public final MutableLiveData<List<RuleRecord>> actRules = new MutableLiveData<>();
     public final MutableLiveData<String> selectedPackage = new MutableLiveData<>();
 
     public SharedViewModel() {
@@ -42,7 +42,7 @@ public class SharedViewModel extends ViewModel {
             }
 
             @Override
-            public void onViewRuleChanged(String packageName, ActRules actRules) {
+            public void onRuleRecordChanged(String packageName, ActRules actRules) {
                 appRules.postValue(GodModeManager.getDefault().getAllRules());
                 if (TextUtils.equals(packageName, selectedPackage.getValue())) {
                     selectedPackage.postValue(packageName);
@@ -66,13 +66,13 @@ public class SharedViewModel extends ViewModel {
         selectedPackage.postValue(packageName);
     }
 
-    public void updateViewRuleList(String packageName) {
-        ArrayList<ViewRule> viewRules = new ArrayList<>();
+    public void updateRuleRecordList(String packageName) {
+        ArrayList<RuleRecord> viewRules = new ArrayList<>();
         AppRules rules = this.appRules.getValue();
         if (rules != null && rules.containsKey(packageName)) {
             ActRules actRules = rules.get(packageName);
             if (actRules != null && !actRules.isEmpty()) {
-                for (List<ViewRule> values : actRules.values()) {
+                for (List<RuleRecord> values : actRules.values()) {
                     viewRules.addAll(values);
                 }
                 Collections.sort(viewRules, (o1, o2) -> (int) (o1.timestamp - o2.timestamp));
@@ -85,11 +85,11 @@ public class SharedViewModel extends ViewModel {
         return GodModeManager.getDefault().deleteRules(packageName);
     }
 
-    public boolean updateRule(ViewRule rule) {
+    public boolean updateRule(RuleRecord rule) {
         return GodModeManager.getDefault().updateRule(rule.packageName, rule);
     }
 
-    public boolean deleteRule(ViewRule rule) {
+    public boolean deleteRule(RuleRecord rule) {
         return GodModeManager.getDefault().deleteRule(rule.packageName, rule);
     }
 
@@ -119,7 +119,7 @@ public class SharedViewModel extends ViewModel {
         });
     }
 
-    public void backupRules(Uri uri, String packageName, List<ViewRule> viewRules, ResultCallback callback) {
+    public void backupRules(Uri uri, String packageName, List<RuleRecord> viewRules, ResultCallback callback) {
         mExecutor.execute(() -> {
             try {
                 Logger.i(TAG, "[ViewModel] backupRules: start, package=" + packageName + ", ruleCount=" + viewRules.size());

@@ -15,7 +15,7 @@ import com.kaisar.xposed.godmode.engine.util.CommonUtils;
 import com.kaisar.xposed.godmode.engine.util.FileUtils;
 import com.kaisar.xposed.godmode.injection.util.Logger;
 import com.kaisar.xposed.godmode.rule.ActRules;
-import com.kaisar.xposed.godmode.rule.ViewRule;
+import com.kaisar.xposed.godmode.rule.RuleRecord;
 import com.kaisar.xposed.godmode.engine.util.Preconditions;
 
 import java.io.File;
@@ -74,10 +74,10 @@ final class RulePersistManager {
                     ActRules rules = mGson.fromJson(json, ActRules.class);
                     Preconditions.checkNotNull(rules, "rules is null");
                     // compact rule — 移除空条目
-                    Iterator<Map.Entry<String, List<ViewRule>>> iterator = rules.entrySet().iterator();
+                    Iterator<Map.Entry<String, List<RuleRecord>>> iterator = rules.entrySet().iterator();
                     while (iterator.hasNext()) {
-                        Map.Entry<String, List<ViewRule>> listEntry = iterator.next();
-                        List<ViewRule> value = listEntry.getValue();
+                        Map.Entry<String, List<RuleRecord>> listEntry = iterator.next();
+                        List<RuleRecord> value = listEntry.getValue();
                         if (value == null || value.isEmpty()) {
                             iterator.remove();
                         }

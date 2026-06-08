@@ -5,12 +5,12 @@ import android.view.HapticFeedbackConstants;
 import android.view.View;
 import android.view.ViewGroup;
 
-import com.kaisar.xposed.godmode.injection.editor.ViewRuleFactory;
+import com.kaisar.xposed.godmode.injection.editor.RuleRecordFactory;
 import com.kaisar.xposed.godmode.injection.editor.BitmapUtils;
 import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
 import com.kaisar.xposed.godmode.injection.util.ViewUtils;
 import com.kaisar.xposed.godmode.engine.util.CommonUtils;
-import com.kaisar.xposed.godmode.rule.ViewRule;
+import com.kaisar.xposed.godmode.rule.RuleRecord;
 
 /**
  * 修改手势处理器 — 长按拖拽修改视图位置 + 网格/边缘吸附 + IPC 持久化。
@@ -81,12 +81,12 @@ public final class ModifyGestureHandler {
         int deltaY = finalMarginY - state.startMarginY;
 
         if (deltaX != 0 || deltaY != 0) {
-            ViewRule rule = ViewRuleFactory.makeModifyRule(state.dragTarget);
+            RuleRecord rule = RuleRecordFactory.makeModifyRule(state.dragTarget);
             rule.origLeftMargin = state.startMarginX;
             rule.origTopMargin = state.startMarginY;
             rule.modXOffset = deltaX;
             rule.modYOffset = deltaY;
-            ViewRuleFactory.fillCoordinates(rule, state.dragTarget);
+            RuleRecordFactory.fillCoordinates(rule, state.dragTarget);
             Bitmap snapshot = BitmapUtils.snapshotView(
                     ViewUtils.findTopParentViewByChildView(state.dragTarget));
             BitmapUtils.drawRuleMask(snapshot, rule);

@@ -8,7 +8,7 @@ import java.util.Arrays;
  * 实现 {@link RuleFields} 接口以提供编译期安全的字段访问，
  * 配合 {@link com.kaisar.xposed.godmode.engine.util.RuleMapper} 实现类型安全的 app→engine 转换。
  * <p>
- * 【同步保障】对方文件: {@code app/.../rule/ViewRule.java}（Parcelable 版，带 @SerializedName）
+ * 【同步保障】对方文件: {@code app/.../rule/RuleRecord.java}（Parcelable 版，带 @SerializedName）
  * <br>引擎字段总数: 37 &nbsp;|&nbsp; app 字段总数: 37
  * <br>若此处增减字段，请同步修改对方文件的同名字段、Parcel 读写、clone() 和 equals()/hashCode()。
  * <p>
