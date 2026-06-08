@@ -1,4 +1,4 @@
-package com.kaisar.xposed.godmode.injection.editor.gesture;
+package com.kaisar.xposed.godmode.injection.editor.panel;
 
 import android.graphics.Color;
 import android.view.View;

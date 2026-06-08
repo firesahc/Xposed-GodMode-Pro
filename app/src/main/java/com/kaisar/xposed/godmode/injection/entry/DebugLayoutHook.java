@@ -1,4 +1,4 @@
-package com.kaisar.xposed.godmode.hook;
+package com.kaisar.xposed.godmode.injection.entry;
 
 import static com.kaisar.xposed.godmode.GodModeApplication.TAG;
 import static com.kaisar.xposed.godmode.engine.util.GmConstants.TAG_GM_CMP;

@@ -133,7 +133,7 @@ public final class RuleRecordFactory {
 
     /** 填充可重复规则信息（itemPath、itemRootClass、parentClass） */
     private static void populateRepeatableInfo(View v, RuleRecord rule) {
-        boolean isInfoFlowMode = GodModeInjector.getKeyInterceptor().isInfoFlowMode();
+        boolean isInfoFlowMode = GodModeInjector.getEditorOrchestrator().isInfoFlowMode();
         com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec engineRule = toEngine(rule);
         ViewFinder.populateRepeatableInfo(v, engineRule, isInfoFlowMode);
         if (engineRule.isRepeatable()) {
