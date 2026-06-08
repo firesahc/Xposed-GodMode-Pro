@@ -73,7 +73,8 @@ public final class RuleRecordDetailsFragment extends PreferenceFragmentCompat im
             ApplicationInfo applicationInfo = packageManager.getApplicationInfo(packageName, 0);
             icon = applicationInfo.loadIcon(packageManager);
             label = applicationInfo.loadLabel(packageManager).toString();
-        } catch (PackageManager.NameNotFoundException ignored) {
+        } catch (PackageManager.NameNotFoundException e) {
+            // 应用未安装 — 使用默认图标和应用包名作为标签
         }
         Preference headerPreference = findPreference(getString(R.string.pref_key_detail_rule_info));
         headerPreference.setIcon(icon);
@@ -230,7 +231,7 @@ public final class RuleRecordDetailsFragment extends PreferenceFragmentCompat im
                 }
                 return BitmapFactory.decodeByteArray(buffer.toByteArray(), 0, buffer.size());
             } finally {
-                try { pfd.close(); } catch (Exception ignored) {}
+                try { pfd.close(); } catch (Exception e) { /* closeSilently */ }
             }
         } catch (Exception e) {
             Logger.w(TAG, "[RuleRecordDetails] " + e.getMessage());

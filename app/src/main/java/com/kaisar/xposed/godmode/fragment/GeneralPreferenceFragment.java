@@ -108,7 +108,8 @@ public final class GeneralPreferenceFragment extends PreferenceFragmentCompat im
             ApplicationInfo aInfo = pm.getApplicationInfo(packageName, 0);
             icon = aInfo.loadIcon(pm);
             label = aInfo.loadLabel(pm);
-        } catch (PackageManager.NameNotFoundException ignore) {
+        } catch (PackageManager.NameNotFoundException e) {
+            // 应用未安装 — 使用默认图标和包名
             icon = ResourcesCompat.getDrawable(getResources(), R.mipmap.ic_god, requireContext().getTheme());
             label = packageName;
         }

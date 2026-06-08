@@ -43,7 +43,8 @@ public final class ModuleResources {
         try {
             res.getString(R.string.res_inject_success);
             return; // 已注入
-        } catch (Resources.NotFoundException ignored) {
+        } catch (Resources.NotFoundException e) {
+            // 尚未注入 — 继续执行注入流程
         }
         try {
             String path = sModulePath;

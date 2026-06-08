@@ -404,7 +404,8 @@ public final class ViewFinder {
                 try {
                     String resName = view.getResources().getResourceName(view.getId());
                     if (!TextUtils.equals(resName, rule.resourceName)) return false;
-                } catch (Resources.NotFoundException ignore) {
+                } catch (Resources.NotFoundException e) {
+                    // view 无 resource id — 不匹配
                     return false;
                 }
             }
@@ -435,7 +436,8 @@ public final class ViewFinder {
             try {
                 String resName = view.getResources().getResourceName(view.getId());
                 if (TextUtils.equals(resName, rule.resourceName)) score += 25;
-            } catch (Resources.NotFoundException ignored) {
+            } catch (Resources.NotFoundException e) {
+                // view 无 resource name — score 保持不增加
             }
         }
         if (!TextUtils.isEmpty(rule.text) && view instanceof TextView) {

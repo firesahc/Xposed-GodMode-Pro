@@ -23,7 +23,8 @@ final class ResourceMatcher implements MatchStrategy {
         try {
             String resName = view.getResources().getResourceName(view.getId());
             if (TextUtils.equals(resName, rule.resourceName)) return 25;
-        } catch (Resources.NotFoundException ignored) {
+        } catch (Resources.NotFoundException e) {
+            // view 没有 resource name — 不匹配，score 保持 0
         }
         return 0;
     }
