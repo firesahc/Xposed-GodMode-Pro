@@ -23,7 +23,7 @@ import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.injection.ModuleResources;
 import com.kaisar.xposed.godmode.engine.matcher.ViewFinder;
 import com.kaisar.xposed.godmode.engine.traversal.ViewTraversal;
-import com.kaisar.xposed.godmode.engine.util.FieldMapper;
+import com.kaisar.xposed.godmode.engine.util.RuleMapper;
 import com.kaisar.xposed.godmode.injection.editor.RuleRecordFactory;
 import com.kaisar.xposed.godmode.injection.editor.BitmapUtils;
 import com.kaisar.xposed.godmode.injection.util.ViewUtils;
@@ -450,8 +450,7 @@ public class PropertyEditorPanel {
                 View view;
                 if (rule.repeatable) {
                     com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec engineRule =
-                            new com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec();
-                    FieldMapper.copyFields(rule, engineRule);
+                            RuleMapper.toEngine(rule);
                     view = ViewFinder.findViewBestMatch(
                             (ViewGroup) activity.getWindow().getDecorView(), engineRule,
                             activity.getPackageManager(), activity.getPackageName());
