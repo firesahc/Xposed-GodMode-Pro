@@ -36,19 +36,23 @@ public class SharedViewModel extends ViewModel {
     public final MutableLiveData<String> selectedPackage = new MutableLiveData<>();
 
     public SharedViewModel() {
-        GodModeManager.getDefault().addObserver("*", new IObserver.Stub() {
-            @Override
-            public void onEditModeChanged(boolean enable) {
-            }
-
-            @Override
-            public void onViewRuleChanged(String packageName, ActRules actRules) {
-                appRules.postValue(GodModeManager.getDefault().getAllRules());
-                if (TextUtils.equals(packageName, selectedPackage.getValue())) {
-                    selectedPackage.postValue(packageName);
+        try {
+            GodModeManager.getDefault().addObserver("*", new IObserver.Stub() {
+                @Override
+                public void onEditModeChanged(boolean enable) {
                 }
-            }
-        });
+
+                @Override
+                public void onViewRuleChanged(String packageName, ActRules actRules) {
+                    appRules.postValue(GodModeManager.getDefault().getAllRules());
+                    if (TextUtils.equals(packageName, selectedPackage.getValue())) {
+                        selectedPackage.postValue(packageName);
+                    }
+                }
+            });
+        } catch (Exception e) {
+            Logger.w(TAG, "SharedViewModel: register observer failed", e);
+        }
     }
 
     @Override
