@@ -157,6 +157,7 @@ public final class LifecycleObserver extends XC_MethodHook {
             XposedHelpers.findAndHookMethod(adapterClass, "notifyDataSetChanged", new XC_MethodHook() {
                 @Override
                 protected void afterHookedMethod(MethodHookParam param) {
+                    if (mActRules.isEmpty()) return; // 无规则时不触发重匹配
                     for (Activity act : mActivities.keySet()) {
                         if (act != null && !act.isFinishing()) scheduleRuleReapplication(act);
                     }

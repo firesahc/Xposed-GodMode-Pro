@@ -37,8 +37,13 @@ public final class ZipUtils {
 
     public static void uncompress(InputStream in, String destPath) throws IOException {
         try (ZipInputStream zipIn = new ZipInputStream(in)) {
+            File destDir = new File(destPath).getCanonicalFile();
             for (ZipEntry e; (e = zipIn.getNextEntry()) != null; ) {
-                File file = new File(destPath, e.getName());
+                File file = new File(destDir, e.getName()).getCanonicalFile();
+                // Zip Slip 防护：校验目标路径在解压目录之下
+                if (!file.getCanonicalPath().startsWith(destDir.getCanonicalPath() + File.separator)) {
+                    throw new IOException("Zip entry with path traversal: " + e.getName());
+                }
                 try (FileOutputStream out = new FileOutputStream(file)) {
                     if (!FileUtils.copy(zipIn, out)) {
                         throw new IOException("Failed to decompress entry: " + e.getName());

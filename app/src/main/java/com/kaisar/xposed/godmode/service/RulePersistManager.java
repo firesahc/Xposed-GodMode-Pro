@@ -208,9 +208,10 @@ final class RulePersistManager {
     /** 校验文件路径是否为合法的 GodMode 图片文件路径 */
     boolean isValidImagePath(String filePath) {
         try {
-            return filePath.startsWith(getBaseDir())
+            return new File(filePath).getCanonicalPath()
+                    .startsWith(new File(getBaseDir()).getCanonicalPath())
                     && filePath.endsWith(IMAGE_FILE_SUFFIX);
-        } catch (FileNotFoundException e) {
+        } catch (IOException e) {
             return false;
         }
     }

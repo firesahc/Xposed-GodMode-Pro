@@ -58,7 +58,9 @@ public final class TouchInterceptor extends XC_MethodHook implements Property.On
 
     private boolean mIsInEditMode;
     private volatile boolean mMultiPointLock;
-    public static volatile boolean mDragging;
+    private static volatile boolean mDragging;
+
+    public static boolean isDragging() { return mDragging; }
 
     // =========================================================================
     // 通用触摸状态

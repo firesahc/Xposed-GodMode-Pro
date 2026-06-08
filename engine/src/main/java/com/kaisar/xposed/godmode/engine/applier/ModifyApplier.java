@@ -10,6 +10,7 @@ import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.TextView;
 
+import com.kaisar.xposed.godmode.engine.pool.ThreadPools;
 import com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec;
 
 import java.lang.ref.SoftReference;
@@ -17,8 +18,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.WeakHashMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 /**
  * 修改规则应用器 — 修改视图尺寸/透明度/位置/文本/图片，支持撤销。
@@ -28,7 +27,7 @@ import java.util.concurrent.Executors;
  */
 public final class ModifyApplier implements RuleApplier {
 
-    private static final ExecutorService IMAGE_LOADER = Executors.newFixedThreadPool(2);
+    // 复用 ThreadPools.IMAGE_LOADER 而非创建独立线程池
     private static final Handler MAIN_HANDLER = new Handler(Looper.getMainLooper());
     private final WeakHashMap<View, Integer> mAppliedViews = new WeakHashMap<>();
     private final Map<String, SoftReference<Bitmap>> mBitmapCache =
@@ -130,7 +129,7 @@ public final class ModifyApplier implements RuleApplier {
         if (cachedBitmap != null && !cachedBitmap.isRecycled()) {
             targetView.setImageBitmap(cachedBitmap);
         } else {
-            IMAGE_LOADER.execute(() -> {
+            ThreadPools.IMAGE_LOADER.execute(() -> {
                 Bitmap bitmap = loadModImage(imagePath);
                 if (bitmap != null) {
                     mBitmapCache.put(imagePath, new SoftReference<>(bitmap));
