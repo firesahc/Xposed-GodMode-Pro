@@ -6,14 +6,14 @@ import android.content.res.Resources;
 
 import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.injection.util.GmResources;
-import com.kaisar.xposed.godmode.injection.util.Logger;
+import com.kaisar.xposed.godmode.util.Logger;
 
 import java.io.File;
 import java.lang.reflect.Method;
 
 /**
- * 模块资源注入器 — 将 GodMode 模块资源注入目标应用的 AssetManager。
- * 从 GodModeInjector 提取的独立职责。
+ * 妯″潡璧勬簮娉ㄥ叆鍣?鈥?灏?GodMode 妯″潡璧勬簮娉ㄥ叆鐩爣搴旂敤鐨?AssetManager銆?
+ * 浠?GodModeInjector 鎻愬彇鐨勭嫭绔嬭亴璐ｃ€?
  */
 public final class ModuleResources {
 
@@ -23,7 +23,7 @@ public final class ModuleResources {
 
     private ModuleResources() {}
 
-    /** 在 initZygote 阶段初始化模块资源路径 */
+    /** 鍦?initZygote 闃舵鍒濆鍖栨ā鍧楄祫婧愯矾寰?*/
     public static void init(String modulePath, Resources moduleRes) {
         sModulePath = modulePath;
         sInitialized = true;
@@ -35,16 +35,16 @@ public final class ModuleResources {
     }
 
     /**
-     * 将 GodMode 模块资源注入目标应用的 Resources。
-     * 使得在目标应用中渲染覆盖层 UI 时可以使用模块的布局、字符串和图片资源。
+     * 灏?GodMode 妯″潡璧勬簮娉ㄥ叆鐩爣搴旂敤鐨?Resources銆?
+     * 浣垮緱鍦ㄧ洰鏍囧簲鐢ㄤ腑娓叉煋瑕嗙洊灞?UI 鏃跺彲浠ヤ娇鐢ㄦā鍧楃殑甯冨眬銆佸瓧绗︿覆鍜屽浘鐗囪祫婧愩€?
      */
     public static void injectInto(Resources res) {
         if (res == null) return;
         try {
             res.getString(R.string.res_inject_success);
-            return; // 已注入
+            return; // 宸叉敞鍏?
         } catch (Resources.NotFoundException e) {
-            // 尚未注入 — 继续执行注入流程
+            // 灏氭湭娉ㄥ叆 鈥?缁х画鎵ц娉ㄥ叆娴佺▼
         }
         try {
             String path = sModulePath;

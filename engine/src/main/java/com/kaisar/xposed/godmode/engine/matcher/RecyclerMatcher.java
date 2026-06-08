@@ -5,14 +5,14 @@ import android.view.ViewGroup;
 import android.view.ViewParent;
 
 import com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec;
-import com.kaisar.xposed.godmode.engine.traversal.ViewTraversal;
+import com.kaisar.xposed.godmode.engine.matcher.ViewTraversal;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * RecyclerView 适配器匹配 — 处理列表中重复出现的同类元素。
- * 通过 itemRootClass + itemPath 在 RecyclerView 的每个 item 中定位目标视图。
+ * RecyclerView 閫傞厤鍣ㄥ尮閰?鈥?澶勭悊鍒楄〃涓噸澶嶅嚭鐜扮殑鍚岀被鍏冪礌銆?
+ * 閫氳繃 itemRootClass + itemPath 鍦?RecyclerView 鐨勬瘡涓?item 涓畾浣嶇洰鏍囪鍥俱€?
  */
 final class RecyclerMatcher implements MatchStrategy {
 
@@ -25,13 +25,13 @@ final class RecyclerMatcher implements MatchStrategy {
     public int computeScore(View view, RuleMatchSpec rule) {
         if (!rule.isRepeatable()) return 0;
         if (ViewTraversal.isInRecyclerView(view)) {
-            return 50; // RecyclerView 上下文匹配
+            return 50; // RecyclerView 涓婁笅鏂囧尮閰?
         }
         return 0;
     }
 
     /**
-     * 在 RecyclerView 中查找所有匹配列表项中的目标视图。
+     * 鍦?RecyclerView 涓煡鎵炬墍鏈夊尮閰嶅垪琛ㄩ」涓殑鐩爣瑙嗗浘銆?
      */
     static List<View> findViewsInRecycler(View root, RuleMatchSpec rule,
             ViewGroup recyclerView) {

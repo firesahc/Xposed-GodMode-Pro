@@ -1,4 +1,4 @@
-package com.kaisar.xposed.godmode.engine.util;
+package com.kaisar.xposed.godmode.engine;
 
 import java.util.ArrayList;
 import java.util.List;

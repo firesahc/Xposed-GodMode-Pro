@@ -5,7 +5,7 @@ import android.view.ViewGroup;
 import android.view.ViewParent;
 
 import com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec;
-import com.kaisar.xposed.godmode.engine.traversal.ViewTraversal;
+import com.kaisar.xposed.godmode.engine.matcher.ViewTraversal;
 import com.kaisar.xposed.godmode.engine.util.GmConstants;
 
 import java.util.ArrayList;
@@ -14,10 +14,10 @@ import java.util.Comparator;
 import java.util.List;
 
 /**
- * 组合匹配器 — IMatcher 的默认实现。
- * 持有所有 MatchStrategy 子策略，按优先级排序后依次评分，选取得分最高且超过阈值的匹配。
+ * 缁勫悎鍖归厤鍣?鈥?IMatcher 鐨勯粯璁ゅ疄鐜般€?
+ * 鎸佹湁鎵€鏈?MatchStrategy 瀛愮瓥鐣ワ紝鎸変紭鍏堢骇鎺掑簭鍚庝緷娆¤瘎鍒嗭紝閫夊彇寰楀垎鏈€楂樹笖瓒呰繃闃堝€肩殑鍖归厤銆?
  * <p>
- * 同时实现 MatchStrategy 接口，自身也可作为策略参与组合。
+ * 鍚屾椂瀹炵幇 MatchStrategy 鎺ュ彛锛岃嚜韬篃鍙綔涓虹瓥鐣ュ弬涓庣粍鍚堛€?
  */
 public final class CompositeMatcher implements IMatcher, MatchStrategy {
 
@@ -27,7 +27,7 @@ public final class CompositeMatcher implements IMatcher, MatchStrategy {
     private final List<MatchStrategy> mStrategies;
 
     public CompositeMatcher() {
-        // 按优先级排序的策略链
+        // 鎸変紭鍏堢骇鎺掑簭鐨勭瓥鐣ラ摼
         MatchStrategy[] strategies = {
                 new DepthMatcher(),
                 new ResourceMatcher(),
@@ -39,22 +39,22 @@ public final class CompositeMatcher implements IMatcher, MatchStrategy {
         mStrategies = Arrays.asList(strategies);
     }
 
-    // ---- IMatcher 实现 ----
+    // ---- IMatcher 瀹炵幇 ----
 
     @Override
     public View matchView(View root, RuleMatchSpec rule) {
         if (root == null || rule == null) return null;
 
-        boolean strictMode = false; // 由调用方通过外部检测设置，此处使用宽松模式
+        boolean strictMode = false; // 鐢辫皟鐢ㄦ柟閫氳繃澶栭儴妫€娴嬭缃紝姝ゅ浣跨敤瀹芥澗妯″紡
         int threshold = strictMode ? STRICT_THRESHOLD : LOOSE_THRESHOLD;
 
-        // 1. 优先按 depth 路径精确定位
+        // 1. 浼樺厛鎸?depth 璺緞绮剧‘瀹氫綅
         if (rule.depth != null && rule.depth.length > 0) {
             View depthView = ViewTraversal.findViewByDepth(root, rule.depth);
             if (depthView != null) {
                 int score = computeScore(depthView, rule);
                 if (score >= threshold) return depthView;
-                // 锚定深度视图的兄弟节点搜索
+                // 閿氬畾娣卞害瑙嗗浘鐨勫厔寮熻妭鐐规悳绱?
                 ViewParent parent = depthView.getParent();
                 if (parent instanceof ViewGroup) {
                     ViewGroup group = (ViewGroup) parent;
@@ -68,14 +68,14 @@ public final class CompositeMatcher implements IMatcher, MatchStrategy {
             }
         }
 
-        // 2. 非 repeatable 模式下，depth 是唯一锚定 — 不回退到 text/desc
+        // 2. 闈?repeatable 妯″紡涓嬶紝depth 鏄敮涓€閿氬畾 鈥?涓嶅洖閫€鍒?text/desc
         if (!rule.isRepeatable()) {
             return null;
         }
 
-        // 3. repeatable 规则：按 itemPath 在 RecyclerView 中精确定位
-        // 遍历整树找到 RecyclerView，对每个调用 RecyclerMatcher 按 itemPath 匹配，
-        // 避免全树模糊搜索误匹配非目标视图。
+        // 3. repeatable 瑙勫垯锛氭寜 itemPath 鍦?RecyclerView 涓簿纭畾浣?
+        // 閬嶅巻鏁存爲鎵惧埌 RecyclerView锛屽姣忎釜璋冪敤 RecyclerMatcher 鎸?itemPath 鍖归厤锛?
+        // 閬垮厤鍏ㄦ爲妯＄硦鎼滅储璇尮閰嶉潪鐩爣瑙嗗浘銆?
         if (rule.itemPath != null && rule.itemPath.length > 0
                 && rule.itemRootClass != null) {
             List<View> rvResults = new ArrayList<>();
@@ -94,7 +94,7 @@ public final class CompositeMatcher implements IMatcher, MatchStrategy {
             }
         }
 
-        // 4. 无可靠匹配 — 返回 null，由调用方处理兜底
+        // 4. 鏃犲彲闈犲尮閰?鈥?杩斿洖 null锛岀敱璋冪敤鏂瑰鐞嗗厹搴?
         return null;
     }
 
@@ -107,8 +107,8 @@ public final class CompositeMatcher implements IMatcher, MatchStrategy {
     }
 
     /**
-     * 递归遍历视图树，收集所有 RecyclerView 中按 itemPath 匹配的视图。
-     * 仅用于 repeatable 规则的精确匹配，不进行模糊评分搜索。
+     * 閫掑綊閬嶅巻瑙嗗浘鏍戯紝鏀堕泦鎵€鏈?RecyclerView 涓寜 itemPath 鍖归厤鐨勮鍥俱€?
+     * 浠呯敤浜?repeatable 瑙勫垯鐨勭簿纭尮閰嶏紝涓嶈繘琛屾ā绯婅瘎鍒嗘悳绱€?
      */
     private static void collectRecyclerMatches(View view, RuleMatchSpec rule, List<View> results) {
         if (results.size() >= GmConstants.MAX_REPEATABLE_RESULTS) return;
@@ -145,27 +145,27 @@ public final class CompositeMatcher implements IMatcher, MatchStrategy {
         }
     }
 
-    // ===== 匹配评分常量 =====
+    // ===== 鍖归厤璇勫垎甯搁噺 =====
     private static final int SCORE_CLASS = 30;
     private static final int SCORE_PARENT = 10;
 
-    // ---- MatchStrategy 实现 — 聚合所有子策略得分 ----
+    // ---- MatchStrategy 瀹炵幇 鈥?鑱氬悎鎵€鏈夊瓙绛栫暐寰楀垎 ----
 
     @Override
     public int computeScore(View view, RuleMatchSpec rule) {
         int total = 0;
-        // 视图类名匹配 — 最基础条件
+        // 瑙嗗浘绫诲悕鍖归厤 鈥?鏈€鍩虹鏉′欢
         if (view.getClass().getName().equals(rule.viewClass)) {
             total += SCORE_CLASS;
         }
-        // 父视图类名匹配
+        // 鐖惰鍥剧被鍚嶅尮閰?
         if (rule.parentClass != null) {
             ViewParent parent = view.getParent();
             if (parent != null && parent.getClass().getName().equals(rule.parentClass)) {
                 total += SCORE_PARENT;
             }
         }
-        // 收集各子策略得分
+        // 鏀堕泦鍚勫瓙绛栫暐寰楀垎
         for (MatchStrategy s : mStrategies) {
             total += s.computeScore(view, rule);
         }

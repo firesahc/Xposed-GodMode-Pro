@@ -1,4 +1,4 @@
-package com.kaisar.xposed.godmode.injection.lifecycle;
+package com.kaisar.xposed.godmode.injection;
 
 import static com.kaisar.xposed.godmode.GodModeApplication.TAG;
 
@@ -12,7 +12,7 @@ import android.view.ViewTreeObserver;
 import com.kaisar.xposed.godmode.engine.event.RulesChangedEvent;
 import com.kaisar.xposed.godmode.engine.event.Subscribe;
 import com.kaisar.xposed.godmode.injection.ViewController;
-import com.kaisar.xposed.godmode.injection.util.Logger;
+import com.kaisar.xposed.godmode.util.Logger;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 import com.kaisar.xposed.godmode.engine.util.Preconditions;
@@ -27,9 +27,9 @@ import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedHelpers;
 
 /**
- * 监听 Activity 生命周期，在 Activity 恢复/销毁时应用/撤销规则。
+ * 鐩戝惉 Activity 鐢熷懡鍛ㄦ湡锛屽湪 Activity 鎭㈠/閿€姣佹椂搴旂敤/鎾ら攢瑙勫垯銆?
  * <p>
- * 通过 EventBus 订阅 {@link RulesChangedEvent} 接收规则变更通知。
+ * 閫氳繃 EventBus 璁㈤槄 {@link RulesChangedEvent} 鎺ユ敹瑙勫垯鍙樻洿閫氱煡銆?
  */
 public final class LifecycleObserver extends XC_MethodHook {
 
@@ -51,8 +51,8 @@ public final class LifecycleObserver extends XC_MethodHook {
                 decorView.getViewTreeObserver().addOnGlobalLayoutListener(listener);
                 mActivities.put(activity, listener);
                 decorView.post(listener::applyRuleIfMatchCondition);
-                // 确保在规则已到达但 mActivities 尚为空（规则早于 onPostResume）
-                // 或视图在初次 applyRuleIfMatchCondition 时尚未就绪时有一个延迟重试。
+                // 纭繚鍦ㄨ鍒欏凡鍒拌揪浣?mActivities 灏氫负绌猴紙瑙勫垯鏃╀簬 onPostResume锛?
+                // 鎴栬鍥惧湪鍒濇 applyRuleIfMatchCondition 鏃跺皻鏈氨缁椂鏈変竴涓欢杩熼噸璇曘€?
                 scheduleRuleReapplication(activity);
             }
             installRecyclerViewHooks(activity);
@@ -69,16 +69,16 @@ public final class LifecycleObserver extends XC_MethodHook {
     }
 
     /**
-     * 接收规则变更通知（EventBus 路径）。
-     * 撤销旧规则，应用新规则，然后为所有已跟踪 Activity 调度延迟重试。
+     * 鎺ユ敹瑙勫垯鍙樻洿閫氱煡锛圗ventBus 璺緞锛夈€?
+     * 鎾ら攢鏃ц鍒欙紝搴旂敤鏂拌鍒欙紝鐒跺悗涓烘墍鏈夊凡璺熻釜 Activity 璋冨害寤惰繜閲嶈瘯銆?
      */
     @SuppressWarnings("unchecked")
     @Subscribe
     public void onRulesChanged(RulesChangedEvent event) {
         ActRules newActRules = (ActRules) event.rules;
         if (newActRules == null) return;
-        // 规则未变化时跳过，避免不必要的撤销→再应用导致的闪回
-        // 触发场景：IPC addObserver 推送的规则与 onPostResume 中已应用的规则完全相同时
+        // 瑙勫垯鏈彉鍖栨椂璺宠繃锛岄伩鍏嶄笉蹇呰鐨勬挙閿€鈫掑啀搴旂敤瀵艰嚧鐨勯棯鍥?
+        // 瑙﹀彂鍦烘櫙锛欼PC addObserver 鎺ㄩ€佺殑瑙勫垯涓?onPostResume 涓凡搴旂敤鐨勮鍒欏畬鍏ㄧ浉鍚屾椂
         if (newActRules.equals(mActRules)) return;
         ViewController.getDefault().clearBlockedCache();
         Set<Map.Entry<String, List<RuleRecord>>> entries = newActRules.entrySet();
@@ -125,11 +125,11 @@ public final class LifecycleObserver extends XC_MethodHook {
                 }
             }
         }
-        // 修复: 在规则存放后为所有已跟踪 Activity 调度重应用，
-        // 以处理视图在规则首次到达时尚不存在的情况（例如异步填充、Fragment 懒加载）。
-        // 如果视图尚不可用，applyRuleBatch 会静默失败，
-        // 而 onGlobalLayout 在静态 UI 上可能永远不会再次触发。
-        // scheduleRuleReapplication（200ms 消抖）提供重试窗口以捕获动态创建的视图。
+        // 淇: 鍦ㄨ鍒欏瓨鏀惧悗涓烘墍鏈夊凡璺熻釜 Activity 璋冨害閲嶅簲鐢紝
+        // 浠ュ鐞嗚鍥惧湪瑙勫垯棣栨鍒拌揪鏃跺皻涓嶅瓨鍦ㄧ殑鎯呭喌锛堜緥濡傚紓姝ュ～鍏呫€丗ragment 鎳掑姞杞斤級銆?
+        // 濡傛灉瑙嗗浘灏氫笉鍙敤锛宎pplyRuleBatch 浼氶潤榛樺け璐ワ紝
+        // 鑰?onGlobalLayout 鍦ㄩ潤鎬?UI 涓婂彲鑳芥案杩滀笉浼氬啀娆¤Е鍙戙€?
+        // scheduleRuleReapplication锛?00ms 娑堟姈锛夋彁渚涢噸璇曠獥鍙ｄ互鎹曡幏鍔ㄦ€佸垱寤虹殑瑙嗗浘銆?
         for (Activity activity : mActivities.keySet()) {
             scheduleRuleReapplication(activity);
         }
@@ -141,7 +141,7 @@ public final class LifecycleObserver extends XC_MethodHook {
             if (existing != null) mDebounceHandler.removeCallbacks(existing);
             Runnable r = () -> {
                 synchronized (mPendingReapply) { mPendingReapply.remove(activity); }
-                // 不清理缓存：重应用应增量补充未覆盖的规则，而非破坏已生效的修改
+                // 涓嶆竻鐞嗙紦瀛橈細閲嶅簲鐢ㄥ簲澧為噺琛ュ厖鏈鐩栫殑瑙勫垯锛岃€岄潪鐮村潖宸茬敓鏁堢殑淇敼
                 OnLayoutChangeListener listener = mActivities.get(activity);
                 if (listener != null) listener.applyRuleIfMatchCondition();
             };
@@ -157,7 +157,7 @@ public final class LifecycleObserver extends XC_MethodHook {
             XposedHelpers.findAndHookMethod(adapterClass, "notifyDataSetChanged", new XC_MethodHook() {
                 @Override
                 protected void afterHookedMethod(MethodHookParam param) {
-                    if (mActRules.isEmpty()) return; // 无规则时不触发重匹配
+                    if (mActRules.isEmpty()) return; // 鏃犺鍒欐椂涓嶈Е鍙戦噸鍖归厤
                     for (Activity act : mActivities.keySet()) {
                         if (act != null && !act.isFinishing()) scheduleRuleReapplication(act);
                     }
@@ -173,7 +173,7 @@ public final class LifecycleObserver extends XC_MethodHook {
     final class OnLayoutChangeListener implements ViewTreeObserver.OnGlobalLayoutListener {
 
         final WeakReference<Activity> activityReference;
-        private volatile boolean mApplying; // 防重入标志
+        private volatile boolean mApplying; // 闃查噸鍏ユ爣蹇?
 
         OnLayoutChangeListener(Activity activity) {
             activityReference = new WeakReference<>(activity);
@@ -181,7 +181,7 @@ public final class LifecycleObserver extends XC_MethodHook {
 
         @Override
         public void onGlobalLayout() {
-            if (mApplying) return; // 防止规则应用触发的布局变更导致递归重入
+            if (mApplying) return; // 闃叉瑙勫垯搴旂敤瑙﹀彂鐨勫竷灞€鍙樻洿瀵艰嚧閫掑綊閲嶅叆
             applyRuleIfMatchCondition();
         }
 

@@ -10,24 +10,24 @@ import com.kaisar.xposed.godmode.engine.applier.ModifyApplier;
 import com.kaisar.xposed.godmode.engine.applier.RemoveApplier;
 import com.kaisar.xposed.godmode.engine.applier.RuleApplier;
 import com.kaisar.xposed.godmode.engine.matcher.ViewFinder;
-import com.kaisar.xposed.godmode.engine.util.RuleMapper;
+import com.kaisar.xposed.godmode.engine.rule.RuleMapper;
 import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
-import com.kaisar.xposed.godmode.injection.util.Logger;
+import com.kaisar.xposed.godmode.util.Logger;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 import com.kaisar.xposed.godmode.engine.util.Preconditions;
 
 import java.util.List;
 
 /**
- * 视图控制器 — 使用 engine/applier 体系应用/撤销规则。
+ * 鐟欏棗娴橀幒褍鍩楅崳?閳?娴ｈ法鏁?engine/applier 娴ｆ挾閮存惔鏃傛暏/閹俱倝鏀㈢憴鍕灟閵?
  * <p>
- * 根据 {@link RuleRecord#ruleTag} 自动路由：
+ * 閺嶈宓?{@link RuleRecord#ruleTag} 閼奉亜濮╃捄顖滄暠閿?
  * <ul>
- *   <li>ruleTag 为 null 或空 → 移除规则，委托 {@link RemoveApplier}</li>
- *   <li>ruleTag 非空 → 修改规则，委托 {@link ModifyApplier}</li>
+ *   <li>ruleTag 娑?null 閹存牜鈹?閳?缁夊娅庣憴鍕灟閿涘苯顫欓幍?{@link RemoveApplier}</li>
+ *   <li>ruleTag 闂堢偟鈹?閳?娣囶喗鏁肩憴鍕灟閿涘苯顫欓幍?{@link ModifyApplier}</li>
  * </ul>
  * <p>
- * 通过 {@link #getDefault()} 获取共享实例。
+ * 闁俺绻?{@link #getDefault()} 閼惧嘲褰囬崗鍙橀煩鐎圭偘绶ラ妴?
  */
 public final class ViewController {
 
@@ -37,10 +37,10 @@ public final class ViewController {
     private RuleApplier mRemoveApplier;
 
     // =========================================================================
-    // 单例访问
+    // 閸楁洑绶ョ拋鍧楁６
     // =========================================================================
 
-    /** 获取共享实例（延迟初始化，线程安全）。 */
+    /** 閼惧嘲褰囬崗鍙橀煩鐎圭偘绶ラ敍鍫濇鏉╃喎鍨垫慨瀣閿涘瞼鍤庣粙瀣暔閸忣煉绱氶妴?*/
     public static ViewController getDefault() {
         if (sInstance == null) {
             synchronized (ViewController.class) {
@@ -55,7 +55,7 @@ public final class ViewController {
     private ViewController() {}
 
     // =========================================================================
-    // Applier 懒加载
+    // Applier 閹虫帒濮炴潪?
     // =========================================================================
 
     private RuleApplier getModifyApplier() {
@@ -74,21 +74,21 @@ public final class ViewController {
     }
 
     // =========================================================================
-    // 公开 API
+    // 閸忣剙绱?API
     // =========================================================================
 
-    /** 清空已屏蔽视图的缓存。 */
+    /** 濞撳懐鈹栧鎻掔潌閽勫€燁潒閸ュ墽娈戠紓鎾崇摠閵?*/
     public void clearBlockedCache() {
         if (mRemoveApplier != null) mRemoveApplier.clearCache();
         if (mModifyApplier != null) mModifyApplier.clearCache();
     }
 
-    /** 将 app 模块的 RuleRecord 转换为 engine 的 RuleMatchSpec。 */
+    /** 鐏?app 濡€虫健閻?RuleRecord 鏉烆剚宕叉稉?engine 閻?RuleMatchSpec閵?*/
     private static com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec toEngineRule(RuleRecord appRule) {
         return RuleMapper.toEngine(appRule);
     }
 
-    /** 批量应用规则。 */
+    /** 閹靛綊鍣烘惔鏃傛暏鐟欏嫬鍨妴?*/
     public void applyRuleBatch(Activity activity, List<RuleRecord> rules) {
         int appliedCount = 0;
         ViewGroup decorView = activity != null && activity.getWindow() != null
@@ -125,7 +125,7 @@ public final class ViewController {
         }
     }
 
-    /** 应用单条规则。 */
+    /** 鎼存梻鏁ら崡鏇熸蒋鐟欏嫬鍨妴?*/
     public boolean applyRule(View v, RuleRecord viewRule) {
         if (v == null || viewRule == null) return false;
         com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec engineRule = toEngineRule(viewRule);
@@ -136,7 +136,7 @@ public final class ViewController {
         }
     }
 
-    /** 批量撤销规则。 */
+    /** 閹靛綊鍣洪幘銈夋敘鐟欏嫬鍨妴?*/
     public void revokeRuleBatch(Activity activity, List<RuleRecord> rules) {
         ViewGroup decorView = activity != null && activity.getWindow() != null
                 ? (ViewGroup) activity.getWindow().getDecorView() : null;
@@ -169,7 +169,7 @@ public final class ViewController {
         }
     }
 
-    /** 撤销单条规则。 */
+    /** 閹俱倝鏀㈤崡鏇熸蒋鐟欏嫬鍨妴?*/
     public void revokeRule(View v, RuleRecord viewRule) {
         if (v == null || viewRule == null) return;
         com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec engineRule = toEngineRule(viewRule);

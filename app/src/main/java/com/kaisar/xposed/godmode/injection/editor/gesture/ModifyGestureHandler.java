@@ -6,15 +6,15 @@ import android.view.View;
 import android.view.ViewGroup;
 
 import com.kaisar.xposed.godmode.injection.editor.RuleRecordFactory;
-import com.kaisar.xposed.godmode.injection.editor.BitmapUtils;
+import com.kaisar.xposed.godmode.injection.util.BitmapUtils;
 import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
 import com.kaisar.xposed.godmode.injection.util.ViewUtils;
 import com.kaisar.xposed.godmode.engine.util.CommonUtils;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 
 /**
- * 修改手势处理器 — 长按拖拽修改视图位置 + 网格/边缘吸附 + IPC 持久化。
- * 从 EventHandlerHook 提取的修改模式交互逻辑。
+ * 淇敼鎵嬪娍澶勭悊鍣?鈥?闀挎寜鎷栨嫿淇敼瑙嗗浘浣嶇疆 + 缃戞牸/杈圭紭鍚搁檮 + IPC 鎸佷箙鍖栥€?
+ * 浠?EventHandlerHook 鎻愬彇鐨勪慨鏀规ā寮忎氦浜掗€昏緫銆?
  */
 public final class ModifyGestureHandler {
 
@@ -23,7 +23,7 @@ public final class ModifyGestureHandler {
 
     private ModifyGestureHandler() {}
 
-    /** 开始拖拽当前选中的视图 */
+    /** 寮€濮嬫嫋鎷藉綋鍓嶉€変腑鐨勮鍥?*/
     public static ModifyState startDrag(View target) {
         if (target == null) return null;
         ModifyState state = new ModifyState();
@@ -43,7 +43,7 @@ public final class ModifyGestureHandler {
         return state;
     }
 
-    /** 移动拖拽目标，应用网格+兄弟边缘吸附 */
+    /** 绉诲姩鎷栨嫿鐩爣锛屽簲鐢ㄧ綉鏍?鍏勫紵杈圭紭鍚搁檮 */
     public static void moveTarget(ModifyState state, float dx, float dy) {
         if (state == null || state.dragTarget == null) return;
 
@@ -67,7 +67,7 @@ public final class ModifyGestureHandler {
         }
     }
 
-    /** 将最终拖拽位置持久化为修改规则 */
+    /** 灏嗘渶缁堟嫋鎷戒綅缃寔涔呭寲涓轰慨鏀硅鍒?*/
     public static void finalizeDrag(ModifyState state, String packageName) {
         if (state == null || state.dragTarget == null) return;
         ViewGroup.LayoutParams lp = state.dragTarget.getLayoutParams();
@@ -95,7 +95,7 @@ public final class ModifyGestureHandler {
         }
     }
 
-    /** 修改模式状态容器 */
+    /** 淇敼妯″紡鐘舵€佸鍣?*/
     public static final class ModifyState {
         public View dragTarget;
         public int startMarginX, startMarginY;

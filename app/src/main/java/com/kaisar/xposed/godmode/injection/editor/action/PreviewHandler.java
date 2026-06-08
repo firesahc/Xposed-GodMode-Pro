@@ -7,17 +7,17 @@ import com.kaisar.xposed.godmode.injection.editor.RuleRecordFactory;
 import com.kaisar.xposed.godmode.injection.util.ViewUtils;
 import com.kaisar.xposed.godmode.injection.ViewController;
 import com.kaisar.xposed.godmode.injection.editor.overlay.MaskView;
-import com.kaisar.xposed.godmode.injection.util.Logger;
+import com.kaisar.xposed.godmode.util.Logger;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 
 /**
- * 预览操作处理器 — 在确认移除前临时隐藏视图。
+ * 棰勮鎿嶄綔澶勭悊鍣?鈥?鍦ㄧ‘璁ょЩ闄ゅ墠涓存椂闅愯棌瑙嗗浘銆?
  * <p>
- * 管理 {@code KeyInterceptor} 中的预览状态（mPreviewView、mPreviewRule、mIsPreviewing），
- * 封装 {@link #startPreview} / {@link #restorePreview} 逻辑。
+ * 绠＄悊 {@code KeyInterceptor} 涓殑棰勮鐘舵€侊紙mPreviewView銆乵PreviewRule銆乵IsPreviewing锛夛紝
+ * 灏佽 {@link #startPreview} / {@link #restorePreview} 閫昏緫銆?
  * <p>
- * 调用方负责按钮状态更新（{@code updatePreviewButton}）及
- * {@link MaskView} 与 {@code NodeSelectorPanel} 的交互。
+ * 璋冪敤鏂硅礋璐ｆ寜閽姸鎬佹洿鏂帮紙{@code updatePreviewButton}锛夊強
+ * {@link MaskView} 涓?{@code NodeSelectorPanel} 鐨勪氦浜掋€?
  */
 public final class PreviewHandler {
 
@@ -25,17 +25,17 @@ public final class PreviewHandler {
     private RuleRecord mPreviewRule;
     private boolean mIsPreviewing;
 
-    /** 当前是否处于预览状态。 */
+    /** 褰撳墠鏄惁澶勪簬棰勮鐘舵€併€?*/
     public boolean isPreviewing() {
         return mIsPreviewing;
     }
 
     /**
-     * 开始预览：为选中视图创建移除规则并应用（visibility = GONE）。
+     * 寮€濮嬮瑙堬細涓洪€変腑瑙嗗浘鍒涘缓绉婚櫎瑙勫垯骞跺簲鐢紙visibility = GONE锛夈€?
      *
-     * @param view          被选中的目标视图
-     * @param maskView      MaskView（用于清除高亮边界）
-     * @param onStateChanged 状态变更通知（调用方用于更新按钮 UI）
+     * @param view          琚€変腑鐨勭洰鏍囪鍥?
+     * @param maskView      MaskView锛堢敤浜庢竻闄ら珮浜竟鐣岋級
+     * @param onStateChanged 鐘舵€佸彉鏇撮€氱煡锛堣皟鐢ㄦ柟鐢ㄤ簬鏇存柊鎸夐挳 UI锛?
      */
     public void startPreview(View view, MaskView maskView, Runnable onStateChanged) {
         if (view == null) return;
@@ -53,11 +53,11 @@ public final class PreviewHandler {
     }
 
     /**
-     * 恢复预览：撤销移除规则（visibility = VISIBLE），更新 MaskView 高亮。
+     * 鎭㈠棰勮锛氭挙閿€绉婚櫎瑙勫垯锛坴isibility = VISIBLE锛夛紝鏇存柊 MaskView 楂樹寒銆?
      *
-     * @param maskView       MaskView（用于恢复后更新高亮边界）
-     * @param selectedView   当前选中的视图（用于恢复后更新高亮边界；可能为 null）
-     * @param onStateChanged 状态变更通知（调用方用于更新按钮 UI）
+     * @param maskView       MaskView锛堢敤浜庢仮澶嶅悗鏇存柊楂樹寒杈圭晫锛?
+     * @param selectedView   褰撳墠閫変腑鐨勮鍥撅紙鐢ㄤ簬鎭㈠鍚庢洿鏂伴珮浜竟鐣岋紱鍙兘涓?null锛?
+     * @param onStateChanged 鐘舵€佸彉鏇撮€氱煡锛堣皟鐢ㄦ柟鐢ㄤ簬鏇存柊鎸夐挳 UI锛?
      */
     public void restorePreview(MaskView maskView, View selectedView, Runnable onStateChanged) {
         if (mPreviewView != null && mPreviewRule != null) {

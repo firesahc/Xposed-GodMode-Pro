@@ -1,4 +1,4 @@
-package com.kaisar.xposed.godmode;
+package com.kaisar.xposed.godmode.service;
 
 import android.content.SharedPreferences;
 import android.graphics.drawable.Icon;

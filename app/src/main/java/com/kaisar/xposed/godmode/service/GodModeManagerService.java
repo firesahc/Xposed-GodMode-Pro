@@ -14,7 +14,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.kaisar.xposed.godmode.BuildConfig;
 import com.kaisar.xposed.godmode.IGodModeManager;
-import com.kaisar.xposed.godmode.injection.util.Logger;
+import com.kaisar.xposed.godmode.util.Logger;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.AppRules;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
@@ -23,31 +23,31 @@ import java.io.File;
 import java.io.FileNotFoundException;
 
 /**
- * 上帝模式核心管理服务 — 所有跨进程通讯均通过此服务。
+ * 涓婂笣妯″紡鏍稿績绠＄悊鏈嶅姟 鈥?鎵€鏈夎法杩涚▼閫氳鍧囬€氳繃姝ゆ湇鍔°€?
  * <p>
- * 该服务通过 XServiceManager 注入到 SystemServer 进程。
- * 采用组合模式，将规则缓存、持久化、观察者管理、权限验证委托给 4 个专职 Manager。
- * Handler 消息分发作为编排层，协调各 Manager 之间的工作流。
+ * 璇ユ湇鍔￠€氳繃 XServiceManager 娉ㄥ叆鍒?SystemServer 杩涚▼銆?
+ * 閲囩敤缁勫悎妯″紡锛屽皢瑙勫垯缂撳瓨銆佹寔涔呭寲銆佽瀵熻€呯鐞嗐€佹潈闄愰獙璇佸鎵樼粰 4 涓笓鑱?Manager銆?
+ * Handler 娑堟伅鍒嗗彂浣滀负缂栨帓灞傦紝鍗忚皟鍚?Manager 涔嬮棿鐨勫伐浣滄祦銆?
  * <p>
- * Client 端通过 {@link com.kaisar.xposed.godmode.injection.bridge.GodModeManager#getDefault()} 使用接口。
+ * Client 绔€氳繃 {@link com.kaisar.xposed.godmode.injection.bridge.GodModeManager#getDefault()} 浣跨敤鎺ュ彛銆?
  */
 public final class GodModeManagerService extends IGodModeManager.Stub {
 
-    // ===== 组合的组件 =====
+    // ===== 缁勫悎鐨勭粍浠?=====
     private final PermissionEnforcer mPermissionEnforcer;
     private final RuleCacheManager mCacheManager;
     private final WorkflowOrchestrator mOrchestrator;
 
-    // ===== 基础设施 =====
+    // ===== 鍩虹璁炬柦 =====
     private final Logger mLogger;
     private final Context mContext;
     private final Gson mGson = new GsonBuilder().setPrettyPrinting().create();
 
-    // ===== 状态字段 =====
+    // ===== 鐘舵€佸瓧娈?=====
     private volatile boolean mInEditMode;
     private boolean mStarted;
 
-    // ===== 工具栏偏好（简单字段，不需单独 Manager） =====
+    // ===== 宸ュ叿鏍忓亸濂斤紙绠€鍗曞瓧娈碉紝涓嶉渶鍗曠嫭 Manager锛?=====
     private String mToolbarHiddenItems = "";
 
     public GodModeManagerService(Context context) {
@@ -62,7 +62,7 @@ public final class GodModeManagerService extends IGodModeManager.Stub {
     }
 
     // ===================================================================
-    // AIDL 接口实现 — 委托给各 Manager
+    // AIDL 鎺ュ彛瀹炵幇 鈥?濮旀墭缁欏悇 Manager
     // ===================================================================
 
     @Override
@@ -71,7 +71,7 @@ public final class GodModeManagerService extends IGodModeManager.Stub {
         return true;
     }
 
-    // ---- 编辑模式 ----
+    // ---- 缂栬緫妯″紡 ----
 
     @Override
     public void setEditMode(boolean enable) throws RemoteException {
@@ -88,7 +88,7 @@ public final class GodModeManagerService extends IGodModeManager.Stub {
         return mInEditMode;
     }
 
-    // ---- 观察者 ----
+    // ---- 瑙傚療鑰?----
 
     @Override
     public void addObserver(String packageName, com.kaisar.xposed.godmode.IObserver observer)
@@ -111,7 +111,7 @@ public final class GodModeManagerService extends IGodModeManager.Stub {
         mOrchestrator.removeObserver(packageName, observer);
     }
 
-    // ---- 规则查询 ----
+    // ---- 瑙勫垯鏌ヨ ----
 
     @Override
     public AppRules getAllRules() throws RemoteException {
@@ -129,7 +129,7 @@ public final class GodModeManagerService extends IGodModeManager.Stub {
         return mCacheManager.getRules(packageName);
     }
 
-    // ---- 规则写入 ----
+    // ---- 瑙勫垯鍐欏叆 ----
 
     @Override
     public boolean writeRule(String packageName, RuleRecord viewRule, Bitmap snapshot)
@@ -148,7 +148,7 @@ public final class GodModeManagerService extends IGodModeManager.Stub {
         return mOrchestrator.updateRuleAsync(packageName, viewRule);
     }
 
-    // ---- 规则删除 ----
+    // ---- 瑙勫垯鍒犻櫎 ----
 
     @Override
     public boolean deleteRule(String packageName, RuleRecord viewRule) throws RemoteException {
@@ -164,7 +164,7 @@ public final class GodModeManagerService extends IGodModeManager.Stub {
         return mOrchestrator.deleteRulesAsync(packageName);
     }
 
-    // ---- 图片操作 ----
+    // ---- 鍥剧墖鎿嶄綔 ----
 
     @Override
     public String saveImageFile(String packageName, Bitmap bitmap) throws RemoteException {
@@ -203,7 +203,7 @@ public final class GodModeManagerService extends IGodModeManager.Stub {
         }
     }
 
-    // ---- 工具栏偏好 ----
+    // ---- 宸ュ叿鏍忓亸濂?----
 
     @Override
     public String getToolbarHiddenItems() throws RemoteException {

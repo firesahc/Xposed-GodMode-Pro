@@ -14,7 +14,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 import com.kaisar.xposed.godmode.engine.util.CommonUtils;
 import com.kaisar.xposed.godmode.engine.util.FileUtils;
-import com.kaisar.xposed.godmode.injection.util.Logger;
+import com.kaisar.xposed.godmode.util.Logger;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 import com.kaisar.xposed.godmode.engine.util.Preconditions;
@@ -30,8 +30,8 @@ import java.util.Map;
 import java.util.WeakHashMap;
 
 /**
- * 规则持久化管理器 — JSON 原子写入 + Bitmap 保存 + 孤儿文件清理。
- * 从 GodModeManagerService 提取的独立职责。
+ * 瑙勫垯鎸佷箙鍖栫鐞嗗櫒 鈥?JSON 鍘熷瓙鍐欏叆 + Bitmap 淇濆瓨 + 瀛ゅ効鏂囦欢娓呯悊銆?
+ * 浠?GodModeManagerService 鎻愬彇鐨勭嫭绔嬭亴璐ｃ€?
  */
 final class RulePersistManager {
 
@@ -49,9 +49,9 @@ final class RulePersistManager {
     private final Logger mLogger;
     private final Handler mHandle;
     private final RuleCacheManager mCacheManager;
-    /** 防抖写入延迟 (ms) — 多次快速变更合并为一次写入 */
+    /** 闃叉姈鍐欏叆寤惰繜 (ms) 鈥?澶氭蹇€熷彉鏇村悎骞朵负涓€娆″啓鍏?*/
     private static final long DEBOUNCE_DELAY_MS = 300L;
-    /** 防抖队列 — 待写入的包名 */
+    /** 闃叉姈闃熷垪 鈥?寰呭啓鍏ョ殑鍖呭悕 */
     private final Map<String, String> mPendingWrites = new WeakHashMap<>();
 
     RulePersistManager(Gson gson, Logger logger, Handler handle, RuleCacheManager cacheManager) {
@@ -61,11 +61,11 @@ final class RulePersistManager {
         this.mCacheManager = cacheManager;
     }
 
-    // ---- 规则加载 ----
+    // ---- 瑙勫垯鍔犺浇 ----
 
     /**
-     * 从磁盘加载所有规则数据到缓存。
-     * 加载结果通过传递给构造函数的 RuleCacheManager 写入缓存。
+     * 浠庣鐩樺姞杞芥墍鏈夎鍒欐暟鎹埌缂撳瓨銆?
+     * 鍔犺浇缁撴灉閫氳繃浼犻€掔粰鏋勯€犲嚱鏁扮殑 RuleCacheManager 鍐欏叆缂撳瓨銆?
      */
     void loadRuleData() throws IOException {
         File dataDir = new File(getBaseDir());
@@ -79,7 +79,7 @@ final class RulePersistManager {
                     String json = FileUtils.readTextFile(appRuleFile, 0, null);
                     ActRules rules = mGson.fromJson(json, ActRules.class);
                     Preconditions.checkNotNull(rules, "rules is null");
-                    // compact rule — 移除空条目
+                    // compact rule 鈥?绉婚櫎绌烘潯鐩?
                     Iterator<Map.Entry<String, List<RuleRecord>>> iterator = rules.entrySet().iterator();
                     while (iterator.hasNext()) {
                         Map.Entry<String, List<RuleRecord>> listEntry = iterator.next();
@@ -104,13 +104,13 @@ final class RulePersistManager {
         }
     }
 
-    // ---- 规则持久化 ----
+    // ---- 瑙勫垯鎸佷箙鍖?----
 
-    /** 原子写入规则 JSON：.tmp → rename → chmod */
+    /** 鍘熷瓙鍐欏叆瑙勫垯 JSON锛?tmp 鈫?rename 鈫?chmod */
     void safePersistRules(String packageName, String json) throws IOException {
         synchronized (mPendingWrites) {
             if (mPendingWrites.containsKey(packageName)) {
-                // 已有待写入任务 — 更新 JSON 并延迟写入（防抖）
+                // 宸叉湁寰呭啓鍏ヤ换鍔?鈥?鏇存柊 JSON 骞跺欢杩熷啓鍏ワ紙闃叉姈锛?
                 mPendingWrites.put(packageName, json);
                 scheduleDebouncedWrite(packageName);
                 return;
@@ -143,13 +143,13 @@ final class RulePersistManager {
     static final int MSG_DEBOUNCE_WRITE = 0x1000;
 
     private void scheduleDebouncedWrite(String packageName) {
-        // 移除之前为此包调度的防抖消息，重置计时器
+        // 绉婚櫎涔嬪墠涓烘鍖呰皟搴︾殑闃叉姈娑堟伅锛岄噸缃鏃跺櫒
         Message msg = mHandle.obtainMessage(MSG_DEBOUNCE_WRITE, packageName);
         mHandle.removeMessages(MSG_DEBOUNCE_WRITE, packageName);
         mHandle.sendMessageDelayed(msg, DEBOUNCE_DELAY_MS);
     }
 
-    /** 由 Handler 调用的防抖写入 */
+    /** 鐢?Handler 璋冪敤鐨勯槻鎶栧啓鍏?*/
     void handleDebouncedWrite(String packageName) {
         String json;
         synchronized (mPendingWrites) {
@@ -163,7 +163,7 @@ final class RulePersistManager {
         }
     }
 
-    /** 保存 Bitmap 为 .webp 文件，处理 HARDWARE → ARGB_8888 转换 */
+    /** 淇濆瓨 Bitmap 涓?.webp 鏂囦欢锛屽鐞?HARDWARE 鈫?ARGB_8888 杞崲 */
     String saveBitmap(Bitmap bitmap, String dir) {
         try {
             Bitmap bitmapToSave = bitmap;
@@ -190,7 +190,7 @@ final class RulePersistManager {
         }
     }
 
-    /** 清理未被任何规则引用的孤立图片文件 */
+    /** 娓呯悊鏈浠讳綍瑙勫垯寮曠敤鐨勫绔嬪浘鐗囨枃浠?*/
     void cleanAllOrphanImages() {
         try {
             File dataDir = new File(getBaseDir());
@@ -214,7 +214,7 @@ final class RulePersistManager {
         }
     }
 
-    // ---- 工具栏偏好 ----
+    // ---- 宸ュ叿鏍忓亸濂?----
 
     String loadToolbarHiddenItems() {
         try {
@@ -239,7 +239,7 @@ final class RulePersistManager {
         }
     }
 
-    // ---- 路径工具 ----
+    // ---- 璺緞宸ュ叿 ----
 
     String getBaseDir() throws FileNotFoundException {
         File dir = new File(BASE_DIR);
@@ -250,7 +250,7 @@ final class RulePersistManager {
         throw new FileNotFoundException();
     }
 
-    /** 校验文件路径是否为合法的 GodMode 图片文件路径 */
+    /** 鏍￠獙鏂囦欢璺緞鏄惁涓哄悎娉曠殑 GodMode 鍥剧墖鏂囦欢璺緞 */
     boolean isValidImagePath(String filePath) {
         try {
             return new File(filePath).getCanonicalPath()

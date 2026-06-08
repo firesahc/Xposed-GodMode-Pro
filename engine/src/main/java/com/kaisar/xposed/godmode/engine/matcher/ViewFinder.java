@@ -11,7 +11,7 @@ import android.view.ViewParent;
 import android.widget.TextView;
 
 import com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec;
-import com.kaisar.xposed.godmode.engine.traversal.ViewTraversal;
+import com.kaisar.xposed.godmode.engine.matcher.ViewTraversal;
 import com.kaisar.xposed.godmode.engine.util.GmConstants;
 
 import java.lang.ref.WeakReference;
@@ -22,12 +22,12 @@ import java.util.Map;
 import java.util.WeakHashMap;
 
 /**
- * 视图查找器 — 使用 engine 的 RuleMatchSpec 进行视图匹配/搜索。
+ * 瑙嗗浘鏌ユ壘鍣?鈥?浣跨敤 engine 鐨?RuleMatchSpec 杩涜瑙嗗浘鍖归厤/鎼滅储銆?
  * <p>
- * 职责：从当前 Activity 的视图树中根据 RuleMatchSpec 定位匹配的视图。
- * 同时支持 {@link CompositeMatcher}（engine 组合匹配）和传统深度/文本/资源名匹配。
+ * 鑱岃矗锛氫粠褰撳墠 Activity 鐨勮鍥炬爲涓牴鎹?RuleMatchSpec 瀹氫綅鍖归厤鐨勮鍥俱€?
+ * 鍚屾椂鏀寔 {@link CompositeMatcher}锛坋ngine 缁勫悎鍖归厤锛夊拰浼犵粺娣卞害/鏂囨湰/璧勬簮鍚嶅尮閰嶃€?
  * <p>
- * 替代 {@code com.kaisar.xposed.godmode.injection.ViewHelper} 中的视图搜索职责。
+ * 鏇夸唬 {@code com.kaisar.xposed.godmode.injection.ViewHelper} 涓殑瑙嗗浘鎼滅储鑱岃矗銆?
  */
 public final class ViewFinder {
 
@@ -43,21 +43,21 @@ public final class ViewFinder {
     }
 
     // =========================================================================
-    // 公开 API
+    // 鍏紑 API
     // =========================================================================
 
     /**
-     * 根据规则匹配视图 — 优先使用 {@link CompositeMatcher}，失败时回退到传统匹配。
+     * 鏍规嵁瑙勫垯鍖归厤瑙嗗浘 鈥?浼樺厛浣跨敤 {@link CompositeMatcher}锛屽け璐ユ椂鍥為€€鍒颁紶缁熷尮閰嶃€?
      *
-     * @param decorView   当前 Activity 的 DecorView
+     * @param decorView   褰撳墠 Activity 鐨?DecorView
      * @param rule        engine RuleMatchSpec
-     * @param pm          PackageManager（用于 strict mode 检查）
-     * @param packageName 目标包名
-     * @return 匹配的视图，或 null
+     * @param pm          PackageManager锛堢敤浜?strict mode 妫€鏌ワ級
+     * @param packageName 鐩爣鍖呭悕
+     * @return 鍖归厤鐨勮鍥撅紝鎴?null
      */
     public static View findViewBestMatch(ViewGroup decorView, RuleMatchSpec rule,
                                           PackageManager pm, String packageName) {
-        // 优先尝试 engine 组合匹配器
+        // 浼樺厛灏濊瘯 engine 缁勫悎鍖归厤鍣?
         try {
             View matched = sMatcher.matchView(decorView, rule);
             if (matched != null) return matched;
@@ -65,7 +65,7 @@ public final class ViewFinder {
             Log.w(TAG, "engine matcher failed, falling back to legacy: " + e.getMessage());
         }
 
-        // 兜底：传统匹配
+        // 鍏滃簳锛氫紶缁熷尮閰?
         boolean strictMode = checkStrictMode(pm, packageName, rule);
 
         if (rule.depth != null && rule.depth.length > 0) {
@@ -79,7 +79,7 @@ public final class ViewFinder {
             }
         }
 
-        // 单元素模式：仅信任 depth 锚定
+        // 鍗曞厓绱犳ā寮忥細浠呬俊浠?depth 閿氬畾
         if (!rule.isRepeatable()) {
             if (rule.depth != null && rule.depth.length > 0) {
                 View view = ViewTraversal.findViewByDepth(decorView, rule.depth);
@@ -114,7 +114,7 @@ public final class ViewFinder {
             }
         }
 
-        // 最终兜底：仅按 depth
+        // 鏈€缁堝厹搴曪細浠呮寜 depth
         if (rule.depth != null && rule.depth.length > 0) {
             View view = ViewTraversal.findViewByDepth(decorView, rule.depth);
             if (view != null) return matchView(view, rule, false);
@@ -123,13 +123,13 @@ public final class ViewFinder {
     }
 
     /**
-     * 查找所有匹配的视图 — repeatable 规则优先搜索 RecyclerView。
+     * 鏌ユ壘鎵€鏈夊尮閰嶇殑瑙嗗浘 鈥?repeatable 瑙勫垯浼樺厛鎼滅储 RecyclerView銆?
      *
-     * @param decorView   当前 Activity 的 DecorView
+     * @param decorView   褰撳墠 Activity 鐨?DecorView
      * @param rule        engine RuleMatchSpec
-     * @param pm          PackageManager（用于 strict mode 检查）
-     * @param packageName 目标包名
-     * @return 匹配的视图列表
+     * @param pm          PackageManager锛堢敤浜?strict mode 妫€鏌ワ級
+     * @param packageName 鐩爣鍖呭悕
+     * @return 鍖归厤鐨勮鍥惧垪琛?
      */
     public static List<View> findAllViewsBestMatch(ViewGroup decorView, RuleMatchSpec rule,
                                                     PackageManager pm, String packageName) {
@@ -147,21 +147,21 @@ public final class ViewFinder {
     }
 
     /**
-     * 检测视图是否在 RecyclerView 中。
+     * 妫€娴嬭鍥炬槸鍚﹀湪 RecyclerView 涓€?
      */
     public static boolean isInRecyclerView(View v) {
         return ViewTraversal.isInRecyclerView(v);
     }
 
     /**
-     * 查找最近 RecyclerView 祖先。
+     * 鏌ユ壘鏈€杩?RecyclerView 绁栧厛銆?
      */
     public static ViewGroup findRecyclerViewAncestor(View v) {
         return ViewTraversal.findRecyclerViewAncestor(v);
     }
 
     /**
-     * 获取视图在 RecyclerView 中的 itemPath。
+     * 鑾峰彇瑙嗗浘鍦?RecyclerView 涓殑 itemPath銆?
      */
     public static String[] getItemPath(View v, ViewGroup recyclerView) {
         ArrayList<String> path = new ArrayList<>();
@@ -179,7 +179,7 @@ public final class ViewFinder {
     }
 
     /**
-     * 按 itemPath 查找视图。
+     * 鎸?itemPath 鏌ユ壘瑙嗗浘銆?
      */
     public static View findViewByItemPath(View root, String[] path, int index) {
         if (index >= path.length) return root;
@@ -206,7 +206,7 @@ public final class ViewFinder {
     }
 
     /**
-     * 评分匹配视图（宽松阈值 30，严格模式 80）。
+     * 璇勫垎鍖归厤瑙嗗浘锛堝鏉鹃槇鍊?30锛屼弗鏍兼ā寮?80锛夈€?
      */
     public static View matchView(View view, RuleMatchSpec rule, boolean strictMode) {
         try {
@@ -221,11 +221,11 @@ public final class ViewFinder {
     }
 
     /**
-     * 填充可重复规则信息 — 检测同一 itemRootClass 在 RecyclerView 中出现 2+ 次时标记为 repeatable。
+     * 濉厖鍙噸澶嶈鍒欎俊鎭?鈥?妫€娴嬪悓涓€ itemRootClass 鍦?RecyclerView 涓嚭鐜?2+ 娆℃椂鏍囪涓?repeatable銆?
      *
-     * @param v              选中的目标视图
-     * @param rule           待填充的规则
-     * @param isInfoFlowMode 是否处于信息流模式（由调用方提供）
+     * @param v              閫変腑鐨勭洰鏍囪鍥?
+     * @param rule           寰呭～鍏呯殑瑙勫垯
+     * @param isInfoFlowMode 鏄惁澶勪簬淇℃伅娴佹ā寮忥紙鐢辫皟鐢ㄦ柟鎻愪緵锛?
      */
     public static void populateRepeatableInfo(View v, RuleMatchSpec rule, boolean isInfoFlowMode) {
         try {
@@ -261,15 +261,15 @@ public final class ViewFinder {
     }
 
     // =========================================================================
-    // RecyclerView 匹配
+    // RecyclerView 鍖归厤
     // =========================================================================
 
     /**
-     * 在 DecorView 中按 RecyclerView 匹配 repeatable 规则。
+     * 鍦?DecorView 涓寜 RecyclerView 鍖归厤 repeatable 瑙勫垯銆?
      *
-     * @param decorView 当前 Activity 的 DecorView
+     * @param decorView 褰撳墠 Activity 鐨?DecorView
      * @param rule      engine RuleMatchSpec
-     * @return 匹配的视图列表
+     * @return 鍖归厤鐨勮鍥惧垪琛?
      */
     public static List<View> findViewsInRecyclers(ViewGroup decorView, RuleMatchSpec rule) {
         List<View> results = new ArrayList<>();
@@ -345,7 +345,7 @@ public final class ViewFinder {
     }
 
     // =========================================================================
-    // 传统匹配（legacy fallback）
+    // 浼犵粺鍖归厤锛坙egacy fallback锛?
     // =========================================================================
 
     private static boolean checkStrictMode(PackageManager pm, String packageName, RuleMatchSpec rule) {
@@ -369,7 +369,7 @@ public final class ViewFinder {
                     String resName = view.getResources().getResourceName(view.getId());
                     if (!TextUtils.equals(resName, rule.resourceName)) return false;
                 } catch (Resources.NotFoundException e) {
-                    // view 无 resource id — 不匹配
+                    // view 鏃?resource id 鈥?涓嶅尮閰?
                     return false;
                 }
             }
@@ -393,7 +393,7 @@ public final class ViewFinder {
         return null;
     }
 
-    // ===== 匹配评分常量 =====
+    // ===== 鍖归厤璇勫垎甯搁噺 =====
     private static final int MATCH_CLASS = 30;
     private static final int MATCH_RESOURCE = 25;
     private static final int MATCH_TEXT = 20;
@@ -409,7 +409,7 @@ public final class ViewFinder {
                 String resName = view.getResources().getResourceName(view.getId());
                 if (TextUtils.equals(resName, rule.resourceName)) score += MATCH_RESOURCE;
             } catch (Resources.NotFoundException e) {
-                // view 无 resource name — score 保持不增加
+                // view 鏃?resource name 鈥?score 淇濇寔涓嶅鍔?
             }
         }
         if (!TextUtils.isEmpty(rule.text) && view instanceof TextView) {
@@ -432,7 +432,7 @@ public final class ViewFinder {
     }
 
     // =========================================================================
-    // 文本/描述 查找
+    // 鏂囨湰/鎻忚堪 鏌ユ壘
     // =========================================================================
 
     private static View findViewByText(View view, String text) {
@@ -466,11 +466,11 @@ public final class ViewFinder {
     }
 
     // =========================================================================
-    // 工具
+    // 宸ュ叿
     // =========================================================================
 
     /**
-     * 根据资源名获取资源 ID（兼容 engines 侧无 R 类的场景）。
+     * 鏍规嵁璧勬簮鍚嶈幏鍙栬祫婧?ID锛堝吋瀹?engines 渚ф棤 R 绫荤殑鍦烘櫙锛夈€?
      */
     private static int getViewId(RuleMatchSpec rule, Resources resources) {
         if (rule.resourceName == null || resources == null) return View.NO_ID;

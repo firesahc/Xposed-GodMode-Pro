@@ -25,11 +25,11 @@ import androidx.preference.PreferenceFragmentCompat;
 
 import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
-import com.kaisar.xposed.godmode.injection.util.Logger;
+import com.kaisar.xposed.godmode.util.Logger;
 import com.kaisar.xposed.godmode.model.SharedViewModel;
 import com.kaisar.xposed.godmode.preference.ImageViewPreference;
 import com.kaisar.xposed.godmode.injection.util.TaskExecutor;
-import com.kaisar.xposed.godmode.engine.pool.ThreadPools;
+import com.kaisar.xposed.godmode.engine.util.ThreadPools;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 import com.kaisar.xposed.godmode.engine.util.Preconditions;
 
@@ -74,7 +74,7 @@ public final class RuleRecordDetailsFragment extends PreferenceFragmentCompat im
             icon = applicationInfo.loadIcon(packageManager);
             label = applicationInfo.loadLabel(packageManager).toString();
         } catch (PackageManager.NameNotFoundException e) {
-            // 应用未安装 — 使用默认图标和应用包名作为标签
+            // 鎼存梻鏁ら張顏勭暔鐟?閳?娴ｈ法鏁ゆ妯款吇閸ョ偓鐖ｉ崪灞界安閻劌瀵橀崥宥勭稊娑撶儤鐖ｇ粵?
         }
         Preference headerPreference = findPreference(getString(R.string.pref_key_detail_rule_info));
         headerPreference.setIcon(icon);

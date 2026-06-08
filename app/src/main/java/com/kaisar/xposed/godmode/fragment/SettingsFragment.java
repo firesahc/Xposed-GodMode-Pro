@@ -23,7 +23,7 @@ import androidx.preference.SwitchPreferenceCompat;
 import com.google.android.material.snackbar.Snackbar;
 import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
-import com.kaisar.xposed.godmode.injection.util.Logger;
+import com.kaisar.xposed.godmode.util.Logger;
 import com.kaisar.xposed.godmode.model.SharedViewModel;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.AppRules;
@@ -106,7 +106,7 @@ public final class SettingsFragment extends PreferenceFragmentCompat implements
             saveAllRules.setOnPreferenceClickListener(this);
         }
 
-        // Group C: Toolbar preferences — read from local SharedPreferences (app process)
+        // Group C: Toolbar preferences 鈥?read from local SharedPreferences (app process)
         SharedPreferences toolbarPrefs = requireContext().getSharedPreferences(TOOLBAR_PREFS, Context.MODE_PRIVATE);
         Set<String> hiddenItems = loadHiddenItemsMigrate(toolbarPrefs);
 
@@ -140,7 +140,7 @@ public final class SettingsFragment extends PreferenceFragmentCompat implements
         }
 
         if (TextUtils.equals(key, getString(R.string.settings_save_all_rules))) {
-            // Group B: Save all rules — collect packages with rules, then open SAF directory picker
+            // Group B: Save all rules 鈥?collect packages with rules, then open SAF directory picker
             final AppRules appRules = mSharedViewModel.appRules.getValue();
             if (appRules == null || appRules.isEmpty()) {
                 Snackbar.make(requireView(), R.string.snack_bar_msg_backup_rule_fail, Snackbar.LENGTH_SHORT).show();
@@ -220,7 +220,7 @@ public final class SettingsFragment extends PreferenceFragmentCompat implements
         });
     }
 
-    // Group B: Handle save-all directory selection — save each package as an individual file
+    // Group B: Handle save-all directory selection 鈥?save each package as an individual file
     private void onSaveAllDirectorySelected(Uri treeUri) {
         if (treeUri == null || !isAdded()) return;
         if (mBackupQueue == null || mBackupQueue.isEmpty()) {
@@ -235,7 +235,7 @@ public final class SettingsFragment extends PreferenceFragmentCompat implements
                     treeUri, Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
         } catch (Exception e) {
             Logger.w(TAG, "[Settings] saveAllRules: take permission failed", e);
-            // Continue anyway — some SAF providers don't support persistable permissions
+            // Continue anyway 鈥?some SAF providers don't support persistable permissions
         }
 
         mBackupIndex = 0;
@@ -329,7 +329,7 @@ public final class SettingsFragment extends PreferenceFragmentCompat implements
                 + " (" + mBackupIndex + "/" + mBackupQueue.size() + ")";
     }
 
-    // Group C: Persist toolbar preference — stored as comma-separated string
+    // Group C: Persist toolbar preference 鈥?stored as comma-separated string
     private void saveToolbarPreference(String key, boolean enabled) {
         SharedPreferences sp = requireContext().getSharedPreferences(TOOLBAR_PREFS, Context.MODE_PRIVATE);
         Set<String> hidden = loadHiddenItemsMigrate(sp);
@@ -345,7 +345,7 @@ public final class SettingsFragment extends PreferenceFragmentCompat implements
     }
 
     /**
-     * 读取工具栏隐藏项，兼容旧版 StringSet 格式并自动迁移为逗号分隔字符串。
+     * 璇诲彇宸ュ叿鏍忛殣钘忛」锛屽吋瀹规棫鐗?StringSet 鏍煎紡骞惰嚜鍔ㄨ縼绉讳负閫楀彿鍒嗛殧瀛楃涓层€?
      */
     private static Set<String> loadHiddenItemsMigrate(SharedPreferences sp) {
         Map<String, ?> all = sp.getAll();

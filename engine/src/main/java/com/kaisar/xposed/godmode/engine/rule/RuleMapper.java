@@ -1,4 +1,4 @@
-package com.kaisar.xposed.godmode.engine.util;
+package com.kaisar.xposed.godmode.engine.rule;
 
 import com.kaisar.xposed.godmode.engine.rule.RuleFields;
 import com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec;

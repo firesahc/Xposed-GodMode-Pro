@@ -7,7 +7,7 @@ import android.os.RemoteException;
 import android.text.TextUtils;
 
 import com.kaisar.xposed.godmode.IObserver;
-import com.kaisar.xposed.godmode.injection.util.Logger;
+import com.kaisar.xposed.godmode.util.Logger;
 import com.kaisar.xposed.godmode.rule.ActRules;
 
 import java.util.ArrayList;
@@ -15,12 +15,12 @@ import java.util.HashMap;
 import java.util.List;
 
 /**
- * 观察者管理器 — RemoteCallbackList 管理 + 死观察者清理 + 通知广播。
- * 从 GodModeManagerService 提取的独立职责。
+ * 瑙傚療鑰呯鐞嗗櫒 鈥?RemoteCallbackList 绠＄悊 + 姝昏瀵熻€呮竻鐞?+ 閫氱煡骞挎挱銆?
+ * 浠?GodModeManagerService 鎻愬彇鐨勭嫭绔嬭亴璐ｃ€?
  */
 final class ObserverManager {
 
-    /** 死观察者清理间隔 (ms) */
+    /** 姝昏瀵熻€呮竻鐞嗛棿闅?(ms) */
     static final long CLEAN_INTERVAL = 60_000L;
 
     private final RemoteCallbackList<ObserverProxy> mRemoteCallbackList = new RemoteCallbackList<>();
@@ -30,9 +30,9 @@ final class ObserverManager {
     private final int mCleanObserversMsgCode;
 
     /**
-     * @param logger               日志记录器
-     * @param handle               Handler 用于调度清理消息
-     * @param cleanObserversMsgCode Handler 消息代码，由调用方传入（解耦对 GodModeManagerService 的依赖）
+     * @param logger               鏃ュ織璁板綍鍣?
+     * @param handle               Handler 鐢ㄤ簬璋冨害娓呯悊娑堟伅
+     * @param cleanObserversMsgCode Handler 娑堟伅浠ｇ爜锛岀敱璋冪敤鏂逛紶鍏ワ紙瑙ｈ€﹀ GodModeManagerService 鐨勪緷璧栵級
      */
     ObserverManager(Logger logger, Handler handle, int cleanObserversMsgCode) {
         this.mLogger = logger;
@@ -40,10 +40,10 @@ final class ObserverManager {
         this.mCleanObserversMsgCode = cleanObserversMsgCode;
     }
 
-    // ---- 观察者注册/注销 ----
+    // ---- 瑙傚療鑰呮敞鍐?娉ㄩ攢 ----
 
     /**
-     * 注册观察者并立即推送当前编辑模式和规则状态。
+     * 娉ㄥ唽瑙傚療鑰呭苟绔嬪嵆鎺ㄩ€佸綋鍓嶇紪杈戞ā寮忓拰瑙勫垯鐘舵€併€?
      */
     void addObserver(String packageName, IObserver observer, boolean editModeEnabled,
             ActRules currentRules) {
@@ -60,7 +60,7 @@ final class ObserverManager {
             mRemoteCallbackList.register(new ObserverProxy(packageName, observer));
             scheduleDeadObserverCleanup();
         }
-        // 立即推送当前状态
+        // 绔嬪嵆鎺ㄩ€佸綋鍓嶇姸鎬?
         try {
             observer.onEditModeChanged(editModeEnabled);
             observer.onViewRuleChanged(packageName, currentRules);
@@ -69,7 +69,7 @@ final class ObserverManager {
         }
     }
 
-    /** 注销观察者 */
+    /** 娉ㄩ攢瑙傚療鑰?*/
     void removeObserver(String packageName, IObserver observer) {
         synchronized (mRemoteCallbackList) {
             mRemoteCallbackList.unregister(new ObserverProxy(packageName, observer));
@@ -79,7 +79,7 @@ final class ObserverManager {
         }
     }
 
-    // ---- 通知广播 ----
+    // ---- 閫氱煡骞挎挱 ----
 
     void notifyObserverRuleChanged(String packageName, ActRules actRules) {
         forEachLiveObserver((proxy) -> {
@@ -94,7 +94,7 @@ final class ObserverManager {
         forEachLiveObserver((proxy) -> proxy.onEditModeChanged(enable));
     }
 
-    // ---- 死观察者清理 ----
+    // ---- 姝昏瀵熻€呮竻鐞?----
 
     void scheduleDeadObserverCleanup() {
         if (!mHandle.hasMessages(mCleanObserversMsgCode)) {
@@ -131,7 +131,7 @@ final class ObserverManager {
         }
     }
 
-    // ---- 内部工具 ----
+    // ---- 鍐呴儴宸ュ叿 ----
 
     private void forEachLiveObserver(ObserverAction action) {
         synchronized (mRemoteCallbackList) {
