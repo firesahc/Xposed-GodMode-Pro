@@ -21,6 +21,8 @@ import com.kaisar.xposed.godmode.injection.editor.gesture.RemoveGestureHandler;
 import com.kaisar.xposed.godmode.injection.util.Logger;
 import com.kaisar.xposed.godmode.engine.util.Property;
 
+import java.lang.reflect.Field;
+
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedHelpers;
 
@@ -116,12 +118,17 @@ public final class TouchInterceptor extends XC_MethodHook implements Property.On
         return type > WindowManager.LayoutParams.LAST_SYSTEM_WINDOW;
     }
 
+    private static Field sWindowAttributesField;
+
     private WindowManager.LayoutParams getWindowLayoutParams(View v) {
         Object viewRootImpl = ViewUtils.findViewRootImplByChildView(v.getParent());
         if (viewRootImpl == null) return null;
         try {
-            return (WindowManager.LayoutParams)
-                    XposedHelpers.getObjectField(viewRootImpl, "mWindowAttributes");
+            if (sWindowAttributesField == null) {
+                sWindowAttributesField = viewRootImpl.getClass().getDeclaredField("mWindowAttributes");
+                sWindowAttributesField.setAccessible(true);
+            }
+            return (WindowManager.LayoutParams) sWindowAttributesField.get(viewRootImpl);
         } catch (Exception e) {
             return null;
         }
