@@ -84,7 +84,7 @@ public final class EventBus {
             try {
                 ref.method.invoke(subscriber, event);
             } catch (IllegalAccessException | InvocationTargetException e) {
-                Logger\.w\("EventBus",\ "Subscriber\ " + subscriber.getClass().getSimpleName()
+                Logger.w("EventBus", "Subscriber " + subscriber.getClass().getSimpleName()
                         + "#" + ref.method.getName() + " threw: "
                         + (e.getCause() != null ? e.getCause().getMessage() : e.getMessage()));
             }

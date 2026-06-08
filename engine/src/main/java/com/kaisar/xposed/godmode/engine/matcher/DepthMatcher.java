@@ -2,7 +2,6 @@ package com.kaisar.xposed.godmode.engine.matcher;
 
 import android.text.TextUtils;
 import android.view.View;
-import android.widget.TextView;
 
 import com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec;
 

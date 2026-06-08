@@ -1,7 +1,8 @@
 package com.kaisar.xposed.godmode.engine.applier;
 
-import com.kaisar.xposed.godmode.engine.util.Logger;
 import android.view.View;
+
+import com.kaisar.xposed.godmode.engine.util.Logger;
 
 /**
  * View.setVisibility 瀹夊叏灏佽 鈥?鍙嶅皠澶辫触鏃跺洖閫€鍒?alpha 鎺у埗銆?
@@ -17,7 +18,7 @@ public final class ViewCompat {
             try {
                 view.setAlpha(visibility == View.VISIBLE ? 1f : 0f);
             } catch (Exception inner) {
-                Log.w("GodMode", "[ViewCompat] setVisibility fallback also failed", inner);
+                Logger.w("GodMode", "[ViewCompat] setVisibility fallback also failed", inner);
             }
         }
     }

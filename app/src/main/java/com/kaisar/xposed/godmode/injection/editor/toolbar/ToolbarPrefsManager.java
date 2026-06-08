@@ -2,6 +2,7 @@ package com.kaisar.xposed.godmode.injection.editor.toolbar;
 
 import android.text.TextUtils;
 
+import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
 
 import java.util.HashSet;
@@ -30,7 +31,7 @@ public final class ToolbarPrefsManager {
                 return parseCommaSeparated(value);
             }
         } catch (Throwable e) {
-            Logger\.w\("ToolbarPrefs", "load hidden items failed", e);
+            Logger.w("ToolbarPrefs", "load hidden items failed", e);
         }
         return new HashSet<>();
     }

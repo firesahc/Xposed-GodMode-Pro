@@ -9,6 +9,7 @@ import android.content.pm.ResolveInfo;
 import android.text.TextUtils;
 
 import com.kaisar.xposed.godmode.BuildConfig;
+import com.kaisar.xposed.godmode.engine.util.Logger;
 
 import java.util.List;
 
