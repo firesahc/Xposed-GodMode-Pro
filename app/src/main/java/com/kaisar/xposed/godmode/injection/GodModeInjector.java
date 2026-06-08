@@ -12,7 +12,6 @@ import android.view.MotionEvent;
 import android.view.View;
 
 import com.kaisar.xposed.godmode.R;
-import com.kaisar.xposed.godmode.engine.event.EditModeEvent;
 import com.kaisar.xposed.godmode.engine.event.EventBus;
 import com.kaisar.xposed.godmode.engine.event.RulesChangedEvent;
 import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
@@ -60,7 +59,7 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
     public final static Property<Boolean> switchProp = new Property<>(false);
     public static volatile XC_LoadPackage.LoadPackageParam loadPackageParam;
 
-    // 闁告瑥鐭佸鐑樼鐎ｂ晜顐界紒顖濆吹缁?闁?EventBus 濞?Property 妤犵偞鍎奸、鎴炴交閹邦垼鏀介柨娑樼焸閳ь剚鍔栭鐐存交娴ｇ洅鈺呮儎閹存繃鍎旈柡?
+    // EventBus — 仅用于规则变更通知（RulesChangedEvent），编辑模式通过 Property 分发
     private static final EventBus sEventBus = EventBus.getDefault();
 
     private static volatile State state = State.UNKNOWN;
@@ -196,8 +195,7 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
         Logger.i(TAG, "[GodMode] edit mode " + enable + " state=" + state
                 + " pkg=" + loadPackageParam.packageName);
         if (state == State.ALLOWED) {
-            switchProp.set(enable);                        // 闁哄唲鍡欑唴鐎?
-            sEventBus.post(new EditModeEvent(enable));     // 闁哄倹濯介惌鎯ь嚗?
+            switchProp.set(enable);                        // 缁垮缎璇矾寰勶紱閫氳繃 Property 閫氱煡鎵€鏈夌洃鍚€?
         }
         sEditorOrchestrator.setDisplay(enable);
     }

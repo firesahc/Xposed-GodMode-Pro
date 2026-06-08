@@ -17,7 +17,7 @@ import java.lang.annotation.Target;
  * 示例：
  * <pre>
  * &#064;Subscribe
- * public void onEditModeChanged(EditModeEvent event) { ... }
+ * public void onRulesChanged(RulesChangedEvent event) { ... }
  * </pre>
  */
 @Retention(RetentionPolicy.RUNTIME)
