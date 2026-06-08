@@ -71,7 +71,13 @@ final class RuleCacheManager {
                 mAppRulesCache.put(packageName, actRules = new ActRules());
             }
             List<RuleRecord> viewRules = actRules.computeIfAbsent(viewRule.activityClass, k -> new ArrayList<>());
-            int index = viewRules.indexOf(viewRule);
+            int index = -1;
+            for (int i = 0; i < viewRules.size(); i++) {
+                if (viewRules.get(i).isSameViewAs(viewRule)) {
+                    index = i;
+                    break;
+                }
+            }
             String oldImagePath = null;
             if (index >= 0) {
                 if (captureOldImagePath) {
@@ -97,7 +103,14 @@ final class RuleCacheManager {
             if (actRules == null) return null;
             List<RuleRecord> viewRules = actRules.get(viewRule.activityClass);
             if (viewRules == null) return null;
-            boolean removed = viewRules.remove(viewRule);
+            int idx = -1;
+            for (int i = 0; i < viewRules.size(); i++) {
+                if (viewRules.get(i).isSameViewAs(viewRule)) {
+                    idx = i;
+                    break;
+                }
+            }
+            boolean removed = idx >= 0 ? viewRules.remove(idx) != null : false;
             if (!removed) return null;
             if (viewRules.isEmpty()) {
                 actRules.remove(viewRule.activityClass);
@@ -131,7 +144,13 @@ final class RuleCacheManager {
             if (actRules != null) {
                 List<RuleRecord> rules = actRules.get(viewRule.activityClass);
                 if (rules != null) {
-                    int idx = rules.indexOf(viewRule);
+                    int idx = -1;
+                    for (int i = 0; i < rules.size(); i++) {
+                        if (rules.get(i).isSameViewAs(viewRule)) {
+                            idx = i;
+                            break;
+                        }
+                    }
                     if (idx >= 0) {
                         rules.get(idx).imagePath = newImagePath;
                     }
