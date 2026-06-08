@@ -196,7 +196,7 @@ public class PropertyEditorPanel {
                 intent.setType("image/*");
                 activity.startActivityForResult(intent, 0x5A45);
             } catch (Exception e) {
-                Toast.makeText(activity, "闂備礁鎼崯鐗堟叏閻㈠灚鍏滈柛顐ｆ礀缁犮儵鏌熼幆褏锛嶇痪鎯ь煼閺屾盯濡烽妷銉㈡寖婵犫拃鍕⒌闁哄苯鎳忓鍕偓锝庝憾娴犳挳姊?, Toast.LENGTH_SHORT).show();
+                Toast.makeText(activity, "无法打开图片选择器", Toast.LENGTH_SHORT).show();
             }
         });
     }
@@ -409,7 +409,7 @@ public class PropertyEditorPanel {
      */
     public void saveAll(Activity activity, View nodeSelectorPanel, View maskView, View modifyPanel) {
         if (mTempModifications.isEmpty()) {
-            Toast.makeText(activity, "婵犵數鍋涙径鍥礈濠靛棴鑰垮〒姘ｅ亾婵☆偂绶氶崺鈧い鎺戝€归崯鍝劽归敐澶樻缂佺姳绮欓幃妤€鈽夊▎妯煎姺濠电偛鐗婇崹鍓佺矚闁稁鏁婇柤鎭掑劜濮?, Toast.LENGTH_SHORT).show();
+            Toast.makeText(activity, "没有需要保存的修改", Toast.LENGTH_SHORT).show();
             return;
         }
         String pkg = activity.getPackageName();
@@ -436,7 +436,7 @@ public class PropertyEditorPanel {
         }
         mTempModifications.entrySet().removeIf(entry -> !entry.getValue().hasModifications());
         if (mTempModifications.isEmpty()) {
-            Toast.makeText(activity, "婵犵數鍋涙径鍥礈濠靛棴鑰垮〒姘ｅ亾婵☆偂绶氶崺鈧い鎺戝€归崯鍝劽归敐澶樻缂佺姳绮欓幃妤€鈽夊▎妯煎姺濠电偛鐗婇崹鍓佺矚闁稁鏁婇柤鎭掑劜濮?, Toast.LENGTH_SHORT).show();
+            Toast.makeText(activity, "没有需要保存的修改", Toast.LENGTH_SHORT).show();
             return;
         }
         if (nodeSelectorPanel != null) nodeSelectorPanel.setVisibility(View.INVISIBLE);
@@ -495,13 +495,13 @@ public class PropertyEditorPanel {
             }
             boolean finalAllOk = allOk;
             String finalFailed = failedRules.isEmpty() ? "" :
-                    "濠电姰鍨洪崕鑲╁垝閸撗勫枂? " + String.join(", ", failedRules);
+                    "失败: " + String.join(", ", failedRules);
             mainHandler.post(() -> {
                 if (nodeSelectorPanel != null) nodeSelectorPanel.setVisibility(View.VISIBLE);
                 if (modifyPanel != null) modifyPanel.setVisibility(View.VISIBLE);
                 if (maskView != null) maskView.setVisibility(View.VISIBLE);
                 Toast.makeText(activity,
-                        finalAllOk ? "濠电儑绲藉ù鍌炲窗濡ゅ懎鏋侀柣鎾冲瘨閸熷懘妫呴顐㈠箻缂佺姳绮欓幃? : "闂傚倷绶￠崰鎾诲礉瀹€鍕瀭閹兼番鍨婚埞宥嗐亜閺冨洤袚闁哄棭鍘艰彁闁搞儯鍔庣粻鎾绘煟鎺抽崝宥咁嚗閸曨剚缍囨い鎰╁剾閺勭€? + finalFailed,
+                        finalAllOk ? "所有修改已保存" : "保存失败: " + finalFailed,
                         Toast.LENGTH_LONG).show();
             });
         });
