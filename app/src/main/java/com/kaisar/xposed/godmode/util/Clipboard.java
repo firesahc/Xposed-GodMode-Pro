@@ -18,7 +18,8 @@ public final class Clipboard {
             ClipData clip = ClipData.newPlainText(text, text);
             clipboard.setPrimaryClip(clip);
             return true;
-        } catch (Throwable ignore) {
+        } catch (Throwable e) {
+            android.util.Log.w("Clipboard", "put content failed", e);
             return false;
         }
     }

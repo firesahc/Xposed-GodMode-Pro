@@ -27,7 +27,8 @@ public final class FileUtils {
             }
             out.flush();
             return true;
-        } catch (IOException ignore) {
+        } catch (IOException e) {
+            android.util.Log.w("FileUtils", "copy failed", e);
             return false;
         }
     }

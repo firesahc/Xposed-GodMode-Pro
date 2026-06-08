@@ -29,7 +29,8 @@ public final class ToolbarPrefsManager {
             if (!TextUtils.isEmpty(value)) {
                 return parseCommaSeparated(value);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable e) {
+            android.util.Log.w("ToolbarPrefs", "load hidden items failed", e);
         }
         return new HashSet<>();
     }
