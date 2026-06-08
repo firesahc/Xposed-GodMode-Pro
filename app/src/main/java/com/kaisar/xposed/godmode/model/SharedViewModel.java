@@ -42,7 +42,7 @@ public class SharedViewModel extends ViewModel {
             }
 
             @Override
-            public void onRuleRecordChanged(String packageName, ActRules actRules) {
+            public void onViewRuleChanged(String packageName, ActRules actRules) {
                 appRules.postValue(GodModeManager.getDefault().getAllRules());
                 if (TextUtils.equals(packageName, selectedPackage.getValue())) {
                     selectedPackage.postValue(packageName);
