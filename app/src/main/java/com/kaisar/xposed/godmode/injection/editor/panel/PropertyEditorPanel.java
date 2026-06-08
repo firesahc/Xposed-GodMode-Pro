@@ -28,7 +28,7 @@ import com.kaisar.xposed.godmode.injection.util.ViewUtils;
 import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
 import com.kaisar.xposed.godmode.injection.util.GmResources;
 import com.kaisar.xposed.godmode.injection.util.Logger;
-import com.kaisar.xposed.godmode.engine.pool.ThreadPools;
+import com.kaisar.xposed.godmode.injection.util.TaskExecutor;
 import com.kaisar.xposed.godmode.rule.ViewRule;
 
 import java.io.InputStream;
@@ -463,7 +463,7 @@ public class PropertyEditorPanel {
         mPendingModBitmaps.clear();
         mTempModifications.clear();
         android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
-        ThreadPools.IO.execute(() -> {
+        TaskExecutor.executeIo(() -> {
             boolean allOk = true;
             for (ViewRule rule : rulesToSave) {
                 Bitmap snapshot = snapshots.get(rule);

@@ -15,6 +15,7 @@ import com.kaisar.xposed.godmode.injection.ViewController;
 import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
 import com.kaisar.xposed.godmode.injection.editor.overlay.ParticleView;
 import com.kaisar.xposed.godmode.injection.util.Logger;
+import com.kaisar.xposed.godmode.injection.util.TaskExecutor;
 import com.kaisar.xposed.godmode.engine.pool.ThreadPools;
 import com.kaisar.xposed.godmode.rule.ViewRule;
 
@@ -80,7 +81,7 @@ public final class BlockHandler {
                     if (listener != null) {
                         listener.onAnimationEnd(blockedViewIndex);
                     }
-                    ThreadPools.IO.execute(() -> {
+                    TaskExecutor.executeIo(() -> {
                         try {
                             GodModeManager.getDefault().writeRule(
                                     activity.getPackageName(), viewRule, snapshot);
