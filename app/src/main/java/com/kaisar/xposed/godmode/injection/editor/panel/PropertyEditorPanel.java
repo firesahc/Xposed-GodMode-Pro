@@ -20,17 +20,17 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.kaisar.xposed.godmode.R;
-import com.kaisar.xposed.godmode.injection.ModuleResources;
 import com.kaisar.xposed.godmode.engine.matcher.ViewFinder;
 import com.kaisar.xposed.godmode.engine.matcher.ViewTraversal;
 import com.kaisar.xposed.godmode.engine.rule.RuleMapper;
+import com.kaisar.xposed.godmode.engine.util.Logger;
+import com.kaisar.xposed.godmode.injection.ModuleResources;
+import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
 import com.kaisar.xposed.godmode.injection.editor.RuleRecordFactory;
 import com.kaisar.xposed.godmode.injection.util.BitmapUtils;
-import com.kaisar.xposed.godmode.injection.util.ViewUtils;
-import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
 import com.kaisar.xposed.godmode.injection.util.GmResources;
-import com.kaisar.xposed.godmode.util.Logger;
 import com.kaisar.xposed.godmode.injection.util.TaskExecutor;
+import com.kaisar.xposed.godmode.injection.util.ViewUtils;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 
 import java.io.InputStream;
@@ -43,17 +43,17 @@ import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedHelpers;
 
 /**
- * 闁诲繒鍋熼崑鐐哄焵椤戭剙鎳愬浠嬪级閸喎鐏存繛闂村嵆瀵?闂?闁?婵?闂備緡鍋勭换鎴澪ｉ幋鐐村劅?婵炶揪绲界粔鍫曟偪?闂佸搫鍊稿ú锕€锕?闂佹悶鍎辨晶鑺ユ櫠閺嶎偂娌柣鎰ˉ閸嬫捁顦寸紒槌栦簼濞煎繘骞嬪▎灞戒壕?
- * 缂備胶濯寸槐鏇㈠箖婵犲伅褰掝敊閼姐倛澹橀梺鐑╂櫓閸犳鎮ラ敐鍡樺劅闁哄啫鍊归弳蹇撯槈閺傛鍎庣紒妤€鍊块幆鍐礋椤栨浜鹃柟閭﹀灱濞兼帡鏌涢妷锕€鍔ら柣顐ｏ耿楠炩偓鐟滃矂骞堥妸鈺佺哗鐟滅増甯楀銊╂煛婢跺函楠忛柍?
+ * 闂佽绻掗崑鐔煎磻閻愬搫鐒垫い鎴墮閹虫劕顪冩禒瀣骇闁割偆鍠庨悘瀛樼箾闂傛潙宓嗙€?闂?闂?濠?闂傚倷绶￠崑鍕崲閹存惊锝夊箣閻愭潙鍔?濠电偠鎻徊鐣岀矓閸洘鍋?闂備礁鎼崐绋棵洪敃鈧敃?闂備焦鎮堕崕杈ㄦ櫠閼恒儲娅犻柡宥庡亗濞岊亪鏌ｉ幇顔克夐柛瀣崄椤﹀绱掓鏍︾凹婵炵厧绻橀獮瀣枎鐏炴垝澹?
+ * 缂傚倷鑳舵刊瀵告閺囥垹绠栧┑鐘蹭紖瑜版帩鏁婇柤濮愬€涙竟姗€姊洪悜鈺傛珦闁哥姵顨婇幃銉╂晲閸℃ê鍔呴梺鍝勫暙閸婂綊寮宠箛鎾闁哄倹顑欓崕搴ｇ磼濡も偓閸婂潡骞嗛崘顔肩妞ゆ牗顨呮禍楣冩煙闁箑鐏辨繛鍏煎浮閺屾盯濡烽敃鈧崝銈夋煟椤愶綇鑰挎鐐╁亾閻熸粌鐭傞獮鍫ュΩ閳轰胶鍝楅悷婊呭鐢顩奸妸鈺傜厸濠㈣泛鍑芥蹇涙煃?
  * <p>
- * 闂佺厧宕惌渚€鎯屽Δ鍛櫖?
+ * 闂備胶鍘у畷顒勬儗娓氣偓閹苯螖閸涱喗娅?
  * <ul>
- *   <li>闂佸憡姊绘慨鎯归崶顒傚祦闁肩鐏氶埢鏃傜磼閳ь剚娼悧鍫濆伎闂佽　鍋撶憸鐗堝笚濡椼劑鏌?UI</li>
- *   <li>闁诲骸婀遍崑鐐差渻閸屾冻绱ｉ柛鏇ㄥ櫘濞兼棃鎮?婵?闂備緡鍋勭换鎴澪ｉ幋鐐村劅?婵炶揪绲界粔鍫曟偪?闂佸搫鍊稿ú锕€锕?闂佹悶鍎辨晶鑺ユ櫠閺嶎厼鐭楁俊顖滅帛缁?/li>
- *   <li>婵烇絽娲︾换鍌炴偤閵娧勫枂闁糕剝顨嗙粋鍫ユ煕濡厧鏋庢い顐ｅ姍閹晠鎳滅喊妯轰壕濞达絿鍎ら弳蹇撁瑰鍐€楃憸鏉挎搐閳?闁哄鏅滈敋閻?/li>
- *   <li>缂佺虎鍙庨崰娑㈩敇缂佹鈹嶆い鏃囧Г閺嗩參鏌涘顒勵€楅柛鐔告崌瀹?{@link #mTempModifications} 閻庡灚婢橀幊宥囨崲濮樻墎鍋撳☉娆樼劸妞ゎ偄顦靛畷?/li>
- *   <li>闂佸綊鏅插鎺旂不濞嗘挸绀岄柡宓棗鐝Δ鐘靛仦鐎笛囧箰閸楃儐鍟呴棅顐幘缁犱粙鎮楀☉娆樼劷婵炲牊鍨剁粚閬嶎敊閼恒儲姣?/li>
- *   <li>Hook Activity.onActivityResult 婵炲濮伴崕閬嵥囬埡鍛仩闁糕剝顨嗙粋鍫ユ煟濡も偓濞诧箑霉濞戙垹绠?/li>
+ *   <li>闂備礁鎲″缁樻叏閹灐褰掑炊椤掑倸绁﹂梺鑲╊焾閻忔岸鍩㈤弮鍌滅＜闁逞屽墯濞碱亪鎮ч崼婵嗕紟闂備浇銆€閸嬫挾鎲搁悧鍫濈瑲婵℃ぜ鍔戦弻?UI</li>
+ *   <li>闂佽楠稿﹢閬嶅磻閻愬樊娓婚柛灞惧喕缁憋綁鏌涢弴銊ユ珮婵炲吋妫冮幃?濠?闂傚倷绶￠崑鍕崲閹存惊锝夊箣閻愭潙鍔?濠电偠鎻徊鐣岀矓閸洘鍋?闂備礁鎼崐绋棵洪敃鈧敃?闂備焦鎮堕崕杈ㄦ櫠閼恒儲娅犻柡宥庡幖閻淇婇婊呭笡缂?/li>
+ *   <li>濠电儑绲藉ú锔炬崲閸岀偞鍋ら柕濞у嫬鏋傞梺绯曞墲椤ㄥ棛绮嬮崼銉︾厱婵☆垳鍘ч弸搴亜椤愶絽濮嶉柟顔规櫊閹虫粎鍠婂Ο杞板婵炶揪绲块崕銈夊汲韫囨拋鐟邦煥閸愵噮鈧鎲搁弶鎸庢悙闁?闂佸搫顦弲婊堟晪闁?/li>
+ *   <li>缂備胶铏庨崣搴ㄥ窗濞戙埄鏁囩紓浣诡焽閳瑰秵銇勯弮鍥撻柡鍡╁弮閺屾稑顫濋鍕碘偓妤呮煕閻斿憡宕岀€?{@link #mTempModifications} 闁诲骸鐏氬姗€骞婂鍥ㄥ床婵ɑ澧庨崑鎾斥槈濞嗘鍔稿銈庡亜椤﹂潧鐣?/li>
+ *   <li>闂備礁缍婇弲鎻掝渻閹烘梻涓嶆繛鍡樻尭缁€宀勬煛瀹擃喖妫楅悵顖毼旈悩闈涗沪閻庣瑳鍥х闁告鍎愰崯鍛存椤愵偄骞樼紒鐘辩矙閹鈽夊▎妯煎姺濠电偛鐗婇崹鍓佺矚闁稁鏁婇柤鎭掑劜濮?/li>
+ *   <li>Hook Activity.onActivityResult 濠电偛顕慨浼村磿闁单鍥煛閸涱喖浠╅梺绯曞墲椤ㄥ棛绮嬮崼銉︾厽婵°倐鍋撴繛璇х畱闇夋繛鎴欏灩缁?/li>
  * </ul>
  */
 public class PropertyEditorPanel {
@@ -65,10 +65,10 @@ public class PropertyEditorPanel {
     private Bitmap mPendingImageBitmap;
     private HashMap<String, Bitmap> mPendingModBitmaps = new HashMap<>();
 
-    // 閻庡灚婢橀幊宥囨崲濮樻墎鍋撳☉娆樼劷婵炲牊鍨剁粚閬嶎敊閼恒儲姣夐柣鐔哥懃鐎氼剟宕?
+    // 闁诲骸鐏氬姗€骞婂鍥ㄥ床婵ɑ澧庨崑鎾斥槈濞嗘鍔峰┑鐐茬墛閸ㄥ墎绮氶柆宥庢晩闁兼亽鍎插В澶愭煟閻斿摜鎳冮悗姘煎墴瀹?
     final HashMap<String, RuleRecord> mTempModifications = new HashMap<>();
 
-    // 闂侀潻璐熼崝宀勬偪閸曨垰绫嶉柛顐ｆ处閺嗘洟鎮峰▎蹇曞闁逛究鍔戝銊╂偡閺夋鏋€闂佺顫夊ú婵嬬嵁韫囨稒鍎嶉柛鏇ㄥ櫘濞兼帡鏌涢妷锕€鍔ら悽顖ｅ亝閹便劎鈧綆鍓欑瑧闂?
+    // 闂備線娼荤拹鐔煎礉瀹€鍕仾闁告洦鍨扮猾宥夋煕椤愶絾澶勯柡鍡樻礋閹嘲鈻庤箛鏇烆暪闂侀€涚┒閸旀垵顕ｉ妸鈺傚仭闁哄顑欓弸鈧梻浣侯攰椤煤濠靛宓侀煫鍥ㄧ⊕閸庡秹鏌涢弴銊ユ珮婵炲吋甯￠弻娑㈠Ψ閿曗偓閸斻倝鎮介锝呬簼闁逛究鍔庨埀顒婄秵閸撴瑧鐟ч梻?
     private ViewGroup.MarginLayoutParams mSavedLayoutParams;
     private int mSavedWidth = -1;
     private int mSavedHeight = -1;
@@ -77,14 +77,14 @@ public class PropertyEditorPanel {
     private float mSavedAlpha;
     private CharSequence mSavedText;
 
-    // 婵烇絽娲︾换鍌炴偤閵娧勫枂闁糕剝顨嗙粋鍫ユ煛瀹ュ懏绌块柣锔藉灦缁岄亶鍩勯崘褏绀€闂佹寧绋戦惉濂稿极閵堝棛顩?Activity 闂備焦褰冪粔瀵哥磽閹捐瑙﹂幖娣妼濞呫垽鏌￠崒婊冾暭闁绘搫绻濋獮?
+    // 濠电儑绲藉ú锔炬崲閸岀偞鍋ら柕濞у嫬鏋傞梺绯曞墲椤ㄥ棛绮嬮崼銉︾厸鐎广儱鎳忕粚鍧楁煟閿旇棄鐏︾紒宀勪憾閸╁嫰宕樿缁€鈧梻浣瑰缁嬫垿鎯夋總绋挎瀬闁靛牆妫涢々?Activity 闂傚倷鐒﹁ぐ鍐矓鐎靛摜纾介柟鎹愵嚙鐟欙箓骞栧ǎ顒€濡兼繛鍛灲閺岋繝宕掑鍐炬毉闂佺粯鎼换婵嬬嵁?
     private int[] mModifyingViewDepth;
     private String mModifyingViewActClass;
 
     private boolean mActivityResultHooked;
 
     /**
-     * 闂佸搫瀚晶浠嬪Φ濮樺彉娌柣鎰ˉ閸嬫捁顦寸紒槌栦簼濞煎繘骞嬮敂鑺ャ€冮梺鍝勵槼閿熴儵鍩€?
+     * 闂備礁鎼€氼剚鏅舵禒瀣︽慨妯哄綁濞岊亪鏌ｉ幇顔克夐柛瀣崄椤﹀绱掓鏍︾凹婵炵厧绻橀獮瀣晜閼恒儯鈧啴姊洪崫鍕垫Ъ闁跨喆鍎甸崺鈧?
      */
     public void show(View targetView, Activity activity, ViewGroup container) {
         if (mPanelView != null || targetView == null) return;
@@ -112,7 +112,7 @@ public class PropertyEditorPanel {
         }
     }
 
-    /** 闂佺绻戞繛濠偽涢幘顔筋棃闁靛繆鍓濈欢?*/
+    /** 闂備胶顭堢换鎴炵箾婵犲伣娑㈠箻椤旂瓔妫冮梺闈涚箚閸撴繄娆?*/
     public void dismiss() {
         if (mPanelView == null) return;
         View panel = mPanelView;
@@ -122,15 +122,15 @@ public class PropertyEditorPanel {
         mOriginalImageBitmap = null;
         mModifyingViewDepth = null;
         mModifyingViewActClass = null;
-        // 濠电偛顦崝宥夊礈娴煎瓨鏅慨姗嗗亞閻熸繈鏌涢妷褍浠﹂柡?濠电偞鎸搁幊鎰板煘?mPendingModBitmaps 闂佺偨鍎查弻锟犲焵?婵炶揪绲界粔鏉懨瑰鈧畷锝夘敍濠靛棗骞嬫繛瀵稿Т缁夌兘锝?ImageView 閻庢鍠楀ú婊堝极閵堝鍙婇柛鎾椾椒绮甸梺?
-        // 婵?saveAll() 闂傚倸娲犻崑鎾绘偡閺囨氨顦﹂柣锝囧У缁傛帡顢楁担褰掓闂佸綊鏅插鎺旂不濞嗘挸绀岄柡宓嫮顩梺缁橆殔濞诧箓寮搁崘鈺冾浄闂婎剚绁撮崑鎾诲磼濮橆叀鍚?cancel() 闂?saveAll() 婵炴垶鎼╅崢濂杆囬埡鍛仩闁糕剝鍔忛崑?
+        // 婵犵數鍋涢ˇ顓㈠礉瀹ュ绀堝ù鐓庣摠閺咁剚鎱ㄥ鍡椾簽闁荤喐绻堥弻娑㈠Ψ瑜嶆禒锕傛煛?婵犵數鍋為幐鎼佸箠閹版澘鐓?mPendingModBitmaps 闂備胶鍋ㄩ崕鏌ュ蓟閿熺姴鐒?濠电偠鎻徊鐣岀矓閺夋嚚鐟邦潨閳ь剙鐣烽敐澶樻晬婵犻潧妫楅獮瀣箾鐎电孝缂佸鍏橀敐?ImageView 闁诲孩顔栭崰妤€煤濠婂牆鏋侀柕鍫濐槸閸欏﹪鏌涢幘妞炬缁敻姊?
+        // 濠?saveAll() 闂傚倸鍊稿ú鐘诲磻閹剧粯鍋￠柡鍥ㄦ皑椤︼箓鏌ｉ敐鍥ｇ紒鍌涘浮椤㈡鎷呰ぐ鎺擃€栭梻浣哥秺閺呮彃顪冮幒鏃備笉婵炲棙鎸哥粈宀勬煛瀹擃喖瀚々顓㈡⒑缂佹﹩娈旀繛璇х畵瀵悂宕橀埡鍐炬祫闂傚鍓氱粊鎾磻閹捐纾兼慨姗嗗弨閸?cancel() 闂?saveAll() 濠电偞鍨堕幖鈺呭储婵傛潌鍥煛閸涱喖浠╅梺绯曞墲閸斿繘宕?
         panel.animate().alpha(0).setDuration(150).withEndAction(() -> {
             ViewGroup parent = (ViewGroup) panel.getParent();
             if (parent != null) parent.removeView(panel);
         }).start();
     }
 
-    /** 闂佸憡鐟﹂悧妤冪矓闁垮鈹嶆い鏃囧Г閺嗩參鏌ㄥ☉娆庝孩缂佺粯娲熷畷銏ゆ偄濞茬粯缍婇梺鎼炲劚婢ц姤鎱ㄩ幖浣哥畱濞达絾鐡曠€氭瑩鏌涜箛鏂库枙婵☆偅鎸冲Λ鍐閳╁啰鍑?*/
+    /** 闂備礁鎲￠悷锕傛偋濡ゅ啰鐭撻梺鍨儑閳瑰秵銇勯弮鍥撻柡鍡╁弮閺屻劌鈽夊▎搴濆缂備胶绮ú鐔风暦閵忋倖鍋勬繛鑼帛缂嶅﹪姊洪幖鐐插姎濠⒀嗗Г閹便劑骞栨担鍝ョ暠婵炶揪绲鹃悺鏇犫偓姘懇閺屾稖绠涢弬搴撴灆濠碘槅鍋呴幐鍐参涢崘顔碱潊闁斥晛鍟伴崙?*/
     public void cancel() {
         revertViewState();
         for (Map.Entry<String, Bitmap> entry : mPendingModBitmaps.entrySet()) {
@@ -142,7 +142,7 @@ public class PropertyEditorPanel {
         dismiss();
     }
 
-    // ---- 闂佸憡鍔曢幊姗€宕?Seeker 缂傚倷鐒﹂崹鐢告偩?----
+    // ---- 闂備礁鎲￠崝鏇㈠箠濮椻偓瀹?Seeker 缂傚倸鍊烽悞锕傚垂閻㈠憡鍋?----
 
     private void setupSeekers(View panel, View selectedView) {
         SeekBar widthSeek = panel.findViewById(R.id.mod_width_seek);
@@ -180,7 +180,7 @@ public class PropertyEditorPanel {
         });
     }
 
-    // ---- 闂佹悶鍎辨晶鑺ユ櫠閺嶎厼鍗抽柟绋块鎼?----
+    // ---- 闂備焦鎮堕崕杈ㄦ櫠閼恒儲娅犻柡宥庡幖閸楁娊鏌熺粙鍧楊€楅幖?----
 
     private void setupImageReplacement(View panel, View selectedView, Activity activity) {
         LinearLayout imageSection = panel.findViewById(R.id.mod_image_section);
@@ -196,12 +196,12 @@ public class PropertyEditorPanel {
                 intent.setType("image/*");
                 activity.startActivityForResult(intent, 0x5A45);
             } catch (Exception e) {
-                Toast.makeText(activity, "闂佸搫鍟版慨鐢垫兜閸洖绠ラ柟鎯х－绾惧鏌涢妷銉モ挃濠⒀勭墵閺屽懏寰勭€ｎ亶浠撮梺?, Toast.LENGTH_SHORT).show();
+                Toast.makeText(activity, "闂備礁鎼崯鐗堟叏閻㈠灚鍏滈柛顐ｆ礀缁犮儵鏌熼幆褏锛嶇痪鎯ь煼閺屾盯濡烽妷銉㈡寖婵犫拃鍕⒌闁哄苯鎳忓鍕偓锝庝憾娴犳挳姊?, Toast.LENGTH_SHORT).show();
             }
         });
     }
 
-    // ---- 婵炶揪绲界粔鍫曟偪閸℃鍤楁い鏃囨硶濞?----
+    // ---- 濠电偠鎻徊鐣岀矓閸洘鍋柛鈩冾殢閸ゆ銇勯弮鍥ㄧ《婵?----
 
     private void setupPositionNudge(View panel, View selectedView) {
         View.OnClickListener nudgeListener = v -> {
@@ -225,7 +225,7 @@ public class PropertyEditorPanel {
         panel.findViewById(R.id.mod_pos_right).setOnClickListener(nudgeListener);
     }
 
-    // ---- 缂佺虎鍙庨崰娑㈩敇?/ 闂佸憡鐟﹂悧妤冪矓閻戣棄绠板鑸靛姈鐏?----
+    // ---- 缂備胶铏庨崣搴ㄥ窗濞戙埄鏁?/ 闂備礁鎲￠悷锕傛偋濡ゅ啰鐭撻柣鎴ｆ缁犳澘顭块懜闈涘閻?----
 
     private void setupConfirmCancel(View panel, View selectedView) {
         SeekBar widthSeek = panel.findViewById(R.id.mod_width_seek);
@@ -241,7 +241,7 @@ public class PropertyEditorPanel {
         });
     }
 
-    // ---- 閻庤鎮堕崕閬嶅矗?----
+    // ---- 闁诲氦顫夐幃鍫曞磿闁秴鐭?----
 
     private void bindSeek(SeekBar seekBar, EditText text, View target, SeekerType type) {
         seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
@@ -262,9 +262,9 @@ public class PropertyEditorPanel {
 
     private enum SeekerType { WIDTH, HEIGHT, ALPHA }
 
-    // ---- 闁荤喐鐟ュΛ妤€霉濮椻偓閹晠鎳滅喊妯轰壕濞达綁顥撶粻浠嬫倵?/ 闁哄鏅滈敋閻?----
+    // ---- 闂佽崵鍠愰悷銉ノ涘Δ鈧湁婵せ鍋撻柟顔规櫊閹虫粎鍠婂Ο杞板婵炶揪缍侀ˉ鎾剁不娴犲鍊?/ 闂佸搫顦弲婊堟晪闁?----
 
-    /** 闂侀潻璐熼崝宥呂熸径宀€鐭嗘繛宸簼濡椼劑鏌℃径濠勪虎濠⒀呭У缁屽崬鈹戦崱娆愭喖闁荤喐鐟ュΛ妤€霉濮椻偓瀹曘垽鎮㈡總澶嬬稄闂佺粯顭堥崺鏍焵椤戣法绛忕紒杈ㄧ箞閹粙濡搁妶鍥闂佸憡鐟﹂悧妤冪矓闁垮浜ゆ俊顖氭惈閺?*/
+    /** 闂備線娼荤拹鐔煎礉瀹ュ憘鐔稿緞瀹€鈧惌鍡樼箾瀹割喕绨兼俊妞煎姂閺屸剝寰勬繝鍕檸婵犫拃鍛ｇ紒灞藉船閳规垿宕卞▎鎰枛闂佽崵鍠愰悷銉ノ涘Δ鈧湁婵せ鍋撶€规洏鍨介幃銏＄附婢跺绋勯梻浣虹帛椤牓宕洪弽顓炵劦妞ゆ垼娉曠粵蹇曠磼鏉堛劎绠為柟顔荤矙婵℃悂濡堕崶顏勵棟闂備礁鎲￠悷锕傛偋濡ゅ啰鐭撻梺鍨儐娴溿倖淇婇姘儓闁?*/
     private void saveViewState(View view) {
         mSavedLayoutParams = null;
         mSavedWidth = -1;
@@ -302,7 +302,7 @@ public class PropertyEditorPanel {
         }
     }
 
-    /** 闁哄鏅滈敋閻㈩垼鍋嗛幉鎾幢濡や胶顩梺鍛婂浮椤ｏ妇鎹㈠鎵佸亾濞戞瑯鐒芥繛鍫熷灴瀹曘垽鎮㈡總澶嬬稄闂佺粯顭堥崺鏍焵?*/
+    /** 闂佸搫顦弲婊堟晪闁汇埄鍨奸崑鍡涘箟閹绢喖骞㈡俊銈勮兌椤╊參姊洪崨濠傛诞妞わ綇濡囬幑銏狀潩閹典礁浜炬繛鎴炵懐閻掕姤绻涢崼鐔风伌鐎规洏鍨介幃銏＄附婢跺绋勯梻浣虹帛椤牓宕洪弽顓炵劦?*/
     private void revertViewState() {
         if (mTargetView == null) return;
         if (!verifyViewIdentity(mTargetView)) {
@@ -344,7 +344,7 @@ public class PropertyEditorPanel {
         mTempModifications.remove(viewKey);
     }
 
-    /** 濠碘槅鍋€閸嬫捇鏌＄仦璇插姤妞ゎ偄顑夊畷鍫曞矗閵壯呯厳闂佸搫鐗嗛ˇ浼村疾閵夛妇鈻旈柡鍌氬⒔閻熴垹菐閸ャ劎绠撻柣掳鍔戦幆鍐礋椤掑倻鐣抽柟?缂備緡鍋夐褔骞冮弴銏犵鐟滅増甯掔敮?*/
+    /** 婵犵妲呴崑鈧柛瀣崌閺岋紕浠︾拠鎻掑Г濡炪値鍋勯澶婄暦閸洖鐭楅柕澹懐鍘抽梻浣告惈閻楀棝藝娴兼潙鐤鹃柕澶涘閳绘棃鏌￠崒姘挃闁荤喆鍨硅彁闁搞儯鍔庣粻鎾绘煟鎺抽崝鎴﹀箚閸愵喖绀嬫い鎺戝€婚悾鎶芥煙?缂傚倷绶￠崑澶愵敋瑜旈獮鍐即閵忕姷顦遍悷婊呭鐢帞鏁?*/
     private boolean verifyViewIdentity(View view) {
         if (!view.isAttachedToWindow()) return false;
         if (mModifyingViewDepth == null || mModifyingViewActClass == null) return true;
@@ -355,9 +355,9 @@ public class PropertyEditorPanel {
         return java.util.Arrays.equals(mModifyingViewDepth, currentDepth);
     }
 
-    // ---- 闁圭厧鐡ㄥ濠氬极閵堝棛鈹嶆い鏃囧Г閺?/ 婵烇絽娲︾换鍌炴偤?----
+    // ---- 闂佸湱鍘ч悺銊ヮ潖婵犳艾鏋侀柕鍫濇閳瑰秵銇勯弮鍥撻柡?/ 濠电儑绲藉ú锔炬崲閸岀偞鍋?----
 
-    /** 婵炲濮存鍝ョ礊鐎ｎ喖绀?UI 闂佺粯顭堥崺鏍焵椤戣法鍔嶉柣搴灠椤?RuleRecord 濡ょ姷鍋犲▔娑㈡偤閵娾晛绀傞柕澶堝€曢ˇ鏌ユ煛閸愨晜鏋勯柟渚垮姂瀵劏銇愰幒鎾瑰亖闂?*/
+    /** 濠电偛顕慨瀛橆殽閸濄儳绀婇悗锝庡枛缁€?UI 闂備胶绮…鍫ュ春閺嶎厼鐒垫い鎴ｆ硶閸斿秹鏌ｆ惔顔肩仩妞?RuleRecord 婵°倗濮烽崑鐘测枖濞戙垺鍋ら柕濞炬櫅缁€鍌炴煏婢跺牆鈧洟藝閺屻儲鐓涢柛鎰ㄦ櫆閺嬪嫰鏌熸笟鍨鐎殿喓鍔忛妵鎰板箳閹剧懓浜栭梻?*/
     private void applyModification(View view, SeekBar widthSeek, SeekBar heightSeek,
                                     SeekBar alphaSeek, EditText textInput) {
         int w = widthSeek.getProgress();
@@ -368,7 +368,7 @@ public class PropertyEditorPanel {
         RuleRecord rule = mTempModifications.get(viewKey);
         if (rule == null) {
             rule = RuleRecordFactory.makeModifyRule(view);
-            // 闂?saveViewState 婵炴垶鎼╅崢钘夌暦閻斿吋鍤斿瀣閻ｉ亶鏌涘Ο鐓庢瀻妞ゎ偅鍔欏畷鎰版嚌闁附鑸归梺?originals
+            // 闂?saveViewState 濠电偞鍨堕幖鈺呭储閽樺鏆﹂柣鏂垮悑閸ゆ柨顪冪€ｎ亜顒㈤柣锝変憾閺屾稑螣閻撳孩鐎诲銈庡亝閸旀瑥鐣烽幇鐗堝殞闂侇叏闄勯懜褰掓⒑?originals
             rule.origWidth = mSavedWidth > 0 ? mSavedWidth : mSavedPixelWidth;
             rule.origHeight = mSavedHeight > 0 ? mSavedHeight : mSavedPixelHeight;
             rule.origAlpha = mSavedAlpha;
@@ -405,11 +405,11 @@ public class PropertyEditorPanel {
     }
 
     /**
-     * 闂佸綊鏅插鎺旂不濞嗘挸绀岄柡宥冨妼椤ｆ煡鏌￠崼婵愭Ц缂佸墎鍠愮粚鍗炩攽閸℃瑦鎲奸梺姹囧妼鐎氼亪骞堥妸鈺佺哗闁荤喐濯界€氭瑩姊洪锝嗙殤闁绘搫绱曢崠鏍嚒閵堝洤鐓氶梺鍝勭墕缁夊瓨鎱ㄩ悢鐓幬?
+     * 闂備礁缍婇弲鎻掝渻閹烘梻涓嶆繛鍡樻尭缁€宀勬煛瀹ュ啫濡兼い锝嗙叀閺岋繝宕煎┑鎰︾紓浣稿閸犳劗绮氶崡鐐╂斀闁糕剝鐟﹂幉濂告⒑濮瑰洤濡奸悗姘间邯楠炲牓濡搁埡浣哄摋闂佽崵鍠愭刊鐣屸偓姘懇濮婃椽顢曢敐鍡欐闂佺粯鎼槐鏇㈠礌閺嶎厽鍤掗柕鍫濇搐閻撴岸姊洪崫鍕缂佸鐡ㄩ幈銊╂偄閻撳宫?
      */
     public void saveAll(Activity activity, View nodeSelectorPanel, View maskView, View modifyPanel) {
         if (mTempModifications.isEmpty()) {
-            Toast.makeText(activity, "濠电偛澶囬崜婵嗭耿娓氣偓濡線鍩€椤掑倹鍟哄ù锝夘棑缁犱粙鎮楀☉娆樼劷婵炲牊鍨剁粚閬嶎敊閼恒儲姣?, Toast.LENGTH_SHORT).show();
+            Toast.makeText(activity, "婵犵數鍋涙径鍥礈濠靛棴鑰垮〒姘ｅ亾婵☆偂绶氶崺鈧い鎺戝€归崯鍝劽归敐澶樻缂佺姳绮欓幃妤€鈽夊▎妯煎姺濠电偛鐗婇崹鍓佺矚闁稁鏁婇柤鎭掑劜濮?, Toast.LENGTH_SHORT).show();
             return;
         }
         String pkg = activity.getPackageName();
@@ -436,7 +436,7 @@ public class PropertyEditorPanel {
         }
         mTempModifications.entrySet().removeIf(entry -> !entry.getValue().hasModifications());
         if (mTempModifications.isEmpty()) {
-            Toast.makeText(activity, "濠电偛澶囬崜婵嗭耿娓氣偓濡線鍩€椤掑倹鍟哄ù锝夘棑缁犱粙鎮楀☉娆樼劷婵炲牊鍨剁粚閬嶎敊閼恒儲姣?, Toast.LENGTH_SHORT).show();
+            Toast.makeText(activity, "婵犵數鍋涙径鍥礈濠靛棴鑰垮〒姘ｅ亾婵☆偂绶氶崺鈧い鎺戝€归崯鍝劽归敐澶樻缂佺姳绮欓幃妤€鈽夊▎妯煎姺濠电偛鐗婇崹鍓佺矚闁稁鏁婇柤鎭掑劜濮?, Toast.LENGTH_SHORT).show();
             return;
         }
         if (nodeSelectorPanel != null) nodeSelectorPanel.setVisibility(View.INVISIBLE);
@@ -468,9 +468,9 @@ public class PropertyEditorPanel {
                 Logger.w(TAG, "[ModifyPanel] saveAll: snapshot failed for rule", e);
             }
         }
-        // 婵炴垶鎸哥粔鐑姐€呴敃鍌氱倞闁绘劕鐡ㄩ弳?mPendingModBitmaps 婵炴垶鎼╅崢鎯р枔閹寸偞濯寸€广儱鎳忕粋鍫ユ煃閵夛附鐓涢柍褜鍓氶弻銊╂偩閻樺磭顩锋い鎴ｆ硶閻繈鎮?ImageView 閻庢鍠楀ú婊堝极閵堝鍙婇柛鎾椾椒绮甸梺?
-        // 閻?writeRule 濡ょ姷鍋炵€笛囧箰闁秴瑙﹂幖鎼灣缁€濉plyModificationToView 婵炴潙鍚嬮惌顔惧垝閻橀潧顥氬ù锝囧劋绾炬悂鏌涢弮鍌毿繛鏉戞喘瀵剚锛愭担铏剐㈤梺鎼炲劤閸嬫挸霉濞戙垹绠叉い顐枤缁€?
-        // 闂佸搫鍞查崒婊呅㈤梺鎼炲劜閸庢娊鎯囨ィ鍐ㄧ睄闁告挷鐒﹂弳?GC 闂佹悶鍎抽崑鐐哄极瑜版帒违?
+        // 濠电偞鍨堕幐鍝ョ矓閻戝鈧懘鏁冮崒姘卞€為梺缁樺姇閻°劑寮?mPendingModBitmaps 濠电偞鍨堕幖鈺呭储閹€鏋旈柟瀵稿仦婵鈧箍鍎遍幊蹇曠矉閸儲鐓冮柕澶涢檮閻撴盯鏌嶈閸撴岸寮婚妸鈺傚仼闁绘ê纾々閿嬨亜閹达絾纭堕柣顓熺箞閹?ImageView 闁诲孩顔栭崰妤€煤濠婂牆鏋侀柕鍫濐槸閸欏﹪鏌涢幘妞炬缁敻姊?
+        // 闁?writeRule 婵°倗濮烽崑鐐碘偓绗涘洤绠伴梺顒€绉寸憴锕傚箹閹碱厼鐏ｇ紒鈧繅顪秔lyModificationToView 濠电偞娼欓崥瀣儗椤旀儳鍨濋柣姗€娼чˉ姘归敐鍥у妺缁剧偓鎮傞弻娑㈠籍閸屾顒佺箾閺夋垶鍠樼€殿噮鍓氶敍鎰媴閾忓墣銏ゆ⒑閹肩偛鍔ら柛瀣尭闇夋繛鎴欏灩缁犲弶銇勯顐㈡灓缂佲偓?
+        // 闂備礁鎼崬鏌ュ磼濠婂憛銏ゆ⒑閹肩偛鍔滈柛搴㈠▕閹洦銈ｉ崘銊х潉闂佸憡鎸烽悞锕傚汲?GC 闂備焦鎮堕崕鎶藉磻閻愬搫鏋佺憸鐗堝笒杩?
         mPendingModBitmaps.clear();
         mTempModifications.clear();
         android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
@@ -495,19 +495,19 @@ public class PropertyEditorPanel {
             }
             boolean finalAllOk = allOk;
             String finalFailed = failedRules.isEmpty() ? "" :
-                    "婵犮垺鍎肩划鍓ф喆? " + String.join(", ", failedRules);
+                    "濠电姰鍨洪崕鑲╁垝閸撗勫枂? " + String.join(", ", failedRules);
             mainHandler.post(() -> {
                 if (nodeSelectorPanel != null) nodeSelectorPanel.setVisibility(View.VISIBLE);
                 if (modifyPanel != null) modifyPanel.setVisibility(View.VISIBLE);
                 if (maskView != null) maskView.setVisibility(View.VISIBLE);
                 Toast.makeText(activity,
-                        finalAllOk ? "婵烇絽娴傞崰妤呭极閻撳寒鍟呴棅顐幘缁犱粙鎮? : "闂備緡鍠撻崝宀勫垂鎼淬垻鈹嶆い鏃囧Г閺嗩厼菐閸ャ劎绠撻柣掳鍔嶅鍕綇椤愩儛鏄瀗" + finalFailed,
+                        finalAllOk ? "濠电儑绲藉ù鍌炲窗濡ゅ懎鏋侀柣鎾冲瘨閸熷懘妫呴顐㈠箻缂佺姳绮欓幃? : "闂傚倷绶￠崰鎾诲礉瀹€鍕瀭閹兼番鍨婚埞宥嗐亜閺冨洤袚闁哄棭鍘艰彁闁搞儯鍔庣粻鎾绘煟鎺抽崝宥咁嚗閸曨剚缍囨い鎰╁剾閺勭€? + finalFailed,
                         Toast.LENGTH_LONG).show();
             });
         });
     }
 
-    // ---- Xposed Hook 闂佹椿娼块崝瀣姳椤掑嫬鐐婇柛鎾楀喚鏆梻渚囧亜椤︽壆鈧哎鍔庣槐鎺楀箻鐎甸晲鍑?----
+    // ---- Xposed Hook 闂備焦妞垮鍧楀礉鐎ｎ剝濮虫い鎺戝閻愬﹪鏌涢幘妤€鍠氶弳顒勬⒒娓氬洤浜滄い锔藉閳ь剚鍝庨崝搴ｆ閹烘绠婚悗鐢告櫜閸?----
 
     private void hookActivityResult(Activity activity) {
         if (mActivityResultHooked) return;
@@ -570,7 +570,7 @@ public class PropertyEditorPanel {
         }
     }
 
-    // ---- 闁荤姳绀佸鈥澄涢崼鏇為棷?----
+    // ---- 闂佽崵濮崇粈浣割焽閳ユ緞娑㈠醇閺囩偤妫?----
 
     public View getPanelView() { return mPanelView; }
     public View getTargetView() { return mTargetView; }

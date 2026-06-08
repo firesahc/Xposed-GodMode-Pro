@@ -5,15 +5,15 @@ import android.content.res.AssetManager;
 import android.content.res.Resources;
 
 import com.kaisar.xposed.godmode.R;
+import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.injection.util.GmResources;
-import com.kaisar.xposed.godmode.util.Logger;
 
 import java.io.File;
 import java.lang.reflect.Method;
 
 /**
- * 妯″潡璧勬簮娉ㄥ叆鍣?鈥?灏?GodMode 妯″潡璧勬簮娉ㄥ叆鐩爣搴旂敤鐨?AssetManager銆?
- * 浠?GodModeInjector 鎻愬彇鐨勭嫭绔嬭亴璐ｃ€?
+ * 濡€虫健鐠у嫭绨▔銊ュ弳閸?閳?鐏?GodMode 濡€虫健鐠у嫭绨▔銊ュ弳閻╊喗鐖ｆ惔鏃傛暏閻?AssetManager閵?
+ * 娴?GodModeInjector 閹绘劕褰囬惃鍕缁斿浜寸拹锝冣偓?
  */
 public final class ModuleResources {
 
@@ -23,7 +23,7 @@ public final class ModuleResources {
 
     private ModuleResources() {}
 
-    /** 鍦?initZygote 闃舵鍒濆鍖栨ā鍧楄祫婧愯矾寰?*/
+    /** 閸?initZygote 闂冭埖顔岄崚婵嗩潗閸栨牗膩閸ф绁┃鎰熅瀵?*/
     public static void init(String modulePath, Resources moduleRes) {
         sModulePath = modulePath;
         sInitialized = true;
@@ -35,16 +35,16 @@ public final class ModuleResources {
     }
 
     /**
-     * 灏?GodMode 妯″潡璧勬簮娉ㄥ叆鐩爣搴旂敤鐨?Resources銆?
-     * 浣垮緱鍦ㄧ洰鏍囧簲鐢ㄤ腑娓叉煋瑕嗙洊灞?UI 鏃跺彲浠ヤ娇鐢ㄦā鍧楃殑甯冨眬銆佸瓧绗︿覆鍜屽浘鐗囪祫婧愩€?
+     * 鐏?GodMode 濡€虫健鐠у嫭绨▔銊ュ弳閻╊喗鐖ｆ惔鏃傛暏閻?Resources閵?
+     * 娴ｅ灝绶遍崷銊ф窗閺嶅洤绨查悽銊よ厬濞撳弶鐓嬬憰鍡欐磰鐏?UI 閺冭泛褰叉禒銉ゅ▏閻劍膩閸ф娈戠敮鍐ㄧ湰閵嗕礁鐡х粭锔胯閸滃苯娴橀悧鍥カ濠ф劑鈧?
      */
     public static void injectInto(Resources res) {
         if (res == null) return;
         try {
             res.getString(R.string.res_inject_success);
-            return; // 宸叉敞鍏?
+            return; // 瀹稿弶鏁為崗?
         } catch (Resources.NotFoundException e) {
-            // 灏氭湭娉ㄥ叆 鈥?缁х画鎵ц娉ㄥ叆娴佺▼
+            // 鐏忔碍婀▔銊ュ弳 閳?缂佈呯敾閹笛嗩攽濞夈劌鍙嗗ù浣衡柤
         }
         try {
             String path = sModulePath;

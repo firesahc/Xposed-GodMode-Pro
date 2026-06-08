@@ -11,11 +11,10 @@ import android.view.ViewTreeObserver;
 
 import com.kaisar.xposed.godmode.engine.event.RulesChangedEvent;
 import com.kaisar.xposed.godmode.engine.event.Subscribe;
-import com.kaisar.xposed.godmode.injection.ViewController;
-import com.kaisar.xposed.godmode.util.Logger;
+import com.kaisar.xposed.godmode.engine.util.Logger;
+import com.kaisar.xposed.godmode.engine.util.Preconditions;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
-import com.kaisar.xposed.godmode.engine.util.Preconditions;
 
 import java.lang.ref.WeakReference;
 import java.util.List;
@@ -27,9 +26,9 @@ import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedHelpers;
 
 /**
- * 鐩戝惉 Activity 鐢熷懡鍛ㄦ湡锛屽湪 Activity 鎭㈠/閿€姣佹椂搴旂敤/鎾ら攢瑙勫垯銆?
+ * 閻╂垵鎯?Activity 閻㈢喎鎳￠崨銊︽埂閿涘苯婀?Activity 閹垹顦?闁库偓濮ｄ焦妞傛惔鏃傛暏/閹俱倝鏀㈢憴鍕灟閵?
  * <p>
- * 閫氳繃 EventBus 璁㈤槄 {@link RulesChangedEvent} 鎺ユ敹瑙勫垯鍙樻洿閫氱煡銆?
+ * 闁俺绻?EventBus 鐠併垽妲?{@link RulesChangedEvent} 閹恒儲鏁圭憴鍕灟閸欐ɑ娲块柅姘辩叀閵?
  */
 public final class LifecycleObserver extends XC_MethodHook {
 
@@ -51,8 +50,8 @@ public final class LifecycleObserver extends XC_MethodHook {
                 decorView.getViewTreeObserver().addOnGlobalLayoutListener(listener);
                 mActivities.put(activity, listener);
                 decorView.post(listener::applyRuleIfMatchCondition);
-                // 纭繚鍦ㄨ鍒欏凡鍒拌揪浣?mActivities 灏氫负绌猴紙瑙勫垯鏃╀簬 onPostResume锛?
-                // 鎴栬鍥惧湪鍒濇 applyRuleIfMatchCondition 鏃跺皻鏈氨缁椂鏈変竴涓欢杩熼噸璇曘€?
+                // 绾喕绻氶崷銊潐閸掓瑥鍑￠崚鎷屾彧娴?mActivities 鐏忔矮璐熺粚鐚寸礄鐟欏嫬鍨弮鈺€绨?onPostResume閿?
+                // 閹存牞顫嬮崶鎯ф躬閸掓繃顐?applyRuleIfMatchCondition 閺冭泛鐨婚張顏勬皑缂侇亝妞傞張澶夌娑擃亜娆㈡潻鐔煎櫢鐠囨洏鈧?
                 scheduleRuleReapplication(activity);
             }
             installRecyclerViewHooks(activity);
@@ -69,16 +68,16 @@ public final class LifecycleObserver extends XC_MethodHook {
     }
 
     /**
-     * 鎺ユ敹瑙勫垯鍙樻洿閫氱煡锛圗ventBus 璺緞锛夈€?
-     * 鎾ら攢鏃ц鍒欙紝搴旂敤鏂拌鍒欙紝鐒跺悗涓烘墍鏈夊凡璺熻釜 Activity 璋冨害寤惰繜閲嶈瘯銆?
+     * 閹恒儲鏁圭憴鍕灟閸欐ɑ娲块柅姘辩叀閿涘湕ventBus 鐠侯垰绶為敍澶堚偓?
+     * 閹俱倝鏀㈤弮褑顫夐崚娆欑礉鎼存梻鏁ら弬鎷岊潐閸掓瑱绱濋悞璺烘倵娑撶儤澧嶉張澶婂嚒鐠虹喕閲?Activity 鐠嬪啫瀹冲鎯扮箿闁插秷鐦妴?
      */
     @SuppressWarnings("unchecked")
     @Subscribe
     public void onRulesChanged(RulesChangedEvent event) {
         ActRules newActRules = (ActRules) event.rules;
         if (newActRules == null) return;
-        // 瑙勫垯鏈彉鍖栨椂璺宠繃锛岄伩鍏嶄笉蹇呰鐨勬挙閿€鈫掑啀搴旂敤瀵艰嚧鐨勯棯鍥?
-        // 瑙﹀彂鍦烘櫙锛欼PC addObserver 鎺ㄩ€佺殑瑙勫垯涓?onPostResume 涓凡搴旂敤鐨勮鍒欏畬鍏ㄧ浉鍚屾椂
+        // 鐟欏嫬鍨張顏勫綁閸栨牗妞傜捄瀹犵箖閿涘矂浼╅崗宥勭瑝韫囧懓顩﹂惃鍕寵闁库偓閳帒鍟€鎼存梻鏁ょ€佃壈鍤ч惃鍕／閸?
+        // 鐟欙箑褰傞崷鐑樻珯閿涙PC addObserver 閹恒劑鈧胶娈戠憴鍕灟娑?onPostResume 娑擃厼鍑℃惔鏃傛暏閻ㄥ嫯顫夐崚娆忕暚閸忋劎娴夐崥灞炬
         if (newActRules.equals(mActRules)) return;
         ViewController.getDefault().clearBlockedCache();
         Set<Map.Entry<String, List<RuleRecord>>> entries = newActRules.entrySet();
@@ -125,11 +124,11 @@ public final class LifecycleObserver extends XC_MethodHook {
                 }
             }
         }
-        // 淇: 鍦ㄨ鍒欏瓨鏀惧悗涓烘墍鏈夊凡璺熻釜 Activity 璋冨害閲嶅簲鐢紝
-        // 浠ュ鐞嗚鍥惧湪瑙勫垯棣栨鍒拌揪鏃跺皻涓嶅瓨鍦ㄧ殑鎯呭喌锛堜緥濡傚紓姝ュ～鍏呫€丗ragment 鎳掑姞杞斤級銆?
-        // 濡傛灉瑙嗗浘灏氫笉鍙敤锛宎pplyRuleBatch 浼氶潤榛樺け璐ワ紝
-        // 鑰?onGlobalLayout 鍦ㄩ潤鎬?UI 涓婂彲鑳芥案杩滀笉浼氬啀娆¤Е鍙戙€?
-        // scheduleRuleReapplication锛?00ms 娑堟姈锛夋彁渚涢噸璇曠獥鍙ｄ互鎹曡幏鍔ㄦ€佸垱寤虹殑瑙嗗浘銆?
+        // 娣囶喖顦? 閸︺劏顫夐崚娆忕摠閺€鎯ф倵娑撶儤澧嶉張澶婂嚒鐠虹喕閲?Activity 鐠嬪啫瀹抽柌宥呯安閻㈩煉绱?
+        // 娴犮儱顦╅悶鍡氼潒閸ユ儳婀憴鍕灟妫ｆ牗顐奸崚鎷屾彧閺冭泛鐨绘稉宥呯摠閸︺劎娈戦幆鍛枌閿涘牅绶ユ俊鍌氱磽濮濄儱锝為崗鍛偓涓梤agment 閹虫帒濮炴潪鏂ょ礆閵?
+        // 婵″倹鐏夌憴鍡楁禈鐏忔矮绗夐崣顖滄暏閿涘畮pplyRuleBatch 娴兼岸娼ゆ妯恒亼鐠愩儻绱?
+        // 閼?onGlobalLayout 閸︺劑娼ら幀?UI 娑撳﹤褰查懗鑺ユ鏉╂粈绗夋导姘晙濞喡ば曢崣鎴欌偓?
+        // scheduleRuleReapplication閿?00ms 濞戝牊濮堥敍澶嬪絹娓氭盯鍣哥拠鏇犵崶閸欙絼浜掗幑鏇″箯閸斻劍鈧礁鍨卞铏规畱鐟欏棗娴橀妴?
         for (Activity activity : mActivities.keySet()) {
             scheduleRuleReapplication(activity);
         }
@@ -141,7 +140,7 @@ public final class LifecycleObserver extends XC_MethodHook {
             if (existing != null) mDebounceHandler.removeCallbacks(existing);
             Runnable r = () -> {
                 synchronized (mPendingReapply) { mPendingReapply.remove(activity); }
-                // 涓嶆竻鐞嗙紦瀛橈細閲嶅簲鐢ㄥ簲澧為噺琛ュ厖鏈鐩栫殑瑙勫垯锛岃€岄潪鐮村潖宸茬敓鏁堢殑淇敼
+                // 娑撳秵绔婚悶鍡欑处鐎涙﹫绱伴柌宥呯安閻劌绨叉晶鐐哄櫤鐞涖儱鍘栭張顏囶洬閻╂牜娈戠憴鍕灟閿涘矁鈧矂娼惍鏉戞綎瀹歌尙鏁撻弫鍫㈡畱娣囶喗鏁?
                 OnLayoutChangeListener listener = mActivities.get(activity);
                 if (listener != null) listener.applyRuleIfMatchCondition();
             };
@@ -157,7 +156,7 @@ public final class LifecycleObserver extends XC_MethodHook {
             XposedHelpers.findAndHookMethod(adapterClass, "notifyDataSetChanged", new XC_MethodHook() {
                 @Override
                 protected void afterHookedMethod(MethodHookParam param) {
-                    if (mActRules.isEmpty()) return; // 鏃犺鍒欐椂涓嶈Е鍙戦噸鍖归厤
+                    if (mActRules.isEmpty()) return; // 閺冪姾顫夐崚娆愭娑撳秷袝閸欐垿鍣搁崠褰掑帳
                     for (Activity act : mActivities.keySet()) {
                         if (act != null && !act.isFinishing()) scheduleRuleReapplication(act);
                     }
@@ -173,7 +172,7 @@ public final class LifecycleObserver extends XC_MethodHook {
     final class OnLayoutChangeListener implements ViewTreeObserver.OnGlobalLayoutListener {
 
         final WeakReference<Activity> activityReference;
-        private volatile boolean mApplying; // 闃查噸鍏ユ爣蹇?
+        private volatile boolean mApplying; // 闂冩煡鍣搁崗銉︾垼韫?
 
         OnLayoutChangeListener(Activity activity) {
             activityReference = new WeakReference<>(activity);
@@ -181,7 +180,7 @@ public final class LifecycleObserver extends XC_MethodHook {
 
         @Override
         public void onGlobalLayout() {
-            if (mApplying) return; // 闃叉瑙勫垯搴旂敤瑙﹀彂鐨勫竷灞€鍙樻洿瀵艰嚧閫掑綊閲嶅叆
+            if (mApplying) return; // 闂冨弶顒涚憴鍕灟鎼存梻鏁ょ憴锕€褰傞惃鍕鐏炩偓閸欐ɑ娲跨€佃壈鍤ч柅鎺戠秺闁插秴鍙?
             applyRuleIfMatchCondition();
         }
 

@@ -19,7 +19,7 @@ public final class Clipboard {
             clipboard.setPrimaryClip(clip);
             return true;
         } catch (Throwable e) {
-            android.util.Log.w("Clipboard", "put content failed", e);
+            Logger\.w\("Clipboard", "put content failed", e);
             return false;
         }
     }

@@ -8,9 +8,9 @@ import java.util.HashSet;
 import java.util.Set;
 
 /**
- * 工具栏偏好的跨进程读取工具。
+ * 宸ュ叿鏍忓亸濂界殑璺ㄨ繘绋嬭鍙栧伐鍏枫€?
  * <p>
- * 通过 GodModeManagerService（system_server 中的 AIDL 服务）读取 GodMode App 保存的工具栏偏好。
+ * 閫氳繃 GodModeManagerService锛坰ystem_server 涓殑 AIDL 鏈嶅姟锛夎鍙?GodMode App 淇濆瓨鐨勫伐鍏锋爮鍋忓ソ銆?
  */
 public final class ToolbarPrefsManager {
 
@@ -18,8 +18,8 @@ public final class ToolbarPrefsManager {
     }
 
     /**
-     * 从 GodModeManagerService 读取已隐藏的项目集合。
-     * 返回空集合表示无隐藏项（全部显示）。
+     * 浠?GodModeManagerService 璇诲彇宸查殣钘忕殑椤圭洰闆嗗悎銆?
+     * 杩斿洖绌洪泦鍚堣〃绀烘棤闅愯棌椤癸紙鍏ㄩ儴鏄剧ず锛夈€?
      */
     public static Set<String> loadHiddenItems() {
         try {
@@ -30,7 +30,7 @@ public final class ToolbarPrefsManager {
                 return parseCommaSeparated(value);
             }
         } catch (Throwable e) {
-            android.util.Log.w("ToolbarPrefs", "load hidden items failed", e);
+            Logger\.w\("ToolbarPrefs", "load hidden items failed", e);
         }
         return new HashSet<>();
     }

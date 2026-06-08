@@ -1,5 +1,7 @@
 package com.kaisar.xposed.godmode.util;
 
+import static com.kaisar.xposed.godmode.engine.util.CommonUtils.recycleNullableBitmap;
+
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -22,8 +24,6 @@ import com.bumptech.glide.load.model.ModelLoaderFactory;
 import com.bumptech.glide.load.model.MultiModelLoaderFactory;
 import com.bumptech.glide.module.AppGlideModule;
 import com.bumptech.glide.signature.ObjectKey;
-import static com.kaisar.xposed.godmode.engine.util.CommonUtils.recycleNullableBitmap;
-
 import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 

@@ -7,52 +7,51 @@ import android.app.Activity;
 import android.graphics.Bitmap;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.Toast;
 
-import com.kaisar.xposed.godmode.injection.editor.RuleRecordFactory;
-import com.kaisar.xposed.godmode.injection.util.BitmapUtils;
+import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.injection.ViewController;
 import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
+import com.kaisar.xposed.godmode.injection.editor.RuleRecordFactory;
 import com.kaisar.xposed.godmode.injection.editor.overlay.ParticleView;
-import com.kaisar.xposed.godmode.util.Logger;
+import com.kaisar.xposed.godmode.injection.util.BitmapUtils;
 import com.kaisar.xposed.godmode.injection.util.TaskExecutor;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 
 /**
- * 鐏炲繗鏂€閿涘牏些闂勩倧绱氶幙宥勭稊婢跺嫮鎮婇崳?閳?缁帒鐡欓崝銊ф暰閹绢厽鏂?+ IPC 鐟欏嫬鍨崘娆忓弳閵?
+ * 閻忕偛绻楅弬鈧柨娑樼墢浜涢梻鍕╁€х槐姘跺箼瀹ュ嫮绋婂璺哄閹﹪宕?闁?缂侇喗甯掗悺娆撳礉閵娧勬毎闁圭虎鍘介弬?+ IPC 閻熸瑥瀚崹顖炲礃濞嗗繐寮抽柕?
  * <p>
- * 娴?{@code KeyInterceptor.performBlock()} 閹绘劕褰囬敍宀冧捍鐠愶絽宕熸稉鈧敍?
+ * 濞?{@code KeyInterceptor.performBlock()} 闁圭粯鍔曡ぐ鍥晬瀹€鍐ф崓閻犳劧绲藉畷鐔哥▔閳ь剟鏁?
  * <ul>
- *   <li>閸掓稑缂?{@link ParticleView} 楠炶埖鎸遍弨鍓у瀻閻愬摜鐭戠€涙劕濮╅悽?/li>
- *   <li>閸斻劎鏁惧鈧慨瀣鎼存梻鏁ょ粔濠氭珟鐟欏嫬鍨敍鍧紷link ViewController#applyRule}閿?/li>
- *   <li>閸斻劎鏁剧紒鎾存将閺冨墎绮崚鎯邦潐閸掓瑩浼勭純鈹库偓渚€鈧俺绻?IPC 閸愭瑥鍙嗙憴鍕灟閺傚洣娆?/li>
+ *   <li>闁告帗绋戠紓?{@link ParticleView} 妤犵偠鍩栭幐閬嶅绩閸撗冪€婚柣鎰憸閻垹鈧稒鍔曟慨鈺呮偨?/li>
+ *   <li>闁告柣鍔庨弫鎯ь嚕閳ь剚鎱ㄧ€ｎ偅顦ч幖瀛樻⒒閺併倗绮旀繝姘彑閻熸瑥瀚崹顖炴晬閸х捶link ViewController#applyRule}闁?/li>
+ *   <li>闁告柣鍔庨弫鍓х磼閹惧瓨灏嗛柡鍐ㄥ缁垶宕氶幆閭︽綈闁告帗鐟╂导鍕磾閳瑰簱鍋撴笟鈧埀顒佷亢缁?IPC 闁告劖鐟ラ崣鍡欐喆閸曨偄鐏熼柡鍌氭矗濞?/li>
  * </ul>
  * <p>
- * 鐠嬪啰鏁ら弬纭呯鐠愶綀顫嬮崶鎹愬箯閸欐牓鈧焦鐗庢灞烩偓浣瑰焻閸ユ儳寮烽棃銏℃緲閻㈢喎鎳￠崨銊︽埂閸ョ偠鐨熼妴?
+ * 閻犲鍟伴弫銈夊棘绾懐顦伴悹鎰剁秬椤宕堕幑鎰闁告瑦鐗撻埀顑跨劍閻楀孩顨ョ仦鐑╁亾娴ｇ懓鐒婚柛銉﹀劤瀵兘妫冮姀鈩冪凡闁汇垻鍠庨幊锟犲川閵婏附鍩傞柛銉у仩閻ㄧ喖濡?
  */
 public final class BlockHandler {
 
     private BlockHandler() {}
 
     /**
-     * 鐏炲繗鏂€閹垮秳缍旂€瑰本鍨?婢惰精瑙﹂崶鐐剁殶閵?
+     * 閻忕偛绻楅弬鈧柟鍨С缂嶆梻鈧懓鏈崹?濠㈡儼绮剧憴锕傚炊閻愬墎娈堕柕?
      */
     public interface OnBlockListener {
-        /** 缁帒鐡欓崝銊ф暰缂佹挻娼妴浣筋潐閸掓瑥鍟撻崗銉ュ嚒閹绘劒姘﹂崥搴ょ殶閻劊鈧?*/
+        /** 缂侇喗甯掗悺娆撳礉閵娧勬毎缂備焦鎸诲顐﹀Υ娴ｇ瓔娼愰柛鎺撶懃閸熸捇宕楅妷銉ュ殥闁圭粯鍔掑锕傚触鎼淬倗娈堕柣顫妸閳?*/
         void onAnimationEnd(int blockedViewIndex);
-        /** 閹垮秳缍旀潻鍥┾柤娑擃厼褰傞悽鐔风磽鐢悶鈧?*/
+        /** 闁瑰灝绉崇紞鏃€娼婚崶鈹炬煠濞戞搩鍘艰ぐ鍌炴偨閻旈纾介悽顖涙偠閳?*/
         void onError(String message);
     }
 
     /**
-     * 閹笛嗩攽鐏炲繗鏂€閹垮秳缍旈敍姘辩煈鐎涙劕濮╅悽?+ IPC 閸愭瑥鍙嗛妴?
+     * 闁圭瑳鍡╂斀閻忕偛绻楅弬鈧柟鍨С缂嶆棃鏁嶅杈╃厛閻庢稒鍔曟慨鈺呮偨?+ IPC 闁告劖鐟ラ崣鍡涘Υ?
      *
-     * @param activity         瑜版挸澧?Activity
-     * @param view             鐞氼偄鐫嗛拕鐣屾畱閻╊喗鐖ｇ憴鍡楁禈
-     * @param container        DecorView 鐎圭懓娅掗敍鍦rticleView 闂勫嫮娼冮惄顔界垼閿?
-     * @param snapshot         鐏炲繗鏂€閸撳秴鍏遍崙鈧幋顏勬禈閿涘牆鍑￠梾鎰 GM 鐟曞棛娲婄仦鍌氭倵閹搭亜褰囬敍?
-     * @param blockedViewIndex 鐞氼偄鐫嗛拕鍊燁潒閸ユ儳婀懞鍌滃仯閸掓銆冩稉顓犳畱缁便垹绱?
-     * @param listener         閸ョ偠鐨?
+     * @param activity         鐟滅増鎸告晶?Activity
+     * @param view             閻炴凹鍋勯惈鍡涙嫊閻ｅ本鐣遍柣鈺婂枟閻栵絿鎲撮崱妤佺
+     * @param container        DecorView 閻庡湱鎳撳▍鎺楁晬閸︻櫑rticleView 闂傚嫬瀚鍐儎椤旂晫鍨奸柨?
+     * @param snapshot         閻忕偛绻楅弬鈧柛鎾崇Т閸忛亶宕欓埀顒勫箣椤忓嫭绂堥柨娑樼墕閸戯繝姊鹃幇顖涱棏 GM 閻熸洖妫涘ú濠勪沪閸屾碍鍊甸柟鎼簻瑜板洭鏁?
+     * @param blockedViewIndex 閻炴凹鍋勯惈鍡涙嫊閸婄噥娼掗柛銉﹀劤濠€顏堟嚍閸屾粌浠柛鎺擃殙閵嗗啯绋夐鐘崇暠缂佷究鍨圭槐?
+     * @param listener         闁搞儳鍋犻惃?
      */
     public static void execute(final Activity activity, final View view,
             final ViewGroup container, final Bitmap snapshot,

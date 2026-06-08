@@ -1,12 +1,7 @@
 package com.kaisar.xposed.godmode.service;
 
-import static com.kaisar.xposed.godmode.engine.util.FileUtils.S_IRWXG;
-import static com.kaisar.xposed.godmode.engine.util.FileUtils.S_IRWXO;
-import static com.kaisar.xposed.godmode.engine.util.FileUtils.S_IRWXU;
-
 import android.content.Context;
 import android.graphics.Bitmap;
-import android.os.Binder;
 import android.os.ParcelFileDescriptor;
 import android.os.RemoteException;
 
@@ -14,7 +9,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.kaisar.xposed.godmode.BuildConfig;
 import com.kaisar.xposed.godmode.IGodModeManager;
-import com.kaisar.xposed.godmode.util.Logger;
+import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.AppRules;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
@@ -23,31 +18,31 @@ import java.io.File;
 import java.io.FileNotFoundException;
 
 /**
- * 涓婂笣妯″紡鏍稿績绠＄悊鏈嶅姟 鈥?鎵€鏈夎法杩涚▼閫氳鍧囬€氳繃姝ゆ湇鍔°€?
+ * 娑撳﹤绗ｅΟ鈥崇础閺嶇绺剧粻锛勬倞閺堝秴濮?閳?閹碘偓閺堝娉曟潻娑氣柤闁俺顔嗛崸鍥偓姘崇箖濮濄倖婀囬崝掳鈧?
  * <p>
- * 璇ユ湇鍔￠€氳繃 XServiceManager 娉ㄥ叆鍒?SystemServer 杩涚▼銆?
- * 閲囩敤缁勫悎妯″紡锛屽皢瑙勫垯缂撳瓨銆佹寔涔呭寲銆佽瀵熻€呯鐞嗐€佹潈闄愰獙璇佸鎵樼粰 4 涓笓鑱?Manager銆?
- * Handler 娑堟伅鍒嗗彂浣滀负缂栨帓灞傦紝鍗忚皟鍚?Manager 涔嬮棿鐨勫伐浣滄祦銆?
+ * 鐠囥儲婀囬崝锟犫偓姘崇箖 XServiceManager 濞夈劌鍙嗛崚?SystemServer 鏉╂稓鈻奸妴?
+ * 闁插洨鏁ょ紒鍕値濡€崇础閿涘苯鐨㈢憴鍕灟缂傛挸鐡ㄩ妴浣瑰瘮娑斿懎瀵查妴浣筋潎鐎电喕鈧懐顓搁悶鍡愨偓浣规綀闂勬劙鐛欑拠浣割潤閹垫绮?4 娑擃亙绗撻懕?Manager閵?
+ * Handler 濞戝牊浼呴崚鍡楀絺娴ｆ粈璐熺紓鏍ㄥ笓鐏炲偊绱濋崡蹇氱殶閸?Manager 娑斿妫块惃鍕紣娴ｆ粍绁﹂妴?
  * <p>
- * Client 绔€氳繃 {@link com.kaisar.xposed.godmode.injection.bridge.GodModeManager#getDefault()} 浣跨敤鎺ュ彛銆?
+ * Client 缁旑垶鈧俺绻?{@link com.kaisar.xposed.godmode.injection.bridge.GodModeManager#getDefault()} 娴ｈ法鏁ら幒銉ュ經閵?
  */
 public final class GodModeManagerService extends IGodModeManager.Stub {
 
-    // ===== 缁勫悎鐨勭粍浠?=====
+    // ===== 缂佸嫬鎮庨惃鍕矋娴?=====
     private final PermissionEnforcer mPermissionEnforcer;
     private final RuleCacheManager mCacheManager;
     private final WorkflowOrchestrator mOrchestrator;
 
-    // ===== 鍩虹璁炬柦 =====
+    // ===== 閸╄櫣顢呯拋鐐煢 =====
     private final Logger mLogger;
     private final Context mContext;
     private final Gson mGson = new GsonBuilder().setPrettyPrinting().create();
 
-    // ===== 鐘舵€佸瓧娈?=====
+    // ===== 閻樿埖鈧礁鐡у▓?=====
     private volatile boolean mInEditMode;
     private boolean mStarted;
 
-    // ===== 宸ュ叿鏍忓亸濂斤紙绠€鍗曞瓧娈碉紝涓嶉渶鍗曠嫭 Manager锛?=====
+    // ===== 瀹搞儱鍙块弽蹇撲焊婵傛枻绱欑粻鈧崡鏇炵摟濞堢绱濇稉宥夋付閸楁洜瀚?Manager閿?=====
     private String mToolbarHiddenItems = "";
 
     public GodModeManagerService(Context context) {
@@ -62,7 +57,7 @@ public final class GodModeManagerService extends IGodModeManager.Stub {
     }
 
     // ===================================================================
-    // AIDL 鎺ュ彛瀹炵幇 鈥?濮旀墭缁欏悇 Manager
+    // AIDL 閹恒儱褰涚€圭偟骞?閳?婵梹澧紒娆忔倗 Manager
     // ===================================================================
 
     @Override
@@ -71,7 +66,7 @@ public final class GodModeManagerService extends IGodModeManager.Stub {
         return true;
     }
 
-    // ---- 缂栬緫妯″紡 ----
+    // ---- 缂傛牞绶Ο鈥崇础 ----
 
     @Override
     public void setEditMode(boolean enable) throws RemoteException {
@@ -88,7 +83,7 @@ public final class GodModeManagerService extends IGodModeManager.Stub {
         return mInEditMode;
     }
 
-    // ---- 瑙傚療鑰?----
+    // ---- 鐟欏倸鐧傞懓?----
 
     @Override
     public void addObserver(String packageName, com.kaisar.xposed.godmode.IObserver observer)
@@ -111,7 +106,7 @@ public final class GodModeManagerService extends IGodModeManager.Stub {
         mOrchestrator.removeObserver(packageName, observer);
     }
 
-    // ---- 瑙勫垯鏌ヨ ----
+    // ---- 鐟欏嫬鍨弻銉嚄 ----
 
     @Override
     public AppRules getAllRules() throws RemoteException {
@@ -129,7 +124,7 @@ public final class GodModeManagerService extends IGodModeManager.Stub {
         return mCacheManager.getRules(packageName);
     }
 
-    // ---- 瑙勫垯鍐欏叆 ----
+    // ---- 鐟欏嫬鍨崘娆忓弳 ----
 
     @Override
     public boolean writeRule(String packageName, RuleRecord viewRule, Bitmap snapshot)
@@ -148,7 +143,7 @@ public final class GodModeManagerService extends IGodModeManager.Stub {
         return mOrchestrator.updateRuleAsync(packageName, viewRule);
     }
 
-    // ---- 瑙勫垯鍒犻櫎 ----
+    // ---- 鐟欏嫬鍨崚鐘绘珟 ----
 
     @Override
     public boolean deleteRule(String packageName, RuleRecord viewRule) throws RemoteException {
@@ -164,7 +159,7 @@ public final class GodModeManagerService extends IGodModeManager.Stub {
         return mOrchestrator.deleteRulesAsync(packageName);
     }
 
-    // ---- 鍥剧墖鎿嶄綔 ----
+    // ---- 閸ュ墽澧栭幙宥勭稊 ----
 
     @Override
     public String saveImageFile(String packageName, Bitmap bitmap) throws RemoteException {
@@ -203,7 +198,7 @@ public final class GodModeManagerService extends IGodModeManager.Stub {
         }
     }
 
-    // ---- 宸ュ叿鏍忓亸濂?----
+    // ---- 瀹搞儱鍙块弽蹇撲焊婵?----
 
     @Override
     public String getToolbarHiddenItems() throws RemoteException {

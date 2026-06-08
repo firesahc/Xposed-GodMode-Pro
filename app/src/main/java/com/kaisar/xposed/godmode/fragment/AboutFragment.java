@@ -12,6 +12,7 @@ import androidx.fragment.app.Fragment;
 
 import com.kaisar.xposed.godmode.BuildConfig;
 import com.kaisar.xposed.godmode.R;
+import com.kaisar.xposed.godmode.engine.util.Logger;
 
 public final class AboutFragment extends Fragment {
 
@@ -57,7 +58,7 @@ public final class AboutFragment extends Fragment {
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             startActivity(intent);
         } catch (Exception e) {
-            android.util.Log.w("GodModePro", "[AboutFragment] openUrl failed: " + url, e);
+            Logger.w("GodModePro", "[AboutFragment] openUrl failed: " + url, e);
         }
     }
 }
