@@ -1,4 +1,4 @@
-package com.kaisar.xposed.godmode.util;
+package com.kaisar.xposed.godmode.engine.util;
 
 import android.util.Log;
 
@@ -114,18 +114,18 @@ public final class Logger {
     }
 
     public void d(String message) {
-        if (isLoggable(TAG, Log.DEBUG)) d(TAG, String.format("[%s] %s", mName, message));
+        d(TAG, String.format("[%s] %s", mName, message));
     }
 
     public void i(String message) {
-        if (isLoggable(TAG, Log.INFO)) i(TAG, String.format("[%s] %s", mName, message));
+        i(TAG, String.format("[%s] %s", mName, message));
     }
 
     public void w(String message, Throwable tr) {
-        if (isLoggable(TAG, Log.WARN)) w(TAG, String.format("[%s] %s", mName, message), tr);
+        w(TAG, String.format("[%s] %s", mName, message), tr);
     }
 
     public void e(String message, Throwable tr) {
-        if (isLoggable(TAG, Log.ERROR)) e(TAG, String.format("[%s] %s", mName, message), tr);
+        e(TAG, String.format("[%s] %s", mName, message), tr);
     }
 }

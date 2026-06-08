@@ -1,10 +1,10 @@
 package com.kaisar.xposed.godmode.injection.editor.overlay;
 
-import java.util.Random;
-
 import android.graphics.Bitmap;
 import android.graphics.Point;
 import android.graphics.Rect;
+
+import java.util.Random;
 
 public final class Particle {
     public static final int PART_WH = 8;

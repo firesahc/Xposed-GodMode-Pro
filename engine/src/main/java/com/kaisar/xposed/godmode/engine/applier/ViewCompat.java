@@ -1,10 +1,10 @@
 package com.kaisar.xposed.godmode.engine.applier;
 
-import android.util.Log;
+import com.kaisar.xposed.godmode.engine.util.Logger;
 import android.view.View;
 
 /**
- * View.setVisibility 安全封装 — 反射失败时回退到 alpha 控制。
+ * View.setVisibility 瀹夊叏灏佽 鈥?鍙嶅皠澶辫触鏃跺洖閫€鍒?alpha 鎺у埗銆?
  */
 public final class ViewCompat {
 

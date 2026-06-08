@@ -1,6 +1,6 @@
 package com.kaisar.xposed.godmode.engine.event;
 
-import android.util.Log;
+import com.kaisar.xposed.godmode.engine.util.Logger;
 
 import java.lang.ref.WeakReference;
 import java.lang.reflect.InvocationTargetException;
@@ -12,11 +12,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
- * 轻量级事件总线 — 发布-订阅模式。
+ * 杞婚噺绾т簨浠舵€荤嚎 鈥?鍙戝竷-璁㈤槄妯″紡銆?
  * <p>
- * 使用 ConcurrentHashMap + CopyOnWriteArrayList 保证线程安全，
- * 订阅者通过 WeakReference 持有防止内存泄漏。
- * 每次 post 时自动清理已回收的订阅者。
+ * 浣跨敤 ConcurrentHashMap + CopyOnWriteArrayList 淇濊瘉绾跨▼瀹夊叏锛?
+ * 璁㈤槄鑰呴€氳繃 WeakReference 鎸佹湁闃叉鍐呭瓨娉勬紡銆?
+ * 姣忔 post 鏃惰嚜鍔ㄦ竻鐞嗗凡鍥炴敹鐨勮闃呰€呫€?
  */
 public final class EventBus {
 
@@ -26,16 +26,16 @@ public final class EventBus {
         return INSTANCE;
     }
 
-    /** 事件类型 → 订阅者列表 */
+    /** 浜嬩欢绫诲瀷 鈫?璁㈤槄鑰呭垪琛?*/
     private final Map<Class<?>, CopyOnWriteArrayList<SubscriberRef>> mSubscribers
             = new ConcurrentHashMap<>();
 
     private EventBus() {}
 
-    // ---- 注册/注销 ----
+    // ---- 娉ㄥ唽/娉ㄩ攢 ----
 
     /**
-     * 注册订阅者。扫描所有带 @Subscribe 注解的方法并注册。
+     * 娉ㄥ唽璁㈤槄鑰呫€傛壂鎻忔墍鏈夊甫 @Subscribe 娉ㄨВ鐨勬柟娉曞苟娉ㄥ唽銆?
      */
     public void register(Object subscriber) {
         if (subscriber == null) return;
@@ -52,7 +52,7 @@ public final class EventBus {
     }
 
     /**
-     * 注销订阅者。移除其所有 @Subscribe 方法。
+     * 娉ㄩ攢璁㈤槄鑰呫€傜Щ闄ゅ叾鎵€鏈?@Subscribe 鏂规硶銆?
      */
     public void unregister(Object subscriber) {
         if (subscriber == null) return;
@@ -61,11 +61,11 @@ public final class EventBus {
         }
     }
 
-    // ---- 发布 ----
+    // ---- 鍙戝竷 ----
 
     /**
-     * 向所有匹配事件类型的订阅者发布事件。
-     * 订阅者方法在主线程或 post 所在线程同步执行。
+     * 鍚戞墍鏈夊尮閰嶄簨浠剁被鍨嬬殑璁㈤槄鑰呭彂甯冧簨浠躲€?
+     * 璁㈤槄鑰呮柟娉曞湪涓荤嚎绋嬫垨 post 鎵€鍦ㄧ嚎绋嬪悓姝ユ墽琛屻€?
      */
     public void post(Object event) {
         if (event == null) return;
@@ -84,7 +84,7 @@ public final class EventBus {
             try {
                 ref.method.invoke(subscriber, event);
             } catch (IllegalAccessException | InvocationTargetException e) {
-                Log.w("EventBus", "Subscriber " + subscriber.getClass().getSimpleName()
+                Logger\.w\("EventBus",\ "Subscriber\ " + subscriber.getClass().getSimpleName()
                         + "#" + ref.method.getName() + " threw: "
                         + (e.getCause() != null ? e.getCause().getMessage() : e.getMessage()));
             }
@@ -94,7 +94,7 @@ public final class EventBus {
         }
     }
 
-    // ---- 内部 ----
+    // ---- 鍐呴儴 ----
 
     private static final class SubscriberRef extends WeakReference<Object> {
         final Method method;

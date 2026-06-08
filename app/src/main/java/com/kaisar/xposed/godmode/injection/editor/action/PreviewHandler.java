@@ -3,21 +3,21 @@ package com.kaisar.xposed.godmode.injection.editor.action;
 import android.graphics.Rect;
 import android.view.View;
 
-import com.kaisar.xposed.godmode.injection.editor.RuleRecordFactory;
-import com.kaisar.xposed.godmode.injection.util.ViewUtils;
+import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.injection.ViewController;
+import com.kaisar.xposed.godmode.injection.editor.RuleRecordFactory;
 import com.kaisar.xposed.godmode.injection.editor.overlay.MaskView;
-import com.kaisar.xposed.godmode.util.Logger;
+import com.kaisar.xposed.godmode.injection.util.ViewUtils;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 
 /**
- * 棰勮鎿嶄綔澶勭悊鍣?鈥?鍦ㄧ‘璁ょЩ闄ゅ墠涓存椂闅愯棌瑙嗗浘銆?
+ * 妫板嫯顫嶉幙宥勭稊婢跺嫮鎮婇崳?閳?閸︺劎鈥樼拋銈囆╅梽銈呭娑撳瓨妞傞梾鎰鐟欏棗娴橀妴?
  * <p>
- * 绠＄悊 {@code KeyInterceptor} 涓殑棰勮鐘舵€侊紙mPreviewView銆乵PreviewRule銆乵IsPreviewing锛夛紝
- * 灏佽 {@link #startPreview} / {@link #restorePreview} 閫昏緫銆?
+ * 缁狅紕鎮?{@code KeyInterceptor} 娑擃厾娈戞０鍕潔閻樿埖鈧緤绱檓PreviewView閵嗕沟PreviewRule閵嗕沟IsPreviewing閿涘绱?
+ * 鐏忎浇顥?{@link #startPreview} / {@link #restorePreview} 闁槒绶妴?
  * <p>
- * 璋冪敤鏂硅礋璐ｆ寜閽姸鎬佹洿鏂帮紙{@code updatePreviewButton}锛夊強
- * {@link MaskView} 涓?{@code NodeSelectorPanel} 鐨勪氦浜掋€?
+ * 鐠嬪啰鏁ら弬纭呯鐠愶絾瀵滈柦顔惧Ц閹焦娲块弬甯礄{@code updatePreviewButton}閿涘寮?
+ * {@link MaskView} 娑?{@code NodeSelectorPanel} 閻ㄥ嫪姘︽禍鎺嬧偓?
  */
 public final class PreviewHandler {
 
@@ -25,17 +25,17 @@ public final class PreviewHandler {
     private RuleRecord mPreviewRule;
     private boolean mIsPreviewing;
 
-    /** 褰撳墠鏄惁澶勪簬棰勮鐘舵€併€?*/
+    /** 瑜版挸澧犻弰顖氭儊婢跺嫪绨０鍕潔閻樿埖鈧降鈧?*/
     public boolean isPreviewing() {
         return mIsPreviewing;
     }
 
     /**
-     * 寮€濮嬮瑙堬細涓洪€変腑瑙嗗浘鍒涘缓绉婚櫎瑙勫垯骞跺簲鐢紙visibility = GONE锛夈€?
+     * 瀵偓婵顣╃憴鍫窗娑撴椽鈧鑵戠憴鍡楁禈閸掓稑缂撶粔濠氭珟鐟欏嫬鍨獮璺虹安閻㈩煉绱檝isibility = GONE閿涘鈧?
      *
-     * @param view          琚€変腑鐨勭洰鏍囪鍥?
-     * @param maskView      MaskView锛堢敤浜庢竻闄ら珮浜竟鐣岋級
-     * @param onStateChanged 鐘舵€佸彉鏇撮€氱煡锛堣皟鐢ㄦ柟鐢ㄤ簬鏇存柊鎸夐挳 UI锛?
+     * @param view          鐞氼偊鈧鑵戦惃鍕窗閺嶅洩顫嬮崶?
+     * @param maskView      MaskView閿涘牏鏁ゆ禍搴㈢闂勩倝鐝禍顔跨珶閻ｅ矉绱?
+     * @param onStateChanged 閻樿埖鈧礁褰夐弴鎾偓姘辩叀閿涘牐鐨熼悽銊︽煙閻劋绨弴瀛樻煀閹稿鎸?UI閿?
      */
     public void startPreview(View view, MaskView maskView, Runnable onStateChanged) {
         if (view == null) return;
@@ -53,11 +53,11 @@ public final class PreviewHandler {
     }
 
     /**
-     * 鎭㈠棰勮锛氭挙閿€绉婚櫎瑙勫垯锛坴isibility = VISIBLE锛夛紝鏇存柊 MaskView 楂樹寒銆?
+     * 閹垹顦叉０鍕潔閿涙碍鎸欓柨鈧粔濠氭珟鐟欏嫬鍨敍鍧磇sibility = VISIBLE閿涘绱濋弴瀛樻煀 MaskView 妤傛ü瀵掗妴?
      *
-     * @param maskView       MaskView锛堢敤浜庢仮澶嶅悗鏇存柊楂樹寒杈圭晫锛?
-     * @param selectedView   褰撳墠閫変腑鐨勮鍥撅紙鐢ㄤ簬鎭㈠鍚庢洿鏂伴珮浜竟鐣岋紱鍙兘涓?null锛?
-     * @param onStateChanged 鐘舵€佸彉鏇撮€氱煡锛堣皟鐢ㄦ柟鐢ㄤ簬鏇存柊鎸夐挳 UI锛?
+     * @param maskView       MaskView閿涘牏鏁ゆ禍搴划婢跺秴鎮楅弴瀛樻煀妤傛ü瀵掓潏鍦櫕閿?
+     * @param selectedView   瑜版挸澧犻柅澶夎厬閻ㄥ嫯顫嬮崶鎾呯礄閻劋绨幁銏狀槻閸氬孩娲块弬浼寸彯娴滎喛绔熼悾宀嬬幢閸欘垵鍏樻稉?null閿?
+     * @param onStateChanged 閻樿埖鈧礁褰夐弴鎾偓姘辩叀閿涘牐鐨熼悽銊︽煙閻劋绨弴瀛樻煀閹稿鎸?UI閿?
      */
     public void restorePreview(MaskView maskView, View selectedView, Runnable onStateChanged) {
         if (mPreviewView != null && mPreviewRule != null) {

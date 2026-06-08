@@ -10,8 +10,8 @@ import java.io.InputStream;
 import java.io.OutputStream;
 
 /**
- * 文件 I/O 工具类 — 不属于 Android 框架，可独立于 app 模块运行。
- * 提供文件读写、删除、权限设置的原子操作。
+ * 鏂囦欢 I/O 宸ュ叿绫?鈥?涓嶅睘浜?Android 妗嗘灦锛屽彲鐙珛浜?app 妯″潡杩愯銆?
+ * 鎻愪緵鏂囦欢璇诲啓銆佸垹闄ゃ€佹潈闄愯缃殑鍘熷瓙鎿嶄綔銆?
  */
 public final class FileUtils {
 
@@ -28,7 +28,7 @@ public final class FileUtils {
             out.flush();
             return true;
         } catch (IOException e) {
-            android.util.Log.w("FileUtils", "copy failed", e);
+            Logger.w("FileUtils", "copy failed", e);
             return false;
         }
     }

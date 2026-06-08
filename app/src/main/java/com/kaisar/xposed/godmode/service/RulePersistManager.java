@@ -14,10 +14,10 @@ import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 import com.kaisar.xposed.godmode.engine.util.CommonUtils;
 import com.kaisar.xposed.godmode.engine.util.FileUtils;
-import com.kaisar.xposed.godmode.util.Logger;
+import com.kaisar.xposed.godmode.engine.util.Logger;
+import com.kaisar.xposed.godmode.engine.util.Preconditions;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
-import com.kaisar.xposed.godmode.engine.util.Preconditions;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -30,8 +30,8 @@ import java.util.Map;
 import java.util.WeakHashMap;
 
 /**
- * 瑙勫垯鎸佷箙鍖栫鐞嗗櫒 鈥?JSON 鍘熷瓙鍐欏叆 + Bitmap 淇濆瓨 + 瀛ゅ効鏂囦欢娓呯悊銆?
- * 浠?GodModeManagerService 鎻愬彇鐨勭嫭绔嬭亴璐ｃ€?
+ * 鐟欏嫬鍨幐浣风畽閸栨牜顓搁悶鍡楁珤 閳?JSON 閸樼喎鐡欓崘娆忓弳 + Bitmap 娣囨繂鐡?+ 鐎涖倕鍔归弬鍥︽濞撳懐鎮婇妴?
+ * 娴?GodModeManagerService 閹绘劕褰囬惃鍕缁斿浜寸拹锝冣偓?
  */
 final class RulePersistManager {
 
@@ -49,9 +49,9 @@ final class RulePersistManager {
     private final Logger mLogger;
     private final Handler mHandle;
     private final RuleCacheManager mCacheManager;
-    /** 闃叉姈鍐欏叆寤惰繜 (ms) 鈥?澶氭蹇€熷彉鏇村悎骞朵负涓€娆″啓鍏?*/
+    /** 闂冨弶濮堥崘娆忓弳瀵ゆ儼绻?(ms) 閳?婢舵碍顐艰箛顐︹偓鐔峰綁閺囨潙鎮庨獮鏈佃礋娑撯偓濞嗏€冲晸閸?*/
     private static final long DEBOUNCE_DELAY_MS = 300L;
-    /** 闃叉姈闃熷垪 鈥?寰呭啓鍏ョ殑鍖呭悕 */
+    /** 闂冨弶濮堥梼鐔峰灙 閳?瀵板懎鍟撻崗銉ф畱閸栧懎鎮?*/
     private final Map<String, String> mPendingWrites = new WeakHashMap<>();
 
     RulePersistManager(Gson gson, Logger logger, Handler handle, RuleCacheManager cacheManager) {
@@ -61,11 +61,11 @@ final class RulePersistManager {
         this.mCacheManager = cacheManager;
     }
 
-    // ---- 瑙勫垯鍔犺浇 ----
+    // ---- 鐟欏嫬鍨崝鐘烘祰 ----
 
     /**
-     * 浠庣鐩樺姞杞芥墍鏈夎鍒欐暟鎹埌缂撳瓨銆?
-     * 鍔犺浇缁撴灉閫氳繃浼犻€掔粰鏋勯€犲嚱鏁扮殑 RuleCacheManager 鍐欏叆缂撳瓨銆?
+     * 娴犲海顥嗛惄妯哄鏉炶姤澧嶉張澶庮潐閸掓瑦鏆熼幑顔煎煂缂傛挸鐡ㄩ妴?
+     * 閸旂姾娴囩紒鎾寸亯闁俺绻冩导鐘烩偓鎺旂舶閺嬪嫰鈧姴鍤遍弫鎵畱 RuleCacheManager 閸愭瑥鍙嗙紓鎾崇摠閵?
      */
     void loadRuleData() throws IOException {
         File dataDir = new File(getBaseDir());
@@ -79,7 +79,7 @@ final class RulePersistManager {
                     String json = FileUtils.readTextFile(appRuleFile, 0, null);
                     ActRules rules = mGson.fromJson(json, ActRules.class);
                     Preconditions.checkNotNull(rules, "rules is null");
-                    // compact rule 鈥?绉婚櫎绌烘潯鐩?
+                    // compact rule 閳?缁夊娅庣粚鐑樻蒋閻?
                     Iterator<Map.Entry<String, List<RuleRecord>>> iterator = rules.entrySet().iterator();
                     while (iterator.hasNext()) {
                         Map.Entry<String, List<RuleRecord>> listEntry = iterator.next();
@@ -104,13 +104,13 @@ final class RulePersistManager {
         }
     }
 
-    // ---- 瑙勫垯鎸佷箙鍖?----
+    // ---- 鐟欏嫬鍨幐浣风畽閸?----
 
-    /** 鍘熷瓙鍐欏叆瑙勫垯 JSON锛?tmp 鈫?rename 鈫?chmod */
+    /** 閸樼喎鐡欓崘娆忓弳鐟欏嫬鍨?JSON閿?tmp 閳?rename 閳?chmod */
     void safePersistRules(String packageName, String json) throws IOException {
         synchronized (mPendingWrites) {
             if (mPendingWrites.containsKey(packageName)) {
-                // 宸叉湁寰呭啓鍏ヤ换鍔?鈥?鏇存柊 JSON 骞跺欢杩熷啓鍏ワ紙闃叉姈锛?
+                // 瀹稿弶婀佸鍛晸閸忋儰鎹㈤崝?閳?閺囧瓨鏌?JSON 楠炶泛娆㈡潻鐔峰晸閸忋儻绱欓梼鍙夊閿?
                 mPendingWrites.put(packageName, json);
                 scheduleDebouncedWrite(packageName);
                 return;
@@ -143,13 +143,13 @@ final class RulePersistManager {
     static final int MSG_DEBOUNCE_WRITE = 0x1000;
 
     private void scheduleDebouncedWrite(String packageName) {
-        // 绉婚櫎涔嬪墠涓烘鍖呰皟搴︾殑闃叉姈娑堟伅锛岄噸缃鏃跺櫒
+        // 缁夊娅庢稊瀣娑撶儤顒濋崠鍛扮殶鎼达妇娈戦梼鍙夊濞戝牊浼呴敍宀勫櫢缂冾喛顓搁弮璺烘珤
         Message msg = mHandle.obtainMessage(MSG_DEBOUNCE_WRITE, packageName);
         mHandle.removeMessages(MSG_DEBOUNCE_WRITE, packageName);
         mHandle.sendMessageDelayed(msg, DEBOUNCE_DELAY_MS);
     }
 
-    /** 鐢?Handler 璋冪敤鐨勯槻鎶栧啓鍏?*/
+    /** 閻?Handler 鐠嬪啰鏁ら惃鍕Щ閹舵牕鍟撻崗?*/
     void handleDebouncedWrite(String packageName) {
         String json;
         synchronized (mPendingWrites) {
@@ -163,7 +163,7 @@ final class RulePersistManager {
         }
     }
 
-    /** 淇濆瓨 Bitmap 涓?.webp 鏂囦欢锛屽鐞?HARDWARE 鈫?ARGB_8888 杞崲 */
+    /** 娣囨繂鐡?Bitmap 娑?.webp 閺傚洣娆㈤敍灞筋槱閻?HARDWARE 閳?ARGB_8888 鏉烆剚宕?*/
     String saveBitmap(Bitmap bitmap, String dir) {
         try {
             Bitmap bitmapToSave = bitmap;
@@ -190,7 +190,7 @@ final class RulePersistManager {
         }
     }
 
-    /** 娓呯悊鏈浠讳綍瑙勫垯寮曠敤鐨勫绔嬪浘鐗囨枃浠?*/
+    /** 濞撳懐鎮婇張顏囶潶娴犺缍嶇憴鍕灟瀵洜鏁ら惃鍕劃缁斿娴橀悧鍥ㄦ瀮娴?*/
     void cleanAllOrphanImages() {
         try {
             File dataDir = new File(getBaseDir());
@@ -214,7 +214,7 @@ final class RulePersistManager {
         }
     }
 
-    // ---- 宸ュ叿鏍忓亸濂?----
+    // ---- 瀹搞儱鍙块弽蹇撲焊婵?----
 
     String loadToolbarHiddenItems() {
         try {
@@ -239,7 +239,7 @@ final class RulePersistManager {
         }
     }
 
-    // ---- 璺緞宸ュ叿 ----
+    // ---- 鐠侯垰绶炲銉ュ徔 ----
 
     String getBaseDir() throws FileNotFoundException {
         File dir = new File(BASE_DIR);
@@ -250,7 +250,7 @@ final class RulePersistManager {
         throw new FileNotFoundException();
     }
 
-    /** 鏍￠獙鏂囦欢璺緞鏄惁涓哄悎娉曠殑 GodMode 鍥剧墖鏂囦欢璺緞 */
+    /** 閺嶏繝鐛欓弬鍥︽鐠侯垰绶為弰顖氭儊娑撳搫鎮庡▔鏇犳畱 GodMode 閸ュ墽澧栭弬鍥︽鐠侯垰绶?*/
     boolean isValidImagePath(String filePath) {
         try {
             return new File(filePath).getCanonicalPath()

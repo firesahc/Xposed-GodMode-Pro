@@ -9,8 +9,8 @@ import android.os.Build;
 import android.view.View;
 import android.view.ViewGroup;
 
-import com.kaisar.xposed.godmode.util.Logger;
 import com.kaisar.xposed.godmode.engine.Property;
+import com.kaisar.xposed.godmode.engine.util.Logger;
 
 import java.util.Optional;
 
@@ -20,8 +20,8 @@ import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
 
 /**
- * 鐎瑰顥?Hook 娴犮儱鎯庨悽?Android 闂呮劘妫岄惃?鐠嬪啳鐦敮鍐ㄧ湰"閸旂喕鍏橀妴? * <p>
- * 瑜?GodMode 缂傛牞绶Ο鈥崇础濠碘偓濞茬粯妞傞敍灞炬▔缁€鐑樼槨娑?View 閻ㄥ嫯绔熺捄?閸愬懓绔熺捄?閻掞妇鍋ｇ憰鍡欐磰鐏炲偊绱? * 鐢喖濮悽銊﹀煕閸︺劑鈧鑵戞潻鍥┾柤娑擃厾婀呭〒鍛邦潒閸ユ崘绔熼悾灞烩偓鍌氭倱閺冨墎顩﹀?GM 鐟曞棛娲婄仦鍌濐潒閸ユ崘鍤滈煬顐ゆ畱鐠嬪啳鐦紒妯哄煑閵? */
+ * 閻庣懓顦抽ˉ?Hook 濞寸姰鍎遍幆搴ㄦ偨?Android 闂傚懏鍔樺Λ宀勬儍?閻犲鍟抽惁顖滄暜閸愩劎婀?闁告梻鍠曢崗姗€濡? * <p>
+ * 鐟?GodMode 缂傚倹鐗炵欢顐⑽熼垾宕囩婵犵鍋撴繛鑼帛濡炲倿鏁嶇仦鐐枖缂佲偓閻戞妲ㄥ☉?View 闁汇劌瀚粩鐔烘崉?闁告劕鎳撶粩鐔烘崉?闁绘帪濡囬崑锝囨啺閸℃瑦纾伴悘鐐插亰缁? * 閻㈩垼鍠栨慨顏堟偨閵婏箑鐓曢柛锔哄姂閳ь剙顦懙鎴炴交閸モ斁鏌ゅ☉鎿冨幘濠€鍛€掗崨閭︽綊闁搞儲宕樼粩鐔兼偩鐏炵儵鍋撻崒姘€遍柡鍐ㄥ椤╋箑顫?GM 閻熸洖妫涘ú濠勪沪閸屾繍娼掗柛銉﹀礃閸ゆ粓鐓銈嗙暠閻犲鍟抽惁顖滅磼濡搫鐓戦柕? */
 public final class DebugLayoutHook {
 
     private DebugLayoutHook() {}
@@ -114,7 +114,7 @@ public final class DebugLayoutHook {
     }
 
     // =========================================================================
-    // 閸愬懘鍎?Hook 缁?    // =========================================================================
+    // 闁告劕鎳橀崕?Hook 缂?    // =========================================================================
 
     private static abstract class BaseDebugHook extends XC_MethodHook implements Property.OnPropertyChangeListener<Boolean> {
 

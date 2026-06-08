@@ -25,8 +25,9 @@ import androidx.appcompat.widget.TooltipCompat;
 
 import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.engine.EditorInteractionMode;
-import com.kaisar.xposed.godmode.engine.matcher.ViewTraversal;
 import com.kaisar.xposed.godmode.engine.Property;
+import com.kaisar.xposed.godmode.engine.matcher.ViewTraversal;
+import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.injection.editor.action.BlockHandler;
 import com.kaisar.xposed.godmode.injection.editor.action.PreviewHandler;
 import com.kaisar.xposed.godmode.injection.editor.gesture.GestureDispatcher;
@@ -36,10 +37,9 @@ import com.kaisar.xposed.godmode.injection.editor.overlay.MaskView;
 import com.kaisar.xposed.godmode.injection.editor.panel.NodeSelectorPanel;
 import com.kaisar.xposed.godmode.injection.editor.panel.PropertyEditorPanel;
 import com.kaisar.xposed.godmode.injection.editor.panel.SeekBarHandler;
+import com.kaisar.xposed.godmode.injection.editor.toolbar.ToolbarVisibilityController;
 import com.kaisar.xposed.godmode.injection.util.BitmapUtils;
 import com.kaisar.xposed.godmode.injection.util.GmResources;
-import com.kaisar.xposed.godmode.util.Logger;
-import com.kaisar.xposed.godmode.injection.editor.toolbar.ToolbarVisibilityController;
 import com.kaisar.xposed.godmode.injection.util.ViewUtils;
 
 import java.lang.ref.WeakReference;
@@ -47,13 +47,13 @@ import java.lang.reflect.Field;
 import java.util.List;
 
 /**
- * 缂傚倸鍊归悧鐐垫椤愶箑闂柕濞у懏銇濋梺鍦劋鐢帒鈻?闂?闂佹崘顕х粔鎾箖?KeyInterceptor 婵?TouchInterceptor 闂佹眹鍔岀€氼厽鏅跺澶婂珘濠㈣埖鍔栨慨?Hook 婵炴垶鎸婚懝鐐叏閻斿吋鐒婚柡鍕箳鐢棝鏌? * <p>
- * 缂備胶濯寸槐鏇㈠箖婵犲洦鍤嶉柛灞剧矊娴狀垶姊洪銏╂Ч閻庢哎鍔戝Λ鍐閳╁啰鍑￠梺闈涙缁€渚€鎯堝鈧獮鈧憸蹇曟椤忓懏缍囬柟瀛樼箖閻濄倝鏌曢崱鏇熺グ鐞氭繈鏌熼挊澶嬪暈濠⒀勭矒瀹曟繈宕归鑲┾偓濠氭煕濞嗘劕鐏熼柍褜鍏涚欢姘舵偂閸洘鐓傞煫鍥ㄧ⊕閺嗘盯鎮楁担鍐棈闁糕晛鎳樻俊瀛樻媴閸濄儲缍勯梺?婵☆偅婢樼€氼垶锝炲澶婄鐎广儱瀚粙濠囨煥? * 婵炲濮伴崕鍗烆嚕妞嬪海纾介柡宥庡墰鐢棙淇婇妞诲亾瀹曞洨顢呴梺姹囧妼鐎氼噣寮幘璇插窛闁芥ê顦伴崳顖炴煛閸垹鏋傞柍褜鍓欓崐濠氬极?{@link com.kaisar.xposed.godmode.injection.entry.ActivityKeyHook}
- * 闂?{@link com.kaisar.xposed.godmode.injection.entry.TouchHook} 闁荤姴顑呴崯浼村极閵堝违? */
+ * 缂傚倸鍊搁崐褰掓偋閻愬灚顐芥い鎰剁畱闂傤垶鏌曟繛褍鎳忛妵婵嬫⒑閸︻厼鍔嬮悽顖涘笒閳?闂?闂備焦宕橀褏绮旈幘顔肩畺?KeyInterceptor 濠?TouchInterceptor 闂備焦鐪归崝宀€鈧凹鍘介弲璺侯吋婢跺﹤鐝樻繝銏ｅ煐閸旀牗鎱?Hook 濠电偞鍨堕幐濠氭嚌閻愵剚鍙忛柣鏂垮悑閻掑鏌￠崟顐ょ閻㈩垰妫濋弻? * <p>
+ * 缂傚倷鑳舵刊瀵告閺囥垹绠栧┑鐘叉处閸ゅ秹鏌涚仦鍓х煀濞寸媭鍨跺娲敃閵忊晜效闁诲孩鍝庨崝鎴澪涢崘顔碱潊闁斥晛鍟伴崙锟犳⒑闂堟稒顥欑紒鈧笟鈧幆鍫濐潨閳ь剟鐛埀顒傛喐韫囨洘顫曟い蹇撴噺缂嶅洭鏌熺€涙绠栭柣婵勫€濋弻鏇㈠幢閺囩喓銈伴悶姘箞閺岀喖鎸婃径瀣殘婵犫拃鍕煉鐎规洘绻堝畷褰掝敊閼测斁鍋撴繝姘厱婵炲棙鍔曢悘鐔兼煃瑜滈崗娑氭濮樿埖鍋傞柛顐ｆ礃閻撳倿鐓崶銊р姇闁哄棙鐩幃妤佹媴閸愵煈妫堥梺绯曟櫅閹虫ɑ淇婄€涙ɑ濯撮柛婵勫劜缂嶅嫰姊?濠碘槅鍋呭妯尖偓姘煎灦閿濈偛顓兼径濠勵啌閻庡箍鍎辩€氼喚绮欐繝鍥ㄧ叆? * 濠电偛顕慨浼村磿閸楃儐鍤曞瀣捣绾句粙鏌″搴″閻㈩垰妫欐穱濠囶敍濡炶浜剧€规洖娲ㄩ、鍛存⒑濮瑰洤濡奸悗姘煎櫍瀵偊骞樼拠鎻掔獩闂佽姤锚椤︿即宕抽鐐寸厸闁割偁鍨归弸鍌炴煃瑜滈崜娆撳磹婵犳艾鏋?{@link com.kaisar.xposed.godmode.injection.entry.ActivityKeyHook}
+ * 闂?{@link com.kaisar.xposed.godmode.injection.entry.TouchHook} 闂佽崵濮撮鍛村疮娴兼潙鏋侀柕鍫濐槸杩? */
 public final class EditorOrchestrator implements Property.OnPropertyChangeListener<Boolean> {
 
     // =========================================================================
-    // 闁汇埄鍨遍幃鍌炲闯?    // =========================================================================
+    // 闂佹眹鍩勯崹閬嶅箖閸岀偛闂?    // =========================================================================
 
     private static final int OVERLAY_COLOR = Color.argb(150, 255, 0, 0);
     @SuppressWarnings("unused")
@@ -61,18 +61,18 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     private static final int LONG_PRESS_TIMEOUT = ViewConfiguration.getLongPressTimeout();
 
     // =========================================================================
-    // 婵炲瓨鍤庨崐鎾惰姳閺夎鐔煎灳瀹曞洨顢呴梺鎸庣☉閻楀棛鏁?KeyInterceptor闂?    // =========================================================================
+    // 濠电偛鐡ㄩ崵搴ㄥ磹閹炬儼濮抽柡澶庮嚦閻旂厧鐏崇€规洖娲ㄩ、鍛存⒑閹稿海鈽夐柣妤€妫涢弫?KeyInterceptor闂?    // =========================================================================
 
     private int mInteractionMode = EditorInteractionMode.INITIAL;
     private boolean mInfoFlowMode = false;
 
     // =========================================================================
-    // 婵☆偅婢樼€氼垶锝炲澶嬪亹闁煎摜顣介崑鎾寸瑹婵犲嫮顦╅梺?KeyInterceptor闂?    // =========================================================================
+    // 濠碘槅鍋呭妯尖偓姘煎灦閿濈偛顓兼径瀣汗闂佺厧鎽滈。浠嬪磻閹惧鐟瑰┑鐘插椤︹晠姊?KeyInterceptor闂?    // =========================================================================
 
     final PreviewHandler mPreviewHandler = new PreviewHandler();
 
     // =========================================================================
-    // 闁诲孩绋掗崝鏍暜閸洖绀嗛悹铏瑰劋閻濄倝鏌ㄥ☉妯煎閻?KeyInterceptor闂?    // =========================================================================
+    // 闂佽瀛╃粙鎺楀礉閺嶎偅鏆滈柛顐ｆ礀缁€鍡涙偣閾忕懓鍔嬮柣婵勫€濋弻銊モ槈濡厧顣洪柣?KeyInterceptor闂?    // =========================================================================
 
     private final NodeSelectorPanel mNodePanel = new NodeSelectorPanel();
     final PropertyEditorPanel mPropertyEditor = new PropertyEditorPanel();
@@ -80,7 +80,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     private WeakReference<Activity> mCurrentActivityRef = new WeakReference<>(null);
 
     // =========================================================================
-    // 闂佺厧鎼崐濠氬磻閿濆鐒诲璺侯儏椤忋儵鏌涢敐鍐ㄥ婵為棿鍗冲鍫曞垂椤旂晫顦ラ柣鐘差儏閸犳稓妲愬▎鎾冲偍?KeyInterceptor.NodeSelectorPanel.Callbacks闂?    // =========================================================================
+    // 闂備胶鍘ч幖顐﹀磹婵犳艾纾婚柨婵嗩槹閻掕顭跨捄渚剰妞ゅ繈鍎甸弻娑㈡晲閸愩劌顫囧┑鐐烘？閸楀啿顕ｉ崼鏇炲瀭妞ゆ梻鏅ˇ銉╂煟閻樺樊鍎忛柛鐘崇〒濡叉劕鈻庨幘鍐插亶?KeyInterceptor.NodeSelectorPanel.Callbacks闂?    // =========================================================================
 
     private final NodeSelectorPanel.Callbacks mNodePanelCallbacks =
             new NodeSelectorPanel.Callbacks() {
@@ -117,7 +117,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
             };
 
     // =========================================================================
-    // 闁荤喐鐟遍梽鍕箠濠婂牊鍋愰柤鍝ヮ暯閸嬫挻绗熸繝鍕槱闂?TouchInterceptor闂?    // =========================================================================
+    // 闂佽崵鍠愰悷閬嶆⒔閸曨垰绠犳繝濠傜墛閸嬫劙鏌ら崫銉毌闁稿鎸荤粭鐔哥節閸曨収妲遍梻?TouchInterceptor闂?    // =========================================================================
 
     private boolean mIsInEditMode;
     private boolean mMultiPointLock;
@@ -133,24 +133,24 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     private float mDragStartRawX, mDragStartRawY;
 
     // =========================================================================
-    // 闁诲繒鍋熼崑鐐哄焵椤戭剙鍟扮粚鍧楁煟?    // =========================================================================
+    // 闂佽绻掗崑鐔煎磻閻愬搫鐒垫い鎴墮閸熸壆绮氶崸妤佺厽?    // =========================================================================
 
     private final Property<Boolean> mSwitchProp;
 
     // =========================================================================
-    // 闂佸憡鐟ョ粔鎾儍閻樼數纾介柟鎯х－閹界娀鏌ㄥ☉妯煎閻?TouchInterceptor闂?    // =========================================================================
+    // 闂備礁鎲￠悷銉х矓閹绢喗鍎嶉柣妯兼暩绾句粙鏌熼幆褏锛嶉柟鐣屽█閺屻劌鈽夊Ο鐓庮暫闁?TouchInterceptor闂?    // =========================================================================
 
     private static Field sWindowAttributesField;
 
     // =========================================================================
-    // 闂佸搫顑呯€氫即鍩€椤掑倸孝婵?    // =========================================================================
+    // 闂備礁鎼鍛偓姘嵆閸┾偓妞ゆ帒鍊稿瓭濠?    // =========================================================================
 
     public EditorOrchestrator(Property<Boolean> switchProp) {
         this.mSwitchProp = switchProp;
     }
 
     // =========================================================================
-    // 闂佺娴氶崜娆撳矗閿涘嫭濯奸柛褎顨嗛敍鏍煕?    // =========================================================================
+    // 闂備胶顭堝ù姘跺礈濞嗘挸鐭楅柨娑樺婵ジ鏌涜椤ㄥ棝鏁嶉弽顓熺厱?    // =========================================================================
 
     public int getInteractionMode() {
         return mInteractionMode;
@@ -169,10 +169,10 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     }
 
     // =========================================================================
-    // 闂傚倸锕ユ繛濠囧闯濞差亝鐓ユい鏃傗拡濡查亶鏌ｉ悙鍙夛紨缂佽鲸鐟︾粭?ActivityKeyHook 闁荤姴顑呴崯浼村极閵堝鏅?    // =========================================================================
+    // 闂傚倸鍊搁敃銉︾箾婵犲洤闂繛宸簼閻撱儲銇勯弮鍌楁嫛婵℃煡浜堕弻锝夋倷閸欏绱ㄧ紓浣介哺閻燂妇绮?ActivityKeyHook 闂佽崵濮撮鍛村疮娴兼潙鏋侀柕鍫濐槹閺?    // =========================================================================
 
     /**
-     * 婵犮垼娉涚€氼噣骞冩繝鍥棅闁规儼妫勫▍銈夋⒑濞嗘儳鏋熼悗鍨矋缁嬪鈧絽澧庣粈鍓噊ggle/闁诲簼绲绘竟鍫ュ春閸涘瓨鏅鑸电〒缁€澶愭煟?ActivityKeyHook 闂侀潻璐熼崝宥夊极瑜版帒绀嗗ù鐓庮嚟閸欓箖姊洪幓鎺旂闁轰緡鍘界粋宥団偓锝傛櫆椤愪粙鏌￠崘鈺佸姸闁汇劎鍠栭幃浠嬪Ω閿濆倸浜?     */
+     * 濠电姰鍨煎▔娑氣偓姘煎櫍楠炲啯绻濋崶顭戞闂佽鍎煎Λ鍕枍閵堝鈷戞繛鍡樺劤閺嬬喖鎮楅崹顐ょ煁缂佸顦遍埀顒婄到婢у海绮堥崜鍣奼gle/闂佽绨肩徊缁樼珶閸儱鏄ラ柛娑樼摠閺咁剙顭块懜鐢点€掔紒鈧径鎰厽?ActivityKeyHook 闂備線娼荤拹鐔煎礉瀹ュ鏋佺憸鐗堝笒缁€鍡椕归悡搴殶闁告瑩绠栧娲箵閹烘梻顔掗梺杞扮贰閸樼晫绮嬪鍥ｅ亾閿濆倹娅嗘い鎰矙閺岋繝宕橀埡浣稿Ц闂佹眹鍔庨崰鏍箖娴犲惟闁挎繂鍊告禍?     */
     public void onVolumeKeyToggle(Activity activity) {
         if (!mNodePanel.isKeySelecting() && activity != null) {
             showNodeSelectPanel(activity);
@@ -182,7 +182,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     }
 
     /**
-     * 闂傚倸锕ユ繛濠囧闯濞差亝鐓ユい鏃傗拡閸ゃ倝鏌ら崜韫倣缂佽鲸绻堥幃?ActivityKeyHook 闂侀潻璐熼崝鎴﹀焵椤掆偓椤︻噣鎳欓幋锔藉亹闁煎摜顣介崑鎾存媴妞嬪海鎲柣鐘差儏閸熶即寮妶澶娢?     */
+     * 闂傚倸鍊搁敃銉︾箾婵犲洤闂繛宸簼閻撱儲銇勯弮鍌楁嫛闁搞們鍊濋弻銈夊礈闊厽鍊ｇ紓浣介哺缁诲牓骞?ActivityKeyHook 闂備線娼荤拹鐔煎礉閹达箑鐒垫い鎺嗗亾妞わ富鍣ｉ幊娆撳箣閿旇棄浜归梺鐓庢憸椤ｄ粙宕戦幘瀛樺濡炲娴烽幉顕€鏌ｉ悩宸剰闁哥喍鍗冲顐﹀Χ婢跺á?     */
     public void onVolumeKeyNavigate(int keyCode) {
         if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) {
             navigatePrevious();
@@ -192,7 +192,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     }
 
     // =========================================================================
-    // Activity 闂佹眹鍨婚崰搴ㄥ箠閿熺姴宸濋柕濠忛檮閸╁倿鏌ㄥ☉妯煎ⅱ闁?GodModeInjector 闁荤姴顑呴崯浼村极閵堝鏅?    // =========================================================================
+    // Activity 闂備焦鐪归崹濠氬窗鎼淬劌绠犻柨鐔哄Т瀹告繈鏌曟繝蹇涙闁糕晛鍊块弻銊モ槈濡厧鈪遍梺?GodModeInjector 闂佽崵濮撮鍛村疮娴兼潙鏋侀柕鍫濐槹閺?    // =========================================================================
 
     public void setActivity(final Activity a) {
         Activity current = mCurrentActivityRef.get();
@@ -217,9 +217,9 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     }
 
     // =========================================================================
-    // 闁荤喐鐟ュΛ妤€霉濮椻偓閺屽懏寰勭€ｎ亶浠撮梺鎸庣☉閻楀棛鏁?KeyInterceptor闂?    // =========================================================================
+    // 闂佽崵鍠愰悷銉ノ涘Δ鈧湁婵せ鍋撻柡灞芥噺瀵板嫮鈧綆浜舵禒鎾⒑閹稿海鈽夐柣妤€妫涢弫?KeyInterceptor闂?    // =========================================================================
 
-    /** 闂備緡鍋呮穱铏规崲閸愵喗鍊烽柣鐔告緲濮ｅ﹤霉濠婂喚鍎庢繛鍡愬灲閺屽懏寰勬径搴″箑闁荤喐鐟ュΛ妤€霉濮椻偓閺佸秹宕煎鍛厾闁荤喐鐟遍梽鍕箠濠婂牆绠ラ悗锝庝簻閳笺垽鏌涢幒鎴烆棞鐟滄澘鍊婚幏顐﹀礃椤忓懏娈㈤梺?*/
+    /** 闂傚倷绶￠崑鍛┍閾忚宕查柛鎰靛枟閸婄兘鏌ｉ悢鍛婄凡婵絽锕ら湁婵犲﹤鍠氶崕搴㈢箾閸℃劕鐏查柡灞芥噺瀵板嫭寰勬惔鈥崇畱闂佽崵鍠愰悷銉ノ涘Δ鈧湁婵せ鍋撻柡浣哥Ч瀹曠厧顭ㄩ崨顖滃幘闂佽崵鍠愰悷閬嶆⒔閸曨垰绠犳繝濠傜墕缁犮儵鎮楅敐搴濈盎闁崇鍨介弻娑㈠箳閹寸儐妫為悷婊勬緲閸婂骞忛锕€绀冩い蹇撴噺濞堛垽姊?*/
     public void selectViewByTap(View tappedView) {
         if (!mNodePanel.isKeySelecting() || mPropertyEditor.isShowing()) return;
         List<WeakReference<View>> nodes = mNodePanel.getViewNodes();
@@ -234,12 +234,12 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
         }
     }
 
-    /** 闂佸吋鍎抽崲鑼躲亹閸ヮ亗浜归柟鎯у暱椤ゅ懘姊洪銏╂Х闁煎灚鍨块幆鍐礋椤曞懏缍婇梺鎼炲劜閹锋繄妲愬▎鎾村仺闁告瑦蓱閸欏繘鏌￠埀顒傛喆閸曗偓娴ｅ壊鍤曢煫鍥ㄦ煥閻濇盯鏌熷畡鎵冲亾閻旂儤顔嶉梺姹囧焺閻撳妲?*/
+    /** 闂備礁鍚嬮崕鎶藉床閼艰翰浜归柛銉簵娴滃綊鏌熼幆褍鏆辨い銈呮嚇濮婃椽顢曢姀鈺傂ラ梺鐓庣仛閸ㄥ潡骞嗛崘顔肩妞ゆ洖鎳忕紞濠囨⒑閹肩偛鍔滈柟閿嬬箘濡叉劕鈻庨幘鏉戜缓闂佸憡鐟﹁摫闁告瑥绻橀弻锟犲焵椤掑倹鍠嗛柛鏇楀亾濞达絽澹婇崵鏇㈢叓閸ャ劍鐓ラ柣婵囩洴閺岀喎鐣￠幍鍐蹭壕闁绘梻鍎ら宥夋⒑濮瑰洤鐒洪柣鎾愁槺濡?*/
     public View getSelectedView() {
         return mNodePanel.getSelectedView();
     }
 
-    /** 闂佸憡甯囬崐鏍蓟?candidate 闂佸搫瀚烽崹浼村箚娓氣偓瀵?tapped 闂佹眹鍔岀€氼剟骞冮幘鍓佹／鐟滃酣宕归妸锔锯枖濠电姴瀚伴悰鎾绘偡濞嗗繑顥滄繛?*/
+    /** 闂備礁鎲＄敮鍥磹閺嶎厼钃?candidate 闂備礁鎼€氱兘宕规导鏉戠畾濞撴埃鍋撶€?tapped 闂備焦鐪归崝宀€鈧凹鍓熼獮鍐箻閸撲焦锛忛悷婊冮叄瀹曞綊濡搁敂閿灃婵犵數濮寸€氫即鎮伴幘缁樺仭婵炲棗绻戦ˉ婊勭箾?*/
     private static boolean isViewMatch(View candidate, View tapped) {
         if (candidate == tapped) return true;
         ViewParent parent = tapped.getParent();
@@ -251,7 +251,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     }
 
     // =========================================================================
-    // 闁荤喐鐟ュΛ妤€霉濡皷鍋撴担鍐棈闁糕晛鎳橀弫宥夊醇濠靛棙鏋?KeyInterceptor闂?    // =========================================================================
+    // 闂佽崵鍠愰悷銉ノ涘Δ鈧湁婵☆垰鐨烽崑鎾存媴閸愵煈妫堥梺绯曟櫅閹虫﹢寮澶婇唶婵犻潧妫欓弸?KeyInterceptor闂?    // =========================================================================
 
     private void toggleInfoFlowMode() {
         mInfoFlowMode = !mInfoFlowMode;
@@ -292,7 +292,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     }
 
     // =========================================================================
-    // 闂佺厧鎼崐濠氬磻閿濆鐒诲璺侯儏椤忋儵鏌涢敐鍐ㄥ婵為棿鍗冲鍫曞礌閿涘嫮顦╅梺?KeyInterceptor闂?    // =========================================================================
+    // 闂備胶鍘ч幖顐﹀磹婵犳艾纾婚柨婵嗩槹閻掕顭跨捄渚剰妞ゅ繈鍎甸弻娑㈡晲閸愩劌顫囧┑鐐烘？閸楀啿顕ｉ崼鏇炵闁挎稑瀚ˇ鈺呮⒑?KeyInterceptor闂?    // =========================================================================
 
     private void showNodeSelectPanel(final Activity activity) {
         Logger.i(TAG, "[KeyEventHook] showNodeSelectPanel for " + activity.getPackageName());
@@ -315,7 +315,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     }
 
     // =========================================================================
-    // 缂備礁顦…宄扳枍鎼淬劍鏅柛顐ｇ箘濞煎矂鏌﹂崟顒佺伄缂佽鲸宀搁獮娆忣吋閸曨厾鈻曢梺鎸庣☉閻楀棛鏁?KeyInterceptor闂?    // =========================================================================
+    // 缂傚倷绀侀ˇ顖炩€﹀畡鎵虫瀺閹兼番鍔嶉弲顒勬煕椤愶絿绠樻繛鐓庣焸閺岋箓宕熼浣轰紕缂備浇椴稿畝鎼佺嵁濞嗗浚鍚嬮柛鏇ㄥ幘閳绘洟姊洪幐搴ｂ槈闁绘妫涢弫?KeyInterceptor闂?    // =========================================================================
 
     private void performBlock(final Activity activity, final ViewGroup container) {
         try {
@@ -361,7 +361,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
         }
     }
 
-    /** 婵炴垶鎸搁悺銊ヮ渻閸岀偞鈷曢柟閭﹀灡椤ユ垿鏌熺€涙澧俊顖氼槺缁牓鎮滃Ο渚殹闂?GodMode 闁荤喐娲栧Λ娑樏烘繝鍕勃闁稿本绻嶅鎺楁煕?*/
+    /** 濠电偞鍨堕幐鎼佹偤閵娿儺娓婚柛宀€鍋為埛鏇㈡煙闁箑鐏℃い銉﹀灴閺岀喓鈧稒顭囨晶顒佷繆椤栨凹妲虹紒顔肩墦閹粌螣娓氼垱娈归梻?GodMode 闂佽崵鍠愬ú鏍涘☉妯忕儤绻濋崟顏呭媰闂佺鏈换宥咁焽閹烘鐓?*/
     private void hideGmOverlays(int visibility) {
         View panelView = mNodePanel.getPanelView();
         if (panelView != null) panelView.setVisibility(visibility);
@@ -381,7 +381,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     }
 
     // =========================================================================
-    // 婵☆偅婢樼€氼垶锝炲澶嬫櫖闁割偅绻傞弬?KeyInterceptor闂?    // =========================================================================
+    // 濠碘槅鍋呭妯尖偓姘煎灦閿濈偛顓兼径瀣珫闂佸壊鍋呯换鍌炲棘?KeyInterceptor闂?    // =========================================================================
 
     private void togglePreview(final Activity activity) {
         if (mPreviewHandler.isPreviewing()) {
@@ -416,10 +416,10 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     }
 
     // =========================================================================
-    // 闁荤喐鐟遍梽鍕箠濠婂嫮顩查悗锝傛櫆椤愪粙鏌涢幒鎴烆棞鐟滄澘鍊块弫宥夊醇濠靛棙鏋?TouchInterceptor 闂佹眹鍔岀€氼參鎮х€圭姷鐤€闁告劘娉曠粈?    // =========================================================================
+    // 闂佽崵鍠愰悷閬嶆⒔閸曨垰绠犳繝濠傚椤╂煡鎮楅敐鍌涙珕妞ゆ劒绮欓弻娑㈠箳閹寸儐妫為悷婊勬緲閸婂潡寮澶婇唶婵犻潧妫欓弸?TouchInterceptor 闂備焦鐪归崝宀€鈧凹鍙冮幃褏鈧湱濮烽悿鈧梺鍛婂姌濞夋洜绮?    // =========================================================================
 
     /**
-     * 缂傚倸鍊归悧鐐垫椤愨懡鐔煎灳瀹曞洨顢呮繛鎴炴尭椤戝洤鈻撻幋鐘冲枂闁挎棁濮ら崵瀣瑰鍐惧剮婵炲棎鍨哄鍕礋椤撶喎鈧偤鏌涜箛瀣姎鐟滅増鐩弫宥呯暆閳ь剟寮?TouchHook 闁荤姴顑呴崯浼村极閵堝违?     * 闁哄鏅滈弻銊ッ?true 闁荤偞绋忛崝搴ㄥΦ濮橆厾顩查悗锝傛櫆椤愮晫鈧鐡曠亸顏堬綖閿曗偓閳藉宕奸敐鍛偓顓㈡煏?     */
+     * 缂傚倸鍊搁崐褰掓偋閻愬灚顐芥い鎰ㄦ嚒閻旂厧鐏崇€规洖娲ㄩ、鍛箾閹寸偞灏い鎴濇搐閳绘捇骞嬮悩鍐叉瀭闂佹寧妫佹慨銈夊吹鐎ｎ€㈢懓顭ㄩ崘鎯у壆濠电偛妫庨崹鍝勵嚗閸曨垰绀嬫い鎾跺枎閳ь剛鍋ら弻娑滅疀鐎ｎ亜濮庨悷婊呭閻╊垶寮鍛殕闁逞屽墴瀵?TouchHook 闂佽崵濮撮鍛村疮娴兼潙鏋侀柕鍫濐槸杩?     * 闂佸搫顦弲婊堝蓟閵娿儍?true 闂佽崵鍋炵粙蹇涘礉鎼淬劌桅婵﹩鍘鹃々鏌ユ倵閿濆倹娅嗘い鎰櫕閳ь剝顫夐悺鏇犱焊椤忓牞缍栭柨鏇楀亾闁宠棄顦靛畷濂告晲閸涱垪鍋撻銏＄厪?     */
     public boolean onTouchEvent(View view, MotionEvent event) {
         if (!mIsInEditMode) return false;
         if (TAG_GM_CMP.equals(view.getTag())) return false;
@@ -463,7 +463,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     }
 
     // =========================================================================
-    // 缂備礁顦…宄扳枍鎼粹垾鐔煎灳瀹曞洨顢呴柣鐔哥懕闂勫嫰骞婂鍕窞闁告洦鍘介崐鐐烘煥濞戞澧曢悽?TouchInterceptor闂?    // =========================================================================
+    // 缂傚倷绀侀ˇ顖炩€﹀畡鎵虫瀺閹肩补鍨鹃悢鐓庣伋鐎规洖娲ㄩ、鍛存煟閻斿摜鎳曢梻鍕楠炲﹤顭ㄩ崟顐ょ獮闂佸憡娲﹂崢浠嬪磹閻愮儤鐓ユ繛鎴烆焽婢ф洟鎮?TouchInterceptor闂?    // =========================================================================
 
     private boolean handleRemoveTouch(View v, MotionEvent event, int action) {
         if (action == MotionEvent.ACTION_DOWN) {
@@ -496,7 +496,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     }
 
     // =========================================================================
-    // 婵烇絽娴傞崰妤呭极閻撳宫鐔煎灳瀹曞洨顢呴柣鐔哥懕闂勫嫰骞婂鍕窞闁告洦鍘介崐鐐烘煥濞戞澧曢悽?TouchInterceptor闂?    // =========================================================================
+    // 濠电儑绲藉ù鍌炲窗濡ゅ懎鏋侀柣鎾冲閻旂厧鐏崇€规洖娲ㄩ、鍛存煟閻斿摜鎳曢梻鍕楠炲﹤顭ㄩ崟顐ょ獮闂佸憡娲﹂崢浠嬪磹閻愮儤鐓ユ繛鎴烆焽婢ф洟鎮?TouchInterceptor闂?    // =========================================================================
 
     private boolean handleModifyTouch(View v, MotionEvent event) {
         int action = event.getActionMasked();
@@ -527,7 +527,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     }
 
     // =========================================================================
-    // 闂佺绻愯ぐ澶愭閳哄啯鍠嗛柨鏃囧Г閸ゅ鈧鍠掗崑鎾斥攽?缂傚倷鐒﹂幐璇差焽椤愶箑妞界€光偓閸曨剚鐦ｉ梺鍦焾椤︿即藟閸涱劶鍦偓锝呭缁€鍕煕?TouchInterceptor闂?    // =========================================================================
+    // 闂備胶顭堢换鎰亹婢舵劖顥婇柍鍝勫暞閸犲棝鏌ㄩ弮鍥撻柛銈咁儑閳ь剚顔栭崰鎺楀磻閹炬枼鏀?缂傚倸鍊烽悞锕傚箰鐠囧樊鐒芥い鎰剁畱濡炵晫鈧厜鍋撻柛鏇ㄥ墯閻︼綁姊洪崷顓х劸妞わ缚鍗宠棢闁告侗鍔堕崷顓涘亾閿濆懎顣崇紒鈧崟顖涚厱?TouchInterceptor闂?    // =========================================================================
 
     private boolean beginTouch(View v, boolean isModifyMode) {
         boolean[] draggingRef = new boolean[1];
@@ -552,7 +552,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
         mDragging = false;
     }
 
-    /** 闂傚倵鍋撻柟绋块閻﹀鎮峰▎娆戠暠鐟滄澘鍊块弫宥咁潩椤撶姴顥戦梺纭咁嚃閸犳鍟悗娈垮枛缁绘劙骞嗘惔銊ョ闁靛鐏濋埡鍛挃闁靛牆妫楅悘妤€菐閸ヨ泛鏋熼柡浣搞偢楠炲繘寮介妸銉肌 */
+    /** 闂傚倸鍊甸崑鎾绘煙缁嬪潡顎楅柣锕€顭烽幃宄扳枎濞嗘垹鏆犻悷婊勬緲閸婂潡寮鍜佹僵妞ゆ挾濮撮ˉ鎴︽⒑绾拋鍤冮柛鐘愁殙閸燁垶鎮楀▓鍨灈缂佺粯鍔欓獮鍡樻償閵娿儳顦梺闈涱煬閻忔繈鍩￠崨顔规寖闂侀潧鐗嗗Λ妤呮倶濡も偓鑿愰柛銉ㄦ硾閺嬬喖鏌℃担鎼炲仮妤犵偛绻樺浠嬪Ω閵夘喕鑲?*/
     private void onLongPress(View v, boolean isModifyMode) {
         if (isModifyMode) {
             View target = getSelectedView();
@@ -567,7 +567,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     }
 
     // =========================================================================
-    // 闁诲繒鍋熼崑鐐哄焵椤戭剙鍟紞渚€鏌￠崶顏呭涧缂佽鲸鐟╁畷?KeyInterceptor + TouchInterceptor 闂佸憡鑹鹃悧鍡涙嚐閻斿吋鏅?    // =========================================================================
+    // 闂佽绻掗崑鐔煎磻閻愬搫鐒垫い鎴墮閸燁偆绱炴笟鈧弻锟犲炊椤忓懎娑х紓浣介哺閻熲晛鐣?KeyInterceptor + TouchInterceptor 闂備礁鎲￠懝楣冩偋閸℃稒鍤愰柣鏂垮悑閺?    // =========================================================================
 
     @Override
     public void onPropertyChange(Boolean enable) {

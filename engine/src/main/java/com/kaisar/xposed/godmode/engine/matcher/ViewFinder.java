@@ -4,7 +4,7 @@ import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.res.Resources;
 import android.text.TextUtils;
-import android.util.Log;
+import com.kaisar.xposed.godmode.engine.util.Logger;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewParent;
@@ -22,12 +22,12 @@ import java.util.Map;
 import java.util.WeakHashMap;
 
 /**
- * 瑙嗗浘鏌ユ壘鍣?鈥?浣跨敤 engine 鐨?RuleMatchSpec 杩涜瑙嗗浘鍖归厤/鎼滅储銆?
+ * 鐟欏棗娴橀弻銉﹀閸?閳?娴ｈ法鏁?engine 閻?RuleMatchSpec 鏉╂稖顢戠憴鍡楁禈閸栧綊鍘?閹兼粎鍌ㄩ妴?
  * <p>
- * 鑱岃矗锛氫粠褰撳墠 Activity 鐨勮鍥炬爲涓牴鎹?RuleMatchSpec 瀹氫綅鍖归厤鐨勮鍥俱€?
- * 鍚屾椂鏀寔 {@link CompositeMatcher}锛坋ngine 缁勫悎鍖归厤锛夊拰浼犵粺娣卞害/鏂囨湰/璧勬簮鍚嶅尮閰嶃€?
+ * 閼卞矁鐭楅敍姘矤瑜版挸澧?Activity 閻ㄥ嫯顫嬮崶鐐埐娑擃厽鐗撮幑?RuleMatchSpec 鐎规矮缍呴崠褰掑帳閻ㄥ嫯顫嬮崶淇扁偓?
+ * 閸氬本妞傞弨顖涘瘮 {@link CompositeMatcher}閿涘潒ngine 缂佸嫬鎮庨崠褰掑帳閿涘鎷版导鐘电埠濞ｅ崬瀹?閺傚洦婀?鐠у嫭绨崥宥呭爱闁板秲鈧?
  * <p>
- * 鏇夸唬 {@code com.kaisar.xposed.godmode.injection.ViewHelper} 涓殑瑙嗗浘鎼滅储鑱岃矗銆?
+ * 閺囧じ鍞?{@code com.kaisar.xposed.godmode.injection.ViewHelper} 娑擃厾娈戠憴鍡楁禈閹兼粎鍌ㄩ懕宀冪煑閵?
  */
 public final class ViewFinder {
 
@@ -43,33 +43,33 @@ public final class ViewFinder {
     }
 
     // =========================================================================
-    // 鍏紑 API
+    // 閸忣剙绱?API
     // =========================================================================
 
     /**
-     * 鏍规嵁瑙勫垯鍖归厤瑙嗗浘 鈥?浼樺厛浣跨敤 {@link CompositeMatcher}锛屽け璐ユ椂鍥為€€鍒颁紶缁熷尮閰嶃€?
+     * 閺嶈宓佺憴鍕灟閸栧綊鍘ょ憴鍡楁禈 閳?娴兼ê鍘涙担璺ㄦ暏 {@link CompositeMatcher}閿涘苯銇戠拹銉︽閸ョ偤鈧偓閸掗绱剁紒鐔峰爱闁板秲鈧?
      *
-     * @param decorView   褰撳墠 Activity 鐨?DecorView
+     * @param decorView   瑜版挸澧?Activity 閻?DecorView
      * @param rule        engine RuleMatchSpec
-     * @param pm          PackageManager锛堢敤浜?strict mode 妫€鏌ワ級
-     * @param packageName 鐩爣鍖呭悕
-     * @return 鍖归厤鐨勮鍥撅紝鎴?null
+     * @param pm          PackageManager閿涘牏鏁ゆ禍?strict mode 濡偓閺屻儻绱?
+     * @param packageName 閻╊喗鐖ｉ崠鍛倳
+     * @return 閸栧綊鍘ら惃鍕潒閸ユ拝绱濋幋?null
      */
     public static View findViewBestMatch(ViewGroup decorView, RuleMatchSpec rule,
                                           PackageManager pm, String packageName) {
-        // 浼樺厛灏濊瘯 engine 缁勫悎鍖归厤鍣?
+        // 娴兼ê鍘涚亸婵婄槸 engine 缂佸嫬鎮庨崠褰掑帳閸?
         try {
             View matched = sMatcher.matchView(decorView, rule);
             if (matched != null) return matched;
         } catch (Exception e) {
-            Log.w(TAG, "engine matcher failed, falling back to legacy: " + e.getMessage());
+            Logger.w(TAG, "engine matcher failed, falling back to legacy: " + e.getMessage());
         }
 
-        // 鍏滃簳锛氫紶缁熷尮閰?
+        // 閸忔粌绨抽敍姘炊缂佺喎灏柊?
         boolean strictMode = checkStrictMode(pm, packageName, rule);
 
         if (rule.depth != null && rule.depth.length > 0) {
-            Log.d(TAG, "match view by depth (primary anchor)");
+            Logger.d(TAG, "match view by depth (primary anchor)");
             View viewByDepth = ViewTraversal.findViewByDepth(decorView, rule.depth);
             if (viewByDepth != null) {
                 if (isDepthMatch(viewByDepth, rule, strictMode))
@@ -79,7 +79,7 @@ public final class ViewFinder {
             }
         }
 
-        // 鍗曞厓绱犳ā寮忥細浠呬俊浠?depth 閿氬畾
+        // 閸楁洖鍘撶槐鐘衬佸蹇ョ窗娴犲懍淇婃禒?depth 闁挎艾鐣?
         if (!rule.isRepeatable()) {
             if (rule.depth != null && rule.depth.length > 0) {
                 View view = ViewTraversal.findViewByDepth(decorView, rule.depth);
@@ -89,7 +89,7 @@ public final class ViewFinder {
         }
 
         if (!TextUtils.isEmpty(rule.resourceName)) {
-            Log.d(TAG, "match view by resource name (primary anchor)");
+            Logger.d(TAG, "match view by resource name (primary anchor)");
             View viewByRes = decorView.findViewById(getViewId(rule, decorView.getResources()));
             if (viewByRes != null) {
                 View matched = matchView(viewByRes, rule, strictMode);
@@ -98,7 +98,7 @@ public final class ViewFinder {
         }
 
         if (!TextUtils.isEmpty(rule.text)) {
-            Log.d(TAG, "match view by text (auxiliary)");
+            Logger.d(TAG, "match view by text (auxiliary)");
             View viewByText = findViewByText(decorView, rule.text);
             if (viewByText != null) {
                 View matched = matchView(viewByText, rule, strictMode);
@@ -106,7 +106,7 @@ public final class ViewFinder {
             }
         }
         if (!TextUtils.isEmpty(rule.description)) {
-            Log.d(TAG, "match view by description (auxiliary)");
+            Logger.d(TAG, "match view by description (auxiliary)");
             View viewByDesc = findViewByDescription(decorView, rule.description);
             if (viewByDesc != null) {
                 View matched = matchView(viewByDesc, rule, strictMode);
@@ -114,7 +114,7 @@ public final class ViewFinder {
             }
         }
 
-        // 鏈€缁堝厹搴曪細浠呮寜 depth
+        // 閺堚偓缂佸牆鍘规惔鏇窗娴犲懏瀵?depth
         if (rule.depth != null && rule.depth.length > 0) {
             View view = ViewTraversal.findViewByDepth(decorView, rule.depth);
             if (view != null) return matchView(view, rule, false);
@@ -123,13 +123,13 @@ public final class ViewFinder {
     }
 
     /**
-     * 鏌ユ壘鎵€鏈夊尮閰嶇殑瑙嗗浘 鈥?repeatable 瑙勫垯浼樺厛鎼滅储 RecyclerView銆?
+     * 閺屻儲澹橀幍鈧張澶婂爱闁板秶娈戠憴鍡楁禈 閳?repeatable 鐟欏嫬鍨导妯哄帥閹兼粎鍌?RecyclerView閵?
      *
-     * @param decorView   褰撳墠 Activity 鐨?DecorView
+     * @param decorView   瑜版挸澧?Activity 閻?DecorView
      * @param rule        engine RuleMatchSpec
-     * @param pm          PackageManager锛堢敤浜?strict mode 妫€鏌ワ級
-     * @param packageName 鐩爣鍖呭悕
-     * @return 鍖归厤鐨勮鍥惧垪琛?
+     * @param pm          PackageManager閿涘牏鏁ゆ禍?strict mode 濡偓閺屻儻绱?
+     * @param packageName 閻╊喗鐖ｉ崠鍛倳
+     * @return 閸栧綊鍘ら惃鍕潒閸ユ儳鍨悰?
      */
     public static List<View> findAllViewsBestMatch(ViewGroup decorView, RuleMatchSpec rule,
                                                     PackageManager pm, String packageName) {
@@ -147,21 +147,21 @@ public final class ViewFinder {
     }
 
     /**
-     * 妫€娴嬭鍥炬槸鍚﹀湪 RecyclerView 涓€?
+     * 濡偓濞村顫嬮崶鐐Ц閸氾箑婀?RecyclerView 娑擃厹鈧?
      */
     public static boolean isInRecyclerView(View v) {
         return ViewTraversal.isInRecyclerView(v);
     }
 
     /**
-     * 鏌ユ壘鏈€杩?RecyclerView 绁栧厛銆?
+     * 閺屻儲澹橀張鈧潻?RecyclerView 缁佹牕鍘涢妴?
      */
     public static ViewGroup findRecyclerViewAncestor(View v) {
         return ViewTraversal.findRecyclerViewAncestor(v);
     }
 
     /**
-     * 鑾峰彇瑙嗗浘鍦?RecyclerView 涓殑 itemPath銆?
+     * 閼惧嘲褰囩憴鍡楁禈閸?RecyclerView 娑擃厾娈?itemPath閵?
      */
     public static String[] getItemPath(View v, ViewGroup recyclerView) {
         ArrayList<String> path = new ArrayList<>();
@@ -179,7 +179,7 @@ public final class ViewFinder {
     }
 
     /**
-     * 鎸?itemPath 鏌ユ壘瑙嗗浘銆?
+     * 閹?itemPath 閺屻儲澹樼憴鍡楁禈閵?
      */
     public static View findViewByItemPath(View root, String[] path, int index) {
         if (index >= path.length) return root;
@@ -206,7 +206,7 @@ public final class ViewFinder {
     }
 
     /**
-     * 璇勫垎鍖归厤瑙嗗浘锛堝鏉鹃槇鍊?30锛屼弗鏍兼ā寮?80锛夈€?
+     * 鐠囧嫬鍨庨崠褰掑帳鐟欏棗娴橀敍鍫濐啍閺夐箖妲囬崐?30閿涘奔寮楅弽鍏寄佸?80閿涘鈧?
      */
     public static View matchView(View view, RuleMatchSpec rule, boolean strictMode) {
         try {
@@ -215,17 +215,17 @@ public final class ViewFinder {
             int threshold = strictMode ? 80 : 30;
             return score >= threshold ? view : null;
         } catch (Exception e) {
-            Log.w(TAG, "matchView: exception during matching", e);
+            Logger.w(TAG, "matchView: exception during matching", e);
         }
         return null;
     }
 
     /**
-     * 濉厖鍙噸澶嶈鍒欎俊鎭?鈥?妫€娴嬪悓涓€ itemRootClass 鍦?RecyclerView 涓嚭鐜?2+ 娆℃椂鏍囪涓?repeatable銆?
+     * 婵夘偄鍘栭崣顖炲櫢婢跺秷顫夐崚娆庝繆閹?閳?濡偓濞村鎮撴稉鈧?itemRootClass 閸?RecyclerView 娑擃厼鍤悳?2+ 濞嗏剝妞傞弽鍥唶娑?repeatable閵?
      *
-     * @param v              閫変腑鐨勭洰鏍囪鍥?
-     * @param rule           寰呭～鍏呯殑瑙勫垯
-     * @param isInfoFlowMode 鏄惁澶勪簬淇℃伅娴佹ā寮忥紙鐢辫皟鐢ㄦ柟鎻愪緵锛?
+     * @param v              闁鑵戦惃鍕窗閺嶅洩顫嬮崶?
+     * @param rule           瀵板懎锝為崗鍛畱鐟欏嫬鍨?
+     * @param isInfoFlowMode 閺勵垰鎯佹径鍕艾娣団剝浼呭ù浣鼓佸蹇ョ礄閻㈣精鐨熼悽銊︽煙閹绘劒绶甸敍?
      */
     public static void populateRepeatableInfo(View v, RuleMatchSpec rule, boolean isInfoFlowMode) {
         try {
@@ -256,20 +256,20 @@ public final class ViewFinder {
                 }
             }
         } catch (Exception e) {
-            Log.w(TAG, "populateRepeatableInfo: failed (non-fatal)", e);
+            Logger.w(TAG, "populateRepeatableInfo: failed (non-fatal)", e);
         }
     }
 
     // =========================================================================
-    // RecyclerView 鍖归厤
+    // RecyclerView 閸栧綊鍘?
     // =========================================================================
 
     /**
-     * 鍦?DecorView 涓寜 RecyclerView 鍖归厤 repeatable 瑙勫垯銆?
+     * 閸?DecorView 娑擃厽瀵?RecyclerView 閸栧綊鍘?repeatable 鐟欏嫬鍨妴?
      *
-     * @param decorView 褰撳墠 Activity 鐨?DecorView
+     * @param decorView 瑜版挸澧?Activity 閻?DecorView
      * @param rule      engine RuleMatchSpec
-     * @return 鍖归厤鐨勮鍥惧垪琛?
+     * @return 閸栧綊鍘ら惃鍕潒閸ユ儳鍨悰?
      */
     public static List<View> findViewsInRecyclers(ViewGroup decorView, RuleMatchSpec rule) {
         List<View> results = new ArrayList<>();
@@ -345,7 +345,7 @@ public final class ViewFinder {
     }
 
     // =========================================================================
-    // 浼犵粺鍖归厤锛坙egacy fallback锛?
+    // 娴肩姷绮洪崠褰掑帳閿涘潤egacy fallback閿?
     // =========================================================================
 
     private static boolean checkStrictMode(PackageManager pm, String packageName, RuleMatchSpec rule) {
@@ -353,7 +353,7 @@ public final class ViewFinder {
             PackageInfo packageInfo = pm.getPackageInfo(packageName, 0);
             return packageInfo.versionCode == rule.matchVersionCode;
         } catch (PackageManager.NameNotFoundException e) {
-            Log.w(TAG, "Failed to get package info for strict mode check", e);
+            Logger.w(TAG, "Failed to get package info for strict mode check", e);
         }
         return false;
     }
@@ -369,7 +369,7 @@ public final class ViewFinder {
                     String resName = view.getResources().getResourceName(view.getId());
                     if (!TextUtils.equals(resName, rule.resourceName)) return false;
                 } catch (Resources.NotFoundException e) {
-                    // view 鏃?resource id 鈥?涓嶅尮閰?
+                    // view 閺?resource id 閳?娑撳秴灏柊?
                     return false;
                 }
             }
@@ -393,7 +393,7 @@ public final class ViewFinder {
         return null;
     }
 
-    // ===== 鍖归厤璇勫垎甯搁噺 =====
+    // ===== 閸栧綊鍘ょ拠鍕瀻鐢悂鍣?=====
     private static final int MATCH_CLASS = 30;
     private static final int MATCH_RESOURCE = 25;
     private static final int MATCH_TEXT = 20;
@@ -409,7 +409,7 @@ public final class ViewFinder {
                 String resName = view.getResources().getResourceName(view.getId());
                 if (TextUtils.equals(resName, rule.resourceName)) score += MATCH_RESOURCE;
             } catch (Resources.NotFoundException e) {
-                // view 鏃?resource name 鈥?score 淇濇寔涓嶅鍔?
+                // view 閺?resource name 閳?score 娣囨繃瀵旀稉宥咁杻閸?
             }
         }
         if (!TextUtils.isEmpty(rule.text) && view instanceof TextView) {
@@ -432,7 +432,7 @@ public final class ViewFinder {
     }
 
     // =========================================================================
-    // 鏂囨湰/鎻忚堪 鏌ユ壘
+    // 閺傚洦婀?閹诲繗鍫?閺屻儲澹?
     // =========================================================================
 
     private static View findViewByText(View view, String text) {
@@ -456,7 +456,7 @@ public final class ViewFinder {
                 }
             }
         } catch (Exception e) {
-            Log.w(TAG, "findViewByCondition: traversal error", e);
+            Logger.w(TAG, "findViewByCondition: traversal error", e);
         }
         return null;
     }
@@ -466,11 +466,11 @@ public final class ViewFinder {
     }
 
     // =========================================================================
-    // 宸ュ叿
+    // 瀹搞儱鍙?
     // =========================================================================
 
     /**
-     * 鏍规嵁璧勬簮鍚嶈幏鍙栬祫婧?ID锛堝吋瀹?engines 渚ф棤 R 绫荤殑鍦烘櫙锛夈€?
+     * 閺嶈宓佺挧鍕爱閸氬秷骞忛崣鏍カ濠?ID閿涘牆鍚嬬€?engines 娓氀勬￥ R 缁崵娈戦崷鐑樻珯閿涘鈧?
      */
     private static int getViewId(RuleMatchSpec rule, Resources resources) {
         if (rule.resourceName == null || resources == null) return View.NO_ID;

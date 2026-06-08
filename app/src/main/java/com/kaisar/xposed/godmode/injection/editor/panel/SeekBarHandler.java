@@ -6,8 +6,6 @@ import android.widget.SeekBar;
 
 import com.kaisar.xposed.godmode.engine.matcher.ViewFinder;
 import com.kaisar.xposed.godmode.injection.editor.overlay.MaskView;
-import com.kaisar.xposed.godmode.injection.editor.panel.NodeSelectorPanel;
-import com.kaisar.xposed.godmode.injection.editor.panel.PropertyEditorPanel;
 import com.kaisar.xposed.godmode.injection.util.ViewUtils;
 
 import java.lang.ref.WeakReference;
