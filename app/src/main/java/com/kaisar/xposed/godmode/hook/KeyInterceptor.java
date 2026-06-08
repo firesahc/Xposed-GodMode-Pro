@@ -5,6 +5,7 @@ import static com.kaisar.xposed.godmode.GodModeApplication.TAG;
 import com.kaisar.xposed.godmode.engine.EditorInteractionMode;
 import com.kaisar.xposed.godmode.injection.editor.gesture.BlockHandler;
 import com.kaisar.xposed.godmode.injection.editor.gesture.PreviewHandler;
+import com.kaisar.xposed.godmode.injection.editor.gesture.SeekBarHandler;
 import android.app.Activity;
 import android.graphics.Bitmap;
 import android.graphics.Color;
@@ -14,7 +15,6 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewParent;
 import android.view.animation.DecelerateInterpolator;
-import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -54,7 +54,7 @@ import de.robv.android.xposed.XposedHelpers;
  * </ul>
  */
 public final class KeyInterceptor extends XC_MethodHook
-        implements Property.OnPropertyChangeListener<Boolean>, SeekBar.OnSeekBarChangeListener {
+        implements Property.OnPropertyChangeListener<Boolean> {
 
     // =========================================================================
     // 常量与交互模式
@@ -62,21 +62,14 @@ public final class KeyInterceptor extends XC_MethodHook
 
     private static final int OVERLAY_COLOR = Color.argb(150, 255, 0, 0);
     private static final int OVERLAY_COLOR_REPEATABLE = Color.argb(150, 255, 165, 0);
-    private static KeyInterceptor sInstance;
 
-    /** @deprecated 使用 {@link EditorInteractionMode#INITIAL} */
-    @Deprecated public static final int MODE_INITIAL = EditorInteractionMode.INITIAL;
-    /** @deprecated 使用 {@link EditorInteractionMode#REMOVE} */
-    @Deprecated public static final int MODE_REMOVE = EditorInteractionMode.REMOVE;
-    /** @deprecated 使用 {@link EditorInteractionMode#MODIFY} */
-    @Deprecated public static final int MODE_MODIFY = EditorInteractionMode.MODIFY;
-    private static volatile int sInteractionMode = MODE_INITIAL;
+    private int mInteractionMode = EditorInteractionMode.INITIAL;
 
-    public static int getInteractionMode() { return sInteractionMode; }
-    public static boolean isKeySelecting() { return sInstance != null && sInstance.mNodePanel.isKeySelecting(); }
+    public int getInteractionMode() { return mInteractionMode; }
+    public boolean isKeySelecting() { return mNodePanel.isKeySelecting(); }
 
-    private static volatile boolean sInfoFlowMode = false;
-    public static boolean isInfoFlowMode() { return sInfoFlowMode; }
+    private boolean mInfoFlowMode = false;
+    public boolean isInfoFlowMode() { return mInfoFlowMode; }
 
     // =========================================================================
     // 预览状态（在确认移除前临时隐藏视图）
@@ -90,6 +83,7 @@ public final class KeyInterceptor extends XC_MethodHook
 
     private final NodeSelectorPanel mNodePanel = new NodeSelectorPanel();
     final PropertyEditorPanel mPropertyEditor = new PropertyEditorPanel();
+    private final SeekBarHandler mSeekBarHandler = new SeekBarHandler(mNodePanel, mPropertyEditor);
     private Activity mCurrentActivity;
 
     /** 节点选择器面板按钮回调 */
@@ -114,7 +108,7 @@ public final class KeyInterceptor extends XC_MethodHook
         }
         @Override
         public void onModeChanged(int mode) {
-            sInteractionMode = mode;
+            mInteractionMode = mode;
         }
         @Override
         public void onInfoFlowRequested() {
@@ -123,37 +117,43 @@ public final class KeyInterceptor extends XC_MethodHook
     };
 
     // =========================================================================
+    // 音量键 Hook — 提取的具名内部类
+    // =========================================================================
+
+    private final class VolumeKeyHook extends XC_MethodHook {
+        @Override
+        protected void beforeHookedMethod(MethodHookParam param) {
+            if (!GodModeInjector.switchProp.get() || TouchInterceptor.mDragging) return;
+            KeyEvent event = (KeyEvent) param.args[0];
+            int action = event.getAction();
+            int keyCode = event.getKeyCode();
+            if (action == KeyEvent.ACTION_UP &&
+                    (keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN)) {
+                if (!mNodePanel.isKeySelecting() && mCurrentActivity != null) {
+                    showNodeSelectPanel(mCurrentActivity);
+                } else if (mNodePanel.isKeySelecting()) {
+                    dismissNodeSelectPanel();
+                }
+                param.setResult(true);
+            } else if (mNodePanel.isKeySelecting() && action == KeyEvent.ACTION_DOWN) {
+                if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) {
+                    navigatePrevious();
+                    param.setResult(true);
+                } else if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
+                    navigateNext();
+                    param.setResult(true);
+                }
+            }
+        }
+    }
+
+    // =========================================================================
     // 构造器 — 注册音量键 Hook
     // =========================================================================
 
     public KeyInterceptor() {
-        sInstance = this;
-        XposedHelpers.findAndHookMethod(Activity.class, "dispatchKeyEvent", KeyEvent.class, new XC_MethodHook() {
-            protected void beforeHookedMethod(MethodHookParam param) {
-                if (!GodModeInjector.switchProp.get() || TouchInterceptor.mDragging) return;
-                KeyEvent event = (KeyEvent) param.args[0];
-                int action = event.getAction();
-                int keyCode = event.getKeyCode();
-                if (action == KeyEvent.ACTION_UP &&
-                        (keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN)) {
-                    Activity currentActivity = sInstance.mCurrentActivity;
-                    if (!sInstance.mNodePanel.isKeySelecting() && currentActivity != null) {
-                        sInstance.showNodeSelectPanel(currentActivity);
-                    } else if (sInstance.mNodePanel.isKeySelecting()) {
-                        sInstance.dismissNodeSelectPanel();
-                    }
-                    param.setResult(true);
-                } else if (sInstance.mNodePanel.isKeySelecting() && action == KeyEvent.ACTION_DOWN) {
-                    if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) {
-                        sInstance.navigatePrevious();
-                        param.setResult(true);
-                    } else if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
-                        sInstance.navigateNext();
-                        param.setResult(true);
-                    }
-                }
-            }
-        });
+        XposedHelpers.findAndHookMethod(Activity.class, "dispatchKeyEvent",
+                KeyEvent.class, new VolumeKeyHook());
     }
 
     // =========================================================================
@@ -185,28 +185,24 @@ public final class KeyInterceptor extends XC_MethodHook
     // =========================================================================
 
     /** 通过点击事件选中视图（从 TouchInterceptor 调用） */
-    public static void selectViewByTap(View tappedView) {
-        KeyInterceptor instance = sInstance;
-        if (instance == null || !instance.mNodePanel.isKeySelecting()
-                || instance.mPropertyEditor.isShowing()) return;
+    public void selectViewByTap(View tappedView) {
+        if (!mNodePanel.isKeySelecting() || mPropertyEditor.isShowing()) return;
 
-        List<WeakReference<View>> nodes = instance.mNodePanel.getViewNodes();
+        List<WeakReference<View>> nodes = mNodePanel.getViewNodes();
         if (nodes == null) return;
         for (int i = nodes.size() - 1; i >= 0; i--) {
             View v = nodes.get(i).get();
             if (v != null && isViewMatch(v, tappedView)) {
-                instance.mNodePanel.setCurrentIndex(i);
-                instance.mNodePanel.setHasUserSelection(true);
+                mNodePanel.setCurrentIndex(i);
+                mNodePanel.setHasUserSelection(true);
                 return;
             }
         }
     }
 
     /** 获取当前选中的视图（由 TouchInterceptor 的修改模式拖拽调用） */
-    public static View getSelectedView() {
-        KeyInterceptor instance = sInstance;
-        if (instance == null) return null;
-        return instance.mNodePanel.getSelectedView();
+    public View getSelectedView() {
+        return mNodePanel.getSelectedView();
     }
 
     /** 判断 candidate 是否是 tapped 的同级或上级视图 */
@@ -225,16 +221,16 @@ public final class KeyInterceptor extends XC_MethodHook
     // =========================================================================
 
     private void toggleInfoFlowMode() {
-        sInfoFlowMode = !sInfoFlowMode;
+        mInfoFlowMode = !mInfoFlowMode;
         updateInfoFlowModeButton();
-        Toast.makeText(mCurrentActivity, GmResources.getString(sInfoFlowMode ? R.string.accessibility_info_flow_on : R.string.accessibility_info_flow_off), Toast.LENGTH_SHORT).show();
+        Toast.makeText(mCurrentActivity, GmResources.getString(mInfoFlowMode ? R.string.accessibility_info_flow_on : R.string.accessibility_info_flow_off), Toast.LENGTH_SHORT).show();
     }
     private void updateInfoFlowModeButton() {
         View panelView = mNodePanel.getPanelView();
         if (panelView == null) return;
         TextView btn = panelView.findViewById(R.id.info_flow_mode_btn);
         if (btn == null) return;
-        if (sInfoFlowMode) {
+        if (mInfoFlowMode) {
             btn.setText(GmResources.getText(R.string.mode_info_flow_on));
             btn.setTextColor(android.graphics.Color.parseColor("#FFA500"));
         } else {
@@ -260,7 +256,7 @@ public final class KeyInterceptor extends XC_MethodHook
         Logger.i(TAG, "[KeyEventHook] showNodeSelectPanel for " + activity.getPackageName());
         List<WeakReference<View>> viewNodes = ViewTraversal.buildViewNodes(activity.getWindow().getDecorView());
         final ViewGroup container = (ViewGroup) activity.getWindow().getDecorView();
-        mNodePanel.show(viewNodes, activity, container, OVERLAY_COLOR, this);
+        mNodePanel.show(viewNodes, activity, container, OVERLAY_COLOR, mSeekBarHandler);
         if (!mNodePanel.isKeySelecting()) return; // show() failed
         ToolbarVisibilityController.apply(mNodePanel.getPanelView());
         mNodePanel.wireButtons(activity, container, mNodePanelCallbacks);
@@ -271,7 +267,7 @@ public final class KeyInterceptor extends XC_MethodHook
         Logger.i(TAG, "[KeyEventHook] dismissNodeSelectPanel");
         mPropertyEditor.cancel();
         mPreviewHandler.restorePreview(null, null, null);
-        sInteractionMode = MODE_INITIAL;
+        mInteractionMode = EditorInteractionMode.INITIAL;
         mNodePanel.dismiss();
     }
 
@@ -384,48 +380,16 @@ public final class KeyInterceptor extends XC_MethodHook
     }
 
     // =========================================================================
-    // 属性变更 & SeekBar 回调
+    // 属性变更
     // =========================================================================
 
     @Override
     public void onPropertyChange(Boolean enable) {
         if (enable == null) return;
         if (!enable) {
-            sInteractionMode = MODE_INITIAL;
+            mInteractionMode = EditorInteractionMode.INITIAL;
             // dismissNodeSelectPanel 不再在此调用——notifyEditModeChanged(false)
             // 已通过 setdisplay(false) 执行完整的 dismiss 流程，此处是冗余路径。
         }
-    }
-
-    @Override
-    public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-        if (mPropertyEditor.isShowing()) return;
-        List<WeakReference<View>> viewNodes = mNodePanel.getViewNodes();
-        MaskView maskView = mNodePanel.getMaskView();
-        if (viewNodes != null && progress < viewNodes.size()) {
-            mNodePanel.setCurrentIndexSilent(progress);
-            if (fromUser) mNodePanel.setHasUserSelection(true);
-            View view = viewNodes.get(mNodePanel.getCurrentIndex()).get();
-            if (view != null && maskView != null) {
-                if (ViewFinder.isInRecyclerView(view)) {
-                    maskView.setMaskOverlay(OVERLAY_COLOR_REPEATABLE);
-                } else {
-                    maskView.setMaskOverlay(OVERLAY_COLOR);
-                }
-                maskView.updateOverlayBounds(ViewUtils.getLocationInWindow(view));
-            }
-        }
-    }
-
-    @Override
-    public void onStartTrackingTouch(SeekBar seekBar) {
-        View panelView = mNodePanel.getPanelView();
-        if (panelView != null) panelView.setAlpha(0.2f);
-    }
-
-    @Override
-    public void onStopTrackingTouch(SeekBar seekBar) {
-        View panelView = mNodePanel.getPanelView();
-        if (panelView != null) panelView.setAlpha(1f);
     }
 }

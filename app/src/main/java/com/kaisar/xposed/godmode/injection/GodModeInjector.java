@@ -70,6 +70,9 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
     private static State state = State.UNKNOWN;
     private static final KeyInterceptor sKeyInterceptor = new KeyInterceptor();
 
+    /** 供子组件获取 KeyInterceptor 实例 */
+    public static KeyInterceptor getKeyInterceptor() { return sKeyInterceptor; }
+
     private enum State { UNKNOWN, ALLOWED, BLOCKED }
 
     // =========================================================================
@@ -162,7 +165,7 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
         DebugLayoutHook.install(switchProp);
 
         // 触摸事件 Hook — 拦截点击/拖拽以进行移除和修改操作
-        TouchInterceptor touchInterceptor = new TouchInterceptor();
+        TouchInterceptor touchInterceptor = new TouchInterceptor(getKeyInterceptor());
         switchProp.addOnPropertyChangeListener(touchInterceptor);
         XposedHelpers.findAndHookMethod(View.class, "dispatchTouchEvent",
                 MotionEvent.class, touchInterceptor);
