@@ -86,6 +86,11 @@ public final class GodModeManager {
         } catch (RemoteException e) {
             logError("getAllRules", e);
             return new AppRules();
+        } catch (RuntimeException e) {
+            // BadParcelableException: ViewRule → RuleRecord 重命名后，
+            // system_server 中旧服务可能仍含有 ViewRule 实例，需静默降级
+            logError("getAllRules", new RemoteException(e.getMessage()));
+            return new AppRules();
         }
     }
 
@@ -94,6 +99,9 @@ public final class GodModeManager {
             return mGMM.getRules(packageName);
         } catch (RemoteException e) {
             logError("getRules", e);
+            return new ActRules();
+        } catch (RuntimeException e) {
+            logError("getRules", new RemoteException(e.getMessage()));
             return new ActRules();
         }
     }
