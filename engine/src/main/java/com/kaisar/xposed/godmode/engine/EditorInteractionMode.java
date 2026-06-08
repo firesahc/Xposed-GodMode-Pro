@@ -1,4 +1,4 @@
-package com.kaisar.xposed.godmode.injection.editor;
+package com.kaisar.xposed.godmode.engine;
 
 import androidx.annotation.IntDef;
 

@@ -2,7 +2,7 @@ package com.kaisar.xposed.godmode.hook;
 
 import static com.kaisar.xposed.godmode.GodModeApplication.TAG;
 
-import com.kaisar.xposed.godmode.injection.editor.EditorInteractionMode;
+import com.kaisar.xposed.godmode.engine.EditorInteractionMode;
 import com.kaisar.xposed.godmode.injection.editor.gesture.BlockHandler;
 import com.kaisar.xposed.godmode.injection.editor.gesture.PreviewHandler;
 import android.app.Activity;
