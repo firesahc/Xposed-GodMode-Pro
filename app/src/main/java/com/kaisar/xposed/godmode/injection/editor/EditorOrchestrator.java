@@ -123,7 +123,14 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     private boolean mMultiPointLock;
     private boolean mDragging;
     private boolean mLongClick;
-    private final Handler mHandler = new Handler(Looper.getMainLooper());
+    private Handler mHandler;
+
+    private Handler getHandler() {
+        if (mHandler == null) {
+            mHandler = new Handler(Looper.getMainLooper());
+        }
+        return mHandler;
+    }
     private boolean mHasBlockEvent;
 
     private RemoveGestureHandler.RemoveState mRemoveState;
@@ -538,14 +545,14 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
         }
         mDragging = draggingRef[0];
         mMultiPointLock = true;
-        mHandler.postDelayed(() -> onLongPress(v, isModifyMode), LONG_PRESS_TIMEOUT);
+        getHandler().postDelayed(() -> onLongPress(v, isModifyMode), LONG_PRESS_TIMEOUT);
         return true;
     }
 
     private void endTouch(View v) {
         ViewParent parent = v.getParent();
         if (parent != null) parent.requestDisallowInterceptTouchEvent(false);
-        mHandler.removeCallbacksAndMessages(null);
+        getHandler().removeCallbacksAndMessages(null);
         mLongClick = false;
         mHasBlockEvent = false;
         mMultiPointLock = false;
@@ -576,7 +583,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
         Logger.d(TAG, "[EditorOrchestrator] edit mode: " + enable);
         if (!enable) {
             mInteractionMode = EditorInteractionMode.INITIAL;
-            mHandler.removeCallbacksAndMessages(null);
+            getHandler().removeCallbacksAndMessages(null);
             mLongClick = false;
             mMultiPointLock = false;
             mDragging = false;
