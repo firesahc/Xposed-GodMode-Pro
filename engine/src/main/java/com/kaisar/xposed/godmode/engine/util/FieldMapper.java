@@ -16,7 +16,13 @@ import java.util.concurrent.ConcurrentHashMap;
  * engine 模块 RuleMatchSpec（纯 POJO）之间的字段级双向转换。
  * <p>
  * 内部使用 ConcurrentHashMap 缓存 Class → Field[] 映射，避免重复反射开销。
+ *
+ * @deprecated 请使用 {@link RuleMapper} 替代。
+ * FieldMapper 基于反射，无法在编译期检测字段变更。
+ * RuleMapper 是显式类型安全的转换器，每行 {@code dst.field = src.getField()} 都是编译期检查。
+ * 此类将在下个大版本移除。
  */
+@Deprecated
 public final class FieldMapper {
 
     private static final String TAG = "FieldMapper";

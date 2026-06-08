@@ -10,7 +10,7 @@ import com.kaisar.xposed.godmode.engine.applier.ModifyApplier;
 import com.kaisar.xposed.godmode.engine.applier.RemoveApplier;
 import com.kaisar.xposed.godmode.engine.applier.RuleApplier;
 import com.kaisar.xposed.godmode.engine.matcher.ViewFinder;
-import com.kaisar.xposed.godmode.engine.util.FieldMapper;
+import com.kaisar.xposed.godmode.engine.util.RuleMapper;
 import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
 import com.kaisar.xposed.godmode.injection.util.Logger;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
@@ -83,12 +83,9 @@ public final class ViewController {
         if (mModifyApplier != null) mModifyApplier.clearCache();
     }
 
-    /** 将 app 模块的 RuleRecord 转换为 engine 的 RuleRecord。 */
+    /** 将 app 模块的 RuleRecord 转换为 engine 的 RuleMatchSpec。 */
     private static com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec toEngineRule(RuleRecord appRule) {
-        com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec engineRule =
-                new com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec();
-        FieldMapper.copyFields(appRule, engineRule);
-        return engineRule;
+        return RuleMapper.toEngine(appRule);
     }
 
     /** 批量应用规则。 */

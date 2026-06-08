@@ -11,7 +11,7 @@ import android.widget.TextView;
 
 import com.kaisar.xposed.godmode.BuildConfig;
 import com.kaisar.xposed.godmode.engine.matcher.ViewFinder;
-import com.kaisar.xposed.godmode.engine.util.FieldMapper;
+import com.kaisar.xposed.godmode.engine.util.RuleMapper;
 import com.kaisar.xposed.godmode.injection.GodModeInjector;
 import com.kaisar.xposed.godmode.injection.util.ViewUtils;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
@@ -126,12 +126,9 @@ public final class RuleRecordFactory {
     // 以下方法从 ViewHelper 内联迁移（ViewHelper @Deprecated 即将退役）
     // =========================================================================
 
-    /** 将 app 模块 RuleRecord 转换为 engine 模块 RuleRecord */
+    /** 将 app 模块 RuleRecord 转换为 engine 模块 RuleMatchSpec */
     private static com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec toEngine(RuleRecord appRule) {
-        com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec engineRule =
-                new com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec();
-        FieldMapper.copyFields(appRule, engineRule);
-        return engineRule;
+        return RuleMapper.toEngine(appRule);
     }
 
     /** 填充可重复规则信息（itemPath、itemRootClass、parentClass） */
@@ -139,10 +136,10 @@ public final class RuleRecordFactory {
         boolean isInfoFlowMode = GodModeInjector.getKeyInterceptor().isInfoFlowMode();
         com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec engineRule = toEngine(rule);
         ViewFinder.populateRepeatableInfo(v, engineRule, isInfoFlowMode);
-        if (engineRule.repeatable) {
-            rule.itemPath = engineRule.itemPath;
-            rule.itemRootClass = engineRule.itemRootClass;
-            rule.parentClass = engineRule.parentClass;
+        if (engineRule.isRepeatable()) {
+            rule.itemPath = engineRule.getItemPath();
+            rule.itemRootClass = engineRule.getItemRootClass();
+            rule.parentClass = engineRule.getParentClass();
             rule.repeatable = true;
         }
     }
