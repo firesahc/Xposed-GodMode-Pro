@@ -10,7 +10,7 @@ import android.view.View;
 import android.view.ViewGroup;
 
 import com.kaisar.xposed.godmode.injection.util.Logger;
-import com.kaisar.xposed.godmode.injection.util.Property;
+import com.kaisar.xposed.godmode.engine.util.Property;
 
 import java.util.Optional;
 
