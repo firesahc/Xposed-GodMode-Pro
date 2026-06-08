@@ -169,7 +169,7 @@ public final class KeyInterceptor extends XC_MethodHook
         mCurrentActivityRef = new WeakReference<>(a);
     }
 
-    public void setdisplay(Boolean display) {
+    public void setDisplay(Boolean display) {
         Activity act = mCurrentActivityRef.get();
         if (act == null) return;
         if (display == null) return;
@@ -395,7 +395,7 @@ public final class KeyInterceptor extends XC_MethodHook
         if (!enable) {
             mInteractionMode = EditorInteractionMode.INITIAL;
             // dismissNodeSelectPanel 不再在此调用——notifyEditModeChanged(false)
-            // 已通过 setdisplay(false) 执行完整的 dismiss 流程，此处是冗余路径。
+            // 已通过 setDisplay(false) 执行完整的 dismiss 流程，此处是冗余路径。
         }
     }
 }

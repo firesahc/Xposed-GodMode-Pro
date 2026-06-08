@@ -16,7 +16,6 @@ import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
 import com.kaisar.xposed.godmode.injection.editor.overlay.ParticleView;
 import com.kaisar.xposed.godmode.injection.util.Logger;
 import com.kaisar.xposed.godmode.injection.util.TaskExecutor;
-import com.kaisar.xposed.godmode.engine.pool.ThreadPools;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 
 /**

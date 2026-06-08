@@ -145,6 +145,10 @@ public final class CompositeMatcher implements IMatcher, MatchStrategy {
         }
     }
 
+    // ===== 匹配评分常量 =====
+    private static final int SCORE_CLASS = 30;
+    private static final int SCORE_PARENT = 10;
+
     // ---- MatchStrategy 实现 — 聚合所有子策略得分 ----
 
     @Override
@@ -152,13 +156,13 @@ public final class CompositeMatcher implements IMatcher, MatchStrategy {
         int total = 0;
         // 视图类名匹配 — 最基础条件
         if (view.getClass().getName().equals(rule.viewClass)) {
-            total += 30;
+            total += SCORE_CLASS;
         }
         // 父视图类名匹配
         if (rule.parentClass != null) {
             ViewParent parent = view.getParent();
             if (parent != null && parent.getClass().getName().equals(rule.parentClass)) {
-                total += 10;
+                total += SCORE_PARENT;
             }
         }
         // 收集各子策略得分

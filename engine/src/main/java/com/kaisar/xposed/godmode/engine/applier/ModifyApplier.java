@@ -129,15 +129,6 @@ public final class ModifyApplier implements RuleApplier {
         mBitmapCache.clear();
     }
 
-    /** 清除与指定规则相关的已应用视图记录 */
-    public void clearForRule(RuleMatchSpec rule) {
-        int hash = rule.hashCode();
-        synchronized (mAppliedViews) {
-            mAppliedViews.entrySet().removeIf(e ->
-                    e.getValue() != null && e.getValue() == hash);
-        }
-    }
-
     // ---- 图片加载 ----
 
     private void loadAndSetImage(ImageView targetView, String imagePath) {

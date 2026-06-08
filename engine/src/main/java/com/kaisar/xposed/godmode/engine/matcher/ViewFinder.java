@@ -1,6 +1,5 @@
 package com.kaisar.xposed.godmode.engine.matcher;
 
-import android.app.Activity; // kept for @Deprecated backward-compat methods only
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.res.Resources;
@@ -124,18 +123,6 @@ public final class ViewFinder {
     }
 
     /**
-     * 根据规则匹配视图 — 优先使用 {@link CompositeMatcher}，失败时回退到传统匹配。
-     *
-     * @deprecated 使用 {@link #findViewBestMatch(ViewGroup, RuleMatchSpec, PackageManager, String)}
-     */
-    @Deprecated
-    public static View findViewBestMatch(Activity activity, RuleMatchSpec rule) {
-        if (activity == null || activity.getWindow() == null) return null;
-        return findViewBestMatch((ViewGroup) activity.getWindow().getDecorView(), rule,
-                activity.getPackageManager(), activity.getPackageName());
-    }
-
-    /**
      * 查找所有匹配的视图 — repeatable 规则优先搜索 RecyclerView。
      *
      * @param decorView   当前 Activity 的 DecorView
@@ -157,18 +144,6 @@ public final class ViewFinder {
             return list;
         }
         return Collections.emptyList();
-    }
-
-    /**
-     * 查找所有匹配的视图 — repeatable 规则优先搜索 RecyclerView。
-     *
-     * @deprecated 使用 {@link #findAllViewsBestMatch(ViewGroup, RuleMatchSpec, PackageManager, String)}
-     */
-    @Deprecated
-    public static List<View> findAllViewsBestMatch(Activity activity, RuleMatchSpec rule) {
-        if (activity == null || activity.getWindow() == null) return Collections.emptyList();
-        return findAllViewsBestMatch((ViewGroup) activity.getWindow().getDecorView(), rule,
-                activity.getPackageManager(), activity.getPackageName());
     }
 
     /**
@@ -316,17 +291,6 @@ public final class ViewFinder {
         return results;
     }
 
-    /**
-     * 在 Activity 中按 RecyclerView 匹配 repeatable 规则。
-     *
-     * @deprecated 使用 {@link #findViewsInRecyclers(ViewGroup, RuleMatchSpec)}
-     */
-    @Deprecated
-    public static List<View> findViewsInRecyclers(Activity activity, RuleMatchSpec rule) {
-        if (activity == null || activity.getWindow() == null) return Collections.emptyList();
-        return findViewsInRecyclers((ViewGroup) activity.getWindow().getDecorView(), rule);
-    }
-
     private static void collectRecyclerViewMatches(ViewGroup parent, RuleMatchSpec rule,
             List<View> results, List<ViewGroup> foundRecyclers) {
         if (results.size() >= MAX_REPEATABLE_RESULTS) return;
@@ -429,34 +393,42 @@ public final class ViewFinder {
         return null;
     }
 
+    // ===== 匹配评分常量 =====
+    private static final int MATCH_CLASS = 30;
+    private static final int MATCH_RESOURCE = 25;
+    private static final int MATCH_TEXT = 20;
+    private static final int MATCH_DESC = 15;
+    private static final int MATCH_PARENT = 10;
+    private static final int MATCH_THRESHOLD = 80;
+
     private static int computeMatchScore(View view, RuleMatchSpec rule) {
         int score = 0;
-        if (view.getClass().getName().equals(rule.viewClass)) score += 30;
+        if (view.getClass().getName().equals(rule.viewClass)) score += MATCH_CLASS;
         if (!TextUtils.isEmpty(rule.resourceName)) {
             try {
                 String resName = view.getResources().getResourceName(view.getId());
-                if (TextUtils.equals(resName, rule.resourceName)) score += 25;
+                if (TextUtils.equals(resName, rule.resourceName)) score += MATCH_RESOURCE;
             } catch (Resources.NotFoundException e) {
                 // view 无 resource name — score 保持不增加
             }
         }
         if (!TextUtils.isEmpty(rule.text) && view instanceof TextView) {
             CharSequence t = ((TextView) view).getText();
-            if (t != null && TextUtils.equals(t.toString(), rule.text)) score += 20;
+            if (t != null && TextUtils.equals(t.toString(), rule.text)) score += MATCH_TEXT;
         }
         if (!TextUtils.isEmpty(rule.description)) {
             CharSequence desc = view.getContentDescription();
-            if (desc != null && TextUtils.equals(desc.toString(), rule.description)) score += 15;
+            if (desc != null && TextUtils.equals(desc.toString(), rule.description)) score += MATCH_DESC;
         }
         if (!TextUtils.isEmpty(rule.parentClass)) {
             ViewParent parent = view.getParent();
-            if (parent != null && parent.getClass().getName().equals(rule.parentClass)) score += 10;
+            if (parent != null && parent.getClass().getName().equals(rule.parentClass)) score += MATCH_PARENT;
         }
         return score;
     }
 
     private static boolean verifySingleElement(View view, RuleMatchSpec rule) {
-        return computeMatchScore(view, rule) >= 80;
+        return computeMatchScore(view, rule) >= MATCH_THRESHOLD;
     }
 
     // =========================================================================

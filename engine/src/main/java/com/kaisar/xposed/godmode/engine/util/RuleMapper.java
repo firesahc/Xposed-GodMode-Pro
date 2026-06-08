@@ -6,7 +6,7 @@ import com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec;
 import androidx.annotation.NonNull;
 
 /**
- * 类型安全的字段转换器 — 替代 {@link FieldMapper 反射拷贝}。
+ * 类型安全的字段转换器 — 替代废弃的 FieldMapper 反射拷贝方案。
  * <p>
  * 编译期安全：每行 {@code dst.field = src.getField()} 都是编译器检查——
  * 字段名错或 getter 不存在立刻报错。
@@ -14,7 +14,6 @@ import androidx.annotation.NonNull;
  * 新增字段时，{@link RuleFields} 接口新增 getter → 此类的 toEngine() 编译报错 → 强制开发者更新。
  * <p>
  * @see RuleFields
- * @see FieldMapper
  */
 public final class RuleMapper {
 

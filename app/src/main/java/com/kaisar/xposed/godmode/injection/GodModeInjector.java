@@ -2,9 +2,7 @@ package com.kaisar.xposed.godmode.injection;
 
 import static com.kaisar.xposed.godmode.GodModeApplication.TAG;
 
-import android.annotation.SuppressLint;
 import android.app.Activity;
-import android.content.res.AssetManager;
 import android.content.res.Resources;
 import android.content.res.XModuleResources;
 import android.os.Binder;
@@ -29,9 +27,6 @@ import com.kaisar.xposed.godmode.engine.util.Property;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.service.GodModeManagerService;
 import com.kaisar.xservicemanager.XServiceManager;
-
-import java.io.File;
-import java.lang.reflect.Method;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.IXposedHookZygoteInit;
@@ -143,7 +138,7 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
                 ModuleResources.injectInto(activity.getResources());
                 if (switchProp.get()) {
                     // post 到 DecorView 确保 setContentView 已完成、视图树完整后再显示面板
-                    activity.getWindow().getDecorView().post(() -> sKeyInterceptor.setdisplay(true));
+                    activity.getWindow().getDecorView().post(() -> sKeyInterceptor.setDisplay(true));
                 }
                 super.afterHookedMethod(param);
             }
@@ -200,7 +195,7 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
             switchProp.set(enable);                        // 旧路径
             sEventBus.post(new EditModeEvent(enable));     // 新路径
         }
-        sKeyInterceptor.setdisplay(enable);
+        sKeyInterceptor.setDisplay(enable);
     }
 
     public static void notifyViewRulesChanged(ActRules actRules) {

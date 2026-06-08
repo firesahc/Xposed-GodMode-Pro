@@ -192,9 +192,7 @@ public final class LifecycleObserver extends XC_MethodHook {
                 Activity activity = Preconditions.checkNotNull(activityReference.get());
                 List<RuleRecord> rules = mActRules.get(activity.getComponentName().getClassName());
                 if (rules != null && !rules.isEmpty()) {
-                    if (!rules.isEmpty()) {
-                        ViewController.getDefault().applyRuleBatch(activity, rules);
-                    }
+                    ViewController.getDefault().applyRuleBatch(activity, rules);
                 }
             } catch (Exception e) {
                 Logger.w(TAG, "[Lifecycle] OnLayoutChange: applyRuleIfMatchCondition failed: " + e.getMessage());
