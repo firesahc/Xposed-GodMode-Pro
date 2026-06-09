@@ -20,7 +20,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.kaisar.xposed.godmode.R;
-import com.kaisar.xposed.godmode.engine.matcher.ViewFinder;
+import com.kaisar.xposed.godmode.engine.matcher.CompositeMatcher;
 import com.kaisar.xposed.godmode.engine.matcher.ViewTraversal;
 import com.kaisar.xposed.godmode.engine.rule.RuleMapper;
 import com.kaisar.xposed.godmode.engine.util.Logger;
@@ -451,9 +451,9 @@ public class PropertyEditorPanel {
                 if (rule.repeatable) {
                     com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec engineRule =
                             RuleMapper.toEngine(rule);
-                    view = ViewFinder.findViewBestMatch(
-                            (ViewGroup) activity.getWindow().getDecorView(), engineRule,
-                            activity.getPackageManager(), activity.getPackageName());
+                    List<View> matchedViews = new CompositeMatcher().matchAllViews(
+                            activity.getWindow().getDecorView(), engineRule.getMatchSpec());
+                    view = (matchedViews != null && !matchedViews.isEmpty()) ? matchedViews.get(0) : null;
                 } else {
                     view = activity != null && activity.getWindow() != null && rule.depth != null
                             ? ViewTraversal.findViewByDepth(activity.getWindow().getDecorView(), rule.depth)

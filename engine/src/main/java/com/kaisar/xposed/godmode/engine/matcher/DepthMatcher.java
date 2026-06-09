@@ -3,7 +3,7 @@ package com.kaisar.xposed.godmode.engine.matcher;
 import android.text.TextUtils;
 import android.view.View;
 
-import com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec;
+import com.kaisar.xposed.godmode.engine.rule.MatchSpec;
 
 /**
  * 按视图树深度路径匹配（depth[] 数组）。
@@ -17,13 +17,11 @@ final class DepthMatcher implements MatchStrategy {
     }
 
     @Override
-    public int computeScore(View view, RuleMatchSpec rule) {
-        if (rule.depth == null || rule.depth.length == 0) return 0;
-        // depth 匹配已在 CompositeMatcher 层面通过 findViewByDepth 完成定位，
-        // 此处仅做视图类名校验和严格模式的 resourceName 校验
+    public int computeScore(View view, MatchSpec spec) {
+        if (spec.depth == null || spec.depth.length == 0) return 0;
         int score = 60; // depth 路径匹配的基础分
-        if (!TextUtils.isEmpty(rule.viewClass)
-                && view.getClass().getName().equals(rule.viewClass)) {
+        if (!TextUtils.isEmpty(spec.viewClass)
+                && view.getClass().getName().equals(spec.viewClass)) {
             score += 30;
         }
         return score;

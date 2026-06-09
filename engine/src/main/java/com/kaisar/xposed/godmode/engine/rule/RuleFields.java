@@ -1,5 +1,7 @@
 package com.kaisar.xposed.godmode.engine.rule;
 
+import com.kaisar.xposed.godmode.engine.matcher.MatchMode;
+
 /**
  * 字段契约接口 — 定义 RuleRecord/RuleMatchSpec 的全部字段的 getter。
  * <p>
@@ -35,6 +37,13 @@ public interface RuleFields {
     boolean isRepeatable();
     String getText();
     String getDescription();
+
+    // ===== 匹配配置 =====
+    /** 匹配模式（精确/包含/前缀/后缀/正则），null 等价于 EXACT */
+    MatchMode getMatchMode();
+    /** 匹配阈值（0=使用系统默认宽松阈值），越大越严格 */
+    int getMatchThreshold();
+
     int getVisibility();
     long getTimestamp();
 

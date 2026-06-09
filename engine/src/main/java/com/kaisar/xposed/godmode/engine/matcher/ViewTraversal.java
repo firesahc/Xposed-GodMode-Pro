@@ -8,6 +8,7 @@ import com.kaisar.xposed.godmode.engine.util.GmConstants;
 
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -122,5 +123,61 @@ public final class ViewTraversal {
             return findTopParentView((View) parent);
         }
         return view;
+    }
+
+    /**
+     * 构建视图在 RecyclerView 内的 item 路径。
+     * <p>
+     * 路径格式：["index:ClassName", ...]，从 RecyclerView 的直接子元素到目标视图。
+     *
+     * @param v            目标视图
+     * @param recyclerView RecyclerView 祖先
+     * @return item 路径数组（从 RecyclerView 子元素到目标视图）
+     */
+    public static String[] getItemPath(View v, ViewGroup recyclerView) {
+        ArrayList<String> path = new ArrayList<>();
+        View current = v;
+        ViewParent parent = v.getParent();
+        while (parent != recyclerView && parent instanceof ViewGroup) {
+            ViewGroup vg = (ViewGroup) parent;
+            int idx = vg.indexOfChild(current);
+            path.add(idx + ":" + current.getClass().getName());
+            current = (View) parent;
+            parent = parent.getParent();
+        }
+        Collections.reverse(path);
+        return path.toArray(new String[0]);
+    }
+
+    /**
+     * 按 item 路径查找视图。
+     *
+     * @param root  起始视图（RecyclerView 的直接子元素）
+     * @param path  item 路径数组
+     * @param index 当前路径索引（起始为 0）
+     * @return 路径末端的视图，查找失败返回 null
+     */
+    public static View findViewByItemPath(View root, String[] path, int index) {
+        if (index >= path.length) return root;
+        String entry = path[index];
+        int colonPos = entry.indexOf(':');
+        if (colonPos < 0) return null;
+        int childIdx;
+        try {
+            childIdx = Integer.parseInt(entry.substring(0, colonPos));
+        } catch (NumberFormatException e) {
+            return null;
+        }
+        String className = entry.substring(colonPos + 1);
+        if (root instanceof ViewGroup) {
+            ViewGroup vg = (ViewGroup) root;
+            if (childIdx < vg.getChildCount()) {
+                View child = vg.getChildAt(childIdx);
+                if (child != null && child.getClass().getName().equals(className)) {
+                    return findViewByItemPath(child, path, index + 1);
+                }
+            }
+        }
+        return null;
     }
 }

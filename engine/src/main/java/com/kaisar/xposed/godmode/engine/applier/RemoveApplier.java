@@ -5,27 +5,32 @@ import android.util.SparseArray;
 import android.view.View;
 import android.view.ViewGroup;
 
+import com.kaisar.xposed.godmode.engine.rule.ModifySpec;
 import com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec;
 
 import java.lang.ref.WeakReference;
 
 /**
  * 移除规则应用器 — 将视图设置为 GONE/INVISIBLE 或恢复原始状态。
- * 从 ViewController 提取的核心逻辑，通过 IMatcher 构造注入实现匹配解耦。
+ * <p>
+ * 新代码使用 {@link #apply(View, ModifySpec)} 和 {@link #revoke(View, ModifySpec)}。
+ * 旧版 {@link #apply(View, RuleMatchSpec)} 已有默认委托。
  */
 public final class RemoveApplier implements RuleApplier {
 
     private final SparseArray<Pair<WeakReference<View>, ViewProperty>> mBlockedViewCache
             = new SparseArray<>();
 
+    // ===== 新 API（ModifySpec） =====
+
     @Override
-    public boolean apply(View view, RuleMatchSpec rule) {
-        if (view == null || rule == null) return false;
-        int cacheKey = rule.isRepeatable() ? identityKey(rule) : rule.hashCode();
+    public boolean apply(View view, ModifySpec spec) {
+        if (view == null || spec == null) return false;
+        int cacheKey = spec.isRemoveRule() ? identityKey(spec) : spec.hashCode();
         Pair<WeakReference<View>, ViewProperty> viewInfo = mBlockedViewCache.get(cacheKey);
         View blockedView = viewInfo != null ? viewInfo.first.get() : null;
-        if (blockedView == view && view.getVisibility() == rule.visibility) {
-            return false; // 已经应用
+        if (blockedView == view && view.getVisibility() == spec.visibility) {
+            return false;
         }
         ViewProperty viewProperty = blockedView == view
                 ? viewInfo.second : ViewProperty.create(view);
@@ -33,7 +38,7 @@ public final class RemoveApplier implements RuleApplier {
         view.setClickable(false);
         ViewGroup.LayoutParams lp = view.getLayoutParams();
         if (lp != null) {
-            switch (rule.visibility) {
+            switch (spec.visibility) {
                 case View.GONE:
                     lp.width = 0;
                     lp.height = 0;
@@ -45,15 +50,16 @@ public final class RemoveApplier implements RuleApplier {
             }
             view.requestLayout();
         }
-        ViewCompat.setVisibility(view, rule.visibility);
+        ViewCompat.setVisibility(view, spec.visibility);
         mBlockedViewCache.put(cacheKey, Pair.create(
                 new WeakReference<>(view), viewProperty));
         return true;
     }
 
     @Override
-    public boolean revoke(View view, RuleMatchSpec rule) {
-        int cacheKey = rule.isRepeatable() ? identityKey(rule) : rule.hashCode();
+    public boolean revoke(View view, ModifySpec spec) {
+        if (view == null || spec == null) return false;
+        int cacheKey = spec.isRemoveRule() ? identityKey(spec) : spec.hashCode();
         Pair<WeakReference<View>, ViewProperty> viewInfo = mBlockedViewCache.get(cacheKey);
         if (viewInfo != null && viewInfo.first.get() == view) {
             ViewProperty vp = viewInfo.second;
@@ -69,9 +75,8 @@ public final class RemoveApplier implements RuleApplier {
             mBlockedViewCache.delete(cacheKey);
             return true;
         }
-        // 缓存缺失时的降级恢复
         view.setAlpha(1f);
-        ViewCompat.setVisibility(view, rule.visibility);
+        ViewCompat.setVisibility(view, spec.visibility);
         return false;
     }
 
@@ -80,12 +85,8 @@ public final class RemoveApplier implements RuleApplier {
         mBlockedViewCache.clear();
     }
 
-    private static int identityKey(RuleMatchSpec rule) {
-        int result = rule.activityClass != null ? rule.activityClass.hashCode() : 0;
-        result = 31 * result + (rule.viewClass != null ? rule.viewClass.hashCode() : 0);
-        result = 31 * result + java.util.Objects.hashCode(rule.resourceName);
-        result = 31 * result + java.util.Objects.hashCode(rule.text);
-        return result;
+    private static int identityKey(ModifySpec spec) {
+        return System.identityHashCode(spec);
     }
 
     // ---- 内部 ViewProperty ----
