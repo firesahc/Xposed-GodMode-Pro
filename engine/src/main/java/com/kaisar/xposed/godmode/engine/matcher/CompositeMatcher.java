@@ -5,7 +5,6 @@ import android.view.ViewGroup;
 import android.view.ViewParent;
 
 import com.kaisar.xposed.godmode.engine.rule.MatchSpec;
-import com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec;
 import com.kaisar.xposed.godmode.engine.util.GmConstants;
 
 import java.util.ArrayList;
@@ -21,7 +20,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * 支持运行时注册/注销策略（注册表模式），线程安全。
  * <p>
  * 默认阈值：宽松模式 30，严格模式 80。
- * 规则可通过 {@link RuleMatchSpec#matchThreshold} 覆盖默认阈值。
+ * 规则可通过 {@link MatchSpec#matchThreshold} 覆盖默认阈值。
  */
 public final class CompositeMatcher implements IMatcher, MatchStrategy {
 
@@ -208,19 +207,7 @@ public final class CompositeMatcher implements IMatcher, MatchStrategy {
         return results;
     }
 
-    // ---- IMatcher 实现（旧 API：RuleMatchSpec，委托给 MatchSpec 版本） ----
-
-    @Override
-    public View matchView(View root, RuleMatchSpec rule) {
-        return matchView(root, rule != null ? rule.getMatchSpec() : null);
-    }
-
-    @Override
-    public List<View> matchAllViews(View root, RuleMatchSpec rule) {
-        return matchAllViews(root, rule != null ? rule.getMatchSpec() : null);
-    }
-
-    // ---- 内部辅助方法（MatchSpec 版本） ----
+    // ---- 内部辅助方法 ----
 
     /**
      * 递归遍历视图树，收集 RecyclerView 中按 itemPath 匹配的视图。
@@ -261,32 +248,16 @@ public final class CompositeMatcher implements IMatcher, MatchStrategy {
         }
     }
 
-    // ---- 旧版辅助方法（RuleMatchSpec 版本，委托 MatchSpec） ----
-
-    /** @deprecated */
-    private static void collectRecyclerMatches(View view, RuleMatchSpec rule, List<View> results) {
-        collectRecyclerMatches(view, rule != null ? rule.getMatchSpec() : null, results);
-    }
-
-    /** @deprecated */
-    private void collectMatches(View view, RuleMatchSpec rule, List<View> results, int threshold) {
-        collectMatches(view, rule != null ? rule.getMatchSpec() : null, results, threshold);
-    }
-
     // ===== 匹配评分常量 =====
     private static final int SCORE_CLASS = 30;
     private static final int SCORE_PARENT = 10;
 
     // ---- MatchStrategy 实现 — 聚合所有子策略评分 ----
 
-    @Override
-    public int computeScore(View view, RuleMatchSpec rule) {
-        return computeScore(view, rule != null ? rule.getMatchSpec() : null);
-    }
-
     /**
-     * MatchSpec 版本的评分方法 — 聚合 viewClass/parentClass 匹配及各子策略得分。
+     * 聚合 viewClass/parentClass 匹配及各子策略得分。
      */
+    @Override
     public int computeScore(View view, MatchSpec spec) {
         if (view == null || spec == null) return 0;
         int total = 0;
