@@ -106,7 +106,7 @@ public final class SettingsFragment extends PreferenceFragmentCompat implements
             saveAllRules.setOnPreferenceClickListener(this);
         }
 
-        // Group C: Toolbar preferences 閳?read from local SharedPreferences (app process)
+        // Group C: Toolbar preferences — read from local SharedPreferences (app process)
         SharedPreferences toolbarPrefs = requireContext().getSharedPreferences(TOOLBAR_PREFS, Context.MODE_PRIVATE);
         Set<String> hiddenItems = loadHiddenItemsMigrate(toolbarPrefs);
 
@@ -140,7 +140,7 @@ public final class SettingsFragment extends PreferenceFragmentCompat implements
         }
 
         if (TextUtils.equals(key, getString(R.string.settings_save_all_rules))) {
-            // Group B: Save all rules 閳?collect packages with rules, then open SAF directory picker
+            // Group B: Save all rules — collect packages with rules, then open SAF directory picker
             final AppRules appRules = mSharedViewModel.appRules.getValue();
             if (appRules == null || appRules.isEmpty()) {
                 Snackbar.make(requireView(), R.string.snack_bar_msg_backup_rule_fail, Snackbar.LENGTH_SHORT).show();
@@ -220,7 +220,7 @@ public final class SettingsFragment extends PreferenceFragmentCompat implements
         });
     }
 
-    // Group B: Handle save-all directory selection 閳?save each package as an individual file
+    // Group B: Handle save-all directory selection — save each package as an individual file
     private void onSaveAllDirectorySelected(Uri treeUri) {
         if (treeUri == null || !isAdded()) return;
         if (mBackupQueue == null || mBackupQueue.isEmpty()) {
@@ -235,7 +235,7 @@ public final class SettingsFragment extends PreferenceFragmentCompat implements
                     treeUri, Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
         } catch (Exception e) {
             Logger.w(TAG, "[Settings] saveAllRules: take permission failed", e);
-            // Continue anyway 閳?some SAF providers don't support persistable permissions
+            // Continue anyway — some SAF providers don't support persistable permissions
         }
 
         mBackupIndex = 0;
@@ -329,7 +329,7 @@ public final class SettingsFragment extends PreferenceFragmentCompat implements
                 + " (" + mBackupIndex + "/" + mBackupQueue.size() + ")";
     }
 
-    // Group C: Persist toolbar preference 閳?stored as comma-separated string
+    // Group C: Persist toolbar preference — stored as comma-separated string
     private void saveToolbarPreference(String key, boolean enabled) {
         SharedPreferences sp = requireContext().getSharedPreferences(TOOLBAR_PREFS, Context.MODE_PRIVATE);
         Set<String> hidden = loadHiddenItemsMigrate(sp);
@@ -345,7 +345,7 @@ public final class SettingsFragment extends PreferenceFragmentCompat implements
     }
 
     /**
-     * 鐠囪褰囧銉ュ徔閺嶅繘娈ｉ挊蹇涖€嶉敍灞藉悑鐎硅妫悧?StringSet 閺嶇厧绱￠獮鎯板殰閸斻劏绺肩粔璁宠礋闁褰块崚鍡涙鐎涙顑佹稉灞傗偓?
+     * 从 SharedPreferences 加载隐藏项目列表，兼容旧版 StringSet 格式。
      */
     private static Set<String> loadHiddenItemsMigrate(SharedPreferences sp) {
         Map<String, ?> all = sp.getAll();

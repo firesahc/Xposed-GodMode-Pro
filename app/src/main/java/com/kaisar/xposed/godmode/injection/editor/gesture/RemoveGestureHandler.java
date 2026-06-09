@@ -23,8 +23,8 @@ import com.kaisar.xposed.godmode.injection.util.ViewUtils;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 
 /**
- * 缂佸顭峰▍搴ㄥ箥鐎ｎ亜鈼㈠璺哄閹﹪宕?闁?闂傗偓閹稿骸鐦婚柟閿嬬墬鐎氳法绮旀繝姘彑 + 缂侇喗甯掗悺娆撴偉閸℃瑥浠柛鏂诲妿閺?+ IPC 闁归晲妞掔粻娆撳礌閺嶃儮鍋?
- * 濞?EventHandlerHook 闁圭粯鍔曡ぐ鍥儍閸曨厜鈺呮⒔閵堝枺浣割嚕韫囧孩鍞夊ù婊勫浮閳ь剚妲掔欢顐﹀Υ?
+ * 移除手势处理 — 长按拖动移除视图：粒子动画 + 取消区域 + IPC 持久化。
+ * 由 EventHandlerHook 提取的移除模式交互逻辑。
  */
 public final class RemoveGestureHandler {
 
@@ -33,7 +33,7 @@ public final class RemoveGestureHandler {
 
     private RemoveGestureHandler() {}
 
-    /** 闁告帗绻傞～鎰板礌閺嶎倣鈺呮⒔閵堝棗鐝涢柟閿嬫灮缁变即宕楃€ｎ喗鐣烽悷娆忔濞存ɑ绋夊ú顏冪磿缂傚啠鏅槐婵嬪及閸撗佷粵闁告瑦鐗楃粔鐑藉礌閸濆嫮鍘?*/
+    /** 开始移除拖拽：创建遮罩、取消区域、应用隐藏规则并截图 */
     public static RemoveState startDrag(View v) {
         RemoveState state = new RemoveState();
         try {
@@ -61,7 +61,7 @@ public final class RemoveGestureHandler {
         return state;
     }
 
-    /** 閻庣懓鏈崹姘辩矓婵犳碍鐝熼柟閿嬬墬鐎氬潡鏁嶅顒€鍤掗柛娆愮墬缁夌兘宕氬▎鎺旂闁告鍣︾槐婵嗩啅閼碱兘鈧鎷嬮妶鍛仧缂侇喗甯掗悺娆撳礉閵娧勬毎 闁?IPC 闁归晲妞掔粻娆撳礌?*/
+    /** 完成移除拖拽：根据是否拖入取消区域决定撤销操作或执行粒子动画 + IPC 持久化 */
     public static void finishDrag(View v, RemoveState state) {
         Activity activity = ViewUtils.getAttachedActivityFromView(v);
         if (activity == null) return;
@@ -69,13 +69,13 @@ public final class RemoveGestureHandler {
         if (state.cancelView != null) state.cancelView.detachFromContainer();
 
         if (state.maskView != null && state.maskView.isMarked()) {
-            // 鐎瑰憡褰冭ぐ鍥р槈?
+            // 已拖入取消区域：撤销操作
             state.maskView.detachFromContainer();
             state.viewRule.visibility = View.VISIBLE;
             ViewController.getDefault().revokeRule(v, state.viewRule);
             CommonUtils.recycleNullableBitmap(state.snapshot);
         } else {
-            // 鐎规瓕灏欓垾妯兼媼閵堝繒绐楃紒顔藉笒閻℃瑩鎮ラ崱娆忎划 闁?IPC 闁归晲妞掔粻娆撳礌?
+            // 未拖入取消区域：执行粒子动画并保存规则到 IPC
             ViewGroup container = (ViewGroup) activity.getWindow().getDecorView();
             ParticleView particleView = new ParticleView(activity);
             particleView.setDuration(1000);
@@ -107,7 +107,7 @@ public final class RemoveGestureHandler {
         }
     }
 
-    /** 婵炴挸鎳愰幃濠勭矓婵犳碍鐝熼柣妯垮煐閳?*/
+    /** 清除拖拽状态 */
     public static void clearState(RemoveState state) {
         if (state != null) {
             state.snapshot = null;
@@ -117,7 +117,7 @@ public final class RemoveGestureHandler {
         }
     }
 
-    /** 缂佸顭峰▍搴∥熼垾宕囩闁绘鍩栭埀顑跨椤旀劙宕?*/
+    /** 移除拖拽状态容器 */
     public static final class RemoveState {
         public Bitmap snapshot;
         public RuleRecord viewRule;

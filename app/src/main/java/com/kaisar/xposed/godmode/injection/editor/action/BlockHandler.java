@@ -18,40 +18,40 @@ import com.kaisar.xposed.godmode.injection.util.TaskExecutor;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 
 /**
- * 閻忕偛绻楅弬鈧柨娑樼墢浜涢梻鍕╁€х槐姘跺箼瀹ュ嫮绋婂璺哄閹﹪宕?闁?缂侇喗甯掗悺娆撳礉閵娧勬毎闁圭虎鍘介弬?+ IPC 閻熸瑥瀚崹顖炲礃濞嗗繐寮抽柕?
+ * 屏蔽管理器 — 执行视图屏蔽操作的完整流程：粒子动画 + IPC 持久化。
  * <p>
- * 濞?{@code KeyInterceptor.performBlock()} 闁圭粯鍔曡ぐ鍥晬瀹€鍐ф崓閻犳劧绲藉畷鐔哥▔閳ь剟鏁?
+ * 由 {@code KeyInterceptor.performBlock()} 触发执行，包含三个步骤：
  * <ul>
- *   <li>闁告帗绋戠紓?{@link ParticleView} 妤犵偠鍩栭幐閬嶅绩閸撗冪€婚柣鎰憸閻垹鈧稒鍔曟慨鈺呮偨?/li>
- *   <li>闁告柣鍔庨弫鎯ь嚕閳ь剚鎱ㄧ€ｎ偅顦ч幖瀛樻⒒閺併倗绮旀繝姘彑閻熸瑥瀚崹顖炴晬閸х捶link ViewController#applyRule}闁?/li>
- *   <li>闁告柣鍔庨弫鍓х磼閹惧瓨灏嗛柡鍐ㄥ缁垶宕氶幆閭︽綈闁告帗鐟╂导鍕磾閳瑰簱鍋撴笟鈧埀顒佷亢缁?IPC 闁告劖鐟ラ崣鍡欐喆閸曨偄鐏熼柡鍌氭矗濞?/li>
+ *   <li>创建 {@link ParticleView} 粒子破碎动画</li>
+ *   <li>执行 {@link ViewController#applyRule} 应用移除规则</li>
+ *   <li>通过 IPC 将规则和截图持久化到系统服务</li>
  * </ul>
  * <p>
- * 閻犲鍟伴弫銈夊棘绾懐顦伴悹鎰剁秬椤宕堕幑鎰闁告瑦鐗撻埀顑跨劍閻楀孩顨ョ仦鐑╁亾娴ｇ懓鐒婚柛銉﹀劤瀵兘妫冮姀鈩冪凡闁汇垻鍠庨幊锟犲川閵婏附鍩傞柛銉у仩閻ㄧ喖濡?
+ * 内部使用回调接口通知调用方动画结束或执行失败。
  */
 public final class BlockHandler {
 
     private BlockHandler() {}
 
     /**
-     * 閻忕偛绻楅弬鈧柟鍨С缂嶆梻鈧懓鏈崹?濠㈡儼绮剧憴锕傚炊閻愬墎娈堕柕?
+     * 屏蔽操作回调接口。
      */
     public interface OnBlockListener {
-        /** 缂侇喗甯掗悺娆撳礉閵娧勬毎缂備焦鎸诲顐﹀Υ娴ｇ瓔娼愰柛鎺撶懃閸熸捇宕楅妷銉ュ殥闁圭粯鍔掑锕傚触鎼淬倗娈堕柣顫妸閳?*/
+        /** 动画结束回调，返回被屏蔽视图的索引 */
         void onAnimationEnd(int blockedViewIndex);
-        /** 闁瑰灝绉崇紞鏃€娼婚崶鈹炬煠濞戞搩鍘艰ぐ鍌炴偨閻旈纾介悽顖涙偠閳?*/
+        /** 操作失败回调，返回错误信息 */
         void onError(String message);
     }
 
     /**
-     * 闁圭瑳鍡╂斀閻忕偛绻楅弬鈧柟鍨С缂嶆棃鏁嶅杈╃厛閻庢稒鍔曟慨鈺呮偨?+ IPC 闁告劖鐟ラ崣鍡涘Υ?
+     * 执行屏蔽操作：粒子动画 + IPC 持久化。
      *
-     * @param activity         鐟滅増鎸告晶?Activity
-     * @param view             閻炴凹鍋勯惈鍡涙嫊閻ｅ本鐣遍柣鈺婂枟閻栵絿鎲撮崱妤佺
-     * @param container        DecorView 閻庡湱鎳撳▍鎺楁晬閸︻櫑rticleView 闂傚嫬瀚鍐儎椤旂晫鍨奸柨?
-     * @param snapshot         閻忕偛绻楅弬鈧柛鎾崇Т閸忛亶宕欓埀顒勫箣椤忓嫭绂堥柨娑樼墕閸戯繝姊鹃幇顖涱棏 GM 閻熸洖妫涘ú濠勪沪閸屾碍鍊甸柟鎼簻瑜板洭鏁?
-     * @param blockedViewIndex 閻炴凹鍋勯惈鍡涙嫊閸婄噥娼掗柛銉﹀劤濠€顏堟嚍閸屾粌浠柛鎺擃殙閵嗗啯绋夐鐘崇暠缂佷究鍨圭槐?
-     * @param listener         闁搞儳鍋犻惃?
+     * @param activity         当前 Activity
+     * @param view             要屏蔽的目标视图
+     * @param container        DecorView 容器，用于添加 ParticleView
+     * @param snapshot         屏蔽前的截图快照，用于绘制屏蔽标记到 GM 存储
+     * @param blockedViewIndex 被屏蔽视图在列表中的索引，用于更新 UI
+     * @param listener         操作回调
      */
     public static void execute(final Activity activity, final View view,
             final ViewGroup container, final Bitmap snapshot,

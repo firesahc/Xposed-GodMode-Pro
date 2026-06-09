@@ -15,12 +15,12 @@ import java.util.HashMap;
 import java.util.List;
 
 /**
- * 鐟欏倸鐧傞懓鍛吀閻炲棗娅?閳?RemoteCallbackList 缁狅紕鎮?+ 濮濇槒顫囩€电喕鈧懏绔婚悶?+ 闁氨鐓￠獮鎸庢尡閵?
- * 娴?GodModeManagerService 閹绘劕褰囬惃鍕缁斿浜寸拹锝冣偓?
+ * 观察者管理 — RemoteCallbackList 注册 + 死观察者清理 + 事件通知。
+ * 由 GodModeManagerService 使用。
  */
 final class ObserverManager {
 
-    /** 濮濇槒顫囩€电喕鈧懏绔婚悶鍡涙？闂?(ms) */
+    /** 死观察者自动清理间隔(ms) */
     static final long CLEAN_INTERVAL = 60_000L;
 
     private final RemoteCallbackList<ObserverProxy> mRemoteCallbackList = new RemoteCallbackList<>();
@@ -30,9 +30,9 @@ final class ObserverManager {
     private final int mCleanObserversMsgCode;
 
     /**
-     * @param logger               閺冦儱绻旂拋鏉跨秿閸?
-     * @param handle               Handler 閻劋绨拫鍐ㄥ濞撳懐鎮婂☉鍫熶紖
-     * @param cleanObserversMsgCode Handler 濞戝牊浼呮禒锝囩垳閿涘瞼鏁辩拫鍐暏閺傞€涚炊閸忋儻绱欑憴锝堚偓锕€顕?GodModeManagerService 閻ㄥ嫪绶风挧鏍电礆
+     * @param logger               日志记录器
+     * @param handle               Handler 用于调度清理任务
+     * @param cleanObserversMsgCode Handler 消息代码（由 GodModeManagerService 定义）
      */
     ObserverManager(Logger logger, Handler handle, int cleanObserversMsgCode) {
         this.mLogger = logger;
@@ -40,10 +40,10 @@ final class ObserverManager {
         this.mCleanObserversMsgCode = cleanObserversMsgCode;
     }
 
-    // ---- 鐟欏倸鐧傞懓鍛暈閸?濞夈劑鏀?----
+    // ---- 观察者注册/注销 ----
 
     /**
-     * 濞夈劌鍞界憴鍌氱檪閼板懎鑻熺粩瀣祮閹恒劑鈧礁缍嬮崜宥囩椽鏉堟垶膩瀵繐鎷扮憴鍕灟閻樿埖鈧降鈧?
+     * 注册观察者，首次注册时立即通知当前状态。
      */
     void addObserver(String packageName, IObserver observer, boolean editModeEnabled,
             ActRules currentRules) {
@@ -60,7 +60,7 @@ final class ObserverManager {
             mRemoteCallbackList.register(new ObserverProxy(packageName, observer));
             scheduleDeadObserverCleanup();
         }
-        // 缁斿宓嗛幒銊┾偓浣哥秼閸撳秶濮搁幀?
+        // 立即通知新注册的观察者当前状态
         try {
             observer.onEditModeChanged(editModeEnabled);
             observer.onViewRuleChanged(packageName, currentRules);
@@ -69,7 +69,7 @@ final class ObserverManager {
         }
     }
 
-    /** 濞夈劑鏀㈢憴鍌氱檪閼?*/
+    /** 注销观察者 */
     void removeObserver(String packageName, IObserver observer) {
         synchronized (mRemoteCallbackList) {
             mRemoteCallbackList.unregister(new ObserverProxy(packageName, observer));
@@ -79,7 +79,7 @@ final class ObserverManager {
         }
     }
 
-    // ---- 闁氨鐓￠獮鎸庢尡 ----
+    // ---- 事件通知 ----
 
     void notifyObserverRuleChanged(String packageName, ActRules actRules) {
         forEachLiveObserver((proxy) -> {
@@ -94,7 +94,7 @@ final class ObserverManager {
         forEachLiveObserver((proxy) -> proxy.onEditModeChanged(enable));
     }
 
-    // ---- 濮濇槒顫囩€电喕鈧懏绔婚悶?----
+    // ---- 死观察者清理 ----
 
     void scheduleDeadObserverCleanup() {
         if (!mHandle.hasMessages(mCleanObserversMsgCode)) {
@@ -131,7 +131,7 @@ final class ObserverManager {
         }
     }
 
-    // ---- 閸愬懘鍎村銉ュ徔 ----
+    // ---- 工具方法 ----
 
     private void forEachLiveObserver(ObserverAction action) {
         synchronized (mRemoteCallbackList) {

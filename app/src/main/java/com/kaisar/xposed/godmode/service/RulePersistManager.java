@@ -30,8 +30,8 @@ import java.util.Map;
 import java.util.WeakHashMap;
 
 /**
- * 鐟欏嫬鍨幐浣风畽閸栨牜顓搁悶鍡楁珤 閳?JSON 閸樼喎鐡欓崘娆忓弳 + Bitmap 娣囨繂鐡?+ 鐎涖倕鍔归弬鍥︽濞撳懐鎮婇妴?
- * 娴?GodModeManagerService 閹绘劕褰囬惃鍕缁斿浜寸拹锝冣偓?
+ * 规则持久化管理器 — JSON 序列化 + Bitmap 图片 + 工具栏配置持久化。
+ * 由 GodModeManagerService 使用。
  */
 final class RulePersistManager {
 
@@ -49,9 +49,9 @@ final class RulePersistManager {
     private final Logger mLogger;
     private final Handler mHandle;
     private final RuleCacheManager mCacheManager;
-    /** 闂冨弶濮堥崘娆忓弳瀵ゆ儼绻?(ms) 閳?婢舵碍顐艰箛顐︹偓鐔峰綁閺囨潙鎮庨獮鏈佃礋娑撯偓濞嗏€冲晸閸?*/
+    /** 防抖写入延迟(ms) — 多次写入合并为一次持久化操作 */
     private static final long DEBOUNCE_DELAY_MS = 300L;
-    /** 闂冨弶濮堥梼鐔峰灙 閳?瀵板懎鍟撻崗銉ф畱閸栧懎鎮?*/
+    /** 防抖队列 — 待写入的包名 */
     private final Map<String, String> mPendingWrites = new WeakHashMap<>();
 
     RulePersistManager(Gson gson, Logger logger, Handler handle, RuleCacheManager cacheManager) {
@@ -61,11 +61,11 @@ final class RulePersistManager {
         this.mCacheManager = cacheManager;
     }
 
-    // ---- 鐟欏嫬鍨崝鐘烘祰 ----
+    // ---- 规则加载 ----
 
     /**
-     * 娴犲海顥嗛惄妯哄鏉炶姤澧嶉張澶庮潐閸掓瑦鏆熼幑顔煎煂缂傛挸鐡ㄩ妴?
-     * 閸旂姾娴囩紒鎾寸亯闁俺绻冩导鐘烩偓鎺旂舶閺嬪嫰鈧姴鍤遍弫鎵畱 RuleCacheManager 閸愭瑥鍙嗙紓鎾崇摠閵?
+     * 从磁盘加载所有已持久化的规则到内存。
+     * 扫描 /data/system/godmode 目录，将各包的规则反序列化后放入 RuleCacheManager 缓存。
      */
     void loadRuleData() throws IOException {
         File dataDir = new File(getBaseDir());
@@ -79,7 +79,7 @@ final class RulePersistManager {
                     String json = FileUtils.readTextFile(appRuleFile, 0, null);
                     ActRules rules = mGson.fromJson(json, ActRules.class);
                     Preconditions.checkNotNull(rules, "rules is null");
-                    // compact rule 閳?缁夊娅庣粚鐑樻蒋閻?
+                    // compact rule — 清理空规则列表
                     Iterator<Map.Entry<String, List<RuleRecord>>> iterator = rules.entrySet().iterator();
                     while (iterator.hasNext()) {
                         Map.Entry<String, List<RuleRecord>> listEntry = iterator.next();
@@ -104,13 +104,13 @@ final class RulePersistManager {
         }
     }
 
-    // ---- 鐟欏嫬鍨幐浣风畽閸?----
+    // ---- 规则持久化 ----
 
-    /** 閸樼喎鐡欓崘娆忓弳鐟欏嫬鍨?JSON閿?tmp 閳?rename 閳?chmod */
+    /** 安全持久化规则：JSON 写入 tmp → rename → chmod */
     void safePersistRules(String packageName, String json) throws IOException {
         synchronized (mPendingWrites) {
             if (mPendingWrites.containsKey(packageName)) {
-                // 瀹稿弶婀佸鍛晸閸忋儰鎹㈤崝?閳?閺囧瓨鏌?JSON 楠炶泛娆㈡潻鐔峰晸閸忋儻绱欓梼鍙夊閿?
+                // 已有待写入队列，更新 JSON 并调度防抖写入
                 mPendingWrites.put(packageName, json);
                 scheduleDebouncedWrite(packageName);
                 return;
@@ -143,13 +143,13 @@ final class RulePersistManager {
     static final int MSG_DEBOUNCE_WRITE = 0x1000;
 
     private void scheduleDebouncedWrite(String packageName) {
-        // 缁夊娅庢稊瀣娑撶儤顒濋崠鍛扮殶鎼达妇娈戦梼鍙夊濞戝牊浼呴敍宀勫櫢缂冾喛顓搁弮璺烘珤
+        // 移除旧消息后发送新的防抖消息
         Message msg = mHandle.obtainMessage(MSG_DEBOUNCE_WRITE, packageName);
         mHandle.removeMessages(MSG_DEBOUNCE_WRITE, packageName);
         mHandle.sendMessageDelayed(msg, DEBOUNCE_DELAY_MS);
     }
 
-    /** 閻?Handler 鐠嬪啰鏁ら惃鍕Щ閹舵牕鍟撻崗?*/
+    /** 由 Handler 调用的防抖写入 */
     void handleDebouncedWrite(String packageName) {
         String json;
         synchronized (mPendingWrites) {
@@ -163,7 +163,7 @@ final class RulePersistManager {
         }
     }
 
-    /** 娣囨繂鐡?Bitmap 娑?.webp 閺傚洣娆㈤敍灞筋槱閻?HARDWARE 閳?ARGB_8888 鏉烆剚宕?*/
+    /** 保存 Bitmap 为 .webp 文件（HARDWARE → ARGB_8888 转换）*/
     String saveBitmap(Bitmap bitmap, String dir) {
         try {
             Bitmap bitmapToSave = bitmap;
@@ -190,7 +190,7 @@ final class RulePersistManager {
         }
     }
 
-    /** 濞撳懐鎮婇張顏囶潶娴犺缍嶇憴鍕灟瀵洜鏁ら惃鍕劃缁斿娴橀悧鍥ㄦ瀮娴?*/
+    /** 清理未被引用的孤儿图片文件 */
     void cleanAllOrphanImages() {
         try {
             File dataDir = new File(getBaseDir());
@@ -214,7 +214,7 @@ final class RulePersistManager {
         }
     }
 
-    // ---- 瀹搞儱鍙块弽蹇撲焊婵?----
+    // ---- 工具栏配置 ----
 
     String loadToolbarHiddenItems() {
         try {
@@ -239,7 +239,7 @@ final class RulePersistManager {
         }
     }
 
-    // ---- 鐠侯垰绶炲銉ュ徔 ----
+    // ---- 目录工具方法 ----
 
     String getBaseDir() throws FileNotFoundException {
         File dir = new File(BASE_DIR);
@@ -250,7 +250,7 @@ final class RulePersistManager {
         throw new FileNotFoundException();
     }
 
-    /** 閺嶏繝鐛欓弬鍥︽鐠侯垰绶為弰顖氭儊娑撳搫鎮庡▔鏇犳畱 GodMode 閸ュ墽澧栭弬鍥︽鐠侯垰绶?*/
+    /** 检查文件路径是否在 GodMode 数据目录下 */
     boolean isValidImagePath(String filePath) {
         try {
             return new File(filePath).getCanonicalPath()
