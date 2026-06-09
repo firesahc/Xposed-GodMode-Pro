@@ -318,6 +318,10 @@ public final class CompositeMatcher implements IMatcher, MatchStrategy {
         if (results.size() >= GmConstants.MAX_REPEATABLE_RESULTS) return;
         if (!isVisibleView(view)) return;
 
+        // 如果父视图已在结果集中，子视图勿需收集（父隐藏/移除了子视图自动不可见）
+        ViewParent p = view.getParent();
+        if (p instanceof View && results.contains(p)) return;
+
         int score = computeScore(view, spec);
         if (score >= threshold) {
             results.add(view);
