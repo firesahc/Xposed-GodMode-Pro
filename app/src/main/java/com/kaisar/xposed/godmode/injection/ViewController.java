@@ -118,9 +118,8 @@ public final class ViewController {
                     }
                     continue;
                 }
-                // 非 repeatable：取第一个匹配的 View
-                List<View> views = getMatcher().matchAllViews(decorView, engineRule.getMatchSpec());
-                View view = (views != null && !views.isEmpty()) ? views.get(0) : null;
+                // 非 repeatable：策略链匹配（depth → resourceId → 全树兜底）
+                View view = getMatcher().matchView(decorView, engineRule.getMatchSpec());
                 if (view == null) {
                     Logger.w(TAG, "[ViewController] Failed: " + activity + "#" + rule.viewClass
                             + " block failed: not match any view");
@@ -165,8 +164,7 @@ public final class ViewController {
                     }
                     continue;
                 }
-                List<View> views = getMatcher().matchAllViews(decorView, engineRule.getMatchSpec());
-                View view = (views != null && !views.isEmpty()) ? views.get(0) : null;
+                View view = getMatcher().matchView(decorView, engineRule.getMatchSpec());
                 if (view == null) {
                     Logger.w(TAG, "[ViewController] revoke rule fail (act=" + activity
                             + "): not match any view");

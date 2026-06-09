@@ -1,5 +1,7 @@
 package com.kaisar.xposed.godmode.engine.matcher;
 
+import android.content.res.Resources;
+import android.text.TextUtils;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewParent;
@@ -148,36 +150,50 @@ public final class CompositeMatcher implements IMatcher, MatchStrategy {
     public View matchView(View root, MatchSpec spec) {
         if (root == null || spec == null) return null;
 
-        boolean strictMode = false; // 默认宽松模式
-        int threshold = resolveThreshold(spec, strictMode);
+        // =====================================================================
+        // 策略链：按锚定可靠性降序尝试，第一个验证通过的返回
+        // =====================================================================
 
-        // 1. depth 路径精确锚定
+        // ── 策略 1: resourceId 锚定 ──
+        // 最可靠：view.getResources().getIdentifier(resourceName) 是框架级稳定 ID
+        if (!TextUtils.isEmpty(spec.resourceName)) {
+            View viewById = findByResourceId(root, spec);
+            if (viewById != null) return viewById;
+        }
+
+        // ── 策略 2: depth 路径锚定 + sibling 兜底 ──
+        // 可靠，但对布局变化敏感
+        int threshold = resolveThreshold(spec, false);
         if (spec.depth != null && spec.depth.length > 0) {
             View depthView = ViewTraversal.findViewByDepth(root, spec.depth);
             if (depthView != null) {
                 int score = computeScore(depthView, spec);
                 if (score >= threshold) return depthView;
-                // 锚定视图的兄弟节点搜索
+                // 锚定视图的兄弟节点搜索 — 取最高分（Bug 1 修复）
                 ViewParent parent = depthView.getParent();
                 if (parent instanceof ViewGroup) {
                     ViewGroup group = (ViewGroup) parent;
+                    View bestSibling = null;
+                    int bestScore = 0;
                     for (int i = 0; i < group.getChildCount(); i++) {
                         View child = group.getChildAt(i);
-                        if (child != null && computeScore(child, spec) >= threshold) {
-                            return child;
+                        if (child != null && child != depthView) {
+                            int s = computeScore(child, spec);
+                            if (s > bestScore) {
+                                bestScore = s;
+                                bestSibling = child;
+                            }
                         }
+                    }
+                    if (bestSibling != null && bestScore >= threshold) {
+                        return bestSibling;
                     }
                 }
             }
         }
 
-        // 2. 非 repeatable 模式：depth 是唯一锚定，不退回 text/desc
-        if (!spec.repeatable) {
-            return null;
-        }
-
-        // 3. repeatable 规则：在 RecyclerView 中按 itemPath 精确匹配
-        if (spec.itemPath != null && spec.itemPath.length > 0
+        // ── 策略 3: 重复规则 — RecyclerView itemPath 精确匹配 ──
+        if (spec.repeatable && spec.itemPath != null && spec.itemPath.length > 0
                 && spec.itemRootClass != null) {
             List<View> rvResults = new ArrayList<>();
             collectRecyclerMatches(root, spec, rvResults);
@@ -195,6 +211,24 @@ public final class CompositeMatcher implements IMatcher, MatchStrategy {
             }
         }
 
+        // ── 策略 4: 全树评分搜索（严格阈值兜底） ──
+        // 消除 single element depth 锚定失败后的 null gap
+        int strictThreshold = resolveThreshold(spec, true);
+        List<View> allMatches = new ArrayList<>();
+        collectMatches(root, spec, allMatches, strictThreshold);
+        if (!allMatches.isEmpty()) {
+            View best = null;
+            int bestScore = 0;
+            for (View v : allMatches) {
+                int s = computeScore(v, spec);
+                if (s > bestScore) {
+                    bestScore = s;
+                    best = v;
+                }
+            }
+            return best;
+        }
+
         return null;
     }
 
@@ -208,6 +242,27 @@ public final class CompositeMatcher implements IMatcher, MatchStrategy {
     }
 
     // ---- 内部辅助方法 ----
+
+    /**
+     * 策略 1：按 resourceName 锚定。
+     * 解析 resourceName 为 int ID，通过 findViewById 精确查找，
+     * 再用严格阈值评分验证防止误匹配。
+     */
+    private View findByResourceId(View root, MatchSpec spec) {
+        if (root == null || TextUtils.isEmpty(spec.resourceName)) return null;
+        try {
+            int id = root.getResources().getIdentifier(spec.resourceName, "id", null);
+            if (id == 0 || id == View.NO_ID) return null;
+            View found = root.findViewById(id);
+            if (found == null) return null;
+            if (computeScore(found, spec) >= resolveThreshold(spec, true)) {
+                return found;
+            }
+        } catch (Resources.NotFoundException e) {
+            // resource 不属于当前 context — 跳过此策略
+        }
+        return null;
+    }
 
     /**
      * 递归遍历视图树，收集 RecyclerView 中按 itemPath 匹配的视图。
