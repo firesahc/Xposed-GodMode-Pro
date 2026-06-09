@@ -238,9 +238,28 @@ public final class CompositeMatcher implements IMatcher, MatchStrategy {
 
     @Override
     public List<View> matchAllViews(View root, MatchSpec spec) {
-        List<View> results = new ArrayList<>();
-        if (root == null || spec == null) return results;
+        if (root == null || spec == null) return new ArrayList<>();
         int threshold = resolveThreshold(spec, false);
+
+        // 信息流规则：先通过 itemPath 精确导航，避免全树收集误伤根容器
+        if (spec.repeatable && spec.itemPath != null && spec.itemPath.length > 0
+                && spec.itemRootClass != null) {
+            List<View> rvResults = new ArrayList<>();
+            collectRecyclerMatches(root, spec, rvResults);
+            if (!rvResults.isEmpty()) {
+                // 对 itemPath 找到的视图做评分验证
+                List<View> verified = new ArrayList<>();
+                for (View v : rvResults) {
+                    if (v != null && computeScore(v, spec) >= threshold) {
+                        verified.add(v);
+                    }
+                }
+                if (!verified.isEmpty()) return verified;
+            }
+        }
+
+        // 兜底：全树内容匹配搜索
+        List<View> results = new ArrayList<>();
         collectMatches(root, spec, results, threshold);
         return results;
     }
