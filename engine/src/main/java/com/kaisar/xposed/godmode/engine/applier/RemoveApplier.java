@@ -22,7 +22,7 @@ public final class RemoveApplier implements RuleApplier {
     @Override
     public boolean apply(View view, ActionSpec spec) {
         if (view == null || spec == null) return false;
-        int cacheKey = identityKey(spec);
+        int cacheKey = System.identityHashCode(view);
         Pair<WeakReference<View>, ViewProperty> viewInfo = mBlockedViewCache.get(cacheKey);
         View blockedView = viewInfo != null ? viewInfo.first.get() : null;
         if (blockedView == view && view.getVisibility() == spec.visibility) {
@@ -55,7 +55,7 @@ public final class RemoveApplier implements RuleApplier {
     @Override
     public boolean revoke(View view, ActionSpec spec) {
         if (view == null || spec == null) return false;
-        int cacheKey = identityKey(spec);
+        int cacheKey = System.identityHashCode(view);
         Pair<WeakReference<View>, ViewProperty> viewInfo = mBlockedViewCache.get(cacheKey);
         if (viewInfo != null && viewInfo.first.get() == view) {
             ViewProperty vp = viewInfo.second;
@@ -79,10 +79,6 @@ public final class RemoveApplier implements RuleApplier {
     @Override
     public void clearCache() {
         mBlockedViewCache.clear();
-    }
-
-    private static int identityKey(ActionSpec spec) {
-        return System.identityHashCode(spec);
     }
 
     // ---- 内部 ViewProperty ----

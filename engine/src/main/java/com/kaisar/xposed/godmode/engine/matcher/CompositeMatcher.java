@@ -30,6 +30,8 @@ public final class CompositeMatcher implements IMatcher, MatchStrategy {
     public static final int DEFAULT_STRICT_THRESHOLD = 80;
     /** 默认宽松阈值 */
     public static final int DEFAULT_LOOSE_THRESHOLD = 30;
+    /** depth 锚定加分 — 仅在 matchView depth 分支内生效 */
+    private static final int SCORE_DEPTH_ANCHOR = 60;
 
     private final List<MatchStrategy> mStrategies;
     private int mStrictThreshold = DEFAULT_STRICT_THRESHOLD;
@@ -37,11 +39,11 @@ public final class CompositeMatcher implements IMatcher, MatchStrategy {
 
     /**
      * 使用内置默认策略链构造。
-     * 策略按优先级降序排列：Depth > Resource > Text > Description > Recycler
+     * 注意：depth 锚定加分（{@link #SCORE_DEPTH_ANCHOR}）仅在 matchView 的
+     * depth 分支内直接添加，不作为全局策略注册，避免污染 matchAllViews 的全树搜索。
      */
     public CompositeMatcher() {
         List<MatchStrategy> defaults = new ArrayList<>(5);
-        defaults.add(new DepthMatcher());
         defaults.add(new ResourceMatcher());
         defaults.add(new TextMatcher());
         defaults.add(new DescriptionMatcher());
@@ -165,11 +167,13 @@ public final class CompositeMatcher implements IMatcher, MatchStrategy {
 
         // ── 策略 2: depth 路径锚定 + sibling 兜底 ──
         // 可靠，但对布局变化敏感
+        // 注意：depth 锚定加分（SCORE_DEPTH_ANCHOR=60）在此分支内直接添加，
+        // 不经过策略链，避免 matchAllViews 全树搜索时错误加分。
         int threshold = resolveThreshold(spec, false);
         if (spec.depth != null && spec.depth.length > 0) {
             View depthView = ViewTraversal.findViewByDepth(root, spec.depth);
             if (depthView != null && isVisibleView(depthView)) {
-                int score = computeScore(depthView, spec);
+                int score = computeScore(depthView, spec) + SCORE_DEPTH_ANCHOR;
                 if (score >= threshold) return depthView;
             }
             if (depthView != null) {
@@ -182,7 +186,7 @@ public final class CompositeMatcher implements IMatcher, MatchStrategy {
                     for (int i = 0; i < group.getChildCount(); i++) {
                         View child = group.getChildAt(i);
                         if (child != null && child != depthView && isVisibleView(child)) {
-                            int s = computeScore(child, spec);
+                            int s = computeScore(child, spec) + SCORE_DEPTH_ANCHOR;
                             if (s > bestScore) {
                                 bestScore = s;
                                 bestSibling = child;
@@ -251,7 +255,8 @@ public final class CompositeMatcher implements IMatcher, MatchStrategy {
             if (id == 0 || id == View.NO_ID) return null;
             View found = root.findViewById(id);
             if (found == null || !isVisibleView(found)) return null;
-            if (computeScore(found, spec) >= resolveThreshold(spec, true)) {
+            // resourceId 锚定最可靠（Android 框架级 ID），阈值可适当放宽
+            if (computeScore(found, spec) >= resolveThreshold(spec, false)) {
                 return found;
             }
         } catch (Resources.NotFoundException e) {
