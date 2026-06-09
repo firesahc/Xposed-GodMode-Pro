@@ -1,6 +1,5 @@
 package com.kaisar.xposed.godmode.engine.matcher;
 
-import android.text.TextUtils;
 import android.view.View;
 
 import com.kaisar.xposed.godmode.engine.rule.MatchSpec;
@@ -19,11 +18,8 @@ final class DepthMatcher implements MatchStrategy {
     @Override
     public int computeScore(View view, MatchSpec spec) {
         if (spec.depth == null || spec.depth.length == 0) return 0;
-        int score = 60; // depth 路径匹配的基础分
-        if (!TextUtils.isEmpty(spec.viewClass)
-                && view.getClass().getName().equals(spec.viewClass)) {
-            score += 30;
-        }
-        return score;
+        // depth 路径本身已是最强锚定信号，基础分 60
+        // viewClass 评分由 CompositeMatcher.computeScore 统一处理，避免重复计分
+        return 60;
     }
 }

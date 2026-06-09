@@ -6,15 +6,11 @@ import android.view.View;
 import android.view.ViewGroup;
 
 import com.kaisar.xposed.godmode.engine.rule.ActionSpec;
-import com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec;
 
 import java.lang.ref.WeakReference;
 
 /**
  * 移除规则应用器 — 将视图设置为 GONE/INVISIBLE 或恢复原始状态。
- * <p>
- * 新代码使用 {@link #apply(View, ActionSpec)} 和 {@link #revoke(View, ActionSpec)}。
- * 旧版 {@link #apply(View, RuleMatchSpec)} 已有默认委托。
  */
 public final class RemoveApplier implements RuleApplier {
 
@@ -26,7 +22,7 @@ public final class RemoveApplier implements RuleApplier {
     @Override
     public boolean apply(View view, ActionSpec spec) {
         if (view == null || spec == null) return false;
-        int cacheKey = spec.isRemoveRule() ? identityKey(spec) : spec.hashCode();
+        int cacheKey = identityKey(spec);
         Pair<WeakReference<View>, ViewProperty> viewInfo = mBlockedViewCache.get(cacheKey);
         View blockedView = viewInfo != null ? viewInfo.first.get() : null;
         if (blockedView == view && view.getVisibility() == spec.visibility) {
@@ -59,7 +55,7 @@ public final class RemoveApplier implements RuleApplier {
     @Override
     public boolean revoke(View view, ActionSpec spec) {
         if (view == null || spec == null) return false;
-        int cacheKey = spec.isRemoveRule() ? identityKey(spec) : spec.hashCode();
+        int cacheKey = identityKey(spec);
         Pair<WeakReference<View>, ViewProperty> viewInfo = mBlockedViewCache.get(cacheKey);
         if (viewInfo != null && viewInfo.first.get() == view) {
             ViewProperty vp = viewInfo.second;

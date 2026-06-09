@@ -22,9 +22,6 @@ import java.util.WeakHashMap;
 
 /**
  * 修改规则应用器 — 将修改规则应用到具体 View。
- * <p>
- * 新代码使用 {@link #apply(View, ActionSpec)} / {@link #revoke(View, ActionSpec)}。
- * 旧版 {@link #apply(View, com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec)} 已有默认委托。
  */
 public final class ModifyApplier implements RuleApplier {
 

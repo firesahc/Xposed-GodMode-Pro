@@ -94,14 +94,16 @@ public final class CompositeMatcher implements IMatcher, MatchStrategy {
      * @return 被移除的策略数量
      */
     public int unregisterStrategy(Class<? extends MatchStrategy> strategyClass) {
-        int removed = 0;
-        for (MatchStrategy s : new ArrayList<>(mStrategies)) {
+        List<MatchStrategy> toRemove = new ArrayList<>();
+        for (MatchStrategy s : mStrategies) {
             if (s.getClass() == strategyClass) {
-                mStrategies.remove(s);
-                removed++;
+                toRemove.add(s);
             }
         }
-        return removed;
+        if (!toRemove.isEmpty()) {
+            mStrategies.removeAll(toRemove);
+        }
+        return toRemove.size();
     }
 
     /** 返回当前策略链的只读视图 */
@@ -166,10 +168,12 @@ public final class CompositeMatcher implements IMatcher, MatchStrategy {
         int threshold = resolveThreshold(spec, false);
         if (spec.depth != null && spec.depth.length > 0) {
             View depthView = ViewTraversal.findViewByDepth(root, spec.depth);
-            if (depthView != null) {
+            if (depthView != null && isVisibleView(depthView)) {
                 int score = computeScore(depthView, spec);
                 if (score >= threshold) return depthView;
-                // 锚定视图的兄弟节点搜索 — 取最高分（Bug 1 修复）
+            }
+            if (depthView != null) {
+                // 锚定视图的兄弟节点搜索 — 取最高分（跳过不可见/GM 标签）
                 ViewParent parent = depthView.getParent();
                 if (parent instanceof ViewGroup) {
                     ViewGroup group = (ViewGroup) parent;
@@ -177,7 +181,7 @@ public final class CompositeMatcher implements IMatcher, MatchStrategy {
                     int bestScore = 0;
                     for (int i = 0; i < group.getChildCount(); i++) {
                         View child = group.getChildAt(i);
-                        if (child != null && child != depthView) {
+                        if (child != null && child != depthView && isVisibleView(child)) {
                             int s = computeScore(child, spec);
                             if (s > bestScore) {
                                 bestScore = s;
@@ -185,7 +189,9 @@ public final class CompositeMatcher implements IMatcher, MatchStrategy {
                             }
                         }
                     }
-                    if (bestSibling != null && bestScore >= threshold) {
+                    // sibling 是 depth 锚定失败后的降级策略，需更严格阈值
+                    int siblingThreshold = resolveThreshold(spec, true);
+                    if (bestSibling != null && bestScore >= siblingThreshold) {
                         return bestSibling;
                     }
                 }
@@ -244,7 +250,7 @@ public final class CompositeMatcher implements IMatcher, MatchStrategy {
             int id = root.getResources().getIdentifier(spec.resourceName, "id", null);
             if (id == 0 || id == View.NO_ID) return null;
             View found = root.findViewById(id);
-            if (found == null) return null;
+            if (found == null || !isVisibleView(found)) return null;
             if (computeScore(found, spec) >= resolveThreshold(spec, true)) {
                 return found;
             }
@@ -274,10 +280,15 @@ public final class CompositeMatcher implements IMatcher, MatchStrategy {
         }
     }
 
+    /** 判断视图是否可见且非 GM 自身组件 */
+    private static boolean isVisibleView(View view) {
+        return view.getVisibility() == View.VISIBLE
+                && !GmConstants.TAG_GM_CMP.equals(view.getTag());
+    }
+
     private void collectMatches(View view, MatchSpec spec, List<View> results, int threshold) {
         if (results.size() >= GmConstants.MAX_REPEATABLE_RESULTS) return;
-        if (view.getVisibility() != View.VISIBLE
-                || GmConstants.TAG_GM_CMP.equals(view.getTag())) return;
+        if (!isVisibleView(view)) return;
 
         int score = computeScore(view, spec);
         if (score >= threshold) {
