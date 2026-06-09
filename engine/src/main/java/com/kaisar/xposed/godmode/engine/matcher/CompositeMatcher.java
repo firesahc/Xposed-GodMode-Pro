@@ -18,7 +18,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
 /**
  * 复合匹配器 — IMatcher 的默认实现。
  * <p>
- * 持有 MatchStrategy 策略链，按优先级排序后依次评分，选取得分最高且超过阈值的匹配。
+ * 持有 MatchStrategy 策略链（Resource/Text/Description），按优先级排序后依次评分。
+ * DepthMatcher 和 RecyclerMatcher 不作为全局策略注册，避免场景加分污染全树搜索。
  * 支持运行时注册/注销策略（注册表模式），线程安全。
  * <p>
  * 默认阈值：宽松模式 30，严格模式 80。
@@ -39,15 +40,18 @@ public final class CompositeMatcher implements IMatcher, MatchStrategy {
 
     /**
      * 使用内置默认策略链构造。
-     * 注意：depth 锚定加分（{@link #SCORE_DEPTH_ANCHOR}）仅在 matchView 的
-     * depth 分支内直接添加，不作为全局策略注册，避免污染 matchAllViews 的全树搜索。
+     * <p>
+     * 注意：DepthMatcher 和 RecyclerMatcher 不作为全局策略注册。
+     * DepthMatcher 的 +60 锚定加分仅在 matchView depth 分支内直接添加；
+     * RecyclerMatcher 的 +50 场景加分同理，RecyclerView item 定位
+     * 由 findViewsInRecycler 静态方法 + itemPath 导航完成。
+     * 两者不注册为全局策略，避免给 matchAllViews 全树搜索带入场景加分。
      */
     public CompositeMatcher() {
-        List<MatchStrategy> defaults = new ArrayList<>(5);
+        List<MatchStrategy> defaults = new ArrayList<>(4);
         defaults.add(new ResourceMatcher());
         defaults.add(new TextMatcher());
         defaults.add(new DescriptionMatcher());
-        defaults.add(new RecyclerMatcher());
         defaults.sort(Comparator.comparingInt(MatchStrategy::priority).reversed());
         mStrategies = new CopyOnWriteArrayList<>(defaults);
     }
