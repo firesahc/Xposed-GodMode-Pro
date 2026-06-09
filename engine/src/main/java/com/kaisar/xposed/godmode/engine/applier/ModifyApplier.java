@@ -10,7 +10,7 @@ import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.TextView;
 
-import com.kaisar.xposed.godmode.engine.rule.ModifySpec;
+import com.kaisar.xposed.godmode.engine.rule.ActionSpec;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.engine.util.ThreadPools;
 
@@ -23,7 +23,7 @@ import java.util.WeakHashMap;
 /**
  * 修改规则应用器 — 将修改规则应用到具体 View。
  * <p>
- * 新代码使用 {@link #apply(View, ModifySpec)} / {@link #revoke(View, ModifySpec)}。
+ * 新代码使用 {@link #apply(View, ActionSpec)} / {@link #revoke(View, ActionSpec)}。
  * 旧版 {@link #apply(View, com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec)} 已有默认委托。
  */
 public final class ModifyApplier implements RuleApplier {
@@ -43,10 +43,10 @@ public final class ModifyApplier implements RuleApplier {
         this.mImageLoader = imageLoader;
     }
 
-    // ---- 应用（ModifySpec API） ----
+    // ---- 应用（ActionSpec API） ----
 
     @Override
-    public boolean apply(View view, ModifySpec spec) {
+    public boolean apply(View view, ActionSpec spec) {
         if (view == null || spec == null || !view.isAttachedToWindow()) return false;
         if (isAlreadyApplied(view, spec)) return false;
 
@@ -62,22 +62,22 @@ public final class ModifyApplier implements RuleApplier {
         return true;
     }
 
-    private boolean isAlreadyApplied(View view, ModifySpec spec) {
+    private boolean isAlreadyApplied(View view, ActionSpec spec) {
         Integer appliedHash = mAppliedViews.get(view);
         return appliedHash != null && appliedHash == spec.hashCode();
     }
 
-    private static void applyDimensions(ModifySpec spec, ViewGroup.LayoutParams lp) {
+    private static void applyDimensions(ActionSpec spec, ViewGroup.LayoutParams lp) {
         if (lp == null) return;
         if (spec.modWidth > 0) lp.width = spec.modWidth;
         if (spec.modHeight > 0) lp.height = spec.modHeight;
     }
 
-    private static void applyAlpha(View view, ModifySpec spec) {
+    private static void applyAlpha(View view, ActionSpec spec) {
         if (spec.modAlpha >= 0f) view.setAlpha(spec.modAlpha);
     }
 
-    private static void applyOffset(ModifySpec spec, ViewGroup.LayoutParams lp) {
+    private static void applyOffset(ActionSpec spec, ViewGroup.LayoutParams lp) {
         if ((spec.modXOffset == 0 && spec.modYOffset == 0)
                 || !(lp instanceof ViewGroup.MarginLayoutParams)) return;
         ViewGroup.MarginLayoutParams mlp = (ViewGroup.MarginLayoutParams) lp;
@@ -85,23 +85,23 @@ public final class ModifyApplier implements RuleApplier {
         mlp.topMargin = spec.origTopMargin + spec.modYOffset;
     }
 
-    private static void applyText(View view, ModifySpec spec) {
+    private static void applyText(View view, ActionSpec spec) {
         if (spec.modText != null && !spec.modText.isEmpty() && view instanceof TextView) {
             ((TextView) view).setText(spec.modText);
         }
     }
 
-    private void applyImage(View view, ModifySpec spec) {
+    private void applyImage(View view, ActionSpec spec) {
         if (spec.modImagePath != null && !spec.modImagePath.isEmpty()
                 && view instanceof ImageView) {
             loadAndSetImage((ImageView) view, spec.modImagePath);
         }
     }
 
-    // ---- 撤销（ModifySpec API） ----
+    // ---- 撤销（ActionSpec API） ----
 
     @Override
-    public boolean revoke(View view, ModifySpec spec) {
+    public boolean revoke(View view, ActionSpec spec) {
         ViewGroup.LayoutParams lp = view.getLayoutParams();
         if (lp != null) {
             if (spec.origWidth > 0) lp.width = spec.origWidth;
