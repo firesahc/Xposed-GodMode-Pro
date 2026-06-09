@@ -4,7 +4,7 @@ import android.graphics.Color;
 import android.view.View;
 import android.widget.SeekBar;
 
-import com.kaisar.xposed.godmode.engine.matcher.ViewFinder;
+import com.kaisar.xposed.godmode.engine.matcher.ViewTraversal;
 import com.kaisar.xposed.godmode.injection.editor.overlay.MaskView;
 import com.kaisar.xposed.godmode.injection.util.ViewUtils;
 
@@ -39,7 +39,7 @@ public final class SeekBarHandler implements SeekBar.OnSeekBarChangeListener {
             if (fromUser) mNodePanel.setHasUserSelection(true);
             View view = viewNodes.get(mNodePanel.getCurrentIndex()).get();
             if (view != null && maskView != null) {
-                if (ViewFinder.isInRecyclerView(view)) {
+                if (ViewTraversal.isInRecyclerView(view)) {
                     maskView.setMaskOverlay(OVERLAY_COLOR_REPEATABLE);
                 } else {
                     maskView.setMaskOverlay(OVERLAY_COLOR);

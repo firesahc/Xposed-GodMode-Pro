@@ -10,7 +10,7 @@ import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.TextView;
 
-import com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec;
+import com.kaisar.xposed.godmode.engine.rule.ModifySpec;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.engine.util.ThreadPools;
 
@@ -21,20 +21,18 @@ import java.util.Map;
 import java.util.WeakHashMap;
 
 /**
- * 娣囶喗鏁肩憴鍕灟鎼存梻鏁ら崳?閳?娣囶喗鏁肩憴鍡楁禈鐏忓搫顕?闁繑妲戞惔?娴ｅ秶鐤?閺傚洦婀?閸ュ墽澧栭敍灞炬暜閹镐焦鎸欓柨鈧妴?
- * 娴?RuleModificationHelper 閹绘劕褰囬惃鍕壋韫囧啴鈧槒绶妴?
+ * 修改规则应用器 — 将修改规则应用到具体 View。
  * <p>
- * 娴ｈ法鏁?SoftReference 缂傛挸鐡ㄥ鎻掑鏉炵晫娈戦崶鍓у Bitmap閿涘矂浼╅崗宥夊櫢婢?IPC 鐠囬攱鐪伴妴?
+ * 新代码使用 {@link #apply(View, ModifySpec)} / {@link #revoke(View, ModifySpec)}。
+ * 旧版 {@link #apply(View, com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec)} 已有默认委托。
  */
 public final class ModifyApplier implements RuleApplier {
 
-    // 婢跺秶鏁?ThreadPools.IMAGE_LOADER 閼板矂娼崚娑樼紦閻欘剛鐝涚痪璺ㄢ柤濮?
     private static final Handler MAIN_HANDLER = new Handler(Looper.getMainLooper());
     private final WeakHashMap<View, Integer> mAppliedViews = new WeakHashMap<>();
     private final Map<String, SoftReference<Bitmap>> mBitmapCache =
             Collections.synchronizedMap(new HashMap<>());
 
-    /** 閸ュ墽澧栭崝鐘烘祰閸ｃ劍甯撮崣?閳?閻㈣精鐨熼悽銊︽煙濞夈劌鍙嗘禒銉ョ杽閻滄媽娉曟潻娑氣柤閸ュ墽澧栭崝鐘烘祰 */
     public interface ImageLoader {
         ParcelFileDescriptor openImageFileDescriptor(String path) throws Exception;
     }
@@ -45,79 +43,78 @@ public final class ModifyApplier implements RuleApplier {
         this.mImageLoader = imageLoader;
     }
 
-    // ---- 鎼存梻鏁?----
+    // ---- 应用（ModifySpec API） ----
 
     @Override
-    public boolean apply(View view, RuleMatchSpec rule) {
-        if (view == null || rule == null || !view.isAttachedToWindow()) return false;
-        if (isAlreadyApplied(view, rule)) return false;
+    public boolean apply(View view, ModifySpec spec) {
+        if (view == null || spec == null || !view.isAttachedToWindow()) return false;
+        if (isAlreadyApplied(view, spec)) return false;
 
         ViewGroup.LayoutParams lp = view.getLayoutParams();
-        applyDimensions(rule, lp);
-        applyAlpha(view, rule);
-        applyOffset(rule, lp);
+        applyDimensions(spec, lp);
+        applyAlpha(view, spec);
+        applyOffset(spec, lp);
         if (lp != null) view.setLayoutParams(lp);
-        applyText(view, rule);
-        applyImage(view, rule);
+        applyText(view, spec);
+        applyImage(view, spec);
 
-        mAppliedViews.put(view, rule.hashCode());
+        mAppliedViews.put(view, spec.hashCode());
         return true;
     }
 
-    private boolean isAlreadyApplied(View view, RuleMatchSpec rule) {
-        // 娴ｈ法鏁ゅ鏇犳暏閻╁摜鐡戦幀褎顥呴弻?hashCode閿涘潟nt閿涘绱濋柆鍨帳閼奉亜濮╃憗鍛唸
+    private boolean isAlreadyApplied(View view, ModifySpec spec) {
         Integer appliedHash = mAppliedViews.get(view);
-        return appliedHash != null && appliedHash == rule.hashCode();
+        return appliedHash != null && appliedHash == spec.hashCode();
     }
 
-    private static void applyDimensions(RuleMatchSpec rule, ViewGroup.LayoutParams lp) {
+    private static void applyDimensions(ModifySpec spec, ViewGroup.LayoutParams lp) {
         if (lp == null) return;
-        if (rule.modWidth > 0) lp.width = rule.modWidth;
-        if (rule.modHeight > 0) lp.height = rule.modHeight;
+        if (spec.modWidth > 0) lp.width = spec.modWidth;
+        if (spec.modHeight > 0) lp.height = spec.modHeight;
     }
 
-    private static void applyAlpha(View view, RuleMatchSpec rule) {
-        if (rule.modAlpha >= 0f) view.setAlpha(rule.modAlpha);
+    private static void applyAlpha(View view, ModifySpec spec) {
+        if (spec.modAlpha >= 0f) view.setAlpha(spec.modAlpha);
     }
 
-    private static void applyOffset(RuleMatchSpec rule, ViewGroup.LayoutParams lp) {
-        if ((rule.modXOffset == 0 && rule.modYOffset == 0)
+    private static void applyOffset(ModifySpec spec, ViewGroup.LayoutParams lp) {
+        if ((spec.modXOffset == 0 && spec.modYOffset == 0)
                 || !(lp instanceof ViewGroup.MarginLayoutParams)) return;
         ViewGroup.MarginLayoutParams mlp = (ViewGroup.MarginLayoutParams) lp;
-        mlp.leftMargin = rule.origLeftMargin + rule.modXOffset;
-        mlp.topMargin = rule.origTopMargin + rule.modYOffset;
+        mlp.leftMargin = spec.origLeftMargin + spec.modXOffset;
+        mlp.topMargin = spec.origTopMargin + spec.modYOffset;
     }
 
-    private static void applyText(View view, RuleMatchSpec rule) {
-        if (rule.modText != null && !rule.modText.isEmpty() && view instanceof TextView) {
-            ((TextView) view).setText(rule.modText);
+    private static void applyText(View view, ModifySpec spec) {
+        if (spec.modText != null && !spec.modText.isEmpty() && view instanceof TextView) {
+            ((TextView) view).setText(spec.modText);
         }
     }
 
-    private void applyImage(View view, RuleMatchSpec rule) {
-        if (rule.modImagePath != null && !rule.modImagePath.isEmpty()
+    private void applyImage(View view, ModifySpec spec) {
+        if (spec.modImagePath != null && !spec.modImagePath.isEmpty()
                 && view instanceof ImageView) {
-            loadAndSetImage((ImageView) view, rule.modImagePath);
+            loadAndSetImage((ImageView) view, spec.modImagePath);
         }
     }
 
-    // ---- 閹俱倝鏀?----
+    // ---- 撤销（ModifySpec API） ----
 
     @Override
-    public boolean revoke(View view, RuleMatchSpec rule) {
+    public boolean revoke(View view, ModifySpec spec) {
         ViewGroup.LayoutParams lp = view.getLayoutParams();
         if (lp != null) {
-            if (rule.origWidth > 0) lp.width = rule.origWidth;
-            if (rule.origHeight > 0) lp.height = rule.origHeight;
+            if (spec.origWidth > 0) lp.width = spec.origWidth;
+            if (spec.origHeight > 0) lp.height = spec.origHeight;
             if (lp instanceof ViewGroup.MarginLayoutParams) {
                 ViewGroup.MarginLayoutParams mlp = (ViewGroup.MarginLayoutParams) lp;
-                mlp.leftMargin = rule.origLeftMargin;
-                mlp.topMargin = rule.origTopMargin;
+                mlp.leftMargin = spec.origLeftMargin;
+                mlp.topMargin = spec.origTopMargin;
             }
         }
-        view.setAlpha(rule.origAlpha > 0f ? rule.origAlpha : 1f);
-        if (view instanceof TextView && rule.origText != null) {
-            ((TextView) view).setText(rule.origText);
+        view.setAlpha(spec.origAlpha > 0f ? spec.origAlpha : 1f);
+        if (view instanceof TextView && spec.origText != null) {
+            ((TextView) view).setText(spec.origText);
         }
         if (lp != null) view.setLayoutParams(lp);
         mAppliedViews.remove(view);
@@ -130,7 +127,7 @@ public final class ModifyApplier implements RuleApplier {
         mBitmapCache.clear();
     }
 
-    // ---- 閸ュ墽澧栭崝鐘烘祰 ----
+    // ---- 图片加载 ----
 
     private void loadAndSetImage(ImageView targetView, String imagePath) {
         SoftReference<Bitmap> cached = mBitmapCache.get(imagePath);

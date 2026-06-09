@@ -7,6 +7,7 @@ android {
     namespace 'com.kaisar.xposed.godmode'
     compileSdk 35
     compileOptions {
+        encoding = 'UTF-8'
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
     }
@@ -14,8 +15,8 @@ android {
         applicationId "com.viewblocker.jrsen.compat"
         minSdkVersion 24
         targetSdkVersion 35
-        versionCode 40
-        versionName "5.4.0"
+        versionCode 41
+        versionName "6.0.0"
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
         vectorDrawables.useSupportLibrary = true
     }

@@ -1,5 +1,7 @@
 package com.kaisar.xposed.godmode.injection.editor;
 
+import static com.kaisar.xposed.godmode.GodModeApplication.TAG;
+
 import android.app.Activity;
 import android.content.Context;
 import android.content.pm.PackageInfo;
@@ -7,11 +9,16 @@ import android.content.pm.PackageManager;
 import android.content.res.Resources;
 import android.text.TextUtils;
 import android.view.View;
+import android.view.ViewGroup;
+import android.view.ViewParent;
 import android.widget.TextView;
 
 import com.kaisar.xposed.godmode.BuildConfig;
-import com.kaisar.xposed.godmode.engine.matcher.ViewFinder;
+import com.kaisar.xposed.godmode.engine.matcher.CompositeMatcher;
+import com.kaisar.xposed.godmode.engine.matcher.ViewTraversal;
+import com.kaisar.xposed.godmode.engine.rule.MatchSpec;
 import com.kaisar.xposed.godmode.engine.rule.RuleMapper;
+import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.injection.GodModeInjector;
 import com.kaisar.xposed.godmode.injection.util.ViewUtils;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
@@ -133,14 +140,47 @@ public final class RuleRecordFactory {
 
     /** 濉厖鍙噸澶嶈鍒欎俊鎭紙itemPath銆乮temRootClass銆乸arentClass锛?*/
     private static void populateRepeatableInfo(View v, RuleRecord rule) {
-        boolean isInfoFlowMode = GodModeInjector.getEditorOrchestrator().isInfoFlowMode();
-        com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec engineRule = toEngine(rule);
-        ViewFinder.populateRepeatableInfo(v, engineRule, isInfoFlowMode);
-        if (engineRule.isRepeatable()) {
-            rule.itemPath = engineRule.getItemPath();
-            rule.itemRootClass = engineRule.getItemRootClass();
-            rule.parentClass = engineRule.getParentClass();
-            rule.repeatable = true;
+        if (!GodModeInjector.getEditorOrchestrator().isInfoFlowMode()) return;
+        try {
+            ViewGroup rv = ViewTraversal.findRecyclerViewAncestor(v);
+            if (rv == null) return;
+
+            String[] itemPath = ViewTraversal.getItemPath(v, rv);
+
+            View current = v;
+            ViewParent p = current.getParent();
+            while (p != rv && p instanceof ViewGroup) {
+                current = (View) p;
+                p = p.getParent();
+            }
+            String itemRootClass = current.getClass().getName();
+
+            com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec engineRule = toEngine(rule);
+            MatchSpec matchSpec = engineRule.getMatchSpec();
+            int threshold = matchSpec.matchThreshold > 0
+                    ? matchSpec.matchThreshold
+                    : CompositeMatcher.DEFAULT_LOOSE_THRESHOLD;
+            CompositeMatcher matcher = new CompositeMatcher();
+
+            int matchCount = 0;
+            for (int i = 0; i < rv.getChildCount() && i < 20 && matchCount < 2; i++) {
+                View child = rv.getChildAt(i);
+                if (child != null && child.getClass().getName().equals(itemRootClass)) {
+                    View found = ViewTraversal.findViewByItemPath(child, itemPath, 0);
+                    if (found != null && matcher.computeScore(found, matchSpec) >= threshold) {
+                        matchCount++;
+                    }
+                }
+            }
+
+            if (matchCount >= 2) {
+                rule.itemPath = itemPath;
+                rule.itemRootClass = itemRootClass;
+                rule.parentClass = v.getParent() != null ? v.getParent().getClass().getName() : null;
+                rule.repeatable = true;
+            }
+        } catch (Exception e) {
+            Logger.w(TAG, "[RuleRecordFactory] populateRepeatableInfo failed", e);
         }
     }
 }

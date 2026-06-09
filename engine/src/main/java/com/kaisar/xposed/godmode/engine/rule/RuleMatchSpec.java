@@ -1,29 +1,27 @@
 package com.kaisar.xposed.godmode.engine.rule;
 
+import com.kaisar.xposed.godmode.engine.matcher.MatchMode;
+
 import java.util.Arrays;
 
 /**
- * 寮曟搸鍖归厤瑙勮寖 鈥?View 鍖归厤 (computeScore) + 灞炴€у簲鐢?(ModifyApplier/RemoveApplier) + 缂撳瓨鍘婚噸 (娣?equals)銆?
+ * 引擎规则匹配规范 — 统一 DTO，同时实现 {@link RuleFields} 接口（与 RuleRecord 互转）。
  * <p>
- * 瀹炵幇 {@link RuleFields} 鎺ュ彛浠ユ彁渚涚紪璇戞湡瀹夊叏鐨勫瓧娈佃闂紝
- * 閰嶅悎 {@link com.kaisar.xposed.godmode.engine.rule.RuleMapper} 瀹炵幇绫诲瀷瀹夊叏鐨?app鈫抏ngine 杞崲銆?
- * <p>
- * 銆愬悓姝ヤ繚闅溿€戝鏂规枃浠? {@code app/.../rule/RuleRecord.java}锛圥arcelable 鐗堬紝甯?@SerializedName锛?
- * <br>寮曟搸瀛楁鎬绘暟: 37 &nbsp;|&nbsp; app 瀛楁鎬绘暟: 37
- * <br>鑻ユ澶勫鍑忓瓧娈碉紝璇峰悓姝ヤ慨鏀瑰鏂规枃浠剁殑鍚屽悕瀛楁銆丳arcel 璇诲啓銆乧lone() 鍜?equals()/hashCode()銆?
- * <p>
- * 鍖哄垎绉婚櫎瑙勫垯鍜屼慨鏀硅鍒欑殑鏂瑰紡锛歿@code ruleTag} 涓?null 鎴栫┖瀛楃涓?= 绉婚櫎瑙勫垯锛岄潪绌?= 淇敼瑙勫垯銆?
- *
- * @see RuleFields
- * @see com.kaisar.xposed.godmode.engine.rule.RuleMapper
+ * 内部包含两个职责清晰的子规格：
+ * <ul>
+ *   <li>{@link #getMatchSpec()} — 纯匹配字段，供 {@link com.kaisar.xposed.godmode.engine.matcher.IMatcher} 使用</li>
+ *   <li>{@link #getModifySpec()} — 纯修改字段，供 {@link com.kaisar.xposed.godmode.engine.applier.RuleApplier} 使用</li>
+ * </ul>
+ * 新代码应优先使用 MatchSpec / ModifySpec，而非直接操作 RuleMatchSpec。
+ * </p>
  */
 public final class RuleMatchSpec implements RuleFields, Cloneable {
 
-    // ===== 瑙勫垯鏍囪瘑 =====
-    /** 瑙勫垯鏍囩 鈥?null/绌?绉婚櫎瑙勫垯锛岄潪绌?淇敼瑙勫垯 */
+    // ===== 规则标识 =====
+    /** 规则标签 — null/空=移除规则，非空=修改规则 */
     public String ruleTag;
 
-    // ===== 绉婚櫎瑙勫垯瀛楁 =====
+    // ===== 移除规则字段 =====
     public String label;
     public String packageName;
     public String matchVersionName;
@@ -45,10 +43,17 @@ public final class RuleMatchSpec implements RuleFields, Cloneable {
     public boolean repeatable;
     public String text;
     public String description;
+
+    // ===== 匹配配置 =====
+    /** 匹配模式，null 等价于 EXACT（精确匹配） */
+    public MatchMode matchMode;
+    /** 匹配阈值，0=使用系统默认值（当前默认宽松阈值 30） */
+    public int matchThreshold;
+
     public int visibility;
     public long timestamp;
 
-    // ===== 淇敼瑙勫垯瀛楁 =====
+    // ===== 修改规则字段 =====
     public int modWidth = -1;
     public int modHeight = -1;
     public float modAlpha = -1f;
@@ -57,7 +62,7 @@ public final class RuleMatchSpec implements RuleFields, Cloneable {
     public String modText;
     public String modImagePath;
 
-    // ===== 鍘熷鍊硷紙鐢ㄤ簬鎾ら攢淇敼锛?=====
+    // ===== 原始值（用于撤销修改）=====
     public int origWidth;
     public int origHeight;
     public float origAlpha = 1f;
@@ -65,12 +70,12 @@ public final class RuleMatchSpec implements RuleFields, Cloneable {
     public int origLeftMargin;
     public int origTopMargin;
 
-    /** 鏃犲弬鏋勯€狅紙渚?FieldMapper / RuleMapper 浣跨敤锛?*/
+    /** 无参构造（供 FieldMapper / RuleMapper 使用）*/
     public RuleMatchSpec() {
     }
 
     // =========================================================================
-    // RuleFields 鎺ュ彛瀹炵幇 鈥?37 涓?getter锛堝鎵樺埌 public 瀛楁锛?
+    // RuleFields 接口实现 — 37 个 getter（委托到 public 字段）
     // =========================================================================
 
     @Override public String getRuleTag() { return ruleTag; }
@@ -95,6 +100,8 @@ public final class RuleMatchSpec implements RuleFields, Cloneable {
     @Override public boolean isRepeatable() { return repeatable; }
     @Override public String getText() { return text; }
     @Override public String getDescription() { return description; }
+    @Override public MatchMode getMatchMode() { return matchMode; }
+    @Override public int getMatchThreshold() { return matchThreshold; }
     @Override public int getVisibility() { return visibility; }
     @Override public long getTimestamp() { return timestamp; }
     @Override public int getModWidth() { return modWidth; }
@@ -112,7 +119,27 @@ public final class RuleMatchSpec implements RuleFields, Cloneable {
     @Override public int getOrigTopMargin() { return origTopMargin; }
 
     // =========================================================================
-    // hashCode / equals / clone锛堝畬鍏ㄤ笉鍔紝淇濇寔鍘熸湁璇箟锛?
+    // 导出为 MatchSpec / ModifySpec（职责分离视图）
+    // =========================================================================
+
+    /**
+     * 导出为纯匹配规格，供 IMatcher 使用。
+     * 返回的 MatchSpec 是独立副本，修改不影响原 RuleMatchSpec。
+     */
+    public MatchSpec getMatchSpec() {
+        return MatchSpec.from(this);
+    }
+
+    /**
+     * 导出为纯修改规格，供 RuleApplier 使用。
+     * 返回的 ModifySpec 是独立副本，修改不影响原 RuleMatchSpec。
+     */
+    public ModifySpec getModifySpec() {
+        return ModifySpec.from(this);
+    }
+
+    // =========================================================================
+    // hashCode / equals / clone（完全不改，保持原有语义）
     // =========================================================================
 
     @Override

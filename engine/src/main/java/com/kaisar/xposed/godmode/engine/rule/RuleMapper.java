@@ -64,6 +64,8 @@ public final class RuleMapper {
         dst.repeatable = src.isRepeatable();
         dst.text = src.getText();
         dst.description = src.getDescription();
+        dst.matchMode = src.getMatchMode();
+        dst.matchThreshold = src.getMatchThreshold();
         dst.visibility = src.getVisibility();
         dst.timestamp = src.getTimestamp();
 
