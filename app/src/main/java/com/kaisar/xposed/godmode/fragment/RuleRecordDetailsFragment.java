@@ -73,7 +73,7 @@ public final class RuleRecordDetailsFragment extends PreferenceFragmentCompat im
             icon = applicationInfo.loadIcon(packageManager);
             label = applicationInfo.loadLabel(packageManager).toString();
         } catch (PackageManager.NameNotFoundException e) {
-            // 閹煎瓨姊婚弫銈夊嫉椤忓嫮鏆旈悷?闁?濞达綀娉曢弫銈嗩渶濡鍚囬柛銉у亾閻栵綁宕仦鐣屽畨闁活潿鍔岀€垫﹢宕ュ鍕▕濞戞挾鍎ら悥锝囩驳?
+            // 包名未找到，使用默认图标
         }
         Preference headerPreference = findPreference(getString(R.string.pref_key_detail_rule_info));
         headerPreference.setIcon(icon);

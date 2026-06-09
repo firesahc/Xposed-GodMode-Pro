@@ -15,16 +15,16 @@ import com.kaisar.xposed.godmode.rule.RuleRecord;
 import java.util.function.Consumer;
 
 /**
- * 鐟欏嫬鍨銉ょ稊濞翠胶绱幒鎺戞珤 閳?缁狅紕鎮?Handler 濞戝牊浼呴崚鍡楀絺閵嗕浇顫夐崚娆愬瘮娑斿懎瀵查崣濠咁潎鐎电喕鈧懘鈧氨鐓￠惃鍕紣娴ｆ粍绁﹂妴?
+ * 工作流编排器 — 通过 Handler 异步处理规则持久化和观察者通知。
  * <p>
- * 娴?GodModeManagerService 閹绘劕褰囬惃鍕椽閹烘帟浜寸拹锝冣偓?
- * 閸愬懘鍎撮幐浣规箒 HandlerThread閵嗕笭andler閵嗕阜ulePersistManager 閸?ObserverManager閵?
+ * 由 GodModeManagerService 使用。
+ * 通过 HandlerThread + Handler 委托给 RulePersistManager 和 ObserverManager。
  */
 final class WorkflowOrchestrator implements Handler.Callback {
 
-    // ===== POJO 濞戝牊浼呯猾浼欑礄閺囧じ鍞?Object[] 娴肩姴寮敍?=====
+    // ===== POJO 消息体（通过 msg.obj 传递）=====
 
-    /** WRITE_RULE 濞戝牊浼呮潪鍊熷祹 */
+    /** WRITE_RULE 消息体 */
     static final class WriteRuleMsg {
         final String packageName;
         final RuleRecord viewRule;
@@ -33,7 +33,7 @@ final class WorkflowOrchestrator implements Handler.Callback {
         @androidx.annotation.Nullable final String json;
         @androidx.annotation.Nullable final ActRules snapshotRules;
 
-        /** 鐢缚缍呴崶鐐€柅?*/
+        /** 带快照的构造方法 */
         WriteRuleMsg(String packageName, RuleRecord viewRule, Bitmap snapshot, String oldImagePath) {
             this.packageName = packageName;
             this.viewRule = viewRule;
@@ -43,7 +43,7 @@ final class WorkflowOrchestrator implements Handler.Callback {
             this.snapshotRules = null;
         }
 
-        /** 閺冪姳缍呴崶鐐€柅鐙呯礄閻╁瓨甯?JSON閿?*/
+        /** 带 JSON 数据的构造方法 */
         WriteRuleMsg(String packageName, RuleRecord viewRule, String json, ActRules snapshotRules) {
             this.packageName = packageName;
             this.viewRule = viewRule;
@@ -54,7 +54,7 @@ final class WorkflowOrchestrator implements Handler.Callback {
         }
     }
 
-    /** UPDATE_IMAGE_PATH 濞戝牊浼呮潪鍊熷祹 */
+    /** UPDATE_IMAGE_PATH 消息体 */
     static final class UpdateImagePathMsg {
         final String packageName;
         final RuleRecord viewRule;
@@ -67,7 +67,7 @@ final class WorkflowOrchestrator implements Handler.Callback {
         }
     }
 
-    /** DELETE_RULE 濞戝牊浼呮潪鍊熷祹 */
+    /** DELETE_RULE 消息体 */
     static final class DeleteRuleMsg {
         final String packageName;
         final String json;
@@ -82,7 +82,7 @@ final class WorkflowOrchestrator implements Handler.Callback {
         }
     }
 
-    /** UPDATE_RULE 濞戝牊浼呮潪鍊熷祹 */
+    /** UPDATE_RULE 消息体 */
     static final class UpdateRuleMsg {
         final String packageName;
         final String json;
@@ -95,7 +95,7 @@ final class WorkflowOrchestrator implements Handler.Callback {
         }
     }
 
-    // ===== 濞戝牊浼呮禒锝囩垳 =====
+    // ===== 消息代码 =====
     static final int LOAD_RULES = 0x00001;
     static final int WRITE_RULE = 0x00002;
     static final int DELETE_RULE = 0x00004;
@@ -107,17 +107,17 @@ final class WorkflowOrchestrator implements Handler.Callback {
 
     private static final long ORPHAN_CLEAN_INTERVAL = 120_000L;
 
-    // ===== 缂佸嫬鎮庨惃?Manager =====
+    // ===== 核心 Manager =====
     private final RuleCacheManager mCacheManager;
     private final RulePersistManager mPersistManager;
     private final ObserverManager mObserverManager;
 
-    // ===== 閸╄櫣顢呯拋鐐煢 =====
+    // ===== 实用工具 =====
     private final Logger mLogger;
     private final Handler mHandle;
     private final Consumer<String> mToolbarItemsCallback;
 
-    // ===== 閻樿埖鈧礁鐡у▓?=====
+    // ===== 运行时状态 =====
     private volatile boolean mDataLoaded;
     private volatile boolean mOrphanCleanPending;
 
@@ -137,15 +137,15 @@ final class WorkflowOrchestrator implements Handler.Callback {
         mHandle.sendEmptyMessage(LOAD_RULES);
     }
 
-    // ===== 閸忣剙绱戠拋鍧楁６閸?=====
+    // ===== 数据加载状态 =====
 
-    /** 鐟欏嫬鍨弫鐗堝祦閺勵垰鎯佸韫矤绾句胶娲忛崝鐘烘祰鐎瑰本鍨?*/
+    /** 数据是否已加载完成 */
     boolean isDataLoaded() {
         return mDataLoaded;
     }
 
     // ===================================================================
-    // Handler 濞戝牊浼呯紓鏍ㄥ笓 閳?閸楀繗鐨熼崥?Manager 娑斿妫块惃鍕紣娴ｆ粍绁?
+    // Handler 消息分发 — 委托给各 Manager 处理
     // ===================================================================
 
     @Override
@@ -183,10 +183,10 @@ final class WorkflowOrchestrator implements Handler.Callback {
     }
 
     // ===================================================================
-    // 瀵倹顒?AIDL 婵梹澧弬瑙勭《閿涘牏鏁?GodModeManagerService AIDL 閺傝纭剁拫鍐暏閿?
+    // 异步 AIDL 实现 — 由 GodModeManagerService AIDL 调用
     // ===================================================================
 
-    /** 缂傛牗甯撻崘娆忓弳鐟欏嫬鍨銉ょ稊濞翠緤绱扮紓鎾崇摠 閳?濞戝牊浼呴梼鐔峰灙 閳?閹镐椒绠欓崠?+ 鐟欏倸鐧傞懓鍛粹偓姘辩叀 */
+    /** 异步写入规则 — 先应用缓存，再发送 Handler 消息持久化 + 通知观察者 */
     boolean writeRuleAsync(String packageName, RuleRecord viewRule, Bitmap snapshot) {
         try {
             RuleCacheManager.CacheResult cr =
@@ -202,7 +202,7 @@ final class WorkflowOrchestrator implements Handler.Callback {
         }
     }
 
-    /** 缂傛牗甯撻弴瀛樻煀鐟欏嫬鍨銉ょ稊濞翠緤绱扮紓鎾崇摠 閳?濞戝牊浼呴梼鐔峰灙 閳?閹镐椒绠欓崠?+ 鐟欏倸鐧傞懓鍛粹偓姘辩叀 */
+    /** 异步更新规则 — 先应用缓存，再发送 Handler 消息持久化 + 通知观察者 */
     boolean updateRuleAsync(String packageName, RuleRecord viewRule) {
         try {
             RuleCacheManager.CacheResult cr =
@@ -216,7 +216,7 @@ final class WorkflowOrchestrator implements Handler.Callback {
         }
     }
 
-    /** 缂傛牗甯撻崚鐘绘珟閸楁洘娼憴鍕灟瀹搞儰缍斿ù?*/
+    /** 异步删除规则 — 从缓存移除并持久化 */
     boolean deleteRuleAsync(String packageName, RuleRecord viewRule) {
         try {
             RuleCacheManager.DeleteResult dr = mCacheManager.deleteRule(packageName, viewRule);
@@ -231,7 +231,7 @@ final class WorkflowOrchestrator implements Handler.Callback {
         }
     }
 
-    /** 缂傛牗甯撻崚鐘绘珟閸栧懎鍙忛柈銊潐閸掓瑥浼愭担婊勭ウ */
+    /** 异步删除某应用所有规则 */
     boolean deleteRulesAsync(String packageName) {
         mLogger.d("delete rules pkg=" + packageName + " size=" + mCacheManager.size());
         if (mCacheManager.deleteRules(packageName)) {
@@ -242,7 +242,7 @@ final class WorkflowOrchestrator implements Handler.Callback {
     }
 
     // ===================================================================
-    // 鐟欏倸鐧傞懓鍛吀閻炲棗顫欓幍?
+    // 观察者管理
     // ===================================================================
 
     void addObserver(String packageName, IObserver observer, boolean editModeEnabled,
@@ -259,7 +259,7 @@ final class WorkflowOrchestrator implements Handler.Callback {
     }
 
     // ===================================================================
-    // RulePersistManager 婵梹澧敍鍫滅返 AIDL 閺傝纭堕惄瀛樺复鐠嬪啰鏁ら敍?
+    // RulePersistManager 委托 — 供 AIDL 调用
     // ===================================================================
 
     String saveBitmap(Bitmap bitmap, String dir) {
@@ -279,13 +279,13 @@ final class WorkflowOrchestrator implements Handler.Callback {
     }
 
     // ===================================================================
-    // Handler 婢跺嫮鎮婇崳銊︽煙濞?
+    // Handler 消息处理
     // ===================================================================
 
     private void handleWriteRule(Message msg) {
         WriteRuleMsg m = (WriteRuleMsg) msg.obj;
         if (m.snapshot != null) {
-            // 鐢缚缍呴崶鎾呯窗閸掔娀娅庨弮褍娴?閳?娣囨繂鐡ㄩ弬鏉挎禈 閳?閺囧瓨鏌?imagePath
+            // 带快照写入：先删除旧图片，再保存新图片到 imagePath
             try {
                 if (m.oldImagePath != null && !android.text.TextUtils.isEmpty(m.oldImagePath)) {
                     FileUtils.delete(m.oldImagePath);
@@ -308,7 +308,7 @@ final class WorkflowOrchestrator implements Handler.Callback {
             mHandle.obtainMessage(UPDATE_IMAGE_PATH,
                     new UpdateImagePathMsg(m.packageName, m.viewRule, newImagePath)).sendToTarget();
         } else {
-            // 閺冪姳缍呴崶鎾呯窗閻╁瓨甯撮幐浣风畽閸栨牞顫夐崚?JSON 楠炲爼鈧氨鐓＄憴鍌氱檪閼?
+            // 无快照写入：直接持久化 JSON 并通知观察者
             try {
                 mObserverManager.notifyObserverRuleChanged(m.packageName, m.snapshotRules);
                 mPersistManager.safePersistRules(m.packageName, m.json);

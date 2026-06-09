@@ -18,31 +18,31 @@ import java.io.File;
 import java.io.FileNotFoundException;
 
 /**
- * 娑撳﹤绗ｅΟ鈥崇础閺嶇绺剧粻锛勬倞閺堝秴濮?閳?閹碘偓閺堝娉曟潻娑氣柤闁俺顔嗛崸鍥偓姘崇箖濮濄倖婀囬崝掳鈧?
+ * GodMode 管理器服务 — AIDL 实现类（核心服务端点）。
  * <p>
- * 鐠囥儲婀囬崝锟犫偓姘崇箖 XServiceManager 濞夈劌鍙嗛崚?SystemServer 鏉╂稓鈻奸妴?
- * 闁插洨鏁ょ紒鍕値濡€崇础閿涘苯鐨㈢憴鍕灟缂傛挸鐡ㄩ妴浣瑰瘮娑斿懎瀵查妴浣筋潎鐎电喕鈧懐顓搁悶鍡愨偓浣规綀闂勬劙鐛欑拠浣割潤閹垫绮?4 娑擃亙绗撻懕?Manager閵?
- * Handler 濞戝牊浼呴崚鍡楀絺娴ｆ粈璐熺紓鏍ㄥ笓鐏炲偊绱濋崡蹇氱殶閸?Manager 娑斿妫块惃鍕紣娴ｆ粍绁﹂妴?
+ * 运行在 XServiceManager 注入的 SystemServer 进程中。
+ * 内部持有 PermissionEnforcer、RuleCacheManager 等核心组件，
+ * 通过 Handler 异步委托给各 Manager 处理规则持久化和观察者通知。
  * <p>
- * Client 缁旑垶鈧俺绻?{@link com.kaisar.xposed.godmode.injection.bridge.GodModeManager#getDefault()} 娴ｈ法鏁ら幒銉ュ經閵?
+ * Client 调用 {@link com.kaisar.xposed.godmode.injection.bridge.GodModeManager#getDefault()} 获取实例。
  */
 public final class GodModeManagerService extends IGodModeManager.Stub {
 
-    // ===== 缂佸嫬鎮庨惃鍕矋娴?=====
+    // ===== 核心组件 =====
     private final PermissionEnforcer mPermissionEnforcer;
     private final RuleCacheManager mCacheManager;
     private final WorkflowOrchestrator mOrchestrator;
 
-    // ===== 閸╄櫣顢呯拋鐐煢 =====
+    // ===== 实用工具 =====
     private final Logger mLogger;
     private final Context mContext;
     private final Gson mGson = new GsonBuilder().setPrettyPrinting().create();
 
-    // ===== 閻樿埖鈧礁鐡у▓?=====
+    // ===== 运行时状态 =====
     private volatile boolean mInEditMode;
     private boolean mStarted;
 
-    // ===== 瀹搞儱鍙块弽蹇撲焊婵傛枻绱欑粻鈧崡鏇炵摟濞堢绱濇稉宥夋付閸楁洜瀚?Manager閿?=====
+    // ===== 工具栏隐藏项（由 GodModeManagerService 管理持久化）=====
     private String mToolbarHiddenItems = "";
 
     public GodModeManagerService(Context context) {
@@ -57,7 +57,7 @@ public final class GodModeManagerService extends IGodModeManager.Stub {
     }
 
     // ===================================================================
-    // AIDL 閹恒儱褰涚€圭偟骞?閳?婵梹澧紒娆忔倗 Manager
+    // AIDL 接口实现 — 委托给各 Manager
     // ===================================================================
 
     @Override

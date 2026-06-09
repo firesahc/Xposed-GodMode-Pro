@@ -26,9 +26,9 @@ import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedHelpers;
 
 /**
- * 閻╂垵鎯?Activity 閻㈢喎鎳￠崨銊︽埂閿涘苯婀?Activity 閹垹顦?闁库偓濮ｄ焦妞傛惔鏃傛暏/閹俱倝鏀㈢憴鍕灟閵?
+ * 监听 Activity 生命周期事件，管理 Activity 视图的规则应用/撤销。
  * <p>
- * 闁俺绻?EventBus 鐠併垽妲?{@link RulesChangedEvent} 閹恒儲鏁圭憴鍕灟閸欐ɑ娲块柅姘辩叀閵?
+ * 通过 EventBus 接收 {@link RulesChangedEvent} 实现规则动态更新。
  */
 public final class LifecycleObserver extends XC_MethodHook {
 
@@ -50,8 +50,8 @@ public final class LifecycleObserver extends XC_MethodHook {
                 decorView.getViewTreeObserver().addOnGlobalLayoutListener(listener);
                 mActivities.put(activity, listener);
                 decorView.post(listener::applyRuleIfMatchCondition);
-                // 绾喕绻氶崷銊潐閸掓瑥鍑￠崚鎷屾彧娴?mActivities 鐏忔矮璐熺粚鐚寸礄鐟欏嫬鍨弮鈺€绨?onPostResume閿?
-                // 閹存牞顫嬮崶鎯ф躬閸掓繃顐?applyRuleIfMatchCondition 閺冭泛鐨婚張顏勬皑缂侇亝妞傞張澶夌娑擃亜娆㈡潻鐔煎櫢鐠囨洏鈧?
+                // 首次 onPostResume 时注册布局变化监听，将 Activity 存入 mActivities
+                // 后续通过 applyRuleIfMatchCondition 在布局变化时重新应用规则
                 scheduleRuleReapplication(activity);
             }
             installRecyclerViewHooks(activity);
@@ -68,16 +68,16 @@ public final class LifecycleObserver extends XC_MethodHook {
     }
 
     /**
-     * 閹恒儲鏁圭憴鍕灟閸欐ɑ娲块柅姘辩叀閿涘湕ventBus 鐠侯垰绶為敍澶堚偓?
-     * 閹俱倝鏀㈤弮褑顫夐崚娆欑礉鎼存梻鏁ら弬鎷岊潐閸掓瑱绱濋悞璺烘倵娑撶儤澧嶉張澶婂嚒鐠虹喕閲?Activity 鐠嬪啫瀹冲鎯扮箿闁插秷鐦妴?
+     * 接收规则变更事件，通过 EventBus 订阅。
+     * 对比新旧规则差异，撤销旧规则并应用新规则，同时对所有存活 Activity 重新调度规则应用。
      */
     @SuppressWarnings("unchecked")
     @Subscribe
     public void onRulesChanged(RulesChangedEvent event) {
         ActRules newActRules = (ActRules) event.rules;
         if (newActRules == null) return;
-        // 鐟欏嫬鍨張顏勫綁閸栨牗妞傜捄瀹犵箖閿涘矂浼╅崗宥勭瑝韫囧懓顩﹂惃鍕寵闁库偓閳帒鍟€鎼存梻鏁ょ€佃壈鍤ч惃鍕／閸?
-        // 鐟欙箑褰傞崷鐑樻珯閿涙PC addObserver 閹恒劑鈧胶娈戠憴鍕灟娑?onPostResume 娑擃厼鍑℃惔鏃傛暏閻ㄥ嫯顫夐崚娆忕暚閸忋劎娴夐崥灞炬
+        // 先保存旧规则用于对比差异（mActRules 缓存当前已应用的规则）
+        // 旧规则由 IPC addObserver 提前推送到此，在 onPostResume 时通过 applyRuleBatch 应用
         if (newActRules.equals(mActRules)) return;
         ViewController.getDefault().clearBlockedCache();
         Set<Map.Entry<String, List<RuleRecord>>> entries = newActRules.entrySet();
@@ -124,11 +124,10 @@ public final class LifecycleObserver extends XC_MethodHook {
                 }
             }
         }
-        // 娣囶喖顦? 閸︺劏顫夐崚娆忕摠閺€鎯ф倵娑撶儤澧嶉張澶婂嚒鐠虹喕閲?Activity 鐠嬪啫瀹抽柌宥呯安閻㈩煉绱?
-        // 娴犮儱顦╅悶鍡氼潒閸ユ儳婀憴鍕灟妫ｆ牗顐奸崚鎷屾彧閺冭泛鐨绘稉宥呯摠閸︺劎娈戦幆鍛枌閿涘牅绶ユ俊鍌氱磽濮濄儱锝為崗鍛偓涓梤agment 閹虫帒濮炴潪鏂ょ礆閵?
-        // 婵″倹鐏夌憴鍡楁禈鐏忔矮绗夐崣顖滄暏閿涘畮pplyRuleBatch 娴兼岸娼ゆ妯恒亼鐠愩儻绱?
-        // 閼?onGlobalLayout 閸︺劑娼ら幀?UI 娑撳﹤褰查懗鑺ユ鏉╂粈绗夋导姘晙濞喡ば曢崣鎴欌偓?
-        // scheduleRuleReapplication閿?00ms 濞戝牊濮堥敍澶嬪絹娓氭盯鍣哥拠鏇犵崶閸欙絼浜掗幑鏇″箯閸斻劍鈧礁鍨卞铏规畱鐟欏棗娴橀妴?
+        // 注意：applyRuleBatch 对每个 Activity 应用规则，但不保证立即生效
+        // 对于动态内容（如 RecyclerView、Fragment），布局可能在应用后发生变化
+        // 因此通过 onGlobalLayout 监听 UI 布局变化后重新调度规则
+        // scheduleRuleReapplication 使用 200ms 防抖延迟，避免频繁重新应用
         for (Activity activity : mActivities.keySet()) {
             scheduleRuleReapplication(activity);
         }
@@ -140,7 +139,7 @@ public final class LifecycleObserver extends XC_MethodHook {
             if (existing != null) mDebounceHandler.removeCallbacks(existing);
             Runnable r = () -> {
                 synchronized (mPendingReapply) { mPendingReapply.remove(activity); }
-                // 娑撳秵绔婚悶鍡欑处鐎涙﹫绱伴柌宥呯安閻劌绨叉晶鐐哄櫤鐞涖儱鍘栭張顏囶洬閻╂牜娈戠憴鍕灟閿涘矁鈧矂娼惍鏉戞綎瀹歌尙鏁撻弫鍫㈡畱娣囶喗鏁?
+                // 防抖结束后重新应用规则（布局稳定后的最终状态）
                 OnLayoutChangeListener listener = mActivities.get(activity);
                 if (listener != null) listener.applyRuleIfMatchCondition();
             };
@@ -156,7 +155,7 @@ public final class LifecycleObserver extends XC_MethodHook {
             XposedHelpers.findAndHookMethod(adapterClass, "notifyDataSetChanged", new XC_MethodHook() {
                 @Override
                 protected void afterHookedMethod(MethodHookParam param) {
-                    if (mActRules.isEmpty()) return; // 閺冪姾顫夐崚娆愭娑撳秷袝閸欐垿鍣搁崠褰掑帳
+                    if (mActRules.isEmpty()) return; // 没有活跃规则时跳过
                     for (Activity act : mActivities.keySet()) {
                         if (act != null && !act.isFinishing()) scheduleRuleReapplication(act);
                     }
@@ -172,7 +171,7 @@ public final class LifecycleObserver extends XC_MethodHook {
     final class OnLayoutChangeListener implements ViewTreeObserver.OnGlobalLayoutListener {
 
         final WeakReference<Activity> activityReference;
-        private volatile boolean mApplying; // 闂冩煡鍣搁崗銉︾垼韫?
+        private volatile boolean mApplying; // 防止重复应用
 
         OnLayoutChangeListener(Activity activity) {
             activityReference = new WeakReference<>(activity);
@@ -180,7 +179,7 @@ public final class LifecycleObserver extends XC_MethodHook {
 
         @Override
         public void onGlobalLayout() {
-            if (mApplying) return; // 闂冨弶顒涚憴鍕灟鎼存梻鏁ょ憴锕€褰傞惃鍕鐏炩偓閸欐ɑ娲跨€佃壈鍤ч柅鎺戠秺闁插秴鍙?
+            if (mApplying) return; // 正在应用规则中，跳过本次布局回调
             applyRuleIfMatchCondition();
         }
 

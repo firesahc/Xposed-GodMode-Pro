@@ -435,7 +435,7 @@ public final class RuleRecordListFragment extends Fragment {
                     updateFilteredList();
                     Snackbar.make(requireView(), R.string.snack_bar_msg_revert_rule_fail, Snackbar.LENGTH_SHORT).show();
                 } else {
-                    // 闁劌鍨庢径杈Е閿涙岸鍣搁弬鏉垮鏉炶棄鐣弫瀛樻殶閹?
+                    // 部分删除失败，重新加载规则列表
                     mSharedViewModel.loadAppRules();
                     if (failed > 0) {
                         Toast.makeText(requireContext(),

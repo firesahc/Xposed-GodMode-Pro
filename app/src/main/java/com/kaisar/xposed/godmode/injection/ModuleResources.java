@@ -12,8 +12,8 @@ import java.io.File;
 import java.lang.reflect.Method;
 
 /**
- * 濡€虫健鐠у嫭绨▔銊ュ弳閸?閳?鐏?GodMode 濡€虫健鐠у嫭绨▔銊ュ弳閻╊喗鐖ｆ惔鏃傛暏閻?AssetManager閵?
- * 娴?GodModeInjector 閹绘劕褰囬惃鍕缁斿浜寸拹锝冣偓?
+ * 模块资源管理 — 提供 GodMode 模块资源注入目标应用 AssetManager 的功能。
+ * 由 GodModeInjector 在初始化时调用。
  */
 public final class ModuleResources {
 
@@ -23,7 +23,7 @@ public final class ModuleResources {
 
     private ModuleResources() {}
 
-    /** 閸?initZygote 闂冭埖顔岄崚婵嗩潗閸栨牗膩閸ф绁┃鎰熅瀵?*/
+    /** 在 initZygote 阶段初始化模块资源路径和资源实例 */
     public static void init(String modulePath, Resources moduleRes) {
         sModulePath = modulePath;
         sInitialized = true;
@@ -35,16 +35,17 @@ public final class ModuleResources {
     }
 
     /**
-     * 鐏?GodMode 濡€虫健鐠у嫭绨▔銊ュ弳閻╊喗鐖ｆ惔鏃傛暏閻?Resources閵?
-     * 娴ｅ灝绶遍崷銊ф窗閺嶅洤绨查悽銊よ厬濞撳弶鐓嬬憰鍡欐磰鐏?UI 閺冭泛褰叉禒銉ゅ▏閻劍膩閸ф娈戠敮鍐ㄧ湰閵嗕礁鐡х粭锔胯閸滃苯娴橀悧鍥カ濠ф劑鈧?
+     * 将 GodMode 模块资源注入目标应用的 Resources 中。
+     * 通过反射调用 AssetManager.addAssetPath 添加模块路径，
+     * 使目标应用能加载模块的 UI 资源和字符串等资源。
      */
     public static void injectInto(Resources res) {
         if (res == null) return;
         try {
             res.getString(R.string.res_inject_success);
-            return; // 瀹稿弶鏁為崗?
+            return; // 已注入，跳过
         } catch (Resources.NotFoundException e) {
-            // 鐏忔碍婀▔銊ュ弳 閳?缂佈呯敾閹笛嗩攽濞夈劌鍙嗗ù浣衡柤
+            // 未注入，需要执行注入流程
         }
         try {
             String path = sModulePath;

@@ -47,13 +47,18 @@ import java.lang.reflect.Field;
 import java.util.List;
 
 /**
- * 缂傚倸鍊搁崐褰掓偋閻愬灚顐芥い鎰剁畱闂傤垶鏌曟繛褍鎳忛妵婵嬫⒑閸︻厼鍔嬮悽顖涘笒閳?闂?闂備焦宕橀褏绮旈幘顔肩畺?KeyInterceptor 濠?TouchInterceptor 闂備焦鐪归崝宀€鈧凹鍘介弲璺侯吋婢跺﹤鐝樻繝銏ｅ煐閸旀牗鎱?Hook 濠电偞鍨堕幐濠氭嚌閻愵剚鍙忛柣鏂垮悑閻掑鏌￠崟顐ょ閻㈩垰妫濋弻? * <p>
- * 缂傚倷鑳舵刊瀵告閺囥垹绠栧┑鐘叉处閸ゅ秹鏌涚仦鍓х煀濞寸媭鍨跺娲敃閵忊晜效闁诲孩鍝庨崝鎴澪涢崘顔碱潊闁斥晛鍟伴崙锟犳⒑闂堟稒顥欑紒鈧笟鈧幆鍫濐潨閳ь剟鐛埀顒傛喐韫囨洘顫曟い蹇撴噺缂嶅洭鏌熺€涙绠栭柣婵勫€濋弻鏇㈠幢閺囩喓銈伴悶姘箞閺岀喖鎸婃径瀣殘婵犫拃鍕煉鐎规洘绻堝畷褰掝敊閼测斁鍋撴繝姘厱婵炲棙鍔曢悘鐔兼煃瑜滈崗娑氭濮樿埖鍋傞柛顐ｆ礃閻撳倿鐓崶銊р姇闁哄棙鐩幃妤佹媴閸愵煈妫堥梺绯曟櫅閹虫ɑ淇婄€涙ɑ濯撮柛婵勫劜缂嶅嫰姊?濠碘槅鍋呭妯尖偓姘煎灦閿濈偛顓兼径濠勵啌閻庡箍鍎辩€氼喚绮欐繝鍥ㄧ叆? * 濠电偛顕慨浼村磿閸楃儐鍤曞瀣捣绾句粙鏌″搴″閻㈩垰妫欐穱濠囶敍濡炶浜剧€规洖娲ㄩ、鍛存⒑濮瑰洤濡奸悗姘煎櫍瀵偊骞樼拠鎻掔獩闂佽姤锚椤︿即宕抽鐐寸厸闁割偁鍨归弸鍌炴煃瑜滈崜娆撳磹婵犳艾鏋?{@link com.kaisar.xposed.godmode.injection.entry.ActivityKeyHook}
- * 闂?{@link com.kaisar.xposed.godmode.injection.entry.TouchHook} 闂佽崵濮撮鍛村疮娴兼潙鏋侀柕鍫濐槸杩? */
+ * 编辑器编排器 — 管理编辑模式的核心类，连接按键拦截器（KeyInterceptor）和触摸拦截器（TouchInterceptor）。
+ * 负责调度视图选择、屏蔽、预览、修改等交互操作，通过 Hook 系统与目标应用交互。
+ * <p>
+ * 内部管理多个子组件：节点选择面板、属性编辑器、预览处理器，以及移除/修改手势处理器。
+ * 同时维护触摸事件分发、长按检测、多点锁定等手势交互逻辑。
+ * 按键事件通过 {@link com.kaisar.xposed.godmode.injection.entry.ActivityKeyHook}
+ * 和 {@link com.kaisar.xposed.godmode.injection.entry.TouchHook} 注入。
+ */
 public final class EditorOrchestrator implements Property.OnPropertyChangeListener<Boolean> {
 
     // =========================================================================
-    // 闂佹眹鍩勯崹閬嶅箖閸岀偛闂?    // =========================================================================
+    // 常量定义    // =========================================================================
 
     private static final int OVERLAY_COLOR = Color.argb(150, 255, 0, 0);
     @SuppressWarnings("unused")
@@ -61,18 +66,18 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     private static final int LONG_PRESS_TIMEOUT = ViewConfiguration.getLongPressTimeout();
 
     // =========================================================================
-    // 濠电偛鐡ㄩ崵搴ㄥ磹閹炬儼濮抽柡澶庮嚦閻旂厧鐏崇€规洖娲ㄩ、鍛存⒑閹稿海鈽夐柣妤€妫涢弫?KeyInterceptor闂?    // =========================================================================
+    // 交互模式与信息流模式    // =========================================================================
 
     private int mInteractionMode = EditorInteractionMode.INITIAL;
     private boolean mInfoFlowMode = false;
 
     // =========================================================================
-    // 濠碘槅鍋呭妯尖偓姘煎灦閿濈偛顓兼径瀣汗闂佺厧鎽滈。浠嬪磻閹惧鐟瑰┑鐘插椤︹晠姊?KeyInterceptor闂?    // =========================================================================
+    // 预览处理器    // =========================================================================
 
     final PreviewHandler mPreviewHandler = new PreviewHandler();
 
     // =========================================================================
-    // 闂佽瀛╃粙鎺楀礉閺嶎偅鏆滈柛顐ｆ礀缁€鍡涙偣閾忕懓鍔嬮柣婵勫€濋弻銊モ槈濡厧顣洪柣?KeyInterceptor闂?    // =========================================================================
+    // 节点选择面板与属性编辑器    // =========================================================================
 
     private final NodeSelectorPanel mNodePanel = new NodeSelectorPanel();
     final PropertyEditorPanel mPropertyEditor = new PropertyEditorPanel();
@@ -80,7 +85,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     private WeakReference<Activity> mCurrentActivityRef = new WeakReference<>(null);
 
     // =========================================================================
-    // 闂備胶鍘ч幖顐﹀磹婵犳艾纾婚柨婵嗩槹閻掕顭跨捄渚剰妞ゅ繈鍎甸弻娑㈡晲閸愩劌顫囧┑鐐烘？閸楀啿顕ｉ崼鏇炲瀭妞ゆ梻鏅ˇ銉╂煟閻樺樊鍎忛柛鐘崇〒濡叉劕鈻庨幘鍐插亶?KeyInterceptor.NodeSelectorPanel.Callbacks闂?    // =========================================================================
+    // 节点选择面板回调（NodeSelectorPanel.Callbacks）    // =========================================================================
 
     private final NodeSelectorPanel.Callbacks mNodePanelCallbacks =
             new NodeSelectorPanel.Callbacks() {
@@ -117,7 +122,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
             };
 
     // =========================================================================
-    // 闂佽崵鍠愰悷閬嶆⒔閸曨垰绠犳繝濠傜墛閸嬫劙鏌ら崫銉毌闁稿鎸荤粭鐔哥節閸曨収妲遍梻?TouchInterceptor闂?    // =========================================================================
+    // 触摸状态字段（TouchInterceptor 相关）    // =========================================================================
 
     private boolean mIsInEditMode;
     private boolean mMultiPointLock;
@@ -140,24 +145,24 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     private float mDragStartRawX, mDragStartRawY;
 
     // =========================================================================
-    // 闂佽绻掗崑鐔煎磻閻愬搫鐒垫い鎴墮閸熸壆绮氶崸妤佺厽?    // =========================================================================
+    // 开关属性引用    // =========================================================================
 
     private final Property<Boolean> mSwitchProp;
 
     // =========================================================================
-    // 闂備礁鎲￠悷銉х矓閹绢喗鍎嶉柣妯兼暩绾句粙鏌熼幆褏锛嶉柟鐣屽█閺屻劌鈽夊Ο鐓庮暫闁?TouchInterceptor闂?    // =========================================================================
+    // 窗口属性反射字段（TouchInterceptor 相关）    // =========================================================================
 
     private static Field sWindowAttributesField;
 
     // =========================================================================
-    // 闂備礁鎼鍛偓姘嵆閸┾偓妞ゆ帒鍊稿瓭濠?    // =========================================================================
+    // 构造器    // =========================================================================
 
     public EditorOrchestrator(Property<Boolean> switchProp) {
         this.mSwitchProp = switchProp;
     }
 
     // =========================================================================
-    // 闂備胶顭堝ù姘跺礈濞嗘挸鐭楅柨娑樺婵ジ鏌涜椤ㄥ棝鏁嶉弽顓熺厱?    // =========================================================================
+    // 状态查询方法    // =========================================================================
 
     public int getInteractionMode() {
         return mInteractionMode;
@@ -176,10 +181,12 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     }
 
     // =========================================================================
-    // 闂傚倸鍊搁敃銉︾箾婵犲洤闂繛宸簼閻撱儲銇勯弮鍌楁嫛婵℃煡浜堕弻锝夋倷閸欏绱ㄧ紓浣介哺閻燂妇绮?ActivityKeyHook 闂佽崵濮撮鍛村疮娴兼潙鏋侀柕鍫濐槹閺?    // =========================================================================
+    // 音量键事件处理（ActivityKeyHook 相关）    // =========================================================================
 
     /**
-     * 濠电姰鍨煎▔娑氣偓姘煎櫍楠炲啯绻濋崶顭戞闂佽鍎煎Λ鍕枍閵堝鈷戞繛鍡樺劤閺嬬喖鎮楅崹顐ょ煁缂佸顦遍埀顒婄到婢у海绮堥崜鍣奼gle/闂佽绨肩徊缁樼珶閸儱鏄ラ柛娑樼摠閺咁剙顭块懜鐢点€掔紒鈧径鎰厽?ActivityKeyHook 闂備線娼荤拹鐔煎礉瀹ュ鏋佺憸鐗堝笒缁€鍡椕归悡搴殶闁告瑩绠栧娲箵閹烘梻顔掗梺杞扮贰閸樼晫绮嬪鍥ｅ亾閿濆倹娅嗘い鎰矙閺岋繝宕橀埡浣稿Ц闂佹眹鍔庨崰鏍箖娴犲惟闁挎繂鍊告禍?     */
+     * 音量键切换编辑面板：若未选择则显示节点选择面板，否则关闭面板。
+     * 由 ActivityKeyHook 通过按键事件触发调用。
+     */
     public void onVolumeKeyToggle(Activity activity) {
         if (!mNodePanel.isKeySelecting() && activity != null) {
             showNodeSelectPanel(activity);
