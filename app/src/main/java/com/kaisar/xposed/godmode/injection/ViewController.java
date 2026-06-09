@@ -11,7 +11,7 @@ import com.kaisar.xposed.godmode.engine.applier.RemoveApplier;
 import com.kaisar.xposed.godmode.engine.applier.RuleApplier;
 import com.kaisar.xposed.godmode.engine.matcher.CompositeMatcher;
 import com.kaisar.xposed.godmode.engine.matcher.IMatcher;
-import com.kaisar.xposed.godmode.engine.rule.ModifySpec;
+import com.kaisar.xposed.godmode.engine.rule.ActionSpec;
 import com.kaisar.xposed.godmode.engine.rule.RuleMapper;
 import com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec;
 import com.kaisar.xposed.godmode.engine.util.Logger;
@@ -139,7 +139,7 @@ public final class ViewController {
     public boolean applyRule(View v, RuleRecord viewRule) {
         if (v == null || viewRule == null) return false;
         RuleMatchSpec engineRule = toEngineRule(viewRule);
-        ModifySpec spec = engineRule.getModifySpec();
+        ActionSpec spec = engineRule.getActionSpec();
         if (viewRule.isModifyRule()) {
             return getModifyApplier().apply(v, spec);
         } else {
@@ -181,7 +181,7 @@ public final class ViewController {
     public void revokeRule(View v, RuleRecord viewRule) {
         if (v == null || viewRule == null) return;
         RuleMatchSpec engineRule = toEngineRule(viewRule);
-        ModifySpec spec = engineRule.getModifySpec();
+        ActionSpec spec = engineRule.getActionSpec();
         if (viewRule.isModifyRule()) {
             getModifyApplier().revoke(v, spec);
         } else {

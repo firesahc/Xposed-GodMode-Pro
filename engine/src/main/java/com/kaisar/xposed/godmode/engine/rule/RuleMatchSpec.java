@@ -10,9 +10,9 @@ import java.util.Arrays;
  * 内部包含两个职责清晰的子规格：
  * <ul>
  *   <li>{@link #getMatchSpec()} — 纯匹配字段，供 {@link com.kaisar.xposed.godmode.engine.matcher.IMatcher} 使用</li>
- *   <li>{@link #getModifySpec()} — 纯修改字段，供 {@link com.kaisar.xposed.godmode.engine.applier.RuleApplier} 使用</li>
+ *   <li>{@link #getActionSpec()} — 纯修改字段，供 {@link com.kaisar.xposed.godmode.engine.applier.RuleApplier} 使用</li>
  * </ul>
- * 新代码应优先使用 MatchSpec / ModifySpec，而非直接操作 RuleMatchSpec。
+ * 新代码应优先使用 MatchSpec / ActionSpec，而非直接操作 RuleMatchSpec。
  * </p>
  */
 public final class RuleMatchSpec implements RuleFields, Cloneable {
@@ -119,7 +119,7 @@ public final class RuleMatchSpec implements RuleFields, Cloneable {
     @Override public int getOrigTopMargin() { return origTopMargin; }
 
     // =========================================================================
-    // 导出为 MatchSpec / ModifySpec（职责分离视图）
+    // 导出为 MatchSpec / ActionSpec（职责分离视图）
     // =========================================================================
 
     /**
@@ -131,11 +131,11 @@ public final class RuleMatchSpec implements RuleFields, Cloneable {
     }
 
     /**
-     * 导出为纯修改规格，供 RuleApplier 使用。
-     * 返回的 ModifySpec 是独立副本，修改不影响原 RuleMatchSpec。
+     * 导出为纯动作规格，供 RuleApplier 使用。
+     * 返回的 ActionSpec 是独立副本，修改不影响原 RuleMatchSpec。
      */
-    public ModifySpec getModifySpec() {
-        return ModifySpec.from(this);
+    public ActionSpec getActionSpec() {
+        return ActionSpec.from(this);
     }
 
     // =========================================================================

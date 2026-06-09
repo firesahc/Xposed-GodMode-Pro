@@ -5,7 +5,7 @@ import android.util.SparseArray;
 import android.view.View;
 import android.view.ViewGroup;
 
-import com.kaisar.xposed.godmode.engine.rule.ModifySpec;
+import com.kaisar.xposed.godmode.engine.rule.ActionSpec;
 import com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec;
 
 import java.lang.ref.WeakReference;
@@ -13,7 +13,7 @@ import java.lang.ref.WeakReference;
 /**
  * 移除规则应用器 — 将视图设置为 GONE/INVISIBLE 或恢复原始状态。
  * <p>
- * 新代码使用 {@link #apply(View, ModifySpec)} 和 {@link #revoke(View, ModifySpec)}。
+ * 新代码使用 {@link #apply(View, ActionSpec)} 和 {@link #revoke(View, ActionSpec)}。
  * 旧版 {@link #apply(View, RuleMatchSpec)} 已有默认委托。
  */
 public final class RemoveApplier implements RuleApplier {
@@ -21,10 +21,10 @@ public final class RemoveApplier implements RuleApplier {
     private final SparseArray<Pair<WeakReference<View>, ViewProperty>> mBlockedViewCache
             = new SparseArray<>();
 
-    // ===== 新 API（ModifySpec） =====
+    // ===== 新 API（ActionSpec） =====
 
     @Override
-    public boolean apply(View view, ModifySpec spec) {
+    public boolean apply(View view, ActionSpec spec) {
         if (view == null || spec == null) return false;
         int cacheKey = spec.isRemoveRule() ? identityKey(spec) : spec.hashCode();
         Pair<WeakReference<View>, ViewProperty> viewInfo = mBlockedViewCache.get(cacheKey);
@@ -57,7 +57,7 @@ public final class RemoveApplier implements RuleApplier {
     }
 
     @Override
-    public boolean revoke(View view, ModifySpec spec) {
+    public boolean revoke(View view, ActionSpec spec) {
         if (view == null || spec == null) return false;
         int cacheKey = spec.isRemoveRule() ? identityKey(spec) : spec.hashCode();
         Pair<WeakReference<View>, ViewProperty> viewInfo = mBlockedViewCache.get(cacheKey);
@@ -85,7 +85,7 @@ public final class RemoveApplier implements RuleApplier {
         mBlockedViewCache.clear();
     }
 
-    private static int identityKey(ModifySpec spec) {
+    private static int identityKey(ActionSpec spec) {
         return System.identityHashCode(spec);
     }
 

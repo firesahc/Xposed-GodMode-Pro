@@ -1,14 +1,14 @@
 package com.kaisar.xposed.godmode.engine.rule;
 
 /**
- * 修改规格 — 定义规则应用（修改/移除）所需的所有字段。
+ * 动作规格 — 定义规则应用（修改/移除）所需的所有字段。
  * <p>
- * 从 {@link RuleMatchSpec} 拆分的纯修改部分，只包含应用器（RuleApplier）需要的字段。
+ * 从 {@link RuleMatchSpec} 拆分的纯动作部分，只包含应用器（RuleApplier）需要的字段。
  * 不包含任何匹配字段。
  * <p>
- * 由 {@link RuleMatchSpec#getModifySpec()} 生成，或直接构造用于纯修改场景。
+ * 由 {@link RuleMatchSpec#getActionSpec()} 生成，或直接构造。
  */
-public final class ModifySpec {
+public final class ActionSpec {
 
     /** 规则标签 — null 或空 = 移除规则，非空 = 修改规则 */
     public String ruleTag;
@@ -34,7 +34,7 @@ public final class ModifySpec {
     public int origLeftMargin;
     public int origTopMargin;
 
-    public ModifySpec() {
+    public ActionSpec() {
     }
 
     /**
@@ -63,8 +63,8 @@ public final class ModifySpec {
     /**
      * 从 RuleFields 提取修改字段构造。
      */
-    public static ModifySpec from(RuleFields fields) {
-        ModifySpec spec = new ModifySpec();
+    public static ActionSpec from(RuleFields fields) {
+        ActionSpec spec = new ActionSpec();
         spec.ruleTag = fields.getRuleTag();
         spec.visibility = fields.getVisibility();
         spec.modWidth = fields.getModWidth();
@@ -85,9 +85,9 @@ public final class ModifySpec {
 
     /**
      * 使用当前修改规则的值覆盖 target 的同名字段（仅覆盖已修改的维度）。
-     * 用于从一个 ModifySpec 合并到另一个。
+     * 用于从一个 ActionSpec 合并到另一个。
      */
-    public void mergeInto(ModifySpec target) {
+    public void mergeInto(ActionSpec target) {
         if (target == null) return;
         if (isWidthModified()) target.modWidth = modWidth;
         if (isHeightModified()) target.modHeight = modHeight;
