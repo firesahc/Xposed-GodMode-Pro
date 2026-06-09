@@ -211,22 +211,12 @@ public final class CompositeMatcher implements IMatcher, MatchStrategy {
             }
         }
 
-        // ── 策略 4: 全树评分搜索（严格阈值兜底） ──
-        // 消除 single element depth 锚定失败后的 null gap
-        int strictThreshold = resolveThreshold(spec, true);
-        List<View> allMatches = new ArrayList<>();
-        collectMatches(root, spec, allMatches, strictThreshold);
+        // ── 策略 4: matchAllViews 兜底 ──
+        // 与 matchAllViews 共享完全相同的搜索路径和阈值，保证行为一致
+        List<View> allMatches = matchAllViews(root, spec);
         if (!allMatches.isEmpty()) {
-            View best = null;
-            int bestScore = 0;
-            for (View v : allMatches) {
-                int s = computeScore(v, spec);
-                if (s > bestScore) {
-                    bestScore = s;
-                    best = v;
-                }
-            }
-            return best;
+            // matchAllViews 默认按遍历顺序，首个即最佳候选
+            return allMatches.get(0);
         }
 
         return null;
