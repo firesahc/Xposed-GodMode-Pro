@@ -1,5 +1,6 @@
 package com.kaisar.xposed.godmode.engine.util;
 
+import android.os.Process;
 import android.util.Log;
 
 import androidx.annotation.Keep;
@@ -12,6 +13,7 @@ import java.util.Date;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @Keep
 public final class Logger {
@@ -21,6 +23,8 @@ public final class Logger {
     private static File sLogFile;
     private static long sMaxLogSize = 2 * 1024 * 1024; // 2MB
     private static int sMaxLogFiles = 3;
+    /** 轮转锁，防止同一进程内 fileLog 回调重入时重复轮转 */
+    private static final AtomicBoolean sRotating = new AtomicBoolean(false);
     private static final ExecutorService sLogExecutor = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "Logger-File");
         t.setDaemon(true);
@@ -29,12 +33,13 @@ public final class Logger {
     private static final SimpleDateFormat sDateFormat = new SimpleDateFormat("MM-dd HH:mm:ss.SSS", Locale.US);
 
     /**
-     * 启用文件日志。所有进程指向同一路径时共享同一个日志文件。
-     * 目录和权限由首次写入的 fileLog() 自动处理，多进程通过 O_APPEND 安全并发写入。
+     * 启用文件日志。每个进程按 PID 命名独立文件（godmodepro-{pid}.log），
+     * 避免多进程轮转冲突。目录和权限由首次写入的 fileLog() 自动处理。
      */
     public static void enableFileLog(String dirPath) {
         if (dirPath == null || dirPath.isEmpty()) return;
-        sLogFile = new File(dirPath, "godmodepro.log");
+        int pid = Process.myPid();
+        sLogFile = new File(dirPath, "godmodepro-" + pid + ".log");
     }
 
     public static void disableFileLog() {
@@ -67,27 +72,32 @@ public final class Logger {
         if (maxFiles > 0) sMaxLogFiles = maxFiles;
     }
 
-    /** 日志文件轮转 — 超过大小限制时自动滚动 */
+    /** 日志文件轮转 — 超过大小限制时自动滚动（AtomicBoolean 防重入） */
     private static void rotateLogFile() {
-        File f = sLogFile;
-        if (f == null || !f.exists() || f.length() < sMaxLogSize) return;
-        // 删除最旧的文件
-        File oldest = new File(f.getParent(), f.getName() + "." + sMaxLogFiles);
-        if (oldest.exists() && !oldest.delete()) {
-            Log.w(TAG, "[Logger] Failed to delete oldest log backup");
-        }
-        // 依次重命名 .2→.3, .1→.2
-        for (int i = sMaxLogFiles - 1; i >= 1; i--) {
-            File src = new File(f.getParent(), f.getName() + "." + i);
-            if (src.exists()) {
-                File dst = new File(f.getParent(), f.getName() + "." + (i + 1));
-                src.renameTo(dst);
+        if (!sRotating.compareAndSet(false, true)) return;
+        try {
+            File f = sLogFile;
+            if (f == null || !f.exists() || f.length() < sMaxLogSize) return;
+            // 删除最旧的文件
+            File oldest = new File(f.getParent(), f.getName() + "." + sMaxLogFiles);
+            if (oldest.exists() && !oldest.delete()) {
+                Log.w(TAG, "[Logger] Failed to delete oldest log backup");
             }
-        }
-        // 当前日志 → .1
-        File rotated = new File(f.getParent(), f.getName() + ".1");
-        if (!f.renameTo(rotated)) {
-            Log.w(TAG, "[Logger] Failed to rotate log file");
+            // 依次重命名 .2→.3, .1→.2
+            for (int i = sMaxLogFiles - 1; i >= 1; i--) {
+                File src = new File(f.getParent(), f.getName() + "." + i);
+                if (src.exists()) {
+                    File dst = new File(f.getParent(), f.getName() + "." + (i + 1));
+                    src.renameTo(dst);
+                }
+            }
+            // 当前日志 → .1
+            File rotated = new File(f.getParent(), f.getName() + ".1");
+            if (!f.renameTo(rotated)) {
+                Log.w(TAG, "[Logger] Failed to rotate log file");
+            }
+        } finally {
+            sRotating.set(false);
         }
     }
 
