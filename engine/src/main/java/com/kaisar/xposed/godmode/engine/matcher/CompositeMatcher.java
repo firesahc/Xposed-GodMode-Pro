@@ -158,60 +158,24 @@ public final class CompositeMatcher implements IMatcher, MatchStrategy {
     public View matchView(View root, MatchSpec spec) {
         if (root == null || spec == null) return null;
 
-        // =====================================================================
-        // 策略链：按锚定可靠性降序尝试，第一个验证通过的返回
-        // =====================================================================
+        // 非 repeatable 规则必须有可靠锚定（resourceId/depth），
+        // 无锚定时不做 content-based 全树搜索——viewClass +30 即过 LOOSE 阈值，
+        // 会导致大面积误伤。
 
         // ── 策略 1: resourceId 锚定 ──
-        // 最可靠：view.getResources().getIdentifier(resourceName) 是框架级稳定 ID
         if (!TextUtils.isEmpty(spec.resourceName)) {
             View viewById = findByResourceId(root, spec);
             if (viewById != null) return viewById;
         }
 
         // ── 策略 2: depth 路径锚定 ──
-        // 可靠，但对布局变化敏感
-        // 注意：depth 锚定加分（SCORE_DEPTH_ANCHOR=60）在此分支内直接添加，
-        // 不经过策略链，避免 matchAllViews 全树搜索时错误加分。
-        // depth 锚定失败后不搜索兄弟节点——sibling 加 +60 锚定分语义错误，
-        // 且遍历全部兄弟 +60 后几乎所有兄弟都过严格阈值，导致误伤。
+        // +60 锚定加分仅在此分支内有效，不经过策略链。
         int threshold = resolveThreshold(spec, false);
         if (spec.depth != null && spec.depth.length > 0) {
             View depthView = ViewTraversal.findViewByDepth(root, spec.depth);
             if (depthView != null && isVisibleView(depthView)) {
                 int score = computeScore(depthView, spec) + SCORE_DEPTH_ANCHOR;
                 if (score >= threshold) return depthView;
-            }
-        }
-
-        // ── 策略 3: 重复规则 — RecyclerView itemPath 精确匹配 ──
-        if (spec.repeatable && spec.itemPath != null && spec.itemPath.length > 0
-                && spec.itemRootClass != null) {
-            List<View> rvResults = new ArrayList<>();
-            collectRecyclerMatches(root, spec, rvResults);
-            if (!rvResults.isEmpty()) {
-                View best = null;
-                int bestScore = 0;
-                for (View v : rvResults) {
-                    int s = computeScore(v, spec);
-                    if (s > bestScore) {
-                        bestScore = s;
-                        best = v;
-                    }
-                }
-                if (bestScore >= threshold) return best;
-            }
-        }
-
-        // ── 策略 4: 仅 repeatable 规则走全树兜底 ──
-        // 非 repeatable 规则必须有可靠锚定（depth/resourceId），
-        // 无锚定时的 content-based 全树搜索会因 LOOSE 阈值过低（viewClass +30 即过）
-        // 导致大面积误伤。旧版设计在此处直接返回 null。
-        if (spec.repeatable) {
-            List<View> allMatches = matchAllViews(root, spec);
-            if (!allMatches.isEmpty()) {
-                // matchAllViews 默认按遍历顺序，首个即最佳候选
-                return allMatches.get(0);
             }
         }
 
