@@ -16,7 +16,7 @@ import com.kaisar.xposed.godmode.engine.util.Logger;
 
 public final class AboutFragment extends Fragment {
 
-    private static final String GITHUB_URL = "https://github.com/firesahc/Xposed-GodMode";
+    private static final String GITHUB_URL = "https://github.com/firesahc/Xposed-GodMode-Pro";
 
     public AboutFragment() {
         super(R.layout.fragment_about);
