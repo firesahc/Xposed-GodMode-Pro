@@ -35,12 +35,12 @@ import java.util.WeakHashMap;
  */
 final class RulePersistManager {
 
-    // /data/system/godmode
+    // /data/misc/godmode
     private static final String BASE_DIR = String.format("%s/misc/%s",
             Environment.getDataDirectory().getAbsolutePath(), "godmode");
-    // /data/system/godmode/{package}/package.rule
+    // /data/misc/godmode/{package}/package.rule
     static final String RULE_FILE_SUFFIX = ".rule";
-    // /data/system/godmode/{package}/xxxxxxxxx.webp
+    // /data/misc/godmode/{package}/xxxxxxxxx.webp
     static final String IMAGE_FILE_SUFFIX = ".webp";
 
     static final String TOOLBAR_PREFS_FILE = "toolbar_prefs.json";
@@ -65,7 +65,7 @@ final class RulePersistManager {
 
     /**
      * 从磁盘加载所有已持久化的规则到内存。
-     * 扫描 /data/system/godmode 目录，将各包的规则反序列化后放入 RuleCacheManager 缓存。
+     * 扫描 /data/misc/godmode 目录，将各包的规则反序列化后放入 RuleCacheManager 缓存。
      */
     void loadRuleData() throws IOException {
         File dataDir = new File(getBaseDir());
