@@ -206,7 +206,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     }
 
     // =========================================================================
-    // Activity 闂備焦鐪归崹濠氬窗鎼淬劌绠犻柨鐔哄Т瀹告繈鏌曟繝蹇涙闁糕晛鍊块弻銊モ槈濡厧鈪遍梺?GodModeInjector 闂佽崵濮撮鍛村疮娴兼潙鏋侀柕鍫濐槹閺?    // =========================================================================
+    // Activity 闂備焦鐪归崹濠氬窗鎼淬劌绠犻柨鐔哄Т瀹告繈鏌曟繝蹇涙闁糕晛鍊块弻銊モ槈濡厧鈪遍梺?HookLauncher 闂佽崵濮撮鍛村疮娴兼潙鏋侀柕鍫濐槹閺?    // =========================================================================
 
     public void setActivity(final Activity a) {
         Activity current = mCurrentActivityRef.get();

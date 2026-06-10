@@ -9,8 +9,8 @@
             android:name="com.kaisar.xposed.godmode.fragment.GeneralPreferenceFragment"
             android:label="@string/app_name">
         <action
-                android:id="@+id/action_generalPreferenceFragment_to_viewRuleListFragment"
-                app:destination="@id/viewRuleListFragment"
+                android:id="@+id/action_generalPreferenceFragment_to_ruleRecordListFragment"
+                app:destination="@id/ruleRecordListFragment"
                 app:enterAnim="@anim/fragment_enter"
                 app:exitAnim="@anim/fragment_exit"
                 app:popEnterAnim="@anim/fragment_enter_pop"
@@ -50,11 +50,11 @@
             android:name="com.kaisar.xposed.godmode.fragment.SettingsFragment"
             android:label="@string/toolbar_settings_title" />
     <fragment
-            android:id="@+id/viewRuleListFragment"
+            android:id="@+id/ruleRecordListFragment"
             android:name="com.kaisar.xposed.godmode.fragment.RuleRecordListFragment"
             android:label="@string/title_app_rule">
         <action
-                android:id="@+id/action_viewRuleListFragment_to_viewRuleDetailsContainerFragment"
+                android:id="@+id/action_ruleRecordListFragment_to_ruleRecordDetailsContainerFragment"
                 app:destination="@id/viewRuleDetailsContainerFragment"
                 app:enterAnim="@anim/fragment_enter"
                 app:exitAnim="@anim/fragment_exit"

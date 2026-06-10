@@ -19,10 +19,10 @@ import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 import androidx.preference.PreferenceManager;
 
-import com.kaisar.xposed.godmode.GodModeHelper;
+import com.kaisar.xposed.godmode.EditModeController;
 import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.SettingsActivity;
-import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
+import com.kaisar.xposed.godmode.injection.bridge.RuleServiceClient;
 
 public final class NotificationService extends Service implements SharedPreferences.OnSharedPreferenceChangeListener {
 
@@ -50,14 +50,14 @@ public final class NotificationService extends Service implements SharedPreferen
     }
 
     private void handleEditToggle(Intent intent) {
-        boolean editMode = GodModeHelper.isEditModeEnabled(this);
+        boolean editMode = EditModeController.isEditModeEnabled(this);
         if (intent != null && TextUtils.equals(intent.getAction(), Intent.ACTION_EDIT)) {
-            if (!GodModeManager.getDefault().hasLight()) {
+            if (!RuleServiceClient.getDefault().hasLight()) {
                 Toast.makeText(this, R.string.not_active_module, Toast.LENGTH_SHORT).show();
                 return;
             }
             editMode = !editMode;
-            GodModeHelper.setEditModeEnabled(this, editMode);
+            EditModeController.setEditModeEnabled(this, editMode);
         }
         showNotification(editMode);
     }
@@ -113,11 +113,11 @@ public final class NotificationService extends Service implements SharedPreferen
     }
 
     public boolean isEditMode() {
-        return GodModeHelper.isEditModeEnabled(this);
+        return EditModeController.isEditModeEnabled(this);
     }
 
     public boolean isMasterEnabled() {
-        return GodModeHelper.isMasterEnabled(this, R.string.pref_key_master);
+        return EditModeController.isMasterEnabled(this, R.string.pref_key_master);
     }
 
     @Override

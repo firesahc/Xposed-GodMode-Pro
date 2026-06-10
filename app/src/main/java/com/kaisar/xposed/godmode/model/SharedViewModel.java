@@ -15,7 +15,7 @@ import androidx.lifecycle.ViewModel;
 
 import com.kaisar.xposed.godmode.IObserver;
 import com.kaisar.xposed.godmode.engine.util.Logger;
-import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
+import com.kaisar.xposed.godmode.injection.bridge.RuleServiceClient;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.AppRules;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
@@ -37,14 +37,14 @@ public class SharedViewModel extends ViewModel {
 
     public SharedViewModel() {
         try {
-            GodModeManager.getDefault().addObserver("*", new IObserver.Stub() {
+            RuleServiceClient.getDefault().addObserver("*", new IObserver.Stub() {
                 @Override
                 public void onEditModeChanged(boolean enable) {
                 }
 
                 @Override
                 public void onViewRuleChanged(String packageName, ActRules actRules) {
-                    appRules.postValue(GodModeManager.getDefault().getAllRules());
+                    appRules.postValue(RuleServiceClient.getDefault().getAllRules());
                     if (TextUtils.equals(packageName, selectedPackage.getValue())) {
                         selectedPackage.postValue(packageName);
                     }
@@ -63,7 +63,7 @@ public class SharedViewModel extends ViewModel {
     }
 
     public void loadAppRules() {
-        mExecutor.execute(() -> appRules.postValue(GodModeManager.getDefault().getAllRules()));
+        mExecutor.execute(() -> appRules.postValue(RuleServiceClient.getDefault().getAllRules()));
     }
 
     public void updateSelectedPackage(String packageName) {
@@ -86,15 +86,15 @@ public class SharedViewModel extends ViewModel {
     }
 
     public boolean deleteAppRules(String packageName) {
-        return GodModeManager.getDefault().deleteRules(packageName);
+        return RuleServiceClient.getDefault().deleteRules(packageName);
     }
 
     public boolean updateRule(RuleRecord rule) {
-        return GodModeManager.getDefault().updateRule(rule.packageName, rule);
+        return RuleServiceClient.getDefault().updateRule(rule.packageName, rule);
     }
 
     public boolean deleteRule(RuleRecord rule) {
-        return GodModeManager.getDefault().deleteRule(rule.packageName, rule);
+        return RuleServiceClient.getDefault().deleteRule(rule.packageName, rule);
     }
 
     public void setIconHidden(Context context, boolean hidden) {

@@ -71,7 +71,7 @@ public class SettingsActivity extends AppCompatActivity {
     }
 
     private void startNotificationService() {
-        GodModeHelper.startNotificationService(this);
+        EditModeController.startNotificationService(this);
     }
 
 }

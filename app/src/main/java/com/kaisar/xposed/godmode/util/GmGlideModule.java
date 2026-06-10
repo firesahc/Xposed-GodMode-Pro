@@ -24,7 +24,7 @@ import com.bumptech.glide.load.model.ModelLoaderFactory;
 import com.bumptech.glide.load.model.MultiModelLoaderFactory;
 import com.bumptech.glide.module.AppGlideModule;
 import com.bumptech.glide.signature.ObjectKey;
-import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
+import com.kaisar.xposed.godmode.injection.bridge.RuleServiceClient;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 
 import java.io.ByteArrayOutputStream;
@@ -75,7 +75,7 @@ public class GmGlideModule extends AppGlideModule {
 
         @Override
         public void loadData(@NonNull Priority priority, @NonNull DataCallback<? super Bitmap> callback) {
-            ParcelFileDescriptor pfd = GodModeManager.getDefault().openImageFileDescriptor(mRuleRecord.imagePath);
+            ParcelFileDescriptor pfd = RuleServiceClient.getDefault().openImageFileDescriptor(mRuleRecord.imagePath);
             if (pfd != null) {
                 try {
                     InputStream in = new ParcelFileDescriptor.AutoCloseInputStream(pfd);

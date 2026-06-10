@@ -4,7 +4,7 @@ import java.util.Map;
 
 /**
  * 规则变更事件。
- * 由 GodModeInjector 在收到 IPC 规则变更通知时通过 EventBus 发布。
+ * 由 HookLauncher 在收到 IPC 规则变更通知时通过 EventBus 发布。
  * <p>
  * rules 字段声明为 {@code Map<String, ?>} 而非 ActRules，
  * 避免 engine 模块对 app 模块的类型依赖。

@@ -16,9 +16,9 @@ import java.util.List;
 
 /**
  * 观察者管理 — RemoteCallbackList 注册 + 死观察者清理 + 事件通知。
- * 由 GodModeManagerService 使用。
+ * 由 RuleServiceServer 使用。
  */
-final class ObserverManager {
+final class ObserverRegistry {
 
     /** 死观察者自动清理间隔(ms) */
     static final long CLEAN_INTERVAL = 60_000L;
@@ -32,9 +32,9 @@ final class ObserverManager {
     /**
      * @param logger               日志记录器
      * @param handle               Handler 用于调度清理任务
-     * @param cleanObserversMsgCode Handler 消息代码（由 GodModeManagerService 定义）
+     * @param cleanObserversMsgCode Handler 消息代码（由 RuleServiceServer 定义）
      */
-    ObserverManager(Logger logger, Handler handle, int cleanObserversMsgCode) {
+    ObserverRegistry(Logger logger, Handler handle, int cleanObserversMsgCode) {
         this.mLogger = logger;
         this.mHandle = handle;
         this.mCleanObserversMsgCode = cleanObserversMsgCode;

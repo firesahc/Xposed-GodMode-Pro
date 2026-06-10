@@ -15,15 +15,15 @@ import com.kaisar.xposed.godmode.engine.Property;
 import com.kaisar.xposed.godmode.engine.event.EventBus;
 import com.kaisar.xposed.godmode.engine.event.RulesChangedEvent;
 import com.kaisar.xposed.godmode.engine.util.Logger;
-import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
-import com.kaisar.xposed.godmode.injection.bridge.ManagerObserver;
+import com.kaisar.xposed.godmode.injection.bridge.RuleServiceClient;
+import com.kaisar.xposed.godmode.injection.bridge.ServiceObserver;
 import com.kaisar.xposed.godmode.injection.editor.EditorOrchestrator;
 import com.kaisar.xposed.godmode.injection.entry.ActivityKeyHook;
 import com.kaisar.xposed.godmode.injection.entry.DebugLayoutHook;
 import com.kaisar.xposed.godmode.injection.entry.TouchHook;
 import com.kaisar.xposed.godmode.injection.util.BlockListChecker;
 import com.kaisar.xposed.godmode.rule.ActRules;
-import com.kaisar.xposed.godmode.service.GodModeManagerService;
+import com.kaisar.xposed.godmode.service.RuleServiceServer;
 import com.kaisar.xservicemanager.XServiceManager;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
@@ -40,12 +40,12 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage;
  * 实现 {@link IXposedHookLoadPackage} 用于拦截目标应用：
  * <ul>
  *   <li>当包名为 {@code "android"} 时，注入 system_server 进程，
- *       注册 {@link GodModeManagerService} 作为系统级 Service</li>
+ *       注册 {@link RuleServiceServer} 作为系统级 Service</li>
  *   <li>当包名为普通应用时，注入目标 app 进程，Hook Activity 生命周期、
  *       触摸事件和按键事件，通过 IPC 与系统服务通信</li>
  * </ul>
  */
-public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHookZygoteInit {
+public final class HookLauncher implements IXposedHookLoadPackage, IXposedHookZygoteInit {
 
     // =========================================================================
     // 字段定义 — 开关状态、注入参数、编辑器和 Hook
@@ -89,7 +89,7 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
         }
         if (!lpp.isFirstApplication) return;
 
-        GodModeInjector.loadPackageParam = lpp;
+        HookLauncher.loadPackageParam = lpp;
         final String packageName = lpp.packageName;
 
         if ("android".equals(packageName)) {
@@ -99,12 +99,12 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
         }
     }
 
-    /** 向 system_server 注入 GodModeManagerService 作为系统级 Service */
+    /** 向 system_server 注入 RuleServiceServer 作为系统级 Service */
     private void bootstrapSystemService() {
-        Logger.i(TAG, "[GodMode] inject GodModeManagerService as system service.");
+        Logger.i(TAG, "[GodMode] inject RuleServiceServer as system service.");
         XServiceManager.initForSystemServer();
         XServiceManager.registerService("godmode",
-                (XServiceManager.ServiceFetcher<Binder>) GodModeManagerService::new);
+                (XServiceManager.ServiceFetcher<Binder>) RuleServiceServer::new);
     }
 
     /** 注入目标应用 — Hook Activity 生命周期、触摸事件和按键事件，通过 IPC 与系统服务通信 */
@@ -170,15 +170,15 @@ public final class GodModeInjector implements IXposedHookLoadPackage, IXposedHoo
 
     /** 注册 IPC 观察者 — 监听来自系统服务的规则变更通知并推送给编辑器 */
     private void registerObserver(String packageName) {
-        GodModeManager gmManager = GodModeManager.getDefault();
+        RuleServiceClient gmManager = RuleServiceClient.getDefault();
         Logger.d(TAG, "[GodMode] registering observer for: " + packageName);
         // addObserver 通过 IPC 注册回调，当规则变更时推送 EditModeChanged + onViewRuleChanged
         // 通过 switchProp / actRuleProp 分发状态；BLOCKED 状态的应用阻止编辑模式启动
-        gmManager.addObserver(packageName, new ManagerObserver());
+        gmManager.addObserver(packageName, new ServiceObserver());
     }
 
     // =========================================================================
-    // 状态管理 — 通知编辑模式变更和规则变更给 ManagerObserver 回调处理
+    // 状态管理 — 通知编辑模式变更和规则变更给 ServiceObserver 回调处理
     // =========================================================================
 
     public static void notifyEditModeChanged(boolean enable) {

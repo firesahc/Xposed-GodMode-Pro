@@ -19,7 +19,7 @@ import com.kaisar.xposed.godmode.GodModeApplication;
 import com.kaisar.xposed.godmode.engine.util.FileUtils;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.engine.util.ZipUtils;
-import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
+import com.kaisar.xposed.godmode.injection.bridge.RuleServiceClient;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 
 import java.io.File;
@@ -66,7 +66,7 @@ public final class BackupUtils {
                 for (RuleRecord viewRule : viewRules) {
                     RuleRecord viewRuleCopy = viewRule.clone();
                     try {
-                        ParcelFileDescriptor parcelFileDescriptor = GodModeManager.getDefault().openImageFileDescriptor(viewRule.imagePath);
+                        ParcelFileDescriptor parcelFileDescriptor = RuleServiceClient.getDefault().openImageFileDescriptor(viewRule.imagePath);
                         if (parcelFileDescriptor != null) {
                             try (FileChannel inChannel = new FileInputStream(parcelFileDescriptor.getFileDescriptor()).getChannel()) {
                                 File file = new File(backupDir, new File(viewRule.imagePath).getName());
@@ -86,7 +86,7 @@ public final class BackupUtils {
                     if (viewRule.isModifyRule() && !TextUtils.isEmpty(viewRule.modImagePath)
                             && !viewRule.modImagePath.equals(viewRule.imagePath)) {
                         try {
-                            ParcelFileDescriptor modPfd = GodModeManager.getDefault().openImageFileDescriptor(viewRule.modImagePath);
+                            ParcelFileDescriptor modPfd = RuleServiceClient.getDefault().openImageFileDescriptor(viewRule.modImagePath);
                             if (modPfd != null) {
                                 try (FileChannel inChannel = new FileInputStream(modPfd.getFileDescriptor()).getChannel()) {
                                     File file = new File(backupDir, "mod_" + new File(viewRule.modImagePath).getName());
@@ -153,19 +153,19 @@ public final class BackupUtils {
                     if (!TextUtils.isEmpty(viewRule.imagePath)) {
                         String imagePath = new File(restoreDir, viewRule.imagePath).getPath();
                         Bitmap bitmap = BitmapFactory.decodeFile(imagePath);
-                        GodModeManager.getDefault().writeRule(viewRule.packageName, viewRule, bitmap);
+                        RuleServiceClient.getDefault().writeRule(viewRule.packageName, viewRule, bitmap);
                         recycleNullableBitmap(bitmap);
                     } else {
-                        GodModeManager.getDefault().writeRule(viewRule.packageName, viewRule, null);
+                        RuleServiceClient.getDefault().writeRule(viewRule.packageName, viewRule, null);
                     }
                     if (viewRule.isModifyRule() && !TextUtils.isEmpty(viewRule.modImagePath)) {
                         String modPath = new File(restoreDir, viewRule.modImagePath).getPath();
                         Bitmap modBitmap = BitmapFactory.decodeFile(modPath);
                         if (modBitmap != null) {
-                            String savedPath = GodModeManager.getDefault().saveImageFile(viewRule.packageName, modBitmap);
+                            String savedPath = RuleServiceClient.getDefault().saveImageFile(viewRule.packageName, modBitmap);
                             if (savedPath != null) {
                                 viewRule.modImagePath = savedPath;
-                                GodModeManager.getDefault().updateRule(viewRule.packageName, viewRule);
+                                RuleServiceClient.getDefault().updateRule(viewRule.packageName, viewRule);
                             }
                             recycleNullableBitmap(modBitmap);
                         }

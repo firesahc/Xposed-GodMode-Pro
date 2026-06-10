@@ -8,10 +8,10 @@ import android.os.Build;
 import androidx.preference.PreferenceManager;
 
 import com.kaisar.xposed.godmode.engine.util.Logger;
-import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
+import com.kaisar.xposed.godmode.injection.bridge.RuleServiceClient;
 import com.kaisar.xposed.godmode.service.NotificationService;
 
-public final class GodModeHelper {
+public final class EditModeController {
 
     private static final String TAG = "GodMode";
 
@@ -24,14 +24,14 @@ public final class GodModeHelper {
                 context.startService(intent);
             }
         } catch (Exception e) {
-            Logger.w(TAG, "[GodModeHelper] startNotificationService failed", e);
+            Logger.w(TAG, "[EditModeController] startNotificationService failed", e);
         }
     }
 
     public static void setEditModeEnabled(Context context, boolean enabled) {
         SharedPreferences sp = PreferenceManager.getDefaultSharedPreferences(context);
         sp.edit().putBoolean("editor_switch", enabled).apply();
-        GodModeManager.getDefault().setEditMode(enabled);
+        RuleServiceClient.getDefault().setEditMode(enabled);
     }
 
     public static boolean isEditModeEnabled(Context context) {

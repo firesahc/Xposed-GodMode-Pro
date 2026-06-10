@@ -5,7 +5,7 @@ import android.os.Looper;
 import android.os.Message;
 
 import com.kaisar.xposed.godmode.IObserver;
-import com.kaisar.xposed.godmode.injection.GodModeInjector;
+import com.kaisar.xposed.godmode.injection.HookLauncher;
 import com.kaisar.xposed.godmode.rule.ActRules;
 
 
@@ -13,7 +13,7 @@ import com.kaisar.xposed.godmode.rule.ActRules;
  * Created by jrsen on 17-10-18.
  */
 
-public final class ManagerObserver extends IObserver.Stub implements Handler.Callback {
+public final class ServiceObserver extends IObserver.Stub implements Handler.Callback {
 
     private final Handler mHandler = new Handler(Looper.getMainLooper(), this);
     private static final int ACTION_EDIT_MODE_CHANGED = 0;
@@ -33,9 +33,9 @@ public final class ManagerObserver extends IObserver.Stub implements Handler.Cal
     public boolean handleMessage(Message msg) {
         if (msg.obj == null) return true;
         if (msg.what == ACTION_EDIT_MODE_CHANGED) {
-            GodModeInjector.notifyEditModeChanged((Boolean) msg.obj);
+            HookLauncher.notifyEditModeChanged((Boolean) msg.obj);
         } else if (msg.what == ACTION_VIEW_RULES_CHANGED) {
-            GodModeInjector.notifyViewRulesChanged((ActRules) msg.obj);
+            HookLauncher.notifyViewRulesChanged((ActRules) msg.obj);
         }
         return true;
     }
