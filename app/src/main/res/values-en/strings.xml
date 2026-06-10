@@ -211,6 +211,4 @@
     <string name="snack_bar_msg_restore_rules_success">Restored %d rules</string>
     <string name="snack_bar_msg_backup_rule_success">Backed up %d rules</string>
     <string name="snack_bar_msg_backup_all_result">Saved: %1$d success, %2$d failed</string>
-    <string name="pref_save_log">Save log to file</string>
-    <string name="pref_save_log_desc">Auto save log to %s/godmodepro.log</string>
 </resources>

@@ -9,11 +9,6 @@
             android:title="@string/settings_save_all_rules"
             android:summary="@string/settings_save_all_rules_desc" />
         <SwitchPreferenceCompat
-            android:key="@string/pref_key_save_log"
-            android:title="@string/pref_save_log"
-            android:summary="@string/pref_save_log_desc"
-            android:defaultValue="false" />
-        <SwitchPreferenceCompat
             android:key="@string/pref_key_hide_icon"
             android:title="@string/menu_icon_switch_hide"
             android:defaultValue="false" />
