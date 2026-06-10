@@ -15,7 +15,6 @@ import android.widget.TextView;
 
 import com.kaisar.xposed.godmode.BuildConfig;
 import com.kaisar.xposed.godmode.engine.matcher.ViewTraversal;
-import com.kaisar.xposed.godmode.engine.rule.RuleMapper;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.injection.GodModeInjector;
 import com.kaisar.xposed.godmode.injection.util.ViewUtils;
@@ -121,15 +120,6 @@ public final class RuleRecordFactory {
         rule.y = out[1];
         rule.width = v.getWidth();
         rule.height = v.getHeight();
-    }
-
-    // =========================================================================
-    // 浠ヤ笅鏂规硶浠?ViewHelper 鍐呰仈杩佺Щ锛圴iewHelper @Deprecated 鍗冲皢閫€褰癸級
-    // =========================================================================
-
-    /** 灏?app 妯″潡 RuleRecord 杞崲涓?engine 妯″潡 RuleMatchSpec */
-    private static com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec toEngine(RuleRecord appRule) {
-        return RuleMapper.toEngine(appRule);
     }
 
     /** 濉厖鍙噸澶嶈鍒欎俊鎭紙itemPath銆乮temRootClass銆乸arentClass锛?*/
