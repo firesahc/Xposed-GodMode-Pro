@@ -5,7 +5,9 @@ import android.util.Log;
 
 import androidx.annotation.Keep;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
@@ -33,13 +35,27 @@ public final class Logger {
     private static final SimpleDateFormat sDateFormat = new SimpleDateFormat("MM-dd HH:mm:ss.SSS", Locale.US);
 
     /**
-     * 启用文件日志。每个进程按 PID 命名独立文件（godmodepro-{pid}.log），
+     * 启用文件日志。每个进程按包名/进程名命名独立文件（godmodepro-{name}.log），
      * 避免多进程轮转冲突。目录和权限由首次写入的 fileLog() 自动处理。
      */
     public static void enableFileLog(String dirPath) {
         if (dirPath == null || dirPath.isEmpty()) return;
-        int pid = Process.myPid();
-        sLogFile = new File(dirPath, "godmodepro-" + pid + ".log");
+        sLogFile = new File(dirPath, "godmodepro-" + getProcessTag() + ".log");
+    }
+
+    /** 读取 /proc/self/cmdline 获取当前进程名（= 包名 / system_server） */
+    private static String getProcessTag() {
+        try (BufferedReader r = new BufferedReader(new FileReader("/proc/self/cmdline"))) {
+            String name = r.readLine();
+            if (name != null) {
+                int nullIdx = name.indexOf('\0');
+                if (nullIdx >= 0) name = name.substring(0, nullIdx);
+                name = name.trim();
+                if (!name.isEmpty()) return name;
+            }
+        } catch (IOException ignored) {}
+        // 回退：读取失败时用 PID
+        return String.valueOf(Process.myPid());
     }
 
     public static void disableFileLog() {
