@@ -169,40 +169,18 @@ public final class CompositeMatcher implements IMatcher, MatchStrategy {
             if (viewById != null) return viewById;
         }
 
-        // ── 策略 2: depth 路径锚定 + sibling 兜底 ──
+        // ── 策略 2: depth 路径锚定 ──
         // 可靠，但对布局变化敏感
         // 注意：depth 锚定加分（SCORE_DEPTH_ANCHOR=60）在此分支内直接添加，
         // 不经过策略链，避免 matchAllViews 全树搜索时错误加分。
+        // depth 锚定失败后不搜索兄弟节点——sibling 加 +60 锚定分语义错误，
+        // 且遍历全部兄弟 +60 后几乎所有兄弟都过严格阈值，导致误伤。
         int threshold = resolveThreshold(spec, false);
         if (spec.depth != null && spec.depth.length > 0) {
             View depthView = ViewTraversal.findViewByDepth(root, spec.depth);
             if (depthView != null && isVisibleView(depthView)) {
                 int score = computeScore(depthView, spec) + SCORE_DEPTH_ANCHOR;
                 if (score >= threshold) return depthView;
-            }
-            if (depthView != null) {
-                // 锚定视图的兄弟节点搜索 — 取最高分（跳过不可见/GM 标签）
-                ViewParent parent = depthView.getParent();
-                if (parent instanceof ViewGroup) {
-                    ViewGroup group = (ViewGroup) parent;
-                    View bestSibling = null;
-                    int bestScore = 0;
-                    for (int i = 0; i < group.getChildCount(); i++) {
-                        View child = group.getChildAt(i);
-                        if (child != null && child != depthView && isVisibleView(child)) {
-                            int s = computeScore(child, spec) + SCORE_DEPTH_ANCHOR;
-                            if (s > bestScore) {
-                                bestScore = s;
-                                bestSibling = child;
-                            }
-                        }
-                    }
-                    // sibling 是 depth 锚定失败后的降级策略，需更严格阈值
-                    int siblingThreshold = resolveThreshold(spec, true);
-                    if (bestSibling != null && bestScore >= siblingThreshold) {
-                        return bestSibling;
-                    }
-                }
             }
         }
 
@@ -225,12 +203,16 @@ public final class CompositeMatcher implements IMatcher, MatchStrategy {
             }
         }
 
-        // ── 策略 4: matchAllViews 兜底 ──
-        // 与 matchAllViews 共享完全相同的搜索路径和阈值，保证行为一致
-        List<View> allMatches = matchAllViews(root, spec);
-        if (!allMatches.isEmpty()) {
-            // matchAllViews 默认按遍历顺序，首个即最佳候选
-            return allMatches.get(0);
+        // ── 策略 4: 仅 repeatable 规则走全树兜底 ──
+        // 非 repeatable 规则必须有可靠锚定（depth/resourceId），
+        // 无锚定时的 content-based 全树搜索会因 LOOSE 阈值过低（viewClass +30 即过）
+        // 导致大面积误伤。旧版设计在此处直接返回 null。
+        if (spec.repeatable) {
+            List<View> allMatches = matchAllViews(root, spec);
+            if (!allMatches.isEmpty()) {
+                // matchAllViews 默认按遍历顺序，首个即最佳候选
+                return allMatches.get(0);
+            }
         }
 
         return null;
