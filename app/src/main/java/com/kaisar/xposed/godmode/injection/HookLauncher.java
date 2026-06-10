@@ -101,6 +101,13 @@ public final class HookLauncher implements IXposedHookLoadPackage, IXposedHookZy
     /** 向 system_server 注入 RuleServiceServer 作为系统级 Service */
     private void bootstrapSystemService() {
         Logger.i(TAG, "[GodMode] inject RuleServiceServer as system service.");
+        XServiceManager.setLogDelegate(new XServiceManager.LogDelegate() {
+            @Override public void d(String tag, String msg) { Logger.d(tag, msg); }
+            @Override public void i(String tag, String msg) { Logger.i(tag, msg); }
+            @Override public void w(String tag, String msg) { Logger.w(tag, msg); }
+            @Override public void w(String tag, String msg, Throwable tr) { Logger.w(tag, msg, tr); }
+            @Override public void e(String tag, String msg, Throwable tr) { Logger.e(tag, msg, tr); }
+        });
         XServiceManager.initForSystemServer();
         XServiceManager.registerService("godmode",
                 (XServiceManager.ServiceFetcher<Binder>) RuleServiceServer::new);
