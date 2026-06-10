@@ -1,7 +1,5 @@
 package com.kaisar.xposed.godmode.injection;
 
-import static com.kaisar.xposed.godmode.GodModeApplication.TAG;
-
 import android.app.Activity;
 import android.os.Handler;
 import android.os.Looper;
@@ -31,6 +29,8 @@ import de.robv.android.xposed.XposedHelpers;
  * 通过 EventBus 接收 {@link RulesChangedEvent} 实现规则动态更新。
  */
 public final class LifecycleObserver extends XC_MethodHook {
+
+    private static final String TAG = "LifecycleObserver";
 
     private final WeakHashMap<Activity, OnLayoutChangeListener> mActivities = new WeakHashMap<>();
     private final ActRules mActRules = new ActRules();

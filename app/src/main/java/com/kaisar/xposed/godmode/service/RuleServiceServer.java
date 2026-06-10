@@ -46,7 +46,7 @@ public final class RuleServiceServer extends IGodModeManager.Stub {
     private String mToolbarHiddenItems = "";
 
     public RuleServiceServer(Context context) {
-        mLogger = Logger.getLogger("GMMService");
+        mLogger = Logger.getLogger("RuleServiceServer");
         mContext = context;
         mPermissionEnforcer = new PermissionEnforcer(context);
         mCacheManager = new RuleCacheManager(mGson, mLogger);

@@ -15,6 +15,8 @@ import java.io.OutputStream;
  */
 public final class FileUtils {
 
+    private static final String TAG = "FileUtils";
+
     public static final int S_IRWXU = 00700;
     public static final int S_IRWXG = 00070;
     public static final int S_IRWXO = 00007;
@@ -28,7 +30,7 @@ public final class FileUtils {
             out.flush();
             return true;
         } catch (IOException e) {
-            Logger.w("FileUtils", "copy failed", e);
+            Logger.w(TAG, "copy failed", e);
             return false;
         }
     }

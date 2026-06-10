@@ -17,7 +17,7 @@ import java.lang.reflect.Method;
  */
 public final class ModuleResources {
 
-    private static final String TAG = "GodMode";
+    private static final String TAG = "ModuleResources";
     private static String sModulePath;
     private static boolean sInitialized;
 

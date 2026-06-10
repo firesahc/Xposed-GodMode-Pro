@@ -1,7 +1,5 @@
 package com.kaisar.xposed.godmode.fragment;
 
-import static com.kaisar.xposed.godmode.GodModeApplication.TAG;
-
 import android.content.ActivityNotFoundException;
 import android.content.pm.PackageManager;
 import android.graphics.drawable.Drawable;
@@ -51,6 +49,7 @@ import java.util.Objects;
 
 public final class RuleRecordListFragment extends Fragment {
 
+    private static final String TAG = "RuleRecordListFragment";
     private static final int FILTER_ALL = 0;
     private static final int FILTER_REMOVE = 1;
     private static final int FILTER_MODIFY = 2;

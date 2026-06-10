@@ -1,6 +1,5 @@
 package com.kaisar.xposed.godmode.injection.editor.panel;
 
-import static com.kaisar.xposed.godmode.GodModeApplication.TAG;
 import static com.kaisar.xposed.godmode.engine.util.CommonUtils.recycleNullableBitmap;
 
 import android.app.Activity;
@@ -57,6 +56,8 @@ import de.robv.android.xposed.XposedHelpers;
  * </ul>
  */
 public class PropertyEditorPanel {
+
+    private static final String TAG = "PropertyEditorPanel";
 
     private View mPanelView;
     private View mTargetView;

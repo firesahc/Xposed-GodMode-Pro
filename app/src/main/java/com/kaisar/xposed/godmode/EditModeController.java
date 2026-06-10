@@ -13,7 +13,7 @@ import com.kaisar.xposed.godmode.service.NotificationService;
 
 public final class EditModeController {
 
-    private static final String TAG = "GodMode";
+    private static final String TAG = "EditModeController";
 
     public static void startNotificationService(Context context) {
         try {
@@ -24,7 +24,7 @@ public final class EditModeController {
                 context.startService(intent);
             }
         } catch (Exception e) {
-            Logger.w(TAG, "[EditModeController] startNotificationService failed", e);
+            Logger.w(TAG, "startNotificationService failed", e);
         }
     }
 

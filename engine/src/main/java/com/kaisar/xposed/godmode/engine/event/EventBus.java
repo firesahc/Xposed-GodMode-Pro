@@ -20,6 +20,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
  */
 public final class EventBus {
 
+    private static final String TAG = "EventBus";
+
     private static final EventBus INSTANCE = new EventBus();
 
     public static EventBus getDefault() {
@@ -84,7 +86,7 @@ public final class EventBus {
             try {
                 ref.method.invoke(subscriber, event);
             } catch (IllegalAccessException | InvocationTargetException e) {
-                Logger.w("EventBus", "Subscriber " + subscriber.getClass().getSimpleName()
+                Logger.w(TAG, "Subscriber " + subscriber.getClass().getSimpleName()
                         + "#" + ref.method.getName() + " threw: "
                         + (e.getCause() != null ? e.getCause().getMessage() : e.getMessage()));
             }

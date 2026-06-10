@@ -14,6 +14,8 @@ import java.util.Objects;
 
 public final class Clipboard {
 
+    private static final String TAG = "Clipboard";
+
     public static boolean putContent(Context context, CharSequence text) {
         try {
             ClipboardManager clipboard = Objects.requireNonNull((ClipboardManager) context.getSystemService(Context.CLIPBOARD_SERVICE));
@@ -21,7 +23,7 @@ public final class Clipboard {
             clipboard.setPrimaryClip(clip);
             return true;
         } catch (Throwable e) {
-            Logger.w("Clipboard", "put content failed", e);
+            Logger.w(TAG, "put content failed", e);
             return false;
         }
     }

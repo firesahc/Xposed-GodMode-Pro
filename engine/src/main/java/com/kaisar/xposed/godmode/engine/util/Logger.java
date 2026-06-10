@@ -114,18 +114,18 @@ public final class Logger {
     }
 
     public void d(String message) {
-        d(TAG, String.format("[%s] %s", mName, message));
+        d(mName, message);
     }
 
     public void i(String message) {
-        i(TAG, String.format("[%s] %s", mName, message));
+        i(mName, message);
     }
 
     public void w(String message, Throwable tr) {
-        w(TAG, String.format("[%s] %s", mName, message), tr);
+        w(mName, message, tr);
     }
 
     public void e(String message, Throwable tr) {
-        e(TAG, String.format("[%s] %s", mName, message), tr);
+        e(mName, message, tr);
     }
 }

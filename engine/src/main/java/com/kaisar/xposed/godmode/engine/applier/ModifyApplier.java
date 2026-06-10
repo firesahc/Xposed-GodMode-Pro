@@ -25,6 +25,8 @@ import java.util.WeakHashMap;
  */
 public final class ModifyApplier implements RuleApplier {
 
+    private static final String TAG = "ModifyApplier";
+
     private static final Handler MAIN_HANDLER = new Handler(Looper.getMainLooper());
     private final WeakHashMap<View, Integer> mAppliedViews = new WeakHashMap<>();
     private final Map<String, SoftReference<Bitmap>> mBitmapCache =
@@ -153,7 +155,7 @@ public final class ModifyApplier implements RuleApplier {
                 if (bitmap != null) return bitmap;
             }
         } catch (Exception e) {
-            Logger.w("ModifyApplier", "loadModImage failed: " + imagePath, e);
+            Logger.w(TAG, "loadModImage failed: " + imagePath, e);
         }
         return null;
     }

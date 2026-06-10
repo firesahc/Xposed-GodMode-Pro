@@ -1,7 +1,5 @@
 package com.kaisar.xposed.godmode.rule;
 
-import static com.kaisar.xposed.godmode.GodModeApplication.TAG;
-
 import android.app.Activity;
 import android.content.Context;
 import android.content.pm.PackageInfo;
@@ -28,6 +26,8 @@ import java.util.Objects;
  * 从 {@code ViewHelper} 拆分，职责单一。
  */
 public final class RuleRecordFactory {
+
+    private static final String TAG = "RuleRecordFactory";
 
     private RuleRecordFactory() {}
 
