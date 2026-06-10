@@ -27,7 +27,6 @@ import com.kaisar.xservicemanager.XServiceManager;
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.IXposedHookZygoteInit;
 import de.robv.android.xposed.XC_MethodHook;
-import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
 
@@ -84,7 +83,7 @@ public final class HookLauncher implements IXposedHookLoadPackage, IXposedHookZy
     @Override
     public void handleLoadPackage(XC_LoadPackage.LoadPackageParam lpp) {
         if (R.string.res_inject_success >>> 24 == 0x7f) {
-            XposedBridge.log("[GodModePro] package id must NOT be 0x7f, reject loading...");
+            Logger.e(TAG, "package id must NOT be 0x7f, reject loading...");
             return;
         }
         if (!lpp.isFirstApplication) return;

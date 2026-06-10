@@ -7,14 +7,15 @@ import android.os.RemoteException;
 
 import com.kaisar.xposed.godmode.IGodModeManager;
 import com.kaisar.xposed.godmode.IObserver;
+import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.AppRules;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 import com.kaisar.xservicemanager.XServiceManager;
 
-import de.robv.android.xposed.XposedBridge;
-
 public final class RuleServiceClient {
+
+    private static final String TAG = "RuleServiceClient";
 
     private static volatile RuleServiceClient instance;
     private final IGodModeManager mGMM;
@@ -43,7 +44,7 @@ public final class RuleServiceClient {
     }
 
     private static void logError(String method, RemoteException e) {
-        XposedBridge.log("[GodModePro] RuleServiceClient#" + method + " failed: " + e.getMessage());
+        Logger.e(TAG, "RuleServiceClient#" + method + " failed: " + e.getMessage());
     }
 
     public boolean hasLight() {

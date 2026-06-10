@@ -131,8 +131,8 @@ final class WorkflowOrchestrator implements Handler.Callback {
         workThread.start();
         mHandle = new Handler(workThread.getLooper(), this);
 
-        mPersistManager = new RulePersistManager(gson, mLogger, mHandle, mCacheManager);
-        mObserverManager = new ObserverRegistry(mLogger, mHandle, CLEAN_OBSERVERS);
+        mPersistManager = new RulePersistManager(gson, Logger.getLogger("RulePersistManager"), mHandle, mCacheManager);
+        mObserverManager = new ObserverRegistry(Logger.getLogger("ObserverRegistry"), mHandle, CLEAN_OBSERVERS);
 
         mHandle.sendEmptyMessage(LOAD_RULES);
     }
