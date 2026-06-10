@@ -9,7 +9,7 @@ import android.widget.Toast;
 
 import androidx.preference.PreferenceManager;
 
-import com.kaisar.xposed.godmode.GodModeHelper;
+import com.kaisar.xposed.godmode.EditModeController;
 import com.kaisar.xposed.godmode.R;
 
 public final class QuickSettingsService extends TileService implements SharedPreferences.OnSharedPreferenceChangeListener {
@@ -29,19 +29,19 @@ public final class QuickSettingsService extends TileService implements SharedPre
 
     @Override
     public void onClick() {
-        if (!GodModeHelper.isMasterEnabled(this, R.string.pref_key_master)) {
+        if (!EditModeController.isMasterEnabled(this, R.string.pref_key_master)) {
             Toast.makeText(this, R.string.master_not_enabled, Toast.LENGTH_SHORT).show();
             return;
         }
-        boolean current = GodModeHelper.isEditModeEnabled(this);
-        GodModeHelper.setEditModeEnabled(this, !current);
+        boolean current = EditModeController.isEditModeEnabled(this);
+        EditModeController.setEditModeEnabled(this, !current);
         updateTile();
     }
 
     private void updateTile() {
         Tile tile = getQsTile();
         if (tile == null) return;
-        boolean active = GodModeHelper.isEditModeEnabled(this);
+        boolean active = EditModeController.isEditModeEnabled(this);
         int iconRes = active ? R.drawable.ic_angel_normal : R.drawable.ic_angel_disable;
         tile.setIcon(Icon.createWithResource(this, iconRes));
         tile.setState(active ? Tile.STATE_ACTIVE : Tile.STATE_INACTIVE);

@@ -6,8 +6,8 @@ import android.view.View;
 import android.view.ViewGroup;
 
 import com.kaisar.xposed.godmode.engine.util.CommonUtils;
-import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
-import com.kaisar.xposed.godmode.injection.editor.RuleRecordFactory;
+import com.kaisar.xposed.godmode.injection.bridge.RuleServiceClient;
+import com.kaisar.xposed.godmode.rule.RuleRecordFactory;
 import com.kaisar.xposed.godmode.injection.util.BitmapUtils;
 import com.kaisar.xposed.godmode.injection.util.ViewUtils;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
@@ -53,7 +53,7 @@ public final class ModifyGestureHandler {
         newMarginX = Math.round(newMarginX / (float) state.gridSizePx) * state.gridSizePx;
         newMarginY = Math.round(newMarginY / (float) state.gridSizePx) * state.gridSizePx;
 
-        int[] snapped = SnapHelper.snapToSiblings(state.dragTarget,
+        int[] snapped = ViewSnapper.snapToSiblings(state.dragTarget,
                 newMarginX, newMarginY, state.snapThresholdPx);
         newMarginX = snapped[0];
         newMarginY = snapped[1];
@@ -90,7 +90,7 @@ public final class ModifyGestureHandler {
             Bitmap snapshot = BitmapUtils.snapshotView(
                     ViewUtils.findTopParentViewByChildView(state.dragTarget));
             BitmapUtils.drawRuleMask(snapshot, rule);
-            GodModeManager.getDefault().writeRule(packageName, rule, snapshot);
+            RuleServiceClient.getDefault().writeRule(packageName, rule, snapshot);
             CommonUtils.recycleNullableBitmap(snapshot);
         }
     }

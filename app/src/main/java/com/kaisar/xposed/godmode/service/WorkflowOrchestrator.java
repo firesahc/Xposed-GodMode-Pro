@@ -17,8 +17,8 @@ import java.util.function.Consumer;
 /**
  * 工作流编排器 — 通过 Handler 异步处理规则持久化和观察者通知。
  * <p>
- * 由 GodModeManagerService 使用。
- * 通过 HandlerThread + Handler 委托给 RulePersistManager 和 ObserverManager。
+ * 由 RuleServiceServer 使用。
+ * 通过 HandlerThread + Handler 委托给 RulePersistManager 和 ObserverRegistry。
  */
 final class WorkflowOrchestrator implements Handler.Callback {
 
@@ -110,7 +110,7 @@ final class WorkflowOrchestrator implements Handler.Callback {
     // ===== 核心 Manager =====
     private final RuleCacheManager mCacheManager;
     private final RulePersistManager mPersistManager;
-    private final ObserverManager mObserverManager;
+    private final ObserverRegistry mObserverManager;
 
     // ===== 实用工具 =====
     private final Logger mLogger;
@@ -132,7 +132,7 @@ final class WorkflowOrchestrator implements Handler.Callback {
         mHandle = new Handler(workThread.getLooper(), this);
 
         mPersistManager = new RulePersistManager(gson, mLogger, mHandle, mCacheManager);
-        mObserverManager = new ObserverManager(mLogger, mHandle, CLEAN_OBSERVERS);
+        mObserverManager = new ObserverRegistry(mLogger, mHandle, CLEAN_OBSERVERS);
 
         mHandle.sendEmptyMessage(LOAD_RULES);
     }
@@ -183,7 +183,7 @@ final class WorkflowOrchestrator implements Handler.Callback {
     }
 
     // ===================================================================
-    // 异步 AIDL 实现 — 由 GodModeManagerService AIDL 调用
+    // 异步 AIDL 实现 — 由 RuleServiceServer AIDL 调用
     // ===================================================================
 
     /** 异步写入规则 — 先应用缓存，再发送 Handler 消息持久化 + 通知观察者 */

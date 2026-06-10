@@ -15,7 +15,7 @@ import com.kaisar.xposed.godmode.engine.rule.ActionSpec;
 import com.kaisar.xposed.godmode.engine.rule.RuleMapper;
 import com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec;
 import com.kaisar.xposed.godmode.engine.util.Logger;
-import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
+import com.kaisar.xposed.godmode.injection.bridge.RuleServiceClient;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 
 import java.util.List;
@@ -65,7 +65,7 @@ public final class ViewController {
     private RuleApplier getModifyApplier() {
         if (mModifyApplier == null) {
             mModifyApplier = new ModifyApplier(
-                    path -> GodModeManager.getDefault().openImageFileDescriptor(path));
+                    path -> RuleServiceClient.getDefault().openImageFileDescriptor(path));
         }
         return mModifyApplier;
     }

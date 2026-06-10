@@ -2,7 +2,7 @@ package com.kaisar.xposed.godmode.fragment;
 
 import static com.kaisar.xposed.godmode.fragment.GeneralPreferenceFragmentDirections.actionGeneralPreferenceFragmentToAboutFragment;
 import static com.kaisar.xposed.godmode.fragment.GeneralPreferenceFragmentDirections.actionGeneralPreferenceFragmentToGuideFragment;
-import static com.kaisar.xposed.godmode.fragment.GeneralPreferenceFragmentDirections.actionGeneralPreferenceFragmentToViewRuleListFragment;
+import static com.kaisar.xposed.godmode.fragment.GeneralPreferenceFragmentDirections.actionGeneralPreferenceFragmentToRuleRecordListFragment;
 
 import android.content.Context;
 import android.content.SharedPreferences;
@@ -35,9 +35,9 @@ import com.google.android.material.snackbar.Snackbar;
 import com.kaisar.xposed.godmode.BuildConfig;
 import com.kaisar.xposed.godmode.CrashHandler;
 import com.kaisar.xposed.godmode.GodModeApplication;
-import com.kaisar.xposed.godmode.GodModeHelper;
+import com.kaisar.xposed.godmode.EditModeController;
 import com.kaisar.xposed.godmode.R;
-import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
+import com.kaisar.xposed.godmode.injection.bridge.RuleServiceClient;
 import com.kaisar.xposed.godmode.model.SharedViewModel;
 import com.kaisar.xposed.godmode.preference.ProgressPreference;
 import com.kaisar.xposed.godmode.rule.ActRules;
@@ -169,7 +169,7 @@ public final class GeneralPreferenceFragment extends PreferenceFragmentCompat im
         if (previousVersionCode != BuildConfig.VERSION_CODE) {
             settingsSp.edit().putInt(KEY_VERSION_CODE, BuildConfig.VERSION_CODE).apply();
             showUpdatePolicyDialog();
-        } else if (!GodModeManager.getDefault().hasLight()) {
+        } else if (!RuleServiceClient.getDefault().hasLight()) {
             showEnableModuleDialog();
         }
     }
@@ -182,14 +182,14 @@ public final class GeneralPreferenceFragment extends PreferenceFragmentCompat im
 
     @Override
     public boolean onPreferenceChange(Preference preference, Object newValue) {
-        return GodModeManager.getDefault().hasLight();
+        return RuleServiceClient.getDefault().hasLight();
     }
 
     @Override
     public boolean onPreferenceClick(Preference preference) {
         String key = preference.getKey();
         if (mEditorSwitchPreference == preference) {
-            if (!GodModeManager.getDefault().hasLight()) {
+            if (!RuleServiceClient.getDefault().hasLight()) {
                 Toast.makeText(requireContext(), R.string.not_active_module, Toast.LENGTH_SHORT).show();
                 return true;
             }
@@ -205,7 +205,7 @@ public final class GeneralPreferenceFragment extends PreferenceFragmentCompat im
             String packageName = preference.getKey();
             mSharedViewModel.updateSelectedPackage(packageName);
             NavController navController = NavHostFragment.findNavController(this);
-            navController.navigate(actionGeneralPreferenceFragmentToViewRuleListFragment());
+            navController.navigate(actionGeneralPreferenceFragmentToRuleRecordListFragment());
         }
         return true;
     }
@@ -214,9 +214,9 @@ public final class GeneralPreferenceFragment extends PreferenceFragmentCompat im
         SharedPreferences sp = PreferenceManager.getDefaultSharedPreferences(requireContext());
         sp.edit().putBoolean(getString(R.string.pref_key_master), enable).apply();
         if (!enable) {
-            GodModeHelper.setEditModeEnabled(requireContext(), false);
+            EditModeController.setEditModeEnabled(requireContext(), false);
         }
-        GodModeHelper.startNotificationService(requireContext());
+        EditModeController.startNotificationService(requireContext());
     }
 
     @Override

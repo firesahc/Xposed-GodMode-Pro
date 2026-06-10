@@ -24,9 +24,9 @@ import java.io.FileNotFoundException;
  * 内部持有 PermissionEnforcer、RuleCacheManager 等核心组件，
  * 通过 Handler 异步委托给各 Manager 处理规则持久化和观察者通知。
  * <p>
- * Client 调用 {@link com.kaisar.xposed.godmode.injection.bridge.GodModeManager#getDefault()} 获取实例。
+ * Client 调用 {@link com.kaisar.xposed.godmode.injection.bridge.RuleServiceClient#getDefault()} 获取实例。
  */
-public final class GodModeManagerService extends IGodModeManager.Stub {
+public final class RuleServiceServer extends IGodModeManager.Stub {
 
     // ===== 核心组件 =====
     private final PermissionEnforcer mPermissionEnforcer;
@@ -42,10 +42,10 @@ public final class GodModeManagerService extends IGodModeManager.Stub {
     private volatile boolean mInEditMode;
     private boolean mStarted;
 
-    // ===== 工具栏隐藏项（由 GodModeManagerService 管理持久化）=====
+    // ===== 工具栏隐藏项（由 RuleServiceServer 管理持久化）=====
     private String mToolbarHiddenItems = "";
 
-    public GodModeManagerService(Context context) {
+    public RuleServiceServer(Context context) {
         mLogger = Logger.getLogger("GMMService");
         mContext = context;
         mPermissionEnforcer = new PermissionEnforcer(context);

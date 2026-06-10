@@ -1,4 +1,4 @@
-package com.kaisar.xposed.godmode.injection.editor;
+package com.kaisar.xposed.godmode.rule;
 
 import static com.kaisar.xposed.godmode.GodModeApplication.TAG;
 
@@ -16,27 +16,27 @@ import android.widget.TextView;
 import com.kaisar.xposed.godmode.BuildConfig;
 import com.kaisar.xposed.godmode.engine.matcher.ViewTraversal;
 import com.kaisar.xposed.godmode.engine.util.Logger;
-import com.kaisar.xposed.godmode.injection.GodModeInjector;
+import com.kaisar.xposed.godmode.injection.HookLauncher;
 import com.kaisar.xposed.godmode.injection.util.ViewUtils;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 
 import java.util.Objects;
 
 /**
- * 瑙嗗浘瑙勫垯鏋勯€犲伐鍘?鈥?浠庤鍥惧垱寤哄睆钄?淇敼瑙勫垯銆?
+ * 视图规则构造工厂 — 从视图创建屏蔽/修改规则。
  * <p>
- * 浠?{@code ViewHelper} 鎷嗗垎锛岃亴璐ｅ崟涓€銆?
+ * 从 {@code ViewHelper} 拆分，职责单一。
  */
 public final class RuleRecordFactory {
 
     private RuleRecordFactory() {}
 
     /**
-     * 浠庤鍥惧垱寤哄睆钄借鍒欙紙閫氱敤锛夈€?
+     * 从视图创建屏蔽规则（通用）。
      *
-     * @param v 鐩爣瑙嗗浘
-     * @return 鏋勯€犲畬鎴愮殑 RuleRecord
-     * @throws PackageManager.NameNotFoundException 鏃犳硶鑾峰彇鍖呬俊鎭椂鎶涘嚭
+     * @param v 目标视图
+     * @return 构造完成的 RuleRecord
+     * @throws PackageManager.NameNotFoundException 无法获取包信息时抛出
      */
     public static RuleRecord makeRule(View v) throws PackageManager.NameNotFoundException {
         Activity activity = ViewUtils.getAttachedActivityFromView(v);
@@ -79,21 +79,21 @@ public final class RuleRecordFactory {
     }
 
     /**
-     * 鍒涘缓绉婚櫎瑙勫垯锛坮uleTag 鐣欑┖浠ュ吋瀹规棫 JSON 鏍煎紡锛夈€?
+     * 创建移除规则（ruleTag 留空以兼容旧 JSON 格式）。
      *
-     * @param v 鐩爣瑙嗗浘
-     * @return 鏋勯€犲畬鎴愮殑 RuleRecord
-     * @throws PackageManager.NameNotFoundException 鏃犳硶鑾峰彇鍖呬俊鎭椂鎶涘嚭
+     * @param v 目标视图
+     * @return 构造完成的 RuleRecord
+     * @throws PackageManager.NameNotFoundException 无法获取包信息时抛出
      */
     public static RuleRecord makeRemoveRule(View v) throws PackageManager.NameNotFoundException {
         return makeRule(v);
     }
 
     /**
-     * 鍒涘缓淇敼瑙勫垯銆?
+     * 创建修改规则。
      *
-     * @param view 鐩爣瑙嗗浘
-     * @return 鏋勯€犲畬鎴愮殑 RuleRecord锛坮uleTag="modify"锛?
+     * @param view 目标视图
+     * @return 构造完成的 RuleRecord（ruleTag="modify"）
      */
     public static RuleRecord makeModifyRule(View view) {
         try {
@@ -108,10 +108,10 @@ public final class RuleRecordFactory {
     }
 
     /**
-     * 灏嗚鍥剧殑褰撳墠浣嶇疆/灏哄鍐欏叆瑙勫垯銆?
+     * 将视图的当前位置/尺寸写入规则。
      *
-     * @param rule 鐩爣瑙勫垯
-     * @param v    褰撳墠瑙嗗浘
+     * @param rule 目标规则
+     * @param v    当前视图
      */
     public static void fillCoordinates(RuleRecord rule, View v) {
         int[] out = new int[2];
@@ -122,9 +122,9 @@ public final class RuleRecordFactory {
         rule.height = v.getHeight();
     }
 
-    /** 濉厖鍙噸澶嶈鍒欎俊鎭紙itemPath銆乮temRootClass銆乸arentClass锛?*/
+    /** 填充可重复规则信息（itemPath、itemRootClass、parentClass）*/
     private static void populateRepeatableInfo(View v, RuleRecord rule) {
-        if (!GodModeInjector.getEditorOrchestrator().isInfoFlowMode()) return;
+        if (!HookLauncher.getEditorOrchestrator().isInfoFlowMode()) return;
         try {
             ViewGroup rv = ViewTraversal.findRecyclerViewAncestor(v);
             if (rv == null) return;
@@ -168,4 +168,3 @@ public final class RuleRecordFactory {
         }
     }
 }
-

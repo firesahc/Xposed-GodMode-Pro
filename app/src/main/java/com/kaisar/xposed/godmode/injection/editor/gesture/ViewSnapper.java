@@ -7,7 +7,7 @@ import android.view.ViewGroup;
  * 网格/边缘吸附辅助工具。
  * 从 EventHandlerHook 提取的纯数学吸附逻辑。
  */
-public final class SnapHelper {
+public final class ViewSnapper {
 
     /** 默认网格间距 (dp) */
     public static final int GRID_SIZE_DP = 16;
@@ -15,7 +15,7 @@ public final class SnapHelper {
     /** 边缘吸附阈值 (dp) */
     public static final int EDGE_SNAP_THRESHOLD_DP = 12;
 
-    private SnapHelper() {}
+    private ViewSnapper() {}
 
     /**
      * 对边距进行网格吸附。

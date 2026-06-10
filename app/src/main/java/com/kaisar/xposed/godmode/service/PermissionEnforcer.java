@@ -12,7 +12,7 @@ import java.util.Arrays;
 
 /**
  * 权限验证器 — 通过 UID → 包名映射验证调用方身份。
- * 从 GodModeManagerService 提取的独立职责。
+ * 从 RuleServiceServer 提取的独立职责。
  */
 final class PermissionEnforcer {
 

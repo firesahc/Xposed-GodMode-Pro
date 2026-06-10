@@ -10,8 +10,8 @@ import android.view.ViewGroup;
 
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.injection.ViewController;
-import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
-import com.kaisar.xposed.godmode.injection.editor.RuleRecordFactory;
+import com.kaisar.xposed.godmode.injection.bridge.RuleServiceClient;
+import com.kaisar.xposed.godmode.rule.RuleRecordFactory;
 import com.kaisar.xposed.godmode.injection.editor.overlay.ParticleView;
 import com.kaisar.xposed.godmode.injection.util.BitmapUtils;
 import com.kaisar.xposed.godmode.injection.util.TaskExecutor;
@@ -81,7 +81,7 @@ public final class BlockHandler {
                     }
                     TaskExecutor.executeIo(() -> {
                         try {
-                            GodModeManager.getDefault().writeRule(
+                            RuleServiceClient.getDefault().writeRule(
                                     activity.getPackageName(), viewRule, snapshot);
                         } catch (Exception e) {
                             Logger.e("BlockHandler", "writeRule fail", e);

@@ -25,8 +25,8 @@ import com.kaisar.xposed.godmode.engine.matcher.ViewTraversal;
 import com.kaisar.xposed.godmode.engine.rule.RuleMapper;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.injection.ModuleResources;
-import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
-import com.kaisar.xposed.godmode.injection.editor.RuleRecordFactory;
+import com.kaisar.xposed.godmode.injection.bridge.RuleServiceClient;
+import com.kaisar.xposed.godmode.rule.RuleRecordFactory;
 import com.kaisar.xposed.godmode.injection.util.BitmapUtils;
 import com.kaisar.xposed.godmode.injection.util.GmResources;
 import com.kaisar.xposed.godmode.injection.util.TaskExecutor;
@@ -95,7 +95,7 @@ public class PropertyEditorPanel {
             ModuleResources.injectInto(activity.getResources());
             LayoutInflater inflater = LayoutInflater.from(activity);
             mPanelView = inflater.inflate(
-                    GmResources.getLayout(R.layout.layout_modify_panel), container, false);
+                    GmResources.getLayout(R.layout.panel_modify), container, false);
 
             setupSeekers(mPanelView, targetView);
             setupTextEdit(mPanelView, targetView);
@@ -422,7 +422,7 @@ public class PropertyEditorPanel {
                 String viewKey = sb.toString();
                 Bitmap bmp = mPendingModBitmaps.get(viewKey);
                 if (bmp != null && !bmp.isRecycled()) {
-                    String savedPath = GodModeManager.getDefault().saveImageFile(pkg, bmp);
+                    String savedPath = RuleServiceClient.getDefault().saveImageFile(pkg, bmp);
                     if (savedPath != null) {
                         rule.modImagePath = savedPath;
                     } else {
@@ -480,7 +480,7 @@ public class PropertyEditorPanel {
             for (RuleRecord rule : rulesToSave) {
                 Bitmap snapshot = snapshots.get(rule);
                 try {
-                    if (!GodModeManager.getDefault().writeRule(pkg, rule, snapshot)) {
+                    if (!RuleServiceClient.getDefault().writeRule(pkg, rule, snapshot)) {
                         allOk = false;
                         failedRules.add(rule.activityClass + "#" + rule.viewClass);
                     }

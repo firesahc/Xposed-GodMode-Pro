@@ -31,7 +31,7 @@ import java.util.WeakHashMap;
 
 /**
  * 规则持久化管理器 — JSON 序列化 + Bitmap 图片 + 工具栏配置持久化。
- * 由 GodModeManagerService 使用。
+ * 由 RuleServiceServer 使用。
  */
 final class RulePersistManager {
 

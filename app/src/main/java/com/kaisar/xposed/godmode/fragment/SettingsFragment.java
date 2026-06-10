@@ -23,7 +23,7 @@ import androidx.preference.SwitchPreferenceCompat;
 import com.google.android.material.snackbar.Snackbar;
 import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.engine.util.Logger;
-import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
+import com.kaisar.xposed.godmode.injection.bridge.RuleServiceClient;
 import com.kaisar.xposed.godmode.model.SharedViewModel;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.AppRules;
@@ -341,7 +341,7 @@ public final class SettingsFragment extends PreferenceFragmentCompat implements
         String value = TextUtils.join(",", hidden);
         sp.edit().putString(TOOLBAR_HIDDEN_ITEMS, value).apply();
         // Sync via AIDL for cross-process access
-        GodModeManager.getDefault().setToolbarHiddenItems(value);
+        RuleServiceClient.getDefault().setToolbarHiddenItems(value);
     }
 
     /**

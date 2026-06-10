@@ -3,7 +3,7 @@ package com.kaisar.xposed.godmode.injection.entry;
 import android.app.Activity;
 import android.view.KeyEvent;
 
-import com.kaisar.xposed.godmode.injection.GodModeInjector;
+import com.kaisar.xposed.godmode.injection.HookLauncher;
 import com.kaisar.xposed.godmode.injection.editor.EditorOrchestrator;
 
 import de.robv.android.xposed.XC_MethodHook;
@@ -22,7 +22,7 @@ public final class ActivityKeyHook extends XC_MethodHook {
 
     @Override
     protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-        if (!GodModeInjector.switchProp.get() || mOrchestrator.isDragging()) return;
+        if (!HookLauncher.switchProp.get() || mOrchestrator.isDragging()) return;
         Activity activity = (Activity) param.thisObject;
         KeyEvent event = (KeyEvent) param.args[0];
         int action = event.getAction();

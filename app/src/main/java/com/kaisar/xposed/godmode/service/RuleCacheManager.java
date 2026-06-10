@@ -12,7 +12,7 @@ import java.util.Map;
 
 /**
  * 规则缓存管理器 — 基于 synchronized 的线程安全内存缓存。
- * 由 GodModeManagerService 使用。
+ * 由 RuleServiceServer 使用。
  */
 final class RuleCacheManager {
 

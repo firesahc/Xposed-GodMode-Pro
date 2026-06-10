@@ -14,26 +14,26 @@ import com.kaisar.xservicemanager.XServiceManager;
 
 import de.robv.android.xposed.XposedBridge;
 
-public final class GodModeManager {
+public final class RuleServiceClient {
 
-    private static volatile GodModeManager instance;
+    private static volatile RuleServiceClient instance;
     private final IGodModeManager mGMM;
 
-    private GodModeManager(IGodModeManager gmm) {
+    private RuleServiceClient(IGodModeManager gmm) {
         this.mGMM = gmm;
     }
 
-    public static GodModeManager getDefault() {
-        GodModeManager result = instance;
+    public static RuleServiceClient getDefault() {
+        RuleServiceClient result = instance;
         if (result == null) {
-            synchronized (GodModeManager.class) {
+            synchronized (RuleServiceClient.class) {
                 result = instance;
                 if (result == null) {
                     IBinder service = XServiceManager.getService("godmode");
                     if (service != null) {
-                        result = new GodModeManager(IGodModeManager.Stub.asInterface(service));
+                        result = new RuleServiceClient(IGodModeManager.Stub.asInterface(service));
                     } else {
-                        result = new GodModeManager(new IGodModeManager.Default());
+                        result = new RuleServiceClient(new IGodModeManager.Default());
                     }
                     instance = result;
                 }
@@ -43,7 +43,7 @@ public final class GodModeManager {
     }
 
     private static void logError(String method, RemoteException e) {
-        XposedBridge.log("[GodModePro] GodModeManager#" + method + " failed: " + e.getMessage());
+        XposedBridge.log("[GodModePro] RuleServiceClient#" + method + " failed: " + e.getMessage());
     }
 
     public boolean hasLight() {

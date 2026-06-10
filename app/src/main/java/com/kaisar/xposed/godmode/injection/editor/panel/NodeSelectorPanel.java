@@ -73,7 +73,7 @@ public class NodeSelectorPanel {
             ModuleResources.injectInto(activity.getResources());
             LayoutInflater inflater = LayoutInflater.from(activity);
             mPanelView = inflater.inflate(
-                    GmResources.getLayout(R.layout.layout_node_selector), container, false);
+                    GmResources.getLayout(R.layout.panel_node_selector), container, false);
             mSeekBar = mPanelView.findViewById(R.id.slider);
             mSeekBar.setMax(Math.max(viewNodes.size() - 1, 0));
             mSeekBar.setOnSeekBarChangeListener(seekBarListener);

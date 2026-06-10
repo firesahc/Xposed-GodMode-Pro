@@ -26,7 +26,7 @@ import androidx.preference.PreferenceFragmentCompat;
 import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.engine.util.Preconditions;
-import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
+import com.kaisar.xposed.godmode.injection.bridge.RuleServiceClient;
 import com.kaisar.xposed.godmode.injection.util.TaskExecutor;
 import com.kaisar.xposed.godmode.model.SharedViewModel;
 import com.kaisar.xposed.godmode.preference.ImageViewPreference;
@@ -218,7 +218,7 @@ public final class RuleRecordDetailsFragment extends PreferenceFragmentCompat im
     @Nullable
     private static Bitmap loadRuleImageBitmap(@NonNull RuleRecord viewRule) {
         try {
-            ParcelFileDescriptor pfd = GodModeManager.getDefault().openImageFileDescriptor(viewRule.imagePath);
+            ParcelFileDescriptor pfd = RuleServiceClient.getDefault().openImageFileDescriptor(viewRule.imagePath);
             Objects.requireNonNull(pfd, String.format("Can not open %s", viewRule.imagePath));
             try {
                 InputStream in = new ParcelFileDescriptor.AutoCloseInputStream(pfd);

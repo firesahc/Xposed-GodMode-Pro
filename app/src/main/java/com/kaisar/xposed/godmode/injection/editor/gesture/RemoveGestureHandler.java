@@ -12,8 +12,8 @@ import com.kaisar.xposed.godmode.engine.util.CommonUtils;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.engine.util.Preconditions;
 import com.kaisar.xposed.godmode.injection.ViewController;
-import com.kaisar.xposed.godmode.injection.bridge.GodModeManager;
-import com.kaisar.xposed.godmode.injection.editor.RuleRecordFactory;
+import com.kaisar.xposed.godmode.injection.bridge.RuleServiceClient;
+import com.kaisar.xposed.godmode.rule.RuleRecordFactory;
 import com.kaisar.xposed.godmode.injection.editor.overlay.CancelView;
 import com.kaisar.xposed.godmode.injection.editor.overlay.MaskView;
 import com.kaisar.xposed.godmode.injection.editor.overlay.ParticleView;
@@ -89,7 +89,7 @@ public final class RemoveGestureHandler {
                     state.maskView.detachFromContainer();
                     TaskExecutor.executeIo(() -> {
                         try {
-                            GodModeManager.getDefault().writeRule(
+                            RuleServiceClient.getDefault().writeRule(
                                     v.getContext().getPackageName(),
                                     state.viewRule, state.snapshot);
                         } catch (Exception e) {
