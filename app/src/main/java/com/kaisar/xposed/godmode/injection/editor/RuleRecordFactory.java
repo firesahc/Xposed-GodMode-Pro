@@ -14,9 +14,7 @@ import android.view.ViewParent;
 import android.widget.TextView;
 
 import com.kaisar.xposed.godmode.BuildConfig;
-import com.kaisar.xposed.godmode.engine.matcher.CompositeMatcher;
 import com.kaisar.xposed.godmode.engine.matcher.ViewTraversal;
-import com.kaisar.xposed.godmode.engine.rule.MatchSpec;
 import com.kaisar.xposed.godmode.engine.rule.RuleMapper;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.injection.GodModeInjector;
@@ -99,19 +97,15 @@ public final class RuleRecordFactory {
      * @return 鏋勯€犲畬鎴愮殑 RuleRecord锛坮uleTag="modify"锛?
      */
     public static RuleRecord makeModifyRule(View view) {
-        Activity act = ViewUtils.getAttachedActivityFromView(view);
-        RuleRecord rule = new RuleRecord("",
-                act != null ? act.getPackageName() : "",
-                "", 0, 0, "", "", 0, 0, 0, 0,
-                ViewUtils.getViewHierarchyDepth(view),
-                act != null ? act.getComponentName().getClassName() : "",
-                view.getClass().getName(), "", "", "",
-                View.VISIBLE, System.currentTimeMillis());
-        rule.ruleTag = "modify";
-        rule.captureOriginals(view);
-        fillCoordinates(rule, view);
-        populateRepeatableInfo(view, rule);
-        return rule;
+        try {
+            RuleRecord rule = makeRule(view);
+            rule.ruleTag = "modify";
+            rule.captureOriginals(view);
+            fillCoordinates(rule, view);
+            return rule;
+        } catch (PackageManager.NameNotFoundException e) {
+            throw new RuntimeException("Failed to create modify rule", e);
+        }
     }
 
     /**
@@ -155,29 +149,29 @@ public final class RuleRecordFactory {
             }
             String itemRootClass = current.getClass().getName();
 
-            com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec engineRule = toEngine(rule);
-            MatchSpec matchSpec = engineRule.getMatchSpec();
-            int threshold = matchSpec.matchThreshold > 0
-                    ? matchSpec.matchThreshold
-                    : CompositeMatcher.DEFAULT_LOOSE_THRESHOLD;
-            CompositeMatcher matcher = new CompositeMatcher();
-
-            int matchCount = 0;
-            for (int i = 0; i < rv.getChildCount() && i < 20 && matchCount < 2; i++) {
-                View child = rv.getChildAt(i);
-                if (child != null && child.getClass().getName().equals(itemRootClass)) {
-                    View found = ViewTraversal.findViewByItemPath(child, itemPath, 0);
-                    if (found != null && matcher.computeScore(found, matchSpec) >= threshold) {
-                        matchCount++;
-                    }
-                }
-            }
-
-            if (matchCount >= 2) {
+            // itemPath + itemRootClass 有效即标记 repeatable（不再要求 matchCount >= 2）
+            if (itemPath != null && itemPath.length > 0 && itemRootClass != null) {
                 rule.itemPath = itemPath;
                 rule.itemRootClass = itemRootClass;
                 rule.parentClass = v.getParent() != null ? v.getParent().getClass().getName() : null;
                 rule.repeatable = true;
+
+                // 捕获 viewType（复用 matchThreshold 字段）
+                int viewType = -1;
+                try {
+                    if (rv instanceof androidx.recyclerview.widget.RecyclerView) {
+                        androidx.recyclerview.widget.RecyclerView recyclerView =
+                                (androidx.recyclerview.widget.RecyclerView) rv;
+                        androidx.recyclerview.widget.RecyclerView.Adapter<?> adapter =
+                                recyclerView.getAdapter();
+                        if (adapter != null) {
+                            int pos = recyclerView.getChildAdapterPosition(current);
+                            if (pos >= 0) viewType = adapter.getItemViewType(pos);
+                        }
+                    }
+                } catch (Exception ignored) {
+                }
+                if (viewType >= 0) rule.matchThreshold = viewType;
             }
         } catch (Exception e) {
             Logger.w(TAG, "[RuleRecordFactory] populateRepeatableInfo failed", e);
