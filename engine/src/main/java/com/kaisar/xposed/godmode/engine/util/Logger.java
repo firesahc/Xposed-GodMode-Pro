@@ -28,19 +28,33 @@ public final class Logger {
     });
     private static final SimpleDateFormat sDateFormat = new SimpleDateFormat("MM-dd HH:mm:ss.SSS", Locale.US);
 
+    /**
+     * 启用文件日志。所有进程指向同一路径时共享同一个日志文件。
+     * 目录和权限由首次写入的 fileLog() 自动处理，多进程通过 O_APPEND 安全并发写入。
+     */
     public static void enableFileLog(String dirPath) {
         if (dirPath == null || dirPath.isEmpty()) return;
-        File dir = new File(dirPath);
-        if (!dir.exists() && !dir.mkdirs()) {
-            Log.w(TAG, "[Logger] Failed to create log dir: " + dirPath);
-            return;
-        }
-        sLogFile = new File(dir, "godmodepro.log");
-        Log.i(TAG, "[Logger] File logging enabled: " + sLogFile.getAbsolutePath());
+        sLogFile = new File(dirPath, "godmodepro.log");
     }
 
     public static void disableFileLog() {
         sLogFile = null;
+    }
+
+    /** 创建文件并设为世界可读写（多进程共享），创建目录并设为世界可执行（跨进程访问）。*/
+    private static void ensureWorldAccessible(File f) throws IOException {
+        File parent = f.getParentFile();
+        if (parent != null && !parent.exists()) {
+            parent.mkdirs();
+            parent.setReadable(true, false);
+            parent.setWritable(true, false);
+            parent.setExecutable(true, false);
+        }
+        if (!f.exists()) {
+            f.createNewFile();
+            f.setReadable(true, false);
+            f.setWritable(true, false);
+        }
     }
 
     /**
@@ -82,8 +96,7 @@ public final class Logger {
         if (f == null) return;
         sLogExecutor.execute(() -> {
             try {
-                File parent = f.getParentFile();
-                if (parent != null && !parent.exists()) parent.mkdirs();
+                ensureWorldAccessible(f);
                 rotateLogFile();
                 try (FileWriter fw = new FileWriter(f, true)) {
                     fw.append(sDateFormat.format(new Date()))
