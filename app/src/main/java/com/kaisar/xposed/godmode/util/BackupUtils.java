@@ -1,7 +1,6 @@
 
 package com.kaisar.xposed.godmode.util;
 
-import static com.kaisar.xposed.godmode.GodModeApplication.TAG;
 import static com.kaisar.xposed.godmode.engine.util.CommonUtils.recycleNullableBitmap;
 
 import android.graphics.Bitmap;
@@ -37,6 +36,7 @@ import java.util.List;
  */
 public final class BackupUtils {
 
+    private static final String TAG = "BackupUtils";
     private static final int VERSION = 1;
     private static final String MANIFEST_FILE = "manifest.json";
 

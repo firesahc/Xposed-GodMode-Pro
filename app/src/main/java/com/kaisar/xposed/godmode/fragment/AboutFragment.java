@@ -16,6 +16,8 @@ import com.kaisar.xposed.godmode.engine.util.Logger;
 
 public final class AboutFragment extends Fragment {
 
+    private static final String TAG = "AboutFragment";
+
     private static final String GITHUB_URL = "https://github.com/firesahc/Xposed-GodMode-Pro";
 
     public AboutFragment() {
@@ -58,7 +60,7 @@ public final class AboutFragment extends Fragment {
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             startActivity(intent);
         } catch (Exception e) {
-            Logger.w("GodModePro", "[AboutFragment] openUrl failed: " + url, e);
+            Logger.w(TAG, "openUrl failed: " + url, e);
         }
     }
 }

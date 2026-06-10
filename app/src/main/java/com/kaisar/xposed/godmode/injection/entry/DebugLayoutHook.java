@@ -1,6 +1,5 @@
 package com.kaisar.xposed.godmode.injection.entry;
 
-import static com.kaisar.xposed.godmode.GodModeApplication.TAG;
 import static com.kaisar.xposed.godmode.engine.util.GmConstants.TAG_GM_CMP;
 
 import android.graphics.Canvas;
@@ -23,6 +22,8 @@ import de.robv.android.xposed.XposedHelpers;
  * 閻庣懓顦抽ˉ?Hook 濞寸姰鍎遍幆搴ㄦ偨?Android 闂傚懏鍔樺Λ宀勬儍?閻犲鍟抽惁顖滄暜閸愩劎婀?闁告梻鍠曢崗姗€濡? * <p>
  * 鐟?GodMode 缂傚倹鐗炵欢顐⑽熼垾宕囩婵犵鍋撴繛鑼帛濡炲倿鏁嶇仦鐐枖缂佲偓閻戞妲ㄥ☉?View 闁汇劌瀚粩鐔烘崉?闁告劕鎳撶粩鐔烘崉?闁绘帪濡囬崑锝囨啺閸℃瑦纾伴悘鐐插亰缁? * 閻㈩垼鍠栨慨顏堟偨閵婏箑鐓曢柛锔哄姂閳ь剙顦懙鎴炴交閸モ斁鏌ゅ☉鎿冨幘濠€鍛€掗崨閭︽綊闁搞儲宕樼粩鐔兼偩鐏炵儵鍋撻崒姘€遍柡鍐ㄥ椤╋箑顫?GM 閻熸洖妫涘ú濠勪沪閸屾繍娼掗柛銉﹀礃閸ゆ粓鐓銈嗙暠閻犲鍟抽惁顖滅磼濡搫鐓戦柕? */
 public final class DebugLayoutHook {
+
+    private static final String TAG = "DebugLayoutHook";
 
     private DebugLayoutHook() {}
 

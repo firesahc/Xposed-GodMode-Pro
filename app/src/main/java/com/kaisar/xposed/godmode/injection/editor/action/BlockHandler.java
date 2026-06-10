@@ -31,6 +31,8 @@ import com.kaisar.xposed.godmode.rule.RuleRecord;
  */
 public final class BlockHandler {
 
+    private static final String TAG = "BlockHandler";
+
     private BlockHandler() {}
 
     /**
@@ -74,7 +76,7 @@ public final class BlockHandler {
                         BitmapUtils.drawRuleMask(snapshot, viewRule);
                         particleView.detachFromContainer();
                     } catch (Exception e) {
-                        Logger.e("BlockHandler", "drawRuleMask / detach fail", e);
+                        Logger.e(TAG, "drawRuleMask / detach fail", e);
                     }
                     if (listener != null) {
                         listener.onAnimationEnd(blockedViewIndex);
@@ -84,7 +86,7 @@ public final class BlockHandler {
                             RuleServiceClient.getDefault().writeRule(
                                     activity.getPackageName(), viewRule, snapshot);
                         } catch (Exception e) {
-                            Logger.e("BlockHandler", "writeRule fail", e);
+                            Logger.e(TAG, "writeRule fail", e);
                         }
                         recycleNullableBitmap(snapshot);
                     });
@@ -92,7 +94,7 @@ public final class BlockHandler {
             });
             particleView.boom(view);
         } catch (Exception e) {
-            Logger.e("BlockHandler", "execute fail", e);
+            Logger.e(TAG, "execute fail", e);
             if (listener != null) {
                 listener.onError(e.getMessage() != null ? e.getMessage() : "block fail");
             }

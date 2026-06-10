@@ -1,6 +1,5 @@
 package com.kaisar.xposed.godmode.injection.editor;
 
-import static com.kaisar.xposed.godmode.GodModeApplication.TAG;
 import static com.kaisar.xposed.godmode.engine.util.GmConstants.TAG_GM_CMP;
 
 import android.app.Activity;
@@ -60,6 +59,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     // =========================================================================
     // 常量定义    // =========================================================================
 
+    private static final String TAG = "EditorOrchestrator";
     private static final int OVERLAY_COLOR = Color.argb(150, 255, 0, 0);
     @SuppressWarnings("unused")
     private static final int OVERLAY_COLOR_REPEATABLE = Color.argb(150, 255, 165, 0);

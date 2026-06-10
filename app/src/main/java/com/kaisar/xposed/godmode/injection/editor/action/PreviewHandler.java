@@ -21,6 +21,8 @@ import com.kaisar.xposed.godmode.rule.RuleRecord;
  */
 public final class PreviewHandler {
 
+    private static final String TAG = "PreviewHandler";
+
     private View mPreviewView;
     private RuleRecord mPreviewRule;
     private boolean mIsPreviewing;
@@ -48,7 +50,7 @@ public final class PreviewHandler {
             if (onStateChanged != null) onStateChanged.run();
             if (maskView != null) maskView.updateOverlayBounds(new Rect());
         } catch (Exception e) {
-            Logger.e("PreviewHandler", "startPreview fail", e);
+            Logger.e(TAG, "startPreview fail", e);
         }
     }
 

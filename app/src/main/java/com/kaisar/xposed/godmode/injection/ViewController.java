@@ -1,7 +1,5 @@
 package com.kaisar.xposed.godmode.injection;
 
-import static com.kaisar.xposed.godmode.GodModeApplication.TAG;
-
 import android.app.Activity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -33,6 +31,8 @@ import java.util.List;
  * 通过 {@link #getDefault()} 获取单例实例。
  */
 public final class ViewController {
+
+    private static final String TAG = "ViewController";
 
     private static volatile ViewController sInstance;
 

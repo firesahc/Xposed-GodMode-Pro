@@ -15,6 +15,8 @@ import java.util.Set;
  */
 public final class ToolbarPrefsManager {
 
+    private static final String TAG = "ToolbarPrefsManager";
+
     private ToolbarPrefsManager() {
     }
 
@@ -31,7 +33,7 @@ public final class ToolbarPrefsManager {
                 return parseCommaSeparated(value);
             }
         } catch (Throwable e) {
-            Logger.w("ToolbarPrefs", "load hidden items failed", e);
+            Logger.w(TAG, "load hidden items failed", e);
         }
         return new HashSet<>();
     }

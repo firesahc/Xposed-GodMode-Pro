@@ -1,7 +1,5 @@
 package com.kaisar.xposed.godmode.model;
 
-import static com.kaisar.xposed.godmode.GodModeApplication.TAG;
-
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.pm.PackageManager;
@@ -28,6 +26,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class SharedViewModel extends ViewModel {
+
+    private static final String TAG = "SharedViewModel";
 
     private final Handler mMainHandler = new Handler(Looper.getMainLooper());
     private final ExecutorService mExecutor = Executors.newSingleThreadExecutor();

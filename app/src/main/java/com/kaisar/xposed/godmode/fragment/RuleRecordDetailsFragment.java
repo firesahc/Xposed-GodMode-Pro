@@ -1,7 +1,5 @@
 package com.kaisar.xposed.godmode.fragment;
 
-import static com.kaisar.xposed.godmode.GodModeApplication.TAG;
-
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
@@ -45,6 +43,8 @@ import java.util.Objects;
  */
 
 public final class RuleRecordDetailsFragment extends PreferenceFragmentCompat implements Preference.OnPreferenceChangeListener {
+
+    private static final String TAG = "RuleRecordDetailsFragment";
 
     private RuleRecord mRuleRecord;
 

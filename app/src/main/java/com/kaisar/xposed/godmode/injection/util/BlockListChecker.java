@@ -1,7 +1,5 @@
 package com.kaisar.xposed.godmode.injection.util;
 
-import static com.kaisar.xposed.godmode.GodModeApplication.TAG;
-
 import android.content.Intent;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
@@ -14,6 +12,8 @@ import com.kaisar.xposed.godmode.engine.util.Logger;
 import java.util.List;
 
 public final class BlockListChecker {
+
+    private static final String TAG = "BlockListChecker";
 
     private BlockListChecker() {}
 

@@ -28,7 +28,7 @@ import com.kaisar.xposed.godmode.rule.RuleRecord;
  */
 public final class RemoveGestureHandler {
 
-    private static final String TAG = "GodMode";
+    private static final String TAG = "RemoveGestureHandler";
     private static final int MARK_COLOR = Color.argb(150, 139, 195, 75);
 
     private RemoveGestureHandler() {}

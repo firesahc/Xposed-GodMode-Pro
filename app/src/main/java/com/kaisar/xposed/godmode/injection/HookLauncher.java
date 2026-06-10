@@ -1,7 +1,5 @@
 package com.kaisar.xposed.godmode.injection;
 
-import static com.kaisar.xposed.godmode.GodModeApplication.TAG;
-
 import android.app.Activity;
 import android.content.res.XModuleResources;
 import android.os.Binder;
@@ -46,6 +44,8 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage;
  * </ul>
  */
 public final class HookLauncher implements IXposedHookLoadPackage, IXposedHookZygoteInit {
+
+    private static final String TAG = "HookLauncher";
 
     // =========================================================================
     // 字段定义 — 开关状态、注入参数、编辑器和 Hook

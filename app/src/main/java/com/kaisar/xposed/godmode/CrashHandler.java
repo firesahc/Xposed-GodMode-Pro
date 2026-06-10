@@ -1,7 +1,5 @@
 package com.kaisar.xposed.godmode;
 
-import static com.kaisar.xposed.godmode.GodModeApplication.TAG;
-
 import android.app.AlarmManager;
 import android.app.PendingIntent;
 import android.content.Context;
@@ -24,6 +22,7 @@ import java.nio.channels.FileChannel;
 
 public final class CrashHandler implements Thread.UncaughtExceptionHandler {
 
+    private static final String TAG = "CrashHandler";
     private static final String LOG_FILE = "crash_info.log";
 
     private final Context mContext;

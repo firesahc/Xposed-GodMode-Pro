@@ -9,6 +9,8 @@ import com.kaisar.xposed.godmode.engine.util.Logger;
  */
 public final class ViewCompat {
 
+    private static final String TAG = "ViewCompat";
+
     private ViewCompat() {}
 
     public static void setVisibility(View view, int visibility) {
@@ -18,7 +20,7 @@ public final class ViewCompat {
             try {
                 view.setAlpha(visibility == View.VISIBLE ? 1f : 0f);
             } catch (Exception inner) {
-                Logger.w("GodMode", "[ViewCompat] setVisibility fallback also failed", inner);
+                Logger.w(TAG, "setVisibility fallback also failed", inner);
             }
         }
     }
