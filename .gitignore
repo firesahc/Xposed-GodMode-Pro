@@ -7,6 +7,7 @@
 .externalNativeBuild
 .idea
 .omo
+/Xposed-GodMode-Pro.wiki/
 /AGENTS.md
 
 # Android build outputs
@@ -30,4 +31,3 @@ libxservicemanager/build/
 Thumbs.db
 ehthumbs.db
 Desktop.ini
-/WIKI.md

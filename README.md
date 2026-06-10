@@ -16,12 +16,13 @@
 
 - 无法屏蔽悬浮窗中的控件
 - 屏蔽列表中的控件可能会导致混乱
-- 图片修改可能无法保存和应用
 - 不明原因的闪退（）
 
-## [当前isuse](https://github.com/firesahc/Xposed-GodMode/issues)
+## [当前isuse](https://github.com/firesahc/Xposed-GodMode-Pro/issues)
 
 ## 伙计们我想我应该跟你说些什么
 vibe coding的价格有些超出预期🫠，如果觉得软件好用可以赞助作者。
 
-![https://www.ifdian.net/a/firesahc](Donate.jpg)
+[![爱发电赞助作者](Donate.jpg)](https://www.ifdian.net/a/firesahc)
+
+> 图片加载失败？请直接访问 [https://www.ifdian.net/a/firesahc](https://www.ifdian.net/a/firesahc)
