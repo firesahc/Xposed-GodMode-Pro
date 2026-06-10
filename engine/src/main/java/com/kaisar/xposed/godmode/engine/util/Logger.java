@@ -19,6 +19,8 @@ public final class Logger {
     private static final String TAG = "GodModePro";
 
     private static File sLogFile;
+    private static long sMaxLogSize = 2 * 1024 * 1024; // 2MB
+    private static int sMaxLogFiles = 3;
     private static final ExecutorService sLogExecutor = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "Logger-File");
         t.setDaemon(true);
@@ -41,6 +43,40 @@ public final class Logger {
         sLogFile = null;
     }
 
+    /**
+     * 设置文件日志轮转参数。
+     * @param maxSize  单个日志文件最大字节数（默认 2MB）
+     * @param maxFiles 保留的轮转文件个数（默认 3）
+     */
+    public static void setRotationPolicy(long maxSize, int maxFiles) {
+        if (maxSize > 0) sMaxLogSize = maxSize;
+        if (maxFiles > 0) sMaxLogFiles = maxFiles;
+    }
+
+    /** 日志文件轮转 — 超过大小限制时自动滚动 */
+    private static void rotateLogFile() {
+        File f = sLogFile;
+        if (f == null || !f.exists() || f.length() < sMaxLogSize) return;
+        // 删除最旧的文件
+        File oldest = new File(f.getParent(), f.getName() + "." + sMaxLogFiles);
+        if (oldest.exists() && !oldest.delete()) {
+            Log.w(TAG, "[Logger] Failed to delete oldest log backup");
+        }
+        // 依次重命名 .2→.3, .1→.2
+        for (int i = sMaxLogFiles - 1; i >= 1; i--) {
+            File src = new File(f.getParent(), f.getName() + "." + i);
+            if (src.exists()) {
+                File dst = new File(f.getParent(), f.getName() + "." + (i + 1));
+                src.renameTo(dst);
+            }
+        }
+        // 当前日志 → .1
+        File rotated = new File(f.getParent(), f.getName() + ".1");
+        if (!f.renameTo(rotated)) {
+            Log.w(TAG, "[Logger] Failed to rotate log file");
+        }
+    }
+
     private static void fileLog(char level, String tag, String msg) {
         File f = sLogFile;
         if (f == null) return;
@@ -48,6 +84,7 @@ public final class Logger {
             try {
                 File parent = f.getParentFile();
                 if (parent != null && !parent.exists()) parent.mkdirs();
+                rotateLogFile();
                 try (FileWriter fw = new FileWriter(f, true)) {
                     fw.append(sDateFormat.format(new Date()))
                       .append(" ").append(level).append("/").append(tag)

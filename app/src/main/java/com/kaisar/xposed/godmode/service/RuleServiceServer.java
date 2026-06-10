@@ -49,8 +49,8 @@ public final class RuleServiceServer extends IGodModeManager.Stub {
         mLogger = Logger.getLogger("RuleServiceServer");
         mContext = context;
         mPermissionEnforcer = new PermissionEnforcer(context);
-        mCacheManager = new RuleCacheManager(mGson, mLogger);
-        mOrchestrator = new WorkflowOrchestrator(mGson, mLogger, mCacheManager,
+        mCacheManager = new RuleCacheManager(mGson, Logger.getLogger("RuleCacheManager"));
+        mOrchestrator = new WorkflowOrchestrator(mGson, Logger.getLogger("WorkflowOrchestrator"), mCacheManager,
                 items -> mToolbarHiddenItems = items);
         mStarted = true;
         mLogger.i("GMMService started, loading rules from /data/system/godmode");
