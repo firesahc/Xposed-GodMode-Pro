@@ -115,6 +115,8 @@ public final class HookLauncher implements IXposedHookLoadPackage, IXposedHookZy
 
     /** 注入目标应用 — Hook Activity 生命周期、触摸事件和按键事件，通过 IPC 与系统服务通信 */
     private void injectIntoTargetApp(XC_LoadPackage.LoadPackageParam lpp, String packageName) {
+        // 所有进程共享同一日志文件（O_APPEND 并发安全）
+        Logger.enableFileLog(android.os.Environment.getDataDirectory().getAbsolutePath() + "/misc/godmode");
         Logger.i(TAG, "[GodMode] inject into app: " + packageName);
         hookActivityOnResume();
         hookActivityOnCreate();
