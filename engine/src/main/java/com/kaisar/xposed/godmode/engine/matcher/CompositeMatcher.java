@@ -5,177 +5,53 @@ import android.text.TextUtils;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewParent;
+import android.widget.TextView;
 
 import com.kaisar.xposed.godmode.engine.rule.MatchSpec;
 import com.kaisar.xposed.godmode.engine.util.GmConstants;
+import com.kaisar.xposed.godmode.engine.util.TextMatcher;
 
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
 import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * 复合匹配器 — IMatcher 的默认实现。
  * <p>
- * 持有 MatchStrategy 策略链（Resource/Text/Description），按优先级排序后依次评分。
- * DepthMatcher 和 RecyclerMatcher 不作为全局策略注册，避免场景加分污染全树搜索。
- * 支持运行时注册/注销策略（注册表模式），线程安全。
+ * 使用 AND 布尔匹配（{@link #isStructuralMatch}），所有非空字段必须全部匹配。
+ * 已移除评分体系（computeScore / 阈值 / MatchStrategy 注册表）。
  * <p>
- * 默认阈值：宽松模式 30，严格模式 80。
- * 规则可通过 {@link MatchSpec#matchThreshold} 覆盖默认阈值。
+ * 匹配流程：
+ * <ul>
+ *   <li>{@link #matchView} — resourceId 锚定 → depth 路径锚定 → isStructuralMatch 验证</li>
+ *   <li>{@link #matchAllViews} — itemPath 导航 + classChain 回退 + isStructuralMatch 验证</li>
+ * </ul>
  */
-public final class CompositeMatcher implements IMatcher, MatchStrategy {
+public final class CompositeMatcher implements IMatcher {
 
-    /** 默认严格阈值 */
-    public static final int DEFAULT_STRICT_THRESHOLD = 80;
-    /** 默认宽松阈值 */
-    public static final int DEFAULT_LOOSE_THRESHOLD = 30;
-    /** depth 锚定加分 — 仅在 matchView depth 分支内生效 */
-    private static final int SCORE_DEPTH_ANCHOR = 60;
-
-    private final List<MatchStrategy> mStrategies;
-    private int mStrictThreshold = DEFAULT_STRICT_THRESHOLD;
-    private int mLooseThreshold = DEFAULT_LOOSE_THRESHOLD;
-
-    /**
-     * 使用内置默认策略链构造。
-     * <p>
-     * 注意：DepthMatcher 和 RecyclerMatcher 不作为全局策略注册。
-     * DepthMatcher 的 +60 锚定加分仅在 matchView depth 分支内直接添加；
-     * RecyclerMatcher 的 +50 场景加分同理，RecyclerView item 定位
-     * 由 findViewsInRecycler 静态方法 + itemPath 导航完成。
-     * 两者不注册为全局策略，避免给 matchAllViews 全树搜索带入场景加分。
-     */
     public CompositeMatcher() {
-        List<MatchStrategy> defaults = new ArrayList<>(4);
-        defaults.add(new ResourceMatcher());
-        defaults.add(new TextMatcher());
-        defaults.add(new DescriptionMatcher());
-        defaults.sort(Comparator.comparingInt(MatchStrategy::priority).reversed());
-        mStrategies = new CopyOnWriteArrayList<>(defaults);
     }
 
-    /**
-     * 使用自定义策略列表构造。
-     * 策略将按 priority() 自动排序。
-     */
-    public CompositeMatcher(List<MatchStrategy> strategies) {
-        List<MatchStrategy> sorted = new ArrayList<>(strategies);
-        sorted.sort(Comparator.comparingInt(MatchStrategy::priority).reversed());
-        mStrategies = new CopyOnWriteArrayList<>(sorted);
-    }
-
-    // =========================================================================
-    // 注册表模式 — 运行时管理策略
-    // =========================================================================
-
-    /**
-     * 注册一个匹配策略。相同类型的策略不会被去重（允许多实例）。
-     * 策略链会按 priority() 自动重新排序。
-     */
-    public void registerStrategy(MatchStrategy strategy) {
-        if (strategy == null) return;
-        mStrategies.add(strategy);
-        // CopyOnWriteArrayList 不支持原地 sort，重新构建
-        List<MatchStrategy> reordered = new ArrayList<>(mStrategies);
-        reordered.sort(Comparator.comparingInt(MatchStrategy::priority).reversed());
-        mStrategies.clear();
-        mStrategies.addAll(reordered);
-    }
-
-    /**
-     * 注销指定的匹配策略实例。
-     *
-     * @return 如果策略存在并被移除返回 true
-     */
-    public boolean unregisterStrategy(MatchStrategy strategy) {
-        return mStrategies.remove(strategy);
-    }
-
-    /**
-     * 按类型注销所有匹配策略。
-     *
-     * @param strategyClass 要注销的策略类型
-     * @return 被移除的策略数量
-     */
-    public int unregisterStrategy(Class<? extends MatchStrategy> strategyClass) {
-        List<MatchStrategy> toRemove = new ArrayList<>();
-        for (MatchStrategy s : mStrategies) {
-            if (s.getClass() == strategyClass) {
-                toRemove.add(s);
-            }
-        }
-        if (!toRemove.isEmpty()) {
-            mStrategies.removeAll(toRemove);
-        }
-        return toRemove.size();
-    }
-
-    /** 返回当前策略链的只读视图 */
-    public List<MatchStrategy> getStrategies() {
-        return Collections.unmodifiableList(mStrategies);
-    }
-
-    // =========================================================================
-    // 阈值配置
-    // =========================================================================
-
-    /** 设置全局严格阈值 */
-    public void setStrictThreshold(int threshold) {
-        mStrictThreshold = threshold;
-    }
-
-    /** 设置全局宽松阈值 */
-    public void setLooseThreshold(int threshold) {
-        mLooseThreshold = threshold;
-    }
-
-    /** 获取当前严格阈值 */
-    public int getStrictThreshold() {
-        return mStrictThreshold;
-    }
-
-    /** 获取当前宽松阈值 */
-    public int getLooseThreshold() {
-        return mLooseThreshold;
-    }
-
-    /**
-     * 获取生效的阈值：优先使用规格中配置的 matchThreshold，
-     * 其次根据 strictMode 使用全局默认值。
-     */
-    private int resolveThreshold(MatchSpec spec, boolean strictMode) {
-        if (spec.matchThreshold > 0) {
-            return spec.matchThreshold;
-        }
-        return strictMode ? mStrictThreshold : mLooseThreshold;
-    }
-
-    // ---- IMatcher 实现（新 API：MatchSpec） ----
+    // ---- IMatcher 实现 ----
 
     @Override
     public View matchView(View root, MatchSpec spec) {
         if (root == null || spec == null) return null;
 
-        // 非 repeatable 规则必须有可靠锚定（resourceId/depth），
-        // 无锚定时不做 content-based 全树搜索——viewClass +30 即过 LOOSE 阈值，
-        // 会导致大面积误伤。
-
+        // 非 repeatable 规则必须有可靠锚定（resourceId/depth）
         // ── 策略 1: resourceId 锚定 ──
         if (!TextUtils.isEmpty(spec.resourceName)) {
             View viewById = findByResourceId(root, spec);
-            if (viewById != null) return viewById;
+            if (viewById != null && isStructuralMatch(viewById, spec, true)) {
+                return viewById;
+            }
         }
 
         // ── 策略 2: depth 路径锚定 ──
-        // +60 锚定加分仅在此分支内有效，不经过策略链。
-        int threshold = resolveThreshold(spec, false);
         if (spec.depth != null && spec.depth.length > 0) {
             View depthView = ViewTraversal.findViewByDepth(root, spec.depth);
-            if (depthView != null && isVisibleView(depthView)) {
-                int score = computeScore(depthView, spec) + SCORE_DEPTH_ANCHOR;
-                if (score >= threshold) return depthView;
+            if (depthView != null && isVisibleView(depthView)
+                    && isStructuralMatch(depthView, spec, true)) {
+                return depthView;
             }
         }
 
@@ -185,66 +61,93 @@ public final class CompositeMatcher implements IMatcher, MatchStrategy {
     @Override
     public List<View> matchAllViews(View root, MatchSpec spec) {
         if (root == null || spec == null) return new ArrayList<>();
-        int threshold = resolveThreshold(spec, false);
 
-        // 信息流规则：先通过 itemPath 精确导航，避免全树收集误伤根容器
+        // 信息流规则：itemPath 导航 + AND 验证，无全树兜底
+        List<View> results = new ArrayList<>();
         if (spec.repeatable && spec.itemPath != null && spec.itemPath.length > 0
                 && spec.itemRootClass != null) {
-            List<View> rvResults = new ArrayList<>();
-            collectRecyclerMatches(root, spec, rvResults);
-            if (!rvResults.isEmpty()) {
-                // 对 itemPath 找到的视图做评分验证
-                List<View> verified = new ArrayList<>();
-                for (View v : rvResults) {
-                    if (v != null && computeScore(v, spec) >= threshold) {
-                        verified.add(v);
-                    }
-                }
-                if (!verified.isEmpty()) return verified;
-            }
+            collectRecyclerMatches(root, spec, results);
+            if (!results.isEmpty()) return results;
         }
 
-        // 兜底：全树内容匹配搜索
-        List<View> results = new ArrayList<>();
-        collectMatches(root, spec, results, threshold);
         return results;
     }
 
     // ---- 内部辅助方法 ----
 
     /**
-     * 策略 1：按 resourceName 锚定。
-     * 解析 resourceName 为 int ID，通过 findViewById 精确查找，
-     * 再用严格阈值评分验证防止误匹配。
+     * 按 resourceName 锚定：解析为 int ID，通过 findViewById 精确查找。
+     * 不包含评分验证，由调用方负责 isStructuralMatch 检查。
      */
-    private View findByResourceId(View root, MatchSpec spec) {
+    private static View findByResourceId(View root, MatchSpec spec) {
         if (root == null || TextUtils.isEmpty(spec.resourceName)) return null;
         try {
             int id = root.getResources().getIdentifier(spec.resourceName, "id", null);
             if (id == 0 || id == View.NO_ID) return null;
             View found = root.findViewById(id);
             if (found == null || !isVisibleView(found)) return null;
-            // resourceId 锚定最可靠（Android 框架级 ID），阈值可适当放宽
-            if (computeScore(found, spec) >= resolveThreshold(spec, false)) {
-                return found;
-            }
+            return found;
         } catch (Resources.NotFoundException e) {
-            // resource 不属于当前 context — 跳过此策略
+            return null;
         }
-        return null;
     }
 
     /**
-     * 递归遍历视图树，收集 RecyclerView 中按 itemPath 匹配的视图。
-     * 仅用于 repeatable 规则的精确匹配。
+     * 递归遍历视图树，收集 RecyclerView 中按 itemPath 导航 + AND 验证匹配的视图。
+     * 无 collectMatches 全树兜底。
      */
     private static void collectRecyclerMatches(View view, MatchSpec spec, List<View> results) {
         if (results.size() >= GmConstants.MAX_REPEATABLE_RESULTS) return;
-        if (view.getClass().getName().contains("RecyclerView")
-                && view instanceof ViewGroup) {
-            List<View> matched = RecyclerMatcher.findViewsInRecycler(view, spec, (ViewGroup) view);
-            results.addAll(matched);
+        boolean isRecyclerView = view.getClass().getName().contains("RecyclerView")
+                && view instanceof ViewGroup;
+        if (isRecyclerView) {
+            ViewGroup rv = (ViewGroup) view;
+
+            // viewType 过滤（如果有）
+            Integer expectedViewType = spec.matchThreshold > 0 ? spec.matchThreshold : null;
+
+            for (int i = 0; i < rv.getChildCount()
+                    && results.size() < GmConstants.MAX_REPEATABLE_RESULTS; i++) {
+                View itemRoot = rv.getChildAt(i);
+                if (itemRoot == null) continue;
+                if (!itemRoot.getClass().getName().equals(spec.itemRootClass)) continue;
+
+                // viewType 检查（反射避免 RecyclerView 编译期依赖）
+                if (expectedViewType != null) {
+                    try {
+                        java.lang.reflect.Method getAdapter =
+                                rv.getClass().getMethod("getAdapter");
+                        Object adapter = getAdapter.invoke(rv);
+                        if (adapter != null) {
+                            java.lang.reflect.Method getChildAdapterPosition =
+                                    rv.getClass().getMethod("getChildAdapterPosition", View.class);
+                            int pos = (int) getChildAdapterPosition.invoke(rv, itemRoot);
+                            if (pos >= 0) {
+                                java.lang.reflect.Method getItemViewType =
+                                        adapter.getClass().getMethod("getItemViewType", int.class);
+                                int viewType = (int) getItemViewType.invoke(adapter, pos);
+                                if (viewType != expectedViewType) continue;
+                            }
+                        }
+                    } catch (Exception ignored) {
+                    }
+                }
+
+                // itemPath 导航 + classChain 回退
+                View found = ViewTraversal.findViewByItemPath(itemRoot, spec.itemPath, 0);
+                if (found == null) {
+                    found = navigateByClassChain(itemRoot, spec.itemPath, 0);
+                }
+                if (found != null && isStructuralMatch(found, spec, false)) {
+                    if (!results.contains(found)) {
+                        results.add(found);
+                    }
+                }
+            }
+            return;
         }
+
+        // 非 RecyclerView → 继续递归
         if (view instanceof ViewGroup) {
             ViewGroup vg = (ViewGroup) view;
             for (int i = 0; i < vg.getChildCount()
@@ -260,56 +163,80 @@ public final class CompositeMatcher implements IMatcher, MatchStrategy {
                 && !GmConstants.TAG_GM_CMP.equals(view.getTag());
     }
 
-    private void collectMatches(View view, MatchSpec spec, List<View> results, int threshold) {
-        if (results.size() >= GmConstants.MAX_REPEATABLE_RESULTS) return;
-        if (!isVisibleView(view)) return;
-
-        // 如果父视图已在结果集中，子视图勿需收集（父隐藏/移除了子视图自动不可见）
-        ViewParent p = view.getParent();
-        if (p instanceof View && results.contains(p)) return;
-
-        int score = computeScore(view, spec);
-        if (score >= threshold) {
-            results.add(view);
-        }
-
-        if (view instanceof ViewGroup) {
-            ViewGroup vg = (ViewGroup) view;
-            for (int i = 0; i < vg.getChildCount()
-                    && results.size() < GmConstants.MAX_REPEATABLE_RESULTS; i++) {
-                collectMatches(vg.getChildAt(i), spec, results, threshold);
-            }
-        }
-    }
-
-    // ===== 匹配评分常量 =====
-    private static final int SCORE_CLASS = 30;
-    private static final int SCORE_PARENT = 10;
-
-    // ---- MatchStrategy 实现 — 聚合所有子策略评分 ----
+    // =========================================================================
+    // isStructuralMatch — AND 布尔匹配（最终验证）
+    // =========================================================================
 
     /**
-     * 聚合 viewClass/parentClass 匹配及各子策略得分。
+     * AND 布尔匹配：MatchSpec 中所有非空字段必须全部匹配。
+     *
+     * @param strictParent true=单元素模式，parentClass 也必须匹配；
+     *                     false=信息流模式，parentClass 提供但不强制
      */
-    @Override
-    public int computeScore(View view, MatchSpec spec) {
-        if (view == null || spec == null) return 0;
-        int total = 0;
-        // 视图类名匹配 — 最基础条件
-        if (spec.viewClass != null && view.getClass().getName().equals(spec.viewClass)) {
-            total += SCORE_CLASS;
+    static boolean isStructuralMatch(View view, MatchSpec spec, boolean strictParent) {
+        if (view == null || spec == null) return false;
+
+        // ── viewClass ──
+        if (hasContent(spec.viewClass)
+                && !view.getClass().getName().equals(spec.viewClass)) {
+            return false;
         }
-        // 父视图类名匹配
-        if (spec.parentClass != null) {
-            ViewParent parent = view.getParent();
-            if (parent != null && parent.getClass().getName().equals(spec.parentClass)) {
-                total += SCORE_PARENT;
+
+        // ── text ──
+        if (hasContent(spec.text)) {
+            if (!(view instanceof TextView)) return false;
+            CharSequence t = ((TextView) view).getText();
+            if (t == null) return false;
+            if (!TextMatcher.matchText(t.toString(), spec.text, spec.matchMode)) {
+                return false;
             }
         }
-        // 收集各子策略得分
-        for (MatchStrategy s : mStrategies) {
-            total += s.computeScore(view, spec);
+
+        // ── description ──
+        if (hasContent(spec.description)) {
+            CharSequence d = view.getContentDescription();
+            if (d == null) return false;
+            if (!TextMatcher.matchText(d.toString(), spec.description, spec.matchMode)) {
+                return false;
+            }
         }
-        return total;
+
+        // ── parentClass（条件检） ──
+        if (hasContent(spec.parentClass) && strictParent) {
+            ViewParent p = view.getParent();
+            if (!(p instanceof View)
+                    || !p.getClass().getName().equals(spec.parentClass)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static boolean hasContent(String s) {
+        return s != null && !s.isEmpty();
+    }
+
+    /**
+     * 按类链导航（不依赖 index），处理卡片间结构微变。
+     * 从 itemPath 数组提取每个元素的 ":ClassName" 部分做纯类链匹配。
+     */
+    private static View navigateByClassChain(View root, String[] itemPath, int startIndex) {
+        if (itemPath == null || startIndex >= itemPath.length) return root;
+        String entry = itemPath[startIndex];
+        int colonPos = entry.indexOf(':');
+        if (colonPos < 0) return null;
+        String className = entry.substring(colonPos + 1);
+
+        if (root instanceof ViewGroup) {
+            ViewGroup vg = (ViewGroup) root;
+            for (int i = 0; i < vg.getChildCount(); i++) {
+                View child = vg.getChildAt(i);
+                if (child != null && child.getClass().getName().equals(className)) {
+                    return navigateByClassChain(child, itemPath, startIndex + 1);
+                }
+            }
+        }
+        return null;
     }
 }
