@@ -14,6 +14,8 @@ import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.AppRules;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 
+import android.os.Environment;
+
 import java.io.File;
 import java.io.FileNotFoundException;
 
@@ -52,6 +54,8 @@ public final class RuleServiceServer extends IGodModeManager.Stub {
         mCacheManager = new RuleCacheManager(mGson, Logger.getLogger("RuleCacheManager"));
         mOrchestrator = new WorkflowOrchestrator(mGson, Logger.getLogger("WorkflowOrchestrator"), mCacheManager,
                 items -> mToolbarHiddenItems = items);
+        // 在 system_server 进程启用文件日志（可写 /data/misc）
+        Logger.enableFileLog(Environment.getDataDirectory().getAbsolutePath() + "/misc/godmode");
         mStarted = true;
         mLogger.i("GMMService started, loading rules from /data/misc/godmode");
     }

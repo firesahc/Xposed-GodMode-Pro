@@ -242,9 +242,6 @@
     <string name="restore_rules_success">恢复规则成功</string>
     <string name="save_all_rules_result">保存完成：%1$d 成功，%2$d 失败</string>
     <string name="pref_key_hide_icon" translatable="false">pref_hide_icon</string>
-    <string name="pref_key_save_log" translatable="false">pref_save_log</string>
-    <string name="pref_save_log">保存日志到文件</string>
-    <string name="pref_save_log_desc">开启后日志自动保存到 %s/godmodepro.log</string>
     <string name="pref_key_show_remove_mode" translatable="false">pref_show_remove_mode</string>
     <string name="pref_key_show_modify_mode" translatable="false">pref_show_modify_mode</string>
     <string name="pref_key_show_info_flow_mode" translatable="false">pref_show_info_flow_mode</string>

@@ -15,7 +15,6 @@ import androidx.annotation.Nullable;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceFragmentCompat;
-import androidx.preference.PreferenceManager;
 import androidx.preference.SwitchPreferenceCompat;
 
 import com.google.android.material.snackbar.Snackbar;
@@ -84,19 +83,6 @@ public final class SettingsFragment extends PreferenceFragmentCompat implements
         if (hideIcon != null) {
             hideIcon.setChecked(mSharedViewModel.isIconHidden(requireContext()));
             hideIcon.setOnPreferenceChangeListener(this);
-        }
-
-        // Group A: Save Log
-        SwitchPreferenceCompat saveLog = (SwitchPreferenceCompat) findPreference(getString(R.string.pref_key_save_log));
-        if (saveLog != null) {
-            String logDir = requireContext().getExternalFilesDir(null).getAbsolutePath();
-            saveLog.setSummary(getString(R.string.pref_save_log_desc, logDir));
-            saveLog.setOnPreferenceChangeListener(this);
-            // Restore previous state
-            if (PreferenceManager.getDefaultSharedPreferences(requireContext())
-                    .getBoolean(getString(R.string.pref_key_save_log), false)) {
-                Logger.enableFileLog(logDir);
-            }
         }
 
         // Group B: Save All Rules
@@ -171,16 +157,6 @@ public final class SettingsFragment extends PreferenceFragmentCompat implements
         if (TextUtils.equals(key, getString(R.string.pref_key_hide_icon))) {
             // Group A: Hide icon toggle
             mSharedViewModel.setIconHidden(requireContext(), enabled);
-            return true;
-        }
-
-        if (TextUtils.equals(key, getString(R.string.pref_key_save_log))) {
-            // Group A: Save log toggle
-            if (enabled) {
-                Logger.enableFileLog(requireContext().getExternalFilesDir(null).getAbsolutePath());
-            } else {
-                Logger.disableFileLog();
-            }
             return true;
         }
 
