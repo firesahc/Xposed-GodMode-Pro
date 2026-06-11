@@ -11,6 +11,8 @@ import com.kaisar.xposed.godmode.engine.applier.RemoveApplier;
 import com.kaisar.xposed.godmode.engine.applier.RuleApplier;
 import com.kaisar.xposed.godmode.engine.matcher.CompositeMatcher;
 import com.kaisar.xposed.godmode.engine.matcher.IMatcher;
+import com.kaisar.xposed.godmode.engine.matcher.TargetLevel;
+import com.kaisar.xposed.godmode.engine.matcher.ViewTraversal;
 import com.kaisar.xposed.godmode.engine.rule.ActionSpec;
 import com.kaisar.xposed.godmode.engine.rule.RuleMapper;
 import com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec;
@@ -209,6 +211,19 @@ public final class ViewController {
         if (v == null || viewRule == null) return false;
         RuleMatchSpec engineRule = toEngineRule(viewRule);
         ActionSpec spec = engineRule.getActionSpec();
+
+        // CARD 模式 + 修改规则：从卡片根导航到内部目标元素再应用修改。
+        // 若导航失败（v 可能已是内部元素，编辑器首次应用场景），降级到直接修改 v。
+        TargetLevel targetLevel = viewRule.getTargetLevel();
+        if (targetLevel == TargetLevel.CARD && viewRule.isModifyRule()
+                && viewRule.getItemPath() != null && viewRule.getItemPath().length > 0) {
+            View target = ViewTraversal.findViewByItemPath(v, viewRule.getItemPath(), 0);
+            if (target != null) {
+                return getModifyApplier().apply(target, spec);
+            }
+            // fall through: v 可能是内部元素（编辑器首次应用），直接修改
+        }
+
         if (viewRule.isModifyRule()) {
             return getModifyApplier().apply(v, spec);
         } else {
@@ -251,6 +266,20 @@ public final class ViewController {
         if (v == null || viewRule == null) return;
         RuleMatchSpec engineRule = toEngineRule(viewRule);
         ActionSpec spec = engineRule.getActionSpec();
+
+        // CARD 模式 + 修改规则：从卡片根导航到内部目标元素再撤销修改。
+        // 若导航失败（v 可能已是内部元素），降级到直接撤销 v。
+        TargetLevel targetLevel = viewRule.getTargetLevel();
+        if (targetLevel == TargetLevel.CARD && viewRule.isModifyRule()
+                && viewRule.getItemPath() != null && viewRule.getItemPath().length > 0) {
+            View target = ViewTraversal.findViewByItemPath(v, viewRule.getItemPath(), 0);
+            if (target != null) {
+                getModifyApplier().revoke(target, spec);
+                return;
+            }
+            // fall through: v 可能是内部元素，直接撤销
+        }
+
         if (viewRule.isModifyRule()) {
             getModifyApplier().revoke(v, spec);
         } else {

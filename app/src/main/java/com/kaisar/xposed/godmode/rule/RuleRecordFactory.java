@@ -12,6 +12,7 @@ import android.view.ViewParent;
 import android.widget.TextView;
 
 import com.kaisar.xposed.godmode.BuildConfig;
+import com.kaisar.xposed.godmode.engine.matcher.TargetLevel;
 import com.kaisar.xposed.godmode.engine.matcher.ViewTraversal;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.injection.HookLauncher;
@@ -164,6 +165,8 @@ public final class RuleRecordFactory {
                 rule.itemRootClass = itemRootClass;
                 rule.parentClass = v.getParent() != null ? v.getParent().getClass().getName() : null;
                 rule.repeatable = true;
+                // 新规则默认使用 CARD 模式：以整张卡片为操作单位，稳定性更高
+                rule.targetLevel = TargetLevel.CARD;
 
                 // 捕获 viewType（复用 matchThreshold 字段）
                 int viewType = -1;

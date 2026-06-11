@@ -25,7 +25,11 @@ import java.util.Map;
  * 匹配流程：
  * <ul>
  *   <li>{@link #matchView} — resourceId 锚定 → depth 路径锚定 → isStructuralMatch 验证</li>
- *   <li>{@link #matchAllViews} — itemPath 导航 + classChain 回退 + isStructuralMatch 验证</li>
+ *   <li>{@link #matchAllViews} / {@link #matchAllViewsBatch} — 根据 targetLevel：</li>
+ *   <ul>
+ *     <li>{@link TargetLevel#CARD} — 直接验证卡片根视图，不导航 itemPath</li>
+ *     <li>{@link TargetLevel#ELEMENT} — itemPath 导航 + classChain 回退 + isStructuralMatch 验证</li>
+ *   </ul>
  * </ul>
  */
 public final class CompositeMatcher implements IMatcher {
@@ -117,15 +121,24 @@ public final class CompositeMatcher implements IMatcher {
                         continue;
                     }
 
-                    // itemPath 导航 + classChain 回退
-                    View found = ViewTraversal.findViewByItemPath(
-                            itemRoot, spec.itemPath, 0);
-                    if (found == null) {
-                        found = navigateByClassChain(itemRoot, spec.itemPath, 0);
-                    }
-                    if (found != null && isStructuralMatch(found, spec, false)) {
-                        if (!partial.contains(found)) {
-                            partial.add(found);
+                    if (spec.targetLevel == TargetLevel.CARD) {
+                        // CARD 模式：直接使用卡片根视图，跳过 itemPath 导航。
+                        // 卡片身份已在 itemRootClass + viewType 过滤中确认，
+                        // isStructuralMatch 不适用（viewClass 来自内部元素而非卡片根）。
+                        if (!partial.contains(itemRoot)) {
+                            partial.add(itemRoot);
+                        }
+                    } else {
+                        // ELEMENT 模式：itemPath 导航 + classChain 回退
+                        View found = ViewTraversal.findViewByItemPath(
+                                itemRoot, spec.itemPath, 0);
+                        if (found == null) {
+                            found = navigateByClassChain(itemRoot, spec.itemPath, 0);
+                        }
+                        if (found != null && isStructuralMatch(found, spec, false)) {
+                            if (!partial.contains(found)) {
+                                partial.add(found);
+                            }
                         }
                     }
                 }
@@ -193,14 +206,22 @@ public final class CompositeMatcher implements IMatcher {
                     continue;
                 }
 
-                // itemPath 导航 + classChain 回退
-                View found = ViewTraversal.findViewByItemPath(itemRoot, spec.itemPath, 0);
-                if (found == null) {
-                    found = navigateByClassChain(itemRoot, spec.itemPath, 0);
-                }
-                if (found != null && isStructuralMatch(found, spec, false)) {
-                    if (!results.contains(found)) {
-                        results.add(found);
+                if (spec.targetLevel == TargetLevel.CARD) {
+                    // CARD 模式：直接使用卡片根视图，跳过 itemPath 导航。
+                    // 卡片身份已在 itemRootClass + viewType 过滤中确认。
+                    if (!results.contains(itemRoot)) {
+                        results.add(itemRoot);
+                    }
+                } else {
+                    // ELEMENT 模式：itemPath 导航 + classChain 回退
+                    View found = ViewTraversal.findViewByItemPath(itemRoot, spec.itemPath, 0);
+                    if (found == null) {
+                        found = navigateByClassChain(itemRoot, spec.itemPath, 0);
+                    }
+                    if (found != null && isStructuralMatch(found, spec, false)) {
+                        if (!results.contains(found)) {
+                            results.add(found);
+                        }
                     }
                 }
             }

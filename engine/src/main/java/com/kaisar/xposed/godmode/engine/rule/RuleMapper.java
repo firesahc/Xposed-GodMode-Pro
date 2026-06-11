@@ -2,6 +2,8 @@ package com.kaisar.xposed.godmode.engine.rule;
 
 import androidx.annotation.NonNull;
 
+import com.kaisar.xposed.godmode.engine.matcher.TargetLevel;
+
 /**
  * 类型安全的字段转换器 — 替代废弃的 FieldMapper 反射拷贝方案。
  * <p>
@@ -66,6 +68,8 @@ public final class RuleMapper {
         dst.description = src.getDescription();
         dst.matchMode = src.getMatchMode();
         dst.matchThreshold = src.getMatchThreshold();
+        TargetLevel tl = src.getTargetLevel();
+        dst.targetLevel = tl != null ? tl : TargetLevel.ELEMENT;
         dst.visibility = src.getVisibility();
         dst.timestamp = src.getTimestamp();
 

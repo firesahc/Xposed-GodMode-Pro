@@ -1,6 +1,7 @@
 package com.kaisar.xposed.godmode.engine.rule;
 
 import com.kaisar.xposed.godmode.engine.matcher.MatchMode;
+import com.kaisar.xposed.godmode.engine.matcher.TargetLevel;
 
 import java.util.Arrays;
 
@@ -47,8 +48,10 @@ public final class RuleMatchSpec implements RuleFields, Cloneable {
     // ===== 匹配配置 =====
     /** 匹配模式，null 等价于 EXACT（精确匹配） */
     public MatchMode matchMode;
-    /** 匹配阈值，0=使用系统默认值（当前默认宽松阈值 30） */
+    /** 匹配阈值，0=使用系统默认值；信息流规则复用作 viewType */
     public int matchThreshold;
+    /** 匹配目标层级，null 等价于 ELEMENT（向后兼容） */
+    public TargetLevel targetLevel;
 
     public int visibility;
     public long timestamp;
@@ -102,6 +105,7 @@ public final class RuleMatchSpec implements RuleFields, Cloneable {
     @Override public String getDescription() { return description; }
     @Override public MatchMode getMatchMode() { return matchMode; }
     @Override public int getMatchThreshold() { return matchThreshold; }
+    @Override public TargetLevel getTargetLevel() { return targetLevel; }
     @Override public int getVisibility() { return visibility; }
     @Override public long getTimestamp() { return timestamp; }
     @Override public int getModWidth() { return modWidth; }
