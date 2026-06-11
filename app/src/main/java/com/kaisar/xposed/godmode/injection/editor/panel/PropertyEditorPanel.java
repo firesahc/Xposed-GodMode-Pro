@@ -26,6 +26,7 @@ import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.injection.ModuleResources;
 import com.kaisar.xposed.godmode.injection.bridge.RuleServiceClient;
 import com.kaisar.xposed.godmode.rule.RuleRecordFactory;
+import com.kaisar.xposed.godmode.rule.ViewSnapshot;
 import com.kaisar.xposed.godmode.injection.util.BitmapUtils;
 import com.kaisar.xposed.godmode.injection.util.GmResources;
 import com.kaisar.xposed.godmode.injection.util.TaskExecutor;
@@ -78,6 +79,9 @@ public class PropertyEditorPanel {
     private float mSavedAlpha;
     private CharSequence mSavedText;
 
+    /** 闂佽娲﹂妶锝夋綖閸掑棝鏆熼幘锟犳⒒椤倸宕撮柛鎰敎濮橆剙鎳楃换鎺撴嫚椤╋箓鏌ｉ弻娑㈠箰椤旇鍘ч崫钟? */
+    private ViewSnapshot mSnapshot;
+
     // 濠电儑绲藉ú锔炬崲閸岀偞鍋ら柕濞у嫬鏋傞梺绯曞墲椤ㄥ棛绮嬮崼銉︾厸鐎广儱鎳忕粚鍧楁煟閿旇棄鐏︾紒宀勪憾閸╁嫰宕樿缁€鈧梻浣瑰缁嬫垿鎯夋總绋挎瀬闁靛牆妫涢々?Activity 闂傚倷鐒﹁ぐ鍐矓鐎靛摜纾介柟鎹愵嚙鐟欙箓骞栧ǎ顒€濡兼繛鍛灲閺岋繝宕掑鍐炬毉闂佺粯鎼换婵嬬嵁?
     private int[] mModifyingViewDepth;
     private String mModifyingViewActClass;
@@ -92,6 +96,8 @@ public class PropertyEditorPanel {
         mTargetView = targetView;
         try {
             saveViewState(targetView);
+            // 在视图被编辑前捕获原始状态快照
+            mSnapshot = ViewSnapshot.capture(targetView);
 
             ModuleResources.injectInto(activity.getResources());
             LayoutInflater inflater = LayoutInflater.from(activity);
@@ -123,6 +129,7 @@ public class PropertyEditorPanel {
         mOriginalImageBitmap = null;
         mModifyingViewDepth = null;
         mModifyingViewActClass = null;
+        mSnapshot = null;
         // 婵犵數鍋涢ˇ顓㈠礉瀹ュ绀堝ù鐓庣摠閺咁剚鎱ㄥ鍡椾簽闁荤喐绻堥弻娑㈠Ψ瑜嶆禒锕傛煛?婵犵數鍋為幐鎼佸箠閹版澘鐓?mPendingModBitmaps 闂備胶鍋ㄩ崕鏌ュ蓟閿熺姴鐒?濠电偠鎻徊鐣岀矓閺夋嚚鐟邦潨閳ь剙鐣烽敐澶樻晬婵犻潧妫楅獮瀣箾鐎电孝缂佸鍏橀敐?ImageView 闁诲孩顔栭崰妤€煤濠婂牆鏋侀柕鍫濐槸閸欏﹪鏌涢幘妞炬缁敻姊?
         // 濠?saveAll() 闂傚倸鍊稿ú鐘诲磻閹剧粯鍋￠柡鍥ㄦ皑椤︼箓鏌ｉ敐鍥ｇ紒鍌涘浮椤㈡鎷呰ぐ鎺擃€栭梻浣哥秺閺呮彃顪冮幒鏃備笉婵炲棙鎸哥粈宀勬煛瀹擃喖瀚々顓㈡⒑缂佹﹩娈旀繛璇х畵瀵悂宕橀埡鍐炬祫闂傚鍓氱粊鎾磻閹捐纾兼慨姗嗗弨閸?cancel() 闂?saveAll() 濠电偞鍨堕幖鈺呭储婵傛潌鍥煛閸涱喖浠╅梺绯曞墲閸斿繘宕?
         panel.animate().alpha(0).setDuration(150).withEndAction(() -> {
@@ -358,7 +365,10 @@ public class PropertyEditorPanel {
 
     // ---- 闂佸湱鍘ч悺銊ヮ潖婵犳艾鏋侀柕鍫濇閳瑰秵銇勯弮鍥撻柡?/ 濠电儑绲藉ú锔炬崲閸岀偞鍋?----
 
-    /** 濠电偛顕慨瀛橆殽閸濄儳绀婇悗锝庡枛缁€?UI 闂備胶绮…鍫ュ春閺嶎厼鐒垫い鎴ｆ硶閸斿秹鏌ｆ惔顔肩仩妞?RuleRecord 婵°倗濮烽崑鐘测枖濞戙垺鍋ら柕濞炬櫅缁€鍌炴煏婢跺牆鈧洟藝閺屻儲鐓涢柛鎰ㄦ櫆閺嬪嫰鏌熸笟鍨鐎殿喓鍔忛妵鎰板箳閹剧懓浜栭梻?*/
+    /** 应用 UI 控件的修改值到 RuleRecord（创建或更新）。
+     * <p>
+     * 结构信息和原始值来自预捕获的 {@link #mSnapshot}（视图未修改时冻结），
+     * 修改值（mod*）来自 UI 控件当前状态。创建时无需后置修正。 */
     private void applyModification(View view, SeekBar widthSeek, SeekBar heightSeek,
                                     SeekBar alphaSeek, EditText textInput) {
         int w = widthSeek.getProgress();
@@ -368,28 +378,11 @@ public class PropertyEditorPanel {
         String viewKey = ViewUtils.getViewKey(view);
         RuleRecord rule = mTempModifications.get(viewKey);
         if (rule == null) {
-            rule = RuleRecordFactory.makeModifyRule(view);
-            // makeModifyRule → makeRule 捕获的是视图当前（可能已被编辑器实时修改）的值。
-            // 用 saveViewState 的原始值（面板打开时保存）覆盖匹配字段和 orig* 字段：
-            rule.text = mSavedText != null ? mSavedText.toString() : null;
-            rule.origWidth = mSavedWidth > 0 ? mSavedWidth : mSavedPixelWidth;
-            rule.origHeight = mSavedHeight > 0 ? mSavedHeight : mSavedPixelHeight;
-            rule.origAlpha = mSavedAlpha;
-            if (mSavedText != null) {
-                rule.origText = mSavedText.toString();
-            }
-            if (mSavedLayoutParams != null) {
-                rule.origLeftMargin = mSavedLayoutParams.leftMargin;
-                rule.origTopMargin = mSavedLayoutParams.topMargin;
-            }
+            // 使用快照创建规则 — 结构来自视图，原始值来自快照，无需后置修正
+            rule = RuleRecordFactory.makeModifyRule(view, mSnapshot);
             mTempModifications.put(viewKey, rule);
-        } else {
-            // 规则已存在（如图片选择路径预创建），仍须修正 rule.text
-            // 因为此时视图可能已被 TextWatcher 实时修改，makeRule 当时捕获的值可能已不准确
-            if (mSavedText != null) {
-                rule.text = mSavedText.toString();
-            }
         }
+        // 规则已存在（如 image-pick 预创建）— 创建时已用快照，orig* 正确，无需修正
 
         if (rule.origWidth > 0 && w != rule.origWidth) {
             rule.modWidth = w;
@@ -562,7 +555,7 @@ public class PropertyEditorPanel {
                                     String viewKey = ViewUtils.getViewKey(targetView);
                                     RuleRecord rule = mTempModifications.get(viewKey);
                                     if (rule == null) {
-                                        rule = RuleRecordFactory.makeModifyRule(targetView);
+                                        rule = RuleRecordFactory.makeModifyRule(targetView, mSnapshot);
                                         mTempModifications.put(viewKey, rule);
                                     }
                                     rule.modImagePath = "pending";
