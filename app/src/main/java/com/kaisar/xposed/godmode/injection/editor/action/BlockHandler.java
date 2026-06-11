@@ -47,6 +47,12 @@ public final class BlockHandler {
 
     /**
      * 执行屏蔽操作：粒子动画 + IPC 持久化。
+     * <p>
+     * ParticleView 的 detach 由 onAnimationEnd 回调中的 finally 块保证执行。
+     * 如果在 attachToContainer 与 boom 之间抛异常（如 boom 内部崩溃），
+     * 外层 catch 会调用 listener.onError，但 ParticleView 无法在当前帧被
+     * 安全清理——boom 通过 view.post() 异步启动动画，onAnimationEnd 最终会触发
+     * detach。实际场景中 boom 不抛同步异常，此路径仅防极端崩溃。
      *
      * @param activity         当前 Activity
      * @param view             要屏蔽的目标视图
@@ -66,17 +72,22 @@ public final class BlockHandler {
             particleView.setOnAnimationListener(new ParticleView.OnAnimationListener() {
                 @Override
                 public void onAnimationStart(View animView, Animator animation) {
-                    viewRule.visibility = View.GONE;
-                    ViewController.getDefault().applyRule(view, viewRule);
+                    try {
+                        viewRule.visibility = View.GONE;
+                        ViewController.getDefault().applyRule(view, viewRule);
+                    } catch (Exception e) {
+                        Logger.e(TAG, "applyRule on animation start fail", e);
+                    }
                 }
 
                 @Override
                 public void onAnimationEnd(View animView, Animator animation) {
                     try {
                         BitmapUtils.drawRuleMask(snapshot, viewRule);
-                        particleView.detachFromContainer();
                     } catch (Exception e) {
-                        Logger.e(TAG, "drawRuleMask / detach fail", e);
+                        Logger.e(TAG, "drawRuleMask fail", e);
+                    } finally {
+                        particleView.detachFromContainer();
                     }
                     if (listener != null) {
                         listener.onAnimationEnd(blockedViewIndex);

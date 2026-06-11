@@ -116,13 +116,16 @@ public final class ViewTraversal {
 
     /**
      * 从子视图向上查找顶层父视图（直到父视图不是 ViewGroup）。
+     * 迭代实现，避免递归在深视图树上栈溢出。
      */
     public static View findTopParentView(View view) {
-        ViewParent parent = view.getParent();
-        if (parent instanceof ViewGroup) {
-            return findTopParentView((View) parent);
+        View current = view;
+        ViewParent parent = current.getParent();
+        while (parent instanceof ViewGroup) {
+            current = (View) parent;
+            parent = current.getParent();
         }
-        return view;
+        return current;
     }
 
     /**
