@@ -12,7 +12,9 @@ import com.kaisar.xposed.godmode.engine.util.GmConstants;
 import com.kaisar.xposed.godmode.engine.util.TextMatcher;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 复合匹配器 — IMatcher 的默认实现。
@@ -73,6 +75,66 @@ public final class CompositeMatcher implements IMatcher {
         return results;
     }
 
+    @Override
+    public Map<Integer, List<View>> matchAllViewsBatch(View root, List<MatchSpec> specs) {
+        Map<Integer, List<View>> results = new HashMap<>();
+        if (root == null || specs == null || specs.isEmpty()) return results;
+
+        // 初始化结果映射：只包含符合条件的 repeatable 规则
+        int eligibleCount = 0;
+        for (int i = 0; i < specs.size(); i++) {
+            MatchSpec spec = specs.get(i);
+            if (spec != null && spec.repeatable && spec.itemPath != null
+                    && spec.itemPath.length > 0 && spec.itemRootClass != null) {
+                results.put(i, new ArrayList<>());
+                eligibleCount++;
+            }
+        }
+        if (eligibleCount == 0) return results;
+
+        // 单次视图树遍历，收集所有 RecyclerView
+        List<ViewGroup> recyclerViews = new ArrayList<>();
+        collectRecyclerViews(root, recyclerViews);
+
+        // 对每个 RecyclerView 的子项批量匹配所有规格
+        for (ViewGroup rv : recyclerViews) {
+            for (int i = 0; i < rv.getChildCount(); i++) {
+                View itemRoot = rv.getChildAt(i);
+                if (itemRoot == null) continue;
+
+                // 所有规格共一次 itemRoot 遍历
+                for (Map.Entry<Integer, List<View>> entry : results.entrySet()) {
+                    List<View> partial = entry.getValue();
+                    if (partial.size() >= GmConstants.MAX_REPEATABLE_RESULTS) continue;
+
+                    MatchSpec spec = specs.get(entry.getKey());
+                    if (!itemRoot.getClass().getName().equals(spec.itemRootClass)) continue;
+
+                    Integer expectedViewType = spec.matchThreshold > 0
+                            ? spec.matchThreshold : null;
+                    if (expectedViewType != null
+                            && !checkViewType(rv, itemRoot, expectedViewType)) {
+                        continue;
+                    }
+
+                    // itemPath 导航 + classChain 回退
+                    View found = ViewTraversal.findViewByItemPath(
+                            itemRoot, spec.itemPath, 0);
+                    if (found == null) {
+                        found = navigateByClassChain(itemRoot, spec.itemPath, 0);
+                    }
+                    if (found != null && isStructuralMatch(found, spec, false)) {
+                        if (!partial.contains(found)) {
+                            partial.add(found);
+                        }
+                    }
+                }
+            }
+        }
+
+        return results;
+    }
+
     // ---- 内部辅助方法 ----
 
     /**
@@ -92,6 +154,20 @@ public final class CompositeMatcher implements IMatcher {
         }
     }
 
+    /** 单次递归遍历，收集视图树中所有 RecyclerView（不递归进入 RecyclerView 内部） */
+    private static void collectRecyclerViews(View view, List<ViewGroup> results) {
+        if (view.getClass().getName().contains("RecyclerView") && view instanceof ViewGroup) {
+            results.add((ViewGroup) view);
+            return;
+        }
+        if (view instanceof ViewGroup) {
+            ViewGroup vg = (ViewGroup) view;
+            for (int i = 0; i < vg.getChildCount(); i++) {
+                collectRecyclerViews(vg.getChildAt(i), results);
+            }
+        }
+    }
+
     /**
      * 递归遍历视图树，收集 RecyclerView 中按 itemPath 导航 + AND 验证匹配的视图。
      * 无 collectMatches 全树兜底。
@@ -103,7 +179,6 @@ public final class CompositeMatcher implements IMatcher {
         if (isRecyclerView) {
             ViewGroup rv = (ViewGroup) view;
 
-            // viewType 过滤（如果有）
             Integer expectedViewType = spec.matchThreshold > 0 ? spec.matchThreshold : null;
 
             for (int i = 0; i < rv.getChildCount()
@@ -113,24 +188,9 @@ public final class CompositeMatcher implements IMatcher {
                 if (!itemRoot.getClass().getName().equals(spec.itemRootClass)) continue;
 
                 // viewType 检查（反射避免 RecyclerView 编译期依赖）
-                if (expectedViewType != null) {
-                    try {
-                        java.lang.reflect.Method getAdapter =
-                                rv.getClass().getMethod("getAdapter");
-                        Object adapter = getAdapter.invoke(rv);
-                        if (adapter != null) {
-                            java.lang.reflect.Method getChildAdapterPosition =
-                                    rv.getClass().getMethod("getChildAdapterPosition", View.class);
-                            int pos = (int) getChildAdapterPosition.invoke(rv, itemRoot);
-                            if (pos >= 0) {
-                                java.lang.reflect.Method getItemViewType =
-                                        adapter.getClass().getMethod("getItemViewType", int.class);
-                                int viewType = (int) getItemViewType.invoke(adapter, pos);
-                                if (viewType != expectedViewType) continue;
-                            }
-                        }
-                    } catch (Exception ignored) {
-                    }
+                if (expectedViewType != null
+                        && !checkViewType(rv, itemRoot, expectedViewType)) {
+                    continue;
                 }
 
                 // itemPath 导航 + classChain 回退
@@ -155,6 +215,27 @@ public final class CompositeMatcher implements IMatcher {
                 collectRecyclerMatches(vg.getChildAt(i), spec, results);
             }
         }
+    }
+
+    /** viewType 检查（反射避免 RecyclerView 编译期依赖） */
+    private static boolean checkViewType(ViewGroup rv, View itemRoot, int expectedViewType) {
+        try {
+            java.lang.reflect.Method getAdapter = rv.getClass().getMethod("getAdapter");
+            Object adapter = getAdapter.invoke(rv);
+            if (adapter != null) {
+                java.lang.reflect.Method getChildAdapterPosition =
+                        rv.getClass().getMethod("getChildAdapterPosition", View.class);
+                int pos = (int) getChildAdapterPosition.invoke(rv, itemRoot);
+                if (pos >= 0) {
+                    java.lang.reflect.Method getItemViewType =
+                            adapter.getClass().getMethod("getItemViewType", int.class);
+                    int viewType = (int) getItemViewType.invoke(adapter, pos);
+                    return viewType == expectedViewType;
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return false;
     }
 
     /** 判断视图是否可见且非 GM 自身组件 */
