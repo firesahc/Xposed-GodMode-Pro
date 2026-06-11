@@ -61,6 +61,27 @@ final class RuleCacheManager {
     // ---- 规则 CRUD 操作 ----
 
     /**
+     * 查询某规则在缓存中的旧 imagePath（读操作，不修改缓存）。
+     * 供 WorkflowOrchestrator 在持久化前获取旧截图路径用于清理。
+     *
+     * @param packageName 包名
+     * @param viewRule    目标规则
+     * @return 旧 imagePath，缓存中不存在或没有 imagePath 时返回 null
+     */
+    String getOldImagePath(String packageName, RuleRecord viewRule) {
+        synchronized (mAppRulesCache) {
+            ActRules actRules = mAppRulesCache.get(packageName);
+            if (actRules == null) return null;
+            List<RuleRecord> rules = actRules.get(viewRule.activityClass);
+            if (rules == null) return null;
+            for (RuleRecord r : rules) {
+                if (r.isSameViewAs(viewRule)) return r.imagePath;
+            }
+            return null;
+        }
+    }
+
+    /**
      * 将规则应用（新增或更新）到缓存中。
      * 供 writeRule / updateRule 使用。
      */

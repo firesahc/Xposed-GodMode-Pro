@@ -28,42 +28,29 @@ final class WorkflowOrchestrator implements Handler.Callback {
     static final class WriteRuleMsg {
         final String packageName;
         final RuleRecord viewRule;
+        /** 快照路径：非 null = 带截图写入（I/O 后更新缓存），null = 纯 JSON 写入（缓存已更新） */
         @androidx.annotation.Nullable final Bitmap snapshot;
-        @androidx.annotation.Nullable final String oldImagePath;
+        /** 纯 JSON 写入时：缓存已更新后的序列化 JSON（供 handler 持久化） */
         @androidx.annotation.Nullable final String json;
+        /** 纯 JSON 写入时：缓存已更新后的快照（供 handler 通知观察者） */
         @androidx.annotation.Nullable final ActRules snapshotRules;
 
-        /** 带快照的构造方法 */
-        WriteRuleMsg(String packageName, RuleRecord viewRule, Bitmap snapshot, String oldImagePath) {
+        /** 带快照的构造方法 — cache 在 handleWriteRule 中 saveBitmap 成功后更新 */
+        WriteRuleMsg(String packageName, RuleRecord viewRule, Bitmap snapshot) {
             this.packageName = packageName;
             this.viewRule = viewRule;
             this.snapshot = snapshot;
-            this.oldImagePath = oldImagePath;
             this.json = null;
             this.snapshotRules = null;
         }
 
-        /** 带 JSON 数据的构造方法 */
+        /** 带 JSON 数据的构造方法 — cache 在 writeRuleAsync 中已更新，handler 只做持久化 */
         WriteRuleMsg(String packageName, RuleRecord viewRule, String json, ActRules snapshotRules) {
             this.packageName = packageName;
             this.viewRule = viewRule;
             this.snapshot = null;
-            this.oldImagePath = null;
             this.json = json;
             this.snapshotRules = snapshotRules;
-        }
-    }
-
-    /** UPDATE_IMAGE_PATH 消息体 */
-    static final class UpdateImagePathMsg {
-        final String packageName;
-        final RuleRecord viewRule;
-        final String newImagePath;
-
-        UpdateImagePathMsg(String packageName, RuleRecord viewRule, String newImagePath) {
-            this.packageName = packageName;
-            this.viewRule = viewRule;
-            this.newImagePath = newImagePath;
         }
     }
 
@@ -103,8 +90,6 @@ final class WorkflowOrchestrator implements Handler.Callback {
     static final int UPDATE_RULE = 0x000010;
     static final int CLEAN_OBSERVERS = 0x000020;
     static final int CLEAN_ORPHANS = 0x000040;
-    static final int UPDATE_IMAGE_PATH = 0x000080;
-
     private static final long ORPHAN_CLEAN_INTERVAL = 120_000L;
 
     // ===== 核心 Manager =====
@@ -154,9 +139,6 @@ final class WorkflowOrchestrator implements Handler.Callback {
             case WRITE_RULE:
                 handleWriteRule(msg);
                 break;
-            case UPDATE_IMAGE_PATH:
-                handleUpdateImagePath(msg);
-                break;
             case DELETE_RULE:
                 handleDeleteRule(msg);
                 break;
@@ -186,14 +168,28 @@ final class WorkflowOrchestrator implements Handler.Callback {
     // 异步 AIDL 实现 — 由 RuleServiceServer AIDL 调用
     // ===================================================================
 
-    /** 异步写入规则 — 先应用缓存，再发送 Handler 消息持久化 + 通知观察者 */
+    /**
+     * 异步写入规则。
+     * <p>
+     * 两路分支：
+     * <ul>
+     *   <li><b>带快照</b>：不预先更新缓存，handler 中先执行 I/O（saveBitmap），成功后再更新缓存 + 持久化 + 通知。
+     *       避免 saveBitmap 失败导致缓存已更新但磁盘无数据的断裂。</li>
+     *   <li><b>纯 JSON</b>：无 I/O 风险，同步更新缓存后 handler 只做持久化 + 通知。</li>
+     * </ul>
+     */
     boolean writeRuleAsync(String packageName, RuleRecord viewRule, Bitmap snapshot) {
         try {
-            RuleCacheManager.CacheResult cr =
-                    mCacheManager.applyRuleToCache(packageName, viewRule, true);
-            Object writeMsg = snapshot != null
-                    ? new WriteRuleMsg(packageName, viewRule, snapshot, cr.oldImagePath)
-                    : new WriteRuleMsg(packageName, viewRule, cr.json, cr.snapshotRules);
+            Object writeMsg;
+            if (snapshot != null) {
+                // 快照路径：cache 在 handleWriteRule 中 saveBitmap 成功后更新
+                writeMsg = new WriteRuleMsg(packageName, viewRule, snapshot);
+            } else {
+                // JSON 路径：cache 立即更新（无 I/O 风险）
+                RuleCacheManager.CacheResult cr =
+                        mCacheManager.applyRuleToCache(packageName, viewRule, true);
+                writeMsg = new WriteRuleMsg(packageName, viewRule, cr.json, cr.snapshotRules);
+            }
             mHandle.obtainMessage(WRITE_RULE, writeMsg).sendToTarget();
             return true;
         } catch (Exception e) {
@@ -282,33 +278,57 @@ final class WorkflowOrchestrator implements Handler.Callback {
     // Handler 消息处理
     // ===================================================================
 
+    /**
+     * 处理 {@link #WRITE_RULE} 消息。
+     * <p>
+     * <b>快照分支</b>：先执行 I/O（删除旧图、保存新图），成功后更新缓存 + 持久化 + 通知观察者。
+     * 如果 saveBitmap 失败，缓存未被修改，无需回滚。消除旧的 UPDATE_IMAGE_PATH 异步链断裂风险。
+     * <br>
+     * <b>JSON 分支</b>：缓存已在 writeRuleAsync 中更新，handler 只负责持久化 + 通知。
+     */
     private void handleWriteRule(Message msg) {
         WriteRuleMsg m = (WriteRuleMsg) msg.obj;
         if (m.snapshot != null) {
-            // 带快照写入：先删除旧图片，再保存新图片到 imagePath
-            try {
-                if (m.oldImagePath != null && !android.text.TextUtils.isEmpty(m.oldImagePath)) {
-                    FileUtils.delete(m.oldImagePath);
+            // ── 快照分支：I/O 先于缓存更新 ──
+
+            // 1) 查询缓存中旧 imagePath（只读），删除旧截图文件
+            String oldImagePath = mCacheManager.getOldImagePath(m.packageName, m.viewRule);
+            if (!android.text.TextUtils.isEmpty(oldImagePath)) {
+                try {
+                    FileUtils.delete(oldImagePath);
+                } catch (Exception e) {
+                    mLogger.w("write rule: delete old image failed", e);
                 }
-            } catch (Exception e) {
-                mLogger.w("write rule: delete old image failed", e);
             }
+
+            // 2) I/O 边界：保存新截图。失败则直接返回，缓存未修改
             String newImagePath;
             try {
                 newImagePath = mPersistManager.saveBitmap(m.snapshot,
                         mPersistManager.getAppDataDir(m.packageName));
             } catch (Exception e) {
-                mLogger.w("write rule: save bitmap failed", e);
+                mLogger.w("write rule: save bitmap failed — cache untouched", e);
                 return;
             }
             if (newImagePath == null) {
-                mLogger.w("write rule aborted: save snapshot returned null", (String) null);
+                mLogger.w("write rule aborted: save snapshot returned null — cache untouched",
+                        (String) null);
                 return;
             }
-            mHandle.obtainMessage(UPDATE_IMAGE_PATH,
-                    new UpdateImagePathMsg(m.packageName, m.viewRule, newImagePath)).sendToTarget();
+
+            // 3) I/O 成功：更新缓存中规则的 imagePath，然后持久化 + 通知观察者
+            try {
+                m.viewRule.imagePath = newImagePath;
+                RuleCacheManager.CacheResult cr = mCacheManager.applyRuleToCache(
+                        m.packageName, m.viewRule, false);
+                mObserverManager.notifyObserverRuleChanged(m.packageName, cr.snapshotRules);
+                mPersistManager.safePersistRules(m.packageName, cr.json);
+                scheduleOrphanCleanup();
+            } catch (Exception e) {
+                mLogger.w("write rule: persist after snapshot failed", e);
+            }
         } else {
-            // 无快照写入：直接持久化 JSON 并通知观察者
+            // ── JSON 分支：缓存已在 writeRuleAsync 中更新，只持久化 + 通知 ──
             try {
                 mObserverManager.notifyObserverRuleChanged(m.packageName, m.snapshotRules);
                 mPersistManager.safePersistRules(m.packageName, m.json);
@@ -316,19 +336,6 @@ final class WorkflowOrchestrator implements Handler.Callback {
             } catch (Exception e) {
                 mLogger.w("write rule: persist failed", e);
             }
-        }
-    }
-
-    private void handleUpdateImagePath(Message msg) {
-        try {
-            UpdateImagePathMsg m = (UpdateImagePathMsg) msg.obj;
-            RuleCacheManager.CacheResult cr =
-                    mCacheManager.updateImagePath(m.packageName, m.viewRule, m.newImagePath);
-            mObserverManager.notifyObserverRuleChanged(m.packageName, cr.snapshotRules);
-            mPersistManager.safePersistRules(m.packageName, cr.json);
-            scheduleOrphanCleanup();
-        } catch (Exception e) {
-            mLogger.w("update image path failed", e);
         }
     }
 
