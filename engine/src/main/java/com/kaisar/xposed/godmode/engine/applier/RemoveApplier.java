@@ -71,8 +71,9 @@ public final class RemoveApplier implements RuleApplier {
             mBlockedViewCache.delete(cacheKey);
             return true;
         }
-        view.setAlpha(1f);
-        ViewCompat.setVisibility(view, spec.visibility);
+        // 非缓存视图：不做任何操作，静默返回 false
+        // 历史上此处执行了 view.setAlpha(1f) + ViewCompat.setVisibility(view, spec.visibility)，
+        // 这会在 RecyclerView 回收 View 后对不相关的视图执行破坏性操作（将无关 View 设为 GONE）。
         return false;
     }
 
