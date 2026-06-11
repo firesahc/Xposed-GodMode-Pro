@@ -8,6 +8,7 @@ import android.view.ViewGroup;
 import com.kaisar.xposed.godmode.engine.util.CommonUtils;
 import com.kaisar.xposed.godmode.injection.bridge.RuleServiceClient;
 import com.kaisar.xposed.godmode.rule.RuleRecordFactory;
+import com.kaisar.xposed.godmode.rule.ViewSnapshot;
 import com.kaisar.xposed.godmode.injection.util.BitmapUtils;
 import com.kaisar.xposed.godmode.injection.util.ViewUtils;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
@@ -39,6 +40,9 @@ public final class ModifyGestureHandler {
             state.startMarginX = mlp.leftMargin;
             state.startMarginY = mlp.topMargin;
         }
+        // 在视图位置被修改前捕获原始状态快照
+        state.snapshot = ViewSnapshot.capture(target);
+
         target.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
         return state;
     }
@@ -81,12 +85,10 @@ public final class ModifyGestureHandler {
         int deltaY = finalMarginY - state.startMarginY;
 
         if (deltaX != 0 || deltaY != 0) {
-            RuleRecord rule = RuleRecordFactory.makeModifyRule(state.dragTarget);
-            rule.origLeftMargin = state.startMarginX;
-            rule.origTopMargin = state.startMarginY;
+            // 使用快照创建规则 — origLeftMargin/origTopMargin 来自 startDrag 时捕获的快照（原始值）
+            RuleRecord rule = RuleRecordFactory.makeModifyRule(state.dragTarget, state.snapshot);
             rule.modXOffset = deltaX;
             rule.modYOffset = deltaY;
-            RuleRecordFactory.fillCoordinates(rule, state.dragTarget);
             Bitmap snapshot = BitmapUtils.snapshotView(
                     ViewUtils.findTopParentViewByChildView(state.dragTarget));
             BitmapUtils.drawRuleMask(snapshot, rule);
@@ -100,5 +102,7 @@ public final class ModifyGestureHandler {
         public View dragTarget;
         public int startMarginX, startMarginY;
         public int gridSizePx, snapThresholdPx;
+        /** 闂佽娲﹂妶锝夋綖閸掑棝鏆熼幘锟犳⒒椤倸宕撮柛鎰敎濮橆剙鎳楃换鎺撴嫚椤╎嚙鏆熼幖?startDrag 鏃舵崏鑾凤級 */
+        public ViewSnapshot snapshot;
     }
 }
