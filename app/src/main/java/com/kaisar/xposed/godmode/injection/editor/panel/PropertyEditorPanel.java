@@ -369,7 +369,9 @@ public class PropertyEditorPanel {
         RuleRecord rule = mTempModifications.get(viewKey);
         if (rule == null) {
             rule = RuleRecordFactory.makeModifyRule(view);
-            // 闂?saveViewState 濠电偞鍨堕幖鈺呭储閽樺鏆﹂柣鏂垮悑閸ゆ柨顪冪€ｎ亜顒㈤柣锝変憾閺屾稑螣閻撳孩鐎诲銈庡亝閸旀瑥鐣烽幇鐗堝殞闂侇叏闄勯懜褰掓⒑?originals
+            // makeModifyRule → makeRule 捕获的是视图当前（可能已被编辑器实时修改）的值。
+            // 用 saveViewState 的原始值（面板打开时保存）覆盖匹配字段和 orig* 字段：
+            rule.text = mSavedText != null ? mSavedText.toString() : null;
             rule.origWidth = mSavedWidth > 0 ? mSavedWidth : mSavedPixelWidth;
             rule.origHeight = mSavedHeight > 0 ? mSavedHeight : mSavedPixelHeight;
             rule.origAlpha = mSavedAlpha;
@@ -381,6 +383,12 @@ public class PropertyEditorPanel {
                 rule.origTopMargin = mSavedLayoutParams.topMargin;
             }
             mTempModifications.put(viewKey, rule);
+        } else {
+            // 规则已存在（如图片选择路径预创建），仍须修正 rule.text
+            // 因为此时视图可能已被 TextWatcher 实时修改，makeRule 当时捕获的值可能已不准确
+            if (mSavedText != null) {
+                rule.text = mSavedText.toString();
+            }
         }
 
         if (rule.origWidth > 0 && w != rule.origWidth) {
