@@ -55,6 +55,10 @@ public final class MatchSpec {
 
     /**
      * 从 RuleFields 提取匹配字段构造。
+     * <p>
+     * 对 repeatable 规则（itemPath 有效），清除 text/description 字段。
+     * 信息流匹配依赖卡片内相对位置（itemPath），而非文本内容——每个卡片的
+     * 文本内容唯一，参与匹配会阻止定位到其他卡片的同位置元素。</p>
      */
     public static MatchSpec from(RuleFields fields) {
         MatchSpec spec = new MatchSpec();
@@ -66,8 +70,15 @@ public final class MatchSpec {
         spec.itemRootClass = fields.getItemRootClass();
         spec.parentClass = fields.getParentClass();
         spec.repeatable = fields.isRepeatable();
-        spec.text = fields.getText();
-        spec.description = fields.getDescription();
+        // repeatable 规则：匹配只靠 itemPath 位置 + viewClass/parentClass 结构，
+        // text/description 内容在卡片间唯一，参与匹配会破坏跨卡片匹配
+        if (spec.repeatable && spec.itemPath != null && spec.itemPath.length > 0) {
+            spec.text = null;
+            spec.description = null;
+        } else {
+            spec.text = fields.getText();
+            spec.description = fields.getDescription();
+        }
         spec.matchMode = fields.getMatchMode();
         spec.matchThreshold = fields.getMatchThreshold();
         return spec;
