@@ -5,8 +5,6 @@ import android.os.Parcel;
 import android.os.Parcelable;
 import android.text.TextUtils;
 import android.view.View;
-import android.view.ViewGroup;
-import android.widget.TextView;
 
 import androidx.annotation.Keep;
 import androidx.annotation.NonNull;
@@ -350,26 +348,6 @@ public final class RuleRecord implements RuleFields, Parcelable, Cloneable {
             return res.getIdentifier(end[1], end[0], start[0]);
         }
         return View.NO_ID;
-    }
-
-    public void captureOriginals(View view) {
-        ViewGroup.LayoutParams lp = view.getLayoutParams();
-        if (lp != null) {
-            origWidth = lp.width;
-            origHeight = lp.height;
-            if (lp instanceof ViewGroup.MarginLayoutParams) {
-                ViewGroup.MarginLayoutParams mlp = (ViewGroup.MarginLayoutParams) lp;
-                origLeftMargin = mlp.leftMargin;
-                origTopMargin = mlp.topMargin;
-            }
-        }
-        if (lp == null || origWidth <= 0) origWidth = view.getWidth();
-        if (lp == null || origHeight <= 0) origHeight = view.getHeight();
-        origAlpha = view.getAlpha();
-        if (view instanceof TextView) {
-            CharSequence t = ((TextView) view).getText();
-            origText = t != null ? t.toString() : "";
-        }
     }
 
     public boolean isRemoveRule() {
