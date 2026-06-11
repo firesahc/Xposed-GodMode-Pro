@@ -212,16 +212,18 @@ public final class ViewController {
         RuleMatchSpec engineRule = toEngineRule(viewRule);
         ActionSpec spec = engineRule.getActionSpec();
 
-        // CARD 模式 + 修改规则：从卡片根导航到内部目标元素再应用修改。
-        // 若导航失败（v 可能已是内部元素，编辑器首次应用场景），降级到直接修改 v。
+        // CARD 模式：从卡片根导航到内部目标元素再执行操作（修改或移除）。
+        // 匹配阶段（matchAllViewsBatch）对 CARD 模式返回的是卡片根 View，
+        // 但用户实际选中的是卡片内部的元素，因此需要通过 itemPath 导航到具体元素。
+        // 若导航失败（v 可能已是内部元素，编辑器首次应用场景），降级到直接操作 v。
         TargetLevel targetLevel = viewRule.getTargetLevel();
-        if (targetLevel == TargetLevel.CARD && viewRule.isModifyRule()
+        if (targetLevel == TargetLevel.CARD
                 && viewRule.getItemPath() != null && viewRule.getItemPath().length > 0) {
             View target = ViewTraversal.findViewByItemPath(v, viewRule.getItemPath(), 0);
             if (target != null) {
-                return getModifyApplier().apply(target, spec);
+                v = target;
             }
-            // fall through: v 可能是内部元素（编辑器首次应用），直接修改
+            // fall through: v 可能是内部元素，直接操作
         }
 
         if (viewRule.isModifyRule()) {
@@ -267,15 +269,15 @@ public final class ViewController {
         RuleMatchSpec engineRule = toEngineRule(viewRule);
         ActionSpec spec = engineRule.getActionSpec();
 
-        // CARD 模式 + 修改规则：从卡片根导航到内部目标元素再撤销修改。
+        // CARD 模式：从卡片根导航到内部目标元素再撤销操作（修改或移除）。
+        // 与 applyRule() 对称，确保 CARD 模式撤销时也定位到用户实际选中的内部元素。
         // 若导航失败（v 可能已是内部元素），降级到直接撤销 v。
         TargetLevel targetLevel = viewRule.getTargetLevel();
-        if (targetLevel == TargetLevel.CARD && viewRule.isModifyRule()
+        if (targetLevel == TargetLevel.CARD
                 && viewRule.getItemPath() != null && viewRule.getItemPath().length > 0) {
             View target = ViewTraversal.findViewByItemPath(v, viewRule.getItemPath(), 0);
             if (target != null) {
-                getModifyApplier().revoke(target, spec);
-                return;
+                v = target;
             }
             // fall through: v 可能是内部元素，直接撤销
         }
