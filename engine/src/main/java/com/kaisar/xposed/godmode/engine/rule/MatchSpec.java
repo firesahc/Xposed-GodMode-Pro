@@ -1,6 +1,7 @@
 package com.kaisar.xposed.godmode.engine.rule;
 
 import com.kaisar.xposed.godmode.engine.matcher.MatchMode;
+import com.kaisar.xposed.godmode.engine.matcher.TargetLevel;
 
 import java.util.Arrays;
 
@@ -47,8 +48,11 @@ public final class MatchSpec {
     /** 匹配模式（精确/包含/前缀/后缀/正则），null 等价于 EXACT */
     public MatchMode matchMode;
 
-    /** 匹配阈值，0=使用系统默认值 */
+    /** 匹配阈值，0=使用系统默认值；信息流规则复用作 viewType */
     public int matchThreshold;
+
+    /** 匹配目标层级，默认 ELEMENT（向后兼容） */
+    public TargetLevel targetLevel = TargetLevel.ELEMENT;
 
     public MatchSpec() {
     }
@@ -81,6 +85,8 @@ public final class MatchSpec {
         }
         spec.matchMode = fields.getMatchMode();
         spec.matchThreshold = fields.getMatchThreshold();
+        TargetLevel tl = fields.getTargetLevel();
+        spec.targetLevel = tl != null ? tl : TargetLevel.ELEMENT;
         return spec;
     }
 
@@ -135,6 +141,7 @@ public final class MatchSpec {
         cloned.description = description;
         cloned.matchMode = matchMode;
         cloned.matchThreshold = matchThreshold;
+        cloned.targetLevel = targetLevel;
         return cloned;
     }
 

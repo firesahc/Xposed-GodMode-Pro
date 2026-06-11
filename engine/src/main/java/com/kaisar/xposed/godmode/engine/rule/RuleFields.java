@@ -1,6 +1,7 @@
 package com.kaisar.xposed.godmode.engine.rule;
 
 import com.kaisar.xposed.godmode.engine.matcher.MatchMode;
+import com.kaisar.xposed.godmode.engine.matcher.TargetLevel;
 
 /**
  * 字段契约接口 — 定义 RuleRecord/RuleMatchSpec 的全部字段的 getter。
@@ -43,6 +44,8 @@ public interface RuleFields {
     MatchMode getMatchMode();
     /** 匹配阈值（0=使用系统默认宽松阈值），越大越严格 */
     int getMatchThreshold();
+    /** 匹配目标层级，null 等价于 ELEMENT（向后兼容） */
+    TargetLevel getTargetLevel();
 
     int getVisibility();
     long getTimestamp();

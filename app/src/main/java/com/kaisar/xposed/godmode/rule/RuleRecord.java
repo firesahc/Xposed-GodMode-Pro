@@ -11,6 +11,7 @@ import androidx.annotation.NonNull;
 
 import com.google.gson.annotations.SerializedName;
 import com.kaisar.xposed.godmode.engine.matcher.MatchMode;
+import com.kaisar.xposed.godmode.engine.matcher.TargetLevel;
 import com.kaisar.xposed.godmode.engine.rule.RuleFields;
 
 import java.util.Arrays;
@@ -22,7 +23,7 @@ import java.util.Arrays;
  * 配合 {@link com.kaisar.xposed.godmode.engine.rule.RuleMapper} 实现类型安全的 app→engine 转换。
  * <p>
  * 【同步保障】对方文件 {@code engine/.../engine/rule/RuleMatchSpec.java}（纯 POJO 版）
- * <br>引擎字段总数: 37 &nbsp;|&nbsp; app 字段总数: 37
+ * <br>引擎字段总数: 38 &nbsp;|&nbsp; app 字段总数: 38
  * <br>若此处增减字段，请同步修改对方文件的同名字段。Parcel 读写、clone() 和 equals()/hashCode()。
  *
  * @see RuleFields
@@ -84,6 +85,8 @@ public final class RuleRecord implements RuleFields, Parcelable, Cloneable {
     public MatchMode matchMode;
     @SerializedName("match_threshold")
     public int matchThreshold;
+    @SerializedName("target_level")
+    public TargetLevel targetLevel;
 
     @SerializedName("visibility")
     public int visibility;
@@ -148,6 +151,7 @@ public final class RuleRecord implements RuleFields, Parcelable, Cloneable {
     @Override public String getDescription() { return description; }
     @Override public MatchMode getMatchMode() { return matchMode; }
     @Override public int getMatchThreshold() { return matchThreshold; }
+    @Override public TargetLevel getTargetLevel() { return targetLevel; }
     @Override public int getVisibility() { return visibility; }
     @Override public long getTimestamp() { return timestamp; }
     @Override public int getModWidth() { return modWidth; }
@@ -238,6 +242,8 @@ public final class RuleRecord implements RuleFields, Parcelable, Cloneable {
         itemRootClass = in.readString();
         parentClass = in.readString();
         repeatable = in.readByte() != 0;
+        String levelName = in.readString();
+        targetLevel = levelName != null ? TargetLevel.valueOf(levelName) : null;
     }
 
     // =========================================================================
@@ -285,6 +291,7 @@ public final class RuleRecord implements RuleFields, Parcelable, Cloneable {
         dest.writeString(itemRootClass);
         dest.writeString(parentClass);
         dest.writeByte((byte) (repeatable ? 1 : 0));
+        dest.writeString(targetLevel != null ? targetLevel.name() : null);
     }
 
     @Override
@@ -334,6 +341,7 @@ public final class RuleRecord implements RuleFields, Parcelable, Cloneable {
         v.repeatable = repeatable;
         v.matchMode = matchMode;
         v.matchThreshold = matchThreshold;
+        v.targetLevel = targetLevel;
         return v;
     }
 
