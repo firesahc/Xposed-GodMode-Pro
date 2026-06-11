@@ -11,7 +11,7 @@ android {
         targetCompatibility JavaVersion.VERSION_1_8
     }
     defaultConfig {
-        applicationId "com.viewblocker.jrsen"
+        applicationId "com.viewblocker.jrsen.compat"
         minSdkVersion 24
         targetSdkVersion 35
         versionCode 35
