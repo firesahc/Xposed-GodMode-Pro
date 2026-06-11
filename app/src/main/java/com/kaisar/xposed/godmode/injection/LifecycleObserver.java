@@ -190,11 +190,13 @@ public final class LifecycleObserver extends XC_MethodHook {
                 Activity activity = Preconditions.checkNotNull(activityReference.get());
                 List<RuleRecord> rules = mActRules.get(activity.getComponentName().getClassName());
                 if (rules != null && !rules.isEmpty()) {
-                    ViewController.getDefault().applyRuleBatch(activity, rules);
+                    // 异步匹配 + 应用，完成后重置 mApplying 防止重复进入
+                    ViewController.getDefault().applyRuleBatch(activity, rules, () -> mApplying = false);
+                } else {
+                    mApplying = false;
                 }
             } catch (Exception e) {
                 Logger.w(TAG, "[Lifecycle] OnLayoutChange: applyRuleIfMatchCondition failed: " + e.getMessage());
-            } finally {
                 mApplying = false;
             }
         }
