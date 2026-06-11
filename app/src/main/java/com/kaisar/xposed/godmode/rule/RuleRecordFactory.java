@@ -90,16 +90,35 @@ public final class RuleRecordFactory {
     }
 
     /**
-     * 创建修改规则。
+     * 创建修改规则（使用预先捕获的原始状态快照）。
+     * <p>
+     * 结构信息（depth/viewClass/resourceName 等）从视图捕获（安全，修改不影响结构），
+     * 匹配字段（text）和原始值（orig*）从快照读取（保证为编辑前的原始值）。
+     * 解决了旧方案在视图被修改后调用时
+     * 捕获错误值的问题。
      *
-     * @param view 目标视图
-     * @return 构造完成的 RuleRecord（ruleTag="modify"）
+     * @param view     目标视图
+     * @param snapshot 视图未修改时预先捕获的原始状态快照
+     * @return 构造完成的 RuleRecord（ruleTag="modify"），所有原始数据正确
      */
-    public static RuleRecord makeModifyRule(View view) {
+    public static RuleRecord makeModifyRule(View view, ViewSnapshot snapshot) {
         try {
             RuleRecord rule = makeRule(view);
             rule.ruleTag = "modify";
-            rule.captureOriginals(view);
+
+            // 匹配字段：来自快照（原始值），非视图当前（可能被修改）值
+            rule.text = snapshot.text;
+            rule.alias = !TextUtils.isEmpty(rule.text) ? rule.text : rule.description;
+
+            // 原始值字段：来自快照（原始值），非视图当前（可能被修改）值
+            rule.origWidth = snapshot.origWidth;
+            rule.origHeight = snapshot.origHeight;
+            rule.origAlpha = snapshot.origAlpha;
+            rule.origText = snapshot.origText;
+            rule.origLeftMargin = snapshot.origLeftMargin;
+            rule.origTopMargin = snapshot.origTopMargin;
+
+            // x/y/width/height 纯展示用途，使用当前视图值可接受
             fillCoordinates(rule, view);
             return rule;
         } catch (PackageManager.NameNotFoundException e) {
