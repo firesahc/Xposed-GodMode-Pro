@@ -16,7 +16,6 @@ import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.view.ViewParent;
 import android.view.WindowManager;
-import android.view.animation.DecelerateInterpolator;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -355,13 +354,11 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
                     new BlockHandler.OnBlockListener() {
                         @Override
                         public void onAnimationEnd(int index) {
-                            restorePanelAlpha();
                             mNodePanel.updateAfterRemove(index);
                         }
 
                         @Override
                         public void onError(String message) {
-                            restorePanelAlpha();
                             Toast.makeText(activity,
                                     GmResources.getString(R.string.block_fail, message),
                                     Toast.LENGTH_SHORT).show();
@@ -369,7 +366,6 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
                     });
         } catch (Exception e) {
             Logger.e(TAG, "[KeyEventHook] block fail", e);
-            restorePanelAlpha();
             Toast.makeText(activity, GmResources.getString(R.string.block_fail, e.getMessage()),
                     Toast.LENGTH_SHORT).show();
         }
@@ -383,15 +379,6 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
         if (modifyPanel != null) modifyPanel.setVisibility(visibility);
         MaskView maskView = mNodePanel.getMaskView();
         if (maskView != null) maskView.setVisibility(visibility);
-    }
-
-    private void restorePanelAlpha() {
-        View panelView = mNodePanel.getPanelView();
-        if (panelView != null) {
-            panelView.animate().alpha(1.0f)
-                    .setInterpolator(new DecelerateInterpolator(1.0f))
-                    .setDuration(300).start();
-        }
     }
 
     // =========================================================================
