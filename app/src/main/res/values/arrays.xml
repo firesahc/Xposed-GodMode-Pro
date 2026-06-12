@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <integer-array name="progress_colors">
-        <item>@android:color/black</item>
-        <item>@android:color/black</item>
-        <item>@android:color/black</item>
+        <item>0xFFE57373</item>
+        <item>0xFFEF5350</item>
+        <item>0xFFE53935</item>
     </integer-array>
 
     <string-array name="visible_entries">
