@@ -10,6 +10,7 @@ import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 import androidx.core.content.ContextCompat;
@@ -22,6 +23,8 @@ import androidx.navigation.ui.AppBarConfiguration;
 import androidx.navigation.ui.NavigationUI;
 
 public class SettingsActivity extends AppCompatActivity {
+
+    private static boolean sCompatTestWarningShown = false;
 
     private final ActivityResultLauncher<String> mNotificationPermissionLauncher =
             registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> {
@@ -36,6 +39,7 @@ public class SettingsActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_settings);
         applyWindowInsets();
+        showCompatTestWarning();
     }
 
     private void applyWindowInsets() {
@@ -72,6 +76,16 @@ public class SettingsActivity extends AppCompatActivity {
 
     private void startNotificationService() {
         EditModeController.startNotificationService(this);
+    }
+
+    private void showCompatTestWarning() {
+        if (sCompatTestWarningShown) return;
+        sCompatTestWarningShown = true;
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.welcome_title)
+                .setMessage(R.string.compat_test_warning)
+                .setPositiveButton(android.R.string.ok, null)
+                .show();
     }
 
 }
