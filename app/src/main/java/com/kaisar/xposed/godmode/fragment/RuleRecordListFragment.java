@@ -244,7 +244,6 @@ public final class RuleRecordListFragment extends Fragment {
             bindItem(holder, rule);
             holder.itemView.setFocusable(true);
             holder.itemView.setClickable(true);
-            holder.itemView.setTag(position);
             holder.itemView.setOnClickListener(this);
         }
 
@@ -324,7 +323,8 @@ public final class RuleRecordListFragment extends Fragment {
 
         @Override
         public void onClick(View view) {
-            final int position = (Integer) view.getTag();
+            final int position = mRecyclerView.getChildAdapterPosition(view);
+            if (position < 0 || position >= mData.size()) return;
             RuleRecord rule = mData.get(position);
             int rulePos = mAllRules.indexOf(rule);
             if (rulePos >= 0) {
