@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">上帝模式Pro</string>
+    <string name="app_name">上帝模式test</string>
 
     <string name="pref_key_progress_indicator" translatable="false">progress_indicator</string>
     <string name="pref_key_editor" translatable="false">editor_switch</string>
@@ -11,7 +11,7 @@
     <string name="pref_header_general">通用</string>
     <string name="pref_header_app_rules">应用规则</string>
 
-    <string name="pref_title_god_mode">上帝模式Pro</string>
+    <string name="pref_title_god_mode">上帝模式test</string>
     <string name="pref_description_god_mode">开启后可在通知栏或快捷磁贴控制编辑模式</string>
     <string name="pref_title_guide">操作指南</string>
     <string name="pref_description_guide">查看使用方法和操作模式</string>
@@ -23,7 +23,7 @@
     <string name="notification_edit_exit">退出编辑</string>
     <string name="notification_edit_start">开始编辑</string>
     <string name="manage">管理</string>
-    <string name="xposed_description">随心屏蔽与修改任何应用界面上不想要的元素 - 上帝模式Pro</string>
+    <string name="xposed_description">随心屏蔽与修改任何应用界面上不想要的元素 - 上帝模式test</string>
 
     <string name="menu_delete_rules">删除全部规则</string>
     <string name="menu_backup_rules">备份全部规则</string>
@@ -120,7 +120,7 @@
 
 <b>八、注意事项</b><br>
 &bull; 仅在 LSPosed 中<b>已激活模块的第三方应用</b>内生效。<br>
-&bull; 桌面、系统界面、输入法、无界面应用、上帝模式Pro自身<b>不可编辑</b>。<br>
+&bull; 桌面、系统界面、输入法、无界面应用、上帝模式test自身<b>不可编辑</b>。<br>
 &bull; 崩溃后下次启动弹出对话框，可复制日志反馈。<br>
 &bull; 通知被禁止时仍可通过快捷磁贴控制编辑模式。
     ]]></string>
@@ -137,11 +137,12 @@
     <string name="modify_detail_text">已修改文本</string>
     <string name="modify_detail_image">已替换图片</string>
 
+    <string name="compat_test_warning">当前处于 compat-test 版本，仅供兼容性测试，请勿长期使用。\n请勿在 lsposed 中同时启用多个版本的上帝模式，这将会导致所有启用的版本无法正常运行。</string>
     <string name="hey_guy">嘿 伙计</string>
-    <string name="not_active_module">上帝模式Pro尚未激活，请到 LSPosed 管理器中重新激活</string>
-    <string name="master_not_enabled">请先在设置中开启上帝模式Pro主开关</string>
+    <string name="not_active_module">上帝模式test尚未激活，请到 LSPosed 管理器中重新激活</string>
+    <string name="master_not_enabled">请先在设置中开启上帝模式test主开关</string>
     <string name="notification_permission_denied">通知权限被拒绝，通知栏开关将无法显示。可通过快捷磁贴控制编辑模式</string>
-    <string name="welcome_title">嘿！伙计，真高兴又见到你！欢迎使用上帝模式Pro！</string>
+    <string name="welcome_title">嘿！伙计，欢迎使用上帝模式test（兼容测试版）！</string>
 
     <string name="snack_bar_msg_revert_rule_fail">删除规则失败</string>
     <string name="snack_bar_msg_backup_rule_fail">备份规则失败</string>
@@ -149,7 +150,7 @@
     <string name="confirm_delete_rules">确认删除 %d 条规则？</string>
     <string name="dialog_btn_copy">复制给我的老伙计</string>
     <string name="crash_tip">我想你应该遇了些麻烦，天知道这该死的程序都干了些什么。把下面这些奇奇怪怪的日志复制给老伙计吧，也许有用。\n\n</string>
-    <string name="update_tips">你可以试试用上帝模式Pro屏蔽一些令人烦恼的按钮。噢！没错这听起来很有趣。不过这小家伙有时会像汤姆家那只倔驴一样不听话，别担心伙计们，我会尽快修理好的！\n\n伙计们玩的开心记得来 GitHub 点个 Star，非常感谢！</string>
+    <string name="update_tips">你可以试试用上帝模式test屏蔽一些令人烦恼的按钮。噢！没错这听起来很有趣。不过这小家伙有时会像汤姆家那只倔驴一样不听话，别担心伙计们，我会尽快修理好的！\n\n伙计们玩的开心记得来 GitHub 点个 Star，非常感谢！</string>
 
     <string name="rule_details_field_create_time">创建日期</string>
     <string name="rule_details_field_generate_version">生成版本</string>

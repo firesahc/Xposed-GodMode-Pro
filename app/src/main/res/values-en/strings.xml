@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">GodMode Pro</string>
+    <string name="app_name">GodMode Test</string>
 
     <string name="pref_header_general">GENERAL</string>
     <string name="pref_header_app_rules">APP RULES</string>
 
-    <string name="pref_title_god_mode">GodMode Pro</string>
+    <string name="pref_title_god_mode">GodMode Test</string>
     <string name="pref_description_god_mode">Enable to control edit mode via notification or Quick Settings tile</string>
     <string name="pref_title_guide">Guide</string>
     <string name="pref_description_guide">View usage and operation modes</string>
@@ -17,7 +17,7 @@
     <string name="notification_edit_exit">Exit Editor</string>
     <string name="notification_edit_start">Start Editor</string>
     <string name="manage">Manage</string>
-    <string name="xposed_description">Block or modify any unwanted UI elements on any app - GodMode Pro</string>
+    <string name="xposed_description">Block or modify any unwanted UI elements on any app - GodMode Test</string>
 
     <string name="menu_delete_rules">Delete rules</string>
     <string name="menu_backup_rules">Backup rules</string>
@@ -114,7 +114,7 @@
 
 <b>8. Notes</b><br>
 &bull; Only works in <b>third-party apps</b> where the module is activated in LSPosed.<br>
-&bull; Launcher, system UI, keyboard, GodMode Pro itself are <b>not editable</b>.<br>
+&bull; Launcher, system UI, keyboard, GodMode Test itself are <b>not editable</b>.<br>
 &bull; After a crash, a dialog appears on next launch with a copyable log.<br>
 &bull; Quick Settings tile works even when notifications are disabled.
     ]]></string>
@@ -130,11 +130,12 @@
     <string name="modify_detail_text">Modified text</string>
     <string name="modify_detail_image">Replaced image</string>
 
+    <string name="compat_test_warning">You are currently using the compat-test version. For compatibility testing only. Do not use for long-term.\nDon\'t enable multiple versions of God Mode in lsposed at the same time, it will cause all the enabled versions to stop working properly.</string>
     <string name="hey_guy">Hey guy</string>
-    <string name="not_active_module">GodMode Pro module is not activated. Please activate it in LSPosed Manager</string>
-    <string name="master_not_enabled">Please enable the GodMode Pro master switch in Settings first</string>
+    <string name="not_active_module">GodMode Test module is not activated. Please activate it in LSPosed Manager</string>
+    <string name="master_not_enabled">Please enable the GodMode Test master switch in Settings first</string>
     <string name="notification_permission_denied">Notification permission denied. You can still use the Quick Settings tile</string>
-    <string name="welcome_title">Hey guys, Welcome!</string>
+    <string name="welcome_title">Hey guys, Welcome to GodMode Test (compat edition)!</string>
 
     <string name="snack_bar_msg_revert_rule_fail">Delete rule failed</string>
     <string name="snack_bar_msg_backup_rule_fail">Backup rules failed</string>
@@ -142,7 +143,7 @@
     <string name="confirm_delete_rules">Confirm delete %d rules?</string>
     <string name="dialog_btn_copy">COPY</string>
     <string name="crash_tip">Crash detected. Copy the log below for feedback.\n\n</string>
-    <string name="update_tips">Try using GodMode Pro to block annoying buttons. If you encounter issues, please report them on GitHub!</string>
+    <string name="update_tips">Try using GodMode Test to block annoying buttons. If you encounter issues, please report them on GitHub!</string>
 
     <string name="rule_details_field_create_time">Created</string>
     <string name="rule_details_field_generate_version">Match Version</string>
