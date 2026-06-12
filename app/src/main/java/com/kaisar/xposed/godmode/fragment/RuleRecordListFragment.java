@@ -186,6 +186,7 @@ public final class RuleRecordListFragment extends Fragment {
         if (adapter == null) {
             LinearLayoutManager linearLayoutManager = new LinearLayoutManager(requireContext());
             recyclerView.setLayoutManager(linearLayoutManager);
+            recyclerView.setItemAnimator(null);
             recyclerView.setAdapter(new ListAdapter());
         }
     }
