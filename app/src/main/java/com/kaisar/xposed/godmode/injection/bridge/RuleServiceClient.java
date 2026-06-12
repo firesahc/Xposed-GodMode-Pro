@@ -33,7 +33,10 @@ public final class RuleServiceClient {
                     IBinder service = XServiceManager.getService("godmode");
                     if (service != null) {
                         result = new RuleServiceClient(IGodModeManager.Stub.asInterface(service));
+                        Logger.i(TAG, "connected to godmode service via clipboard delegate");
                     } else {
+                        Logger.e(TAG, "godmode service is null — XServiceManager proxy not installed"
+                                + " or RuleServiceServer not created");
                         result = new RuleServiceClient(new IGodModeManager.Default());
                     }
                     instance = result;

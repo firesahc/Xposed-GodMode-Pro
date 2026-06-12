@@ -86,7 +86,13 @@ public final class HookLauncher implements IXposedHookLoadPackage, IXposedHookZy
             Logger.e(TAG, "package id must NOT be 0x7f, reject loading...");
             return;
         }
-        if (!lpp.isFirstApplication) return;
+        if (!lpp.isFirstApplication) {
+            if ("android".equals(lpp.packageName)) {
+                Logger.w(TAG, "handleLoadPackage(android) skipped — isFirstApplication=false,"
+                        + " system_server init requires first application flag");
+            }
+            return;
+        }
 
         HookLauncher.loadPackageParam = lpp;
         final String packageName = lpp.packageName;
@@ -106,11 +112,13 @@ public final class HookLauncher implements IXposedHookLoadPackage, IXposedHookZy
             @Override public void i(String tag, String msg) { Logger.i(tag, msg); }
             @Override public void w(String tag, String msg) { Logger.w(tag, msg); }
             @Override public void w(String tag, String msg, Throwable tr) { Logger.w(tag, msg, tr); }
+            @Override public void e(String tag, String msg) { Logger.w(tag, msg); }
             @Override public void e(String tag, String msg, Throwable tr) { Logger.e(tag, msg, tr); }
         });
         XServiceManager.initForSystemServer();
         XServiceManager.registerService("godmode",
                 (XServiceManager.ServiceFetcher<Binder>) RuleServiceServer::new);
+        XServiceManager.flushRegisteredServices();
     }
 
     /** 注入目标应用 — Hook Activity 生命周期、触摸事件和按键事件，通过 IPC 与系统服务通信 */
