@@ -4,6 +4,7 @@ import android.app.AlarmManager;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
+import android.os.Build;
 
 import androidx.annotation.NonNull;
 
@@ -77,11 +78,20 @@ public final class CrashHandler implements Thread.UncaughtExceptionHandler {
 
     private void restartSelf() {
         Intent intent = new Intent(mContext, SettingsActivity.class);
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        PendingIntent restartIntent = PendingIntent.getActivity(mContext, 1, intent, PendingIntent.FLAG_CANCEL_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        intent.putExtra("from_crash", true);
+        PendingIntent restartIntent = PendingIntent.getActivity(mContext, 1, intent,
+                PendingIntent.FLAG_CANCEL_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         AlarmManager mgr = (AlarmManager) mContext.getSystemService(Context.ALARM_SERVICE);
         if (mgr != null) {
-            mgr.set(AlarmManager.RTC, System.currentTimeMillis() + 100, restartIntent);
+            // 使用 setExactAndAllowWhileIdle 确保在 Android 14+ 上也能可靠触发
+            // （低于 API 19 的设备降级到普通 set）
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+                mgr.setExactAndAllowWhileIdle(AlarmManager.RTC,
+                        System.currentTimeMillis() + 100, restartIntent);
+            } else {
+                mgr.set(AlarmManager.RTC, System.currentTimeMillis() + 100, restartIntent);
+            }
         }
         android.os.Process.killProcess(android.os.Process.myPid());
     }
