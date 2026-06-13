@@ -1,8 +1,6 @@
 package com.kaisar.xposed.godmode.injection;
 
 import android.app.Activity;
-import android.os.Handler;
-import android.os.Looper;
 import android.view.View;
 import android.view.ViewGroup;
 
@@ -17,7 +15,6 @@ import com.kaisar.xposed.godmode.engine.rule.ActionSpec;
 import com.kaisar.xposed.godmode.engine.rule.RuleMapper;
 import com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec;
 import com.kaisar.xposed.godmode.engine.util.Logger;
-import com.kaisar.xposed.godmode.engine.util.ThreadPools;
 import com.kaisar.xposed.godmode.injection.bridge.RuleServiceClient;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 
@@ -40,9 +37,6 @@ import java.util.Map;
 public final class ViewController {
 
     private static final String TAG = "ViewController";
-
-    /** 主线程 Handler，用于异步匹配完成后切回主线程应用规则 */
-    private static final Handler MAIN_HANDLER = new Handler(Looper.getMainLooper());
 
     private static volatile ViewController sInstance;
 
@@ -110,22 +104,23 @@ public final class ViewController {
         return RuleMapper.toEngine(appRule);
     }
 
-    /** 批量应用规则（异步匹配 + 主线程应用）。内部调用 {@link #applyRuleBatch(Activity, List, Runnable)}。 */
+    /** 批量应用规则（同步匹配 + 主线程应用）。内部调用 {@link #applyRuleBatch(Activity, List, Runnable)}。 */
     public void applyRuleBatch(Activity activity, List<RuleRecord> rules) {
         applyRuleBatch(activity, rules, null);
     }
 
     /**
-     * 批量应用规则（异步匹配 + 主线程应用）。
+     * 批量应用规则（同步匹配 + 主线程应用）。
      * <p>
-     * 匹配阶段（CompositeMatcher.matchView/matchAllViews）在 {@link ThreadPools#GENERAL} 上执行，
-     * 避免阻塞主线程导致 UI 卡顿。匹配完成后切回主线程执行 applyRule/revokeRule。
+     * 匹配阶段（CompositeMatcher.matchView/matchAllViewsBatch）在当前线程同步执行，
+     * 匹配完成后立即在同一线程应用规则。匹配操作为 O(depth) 的视图树遍历，耗时极短，
+     * 无需异步到后台线程执行。
      * <p>
-     * applyRule（修改 View 属性）必须在主线程执行，因此分为两阶段：
-     * <ol>
-     *   <li>ThreadPools.GENERAL 上执行匹配，收集匹配结果 (View, RuleRecord) 列表</li>
-     *   <li>MAIN_HANDLER.post() 回到主线程，批量应用匹配结果</li>
-     * </ol>
+     * 同步执行确保规则在首帧渲染前生效，避免异步跳转（后台线程 + MAIN_HANDLER.post）
+     * 引入的帧延迟导致被屏蔽元素短暂可见的闪烁问题。恢复为与 v5.3.0 一致的行为。
+     * <p>
+     * applyRule（修改 View 属性）必须在主线程执行，调用方需保证已处于主线程。
+     *（当前所有调用路径：onRulesChanged、onGlobalLayout、decorView.post 均在主线程）
      *
      * @param activity   目标 Activity
      * @param rules      待应用的规则列表
@@ -139,71 +134,60 @@ public final class ViewController {
             return;
         }
 
-        // 引用锚定（DecorView 在 async 执行期间可能失效，但匹配失败会被 catch 静默处理）
-        final ViewGroup decorViewRef = decorView;
-        ThreadPools.GENERAL.execute(() -> {
-            // ── 阶段 1：异步匹配（GENERAL 线程池） ──
-            List<MatchTask> pending = new ArrayList<>();
+        // ── 同步匹配 ──
+        List<MatchTask> pending = new ArrayList<>();
 
-            // 收集所有 repeatable 规则，使用批次匹配（单次视图树遍历）
-            List<RuleRecord> batchRules = new ArrayList<>();
-            List<com.kaisar.xposed.godmode.engine.rule.MatchSpec> batchSpecs = new ArrayList<>();
-            for (RuleRecord rule : rules) {
-                if (rule.isRepeatable()) {
-                    batchRules.add(rule);
-                    batchSpecs.add(toEngineRule(rule).getMatchSpec());
-                }
+        // 收集所有 repeatable 规则，使用批次匹配（单次视图树遍历）
+        List<RuleRecord> batchRules = new ArrayList<>();
+        List<com.kaisar.xposed.godmode.engine.rule.MatchSpec> batchSpecs = new ArrayList<>();
+        for (RuleRecord rule : rules) {
+            if (rule.isRepeatable()) {
+                batchRules.add(rule);
+                batchSpecs.add(toEngineRule(rule).getMatchSpec());
             }
-            if (!batchSpecs.isEmpty()) {
-                try {
-                    Map<Integer, List<View>> batchResults =
-                            getMatcher().matchAllViewsBatch(decorViewRef, batchSpecs);
-                    for (Map.Entry<Integer, List<View>> entry : batchResults.entrySet()) {
-                        RuleRecord rule = batchRules.get(entry.getKey());
-                        for (View v : entry.getValue()) {
-                            if (v != null) pending.add(new MatchTask(v, rule));
-                        }
-                    }
-                } catch (Exception e) {
-                    Logger.w(TAG, "[ViewController] batch match failed", e);
-                }
-            }
-
-            // 非 repeatable 规则：逐条 matchView（每次 O(depth) 不影响）
-            for (RuleRecord rule : rules) {
-                if (rule.isRepeatable()) continue;
-                try {
-                    View view = getMatcher().matchView(decorViewRef,
-                            toEngineRule(rule).getMatchSpec());
-                    if (view != null) {
-                        pending.add(new MatchTask(view, rule));
-                    }
-                } catch (Exception e) {
-                    Logger.w(TAG, "[ViewController] async match failed", e);
-                }
-            }
-
-            if (pending.isEmpty()) {
-                if (onComplete != null) MAIN_HANDLER.post(onComplete);
-                return;
-            }
-
-            // ── 阶段 2：主线程应用 ──
-            MAIN_HANDLER.post(() -> {
-                int applied = 0;
-                for (MatchTask task : pending) {
-                    try {
-                        if (applyRule(task.view, task.rule)) applied++;
-                    } catch (Exception e) {
-                        Logger.w(TAG, "[ViewController] apply rule failed", e);
+        }
+        if (!batchSpecs.isEmpty()) {
+            try {
+                Map<Integer, List<View>> batchResults =
+                        getMatcher().matchAllViewsBatch(decorView, batchSpecs);
+                for (Map.Entry<Integer, List<View>> entry : batchResults.entrySet()) {
+                    RuleRecord rule = batchRules.get(entry.getKey());
+                    for (View v : entry.getValue()) {
+                        if (v != null) pending.add(new MatchTask(v, rule));
                     }
                 }
-                if (applied > 0) {
-                    Logger.d(TAG, "[ViewController] async applied " + applied + " rules for " + activity);
+            } catch (Exception e) {
+                Logger.w(TAG, "[ViewController] batch match failed", e);
+            }
+        }
+
+        // 非 repeatable 规则：逐条 matchView（每次 O(depth) 不影响）
+        for (RuleRecord rule : rules) {
+            if (rule.isRepeatable()) continue;
+            try {
+                View view = getMatcher().matchView(decorView,
+                        toEngineRule(rule).getMatchSpec());
+                if (view != null) {
+                    pending.add(new MatchTask(view, rule));
                 }
-                if (onComplete != null) onComplete.run();
-            });
-        });
+            } catch (Exception e) {
+                Logger.w(TAG, "[ViewController] match failed", e);
+            }
+        }
+
+        // ── 同步应用 ──
+        int applied = 0;
+        for (MatchTask task : pending) {
+            try {
+                if (applyRule(task.view, task.rule)) applied++;
+            } catch (Exception e) {
+                Logger.w(TAG, "[ViewController] apply rule failed", e);
+            }
+        }
+        if (applied > 0) {
+            Logger.d(TAG, "[ViewController] applied " + applied + " rules for " + activity);
+        }
+        if (onComplete != null) onComplete.run();
     }
 
     /** 应用单条规则 */
