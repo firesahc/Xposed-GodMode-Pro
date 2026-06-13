@@ -70,7 +70,7 @@ public final class RuleServiceServer extends IGodModeManager.Stub {
         return true;
     }
 
-    // ---- 缂傛牞绶Ο鈥崇础 ----
+    // ---- 编辑模式 ----
 
     @Override
     public void setEditMode(boolean enable) throws RemoteException {
@@ -110,7 +110,7 @@ public final class RuleServiceServer extends IGodModeManager.Stub {
         mOrchestrator.removeObserver(packageName, observer);
     }
 
-    // ---- 鐟欏嫬鍨弻銉嚄 ----
+    // ---- 规则写入 ----
 
     @Override
     public AppRules getAllRules() throws RemoteException {
@@ -128,7 +128,7 @@ public final class RuleServiceServer extends IGodModeManager.Stub {
         return mCacheManager.getRules(packageName);
     }
 
-    // ---- 鐟欏嫬鍨崘娆忓弳 ----
+    // ---- 规则更新 ----
 
     @Override
     public boolean writeRule(String packageName, RuleRecord viewRule, Bitmap snapshot)
@@ -147,7 +147,7 @@ public final class RuleServiceServer extends IGodModeManager.Stub {
         return mOrchestrator.updateRuleAsync(packageName, viewRule);
     }
 
-    // ---- 鐟欏嫬鍨崚鐘绘珟 ----
+    // ---- 规则删除 ----
 
     @Override
     public boolean deleteRule(String packageName, RuleRecord viewRule) throws RemoteException {

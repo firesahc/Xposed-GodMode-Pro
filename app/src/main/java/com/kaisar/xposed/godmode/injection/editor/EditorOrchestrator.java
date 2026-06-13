@@ -65,7 +65,8 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     private static final int LONG_PRESS_TIMEOUT = ViewConfiguration.getLongPressTimeout();
 
     // =========================================================================
-    // 交互模式与信息流模式    // =========================================================================
+    // Interaction mode and info-flow mode
+// =========================================================================
 
     private int mInteractionMode = EditorInteractionMode.INITIAL;
     private boolean mInfoFlowMode = false;
@@ -195,7 +196,9 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     }
 
     /**
-     * 闂傚倸鍊搁敃銉︾箾婵犲洤闂繛宸簼閻撱儲銇勯弮鍌楁嫛闁搞們鍊濋弻銈夊礈闊厽鍊ｇ紓浣介哺缁诲牓骞?ActivityKeyHook 闂備線娼荤拹鐔煎礉閹达箑鐒垫い鎺嗗亾妞わ富鍣ｉ幊娆撳箣閿旇棄浜归梺鐓庢憸椤ｄ粙宕戦幘瀛樺濡炲娴烽幉顕€鏌ｉ悩宸剰闁哥喍鍗冲顐﹀Χ婢跺á?     */
+     * Integrates with ActivityKeyHook for key event dispatch and
+ * TouchHook for touch interception in edit mode.
+ */
     public void onVolumeKeyNavigate(int keyCode) {
         if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) {
             navigatePrevious();
@@ -252,7 +255,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
         return mNodePanel.getSelectedView();
     }
 
-    /** 闂備礁鎲＄敮鍥磹閺嶎厼钃?candidate 闂備礁鎼€氱兘宕规导鏉戠畾濞撴埃鍋撶€?tapped 闂備焦鐪归崝宀€鈧凹鍓熼獮鍐箻閸撲焦锛忛悷婊冮叄瀹曞綊濡搁敂閿灃婵犵數濮寸€氫即鎮伴幘缁樺仭婵炲棗绻戦ˉ婊勭箾?*/
+    /** Check whether the candidate view equals the currently tapped view. */
     private static boolean isViewMatch(View candidate, View tapped) {
         if (candidate == tapped) return true;
         ViewParent parent = tapped.getParent();
@@ -305,7 +308,8 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     }
 
     // =========================================================================
-    // 闂備胶鍘ч幖顐﹀磹婵犳艾纾婚柨婵嗩槹閻掕顭跨捄渚剰妞ゅ繈鍎甸弻娑㈡晲閸愩劌顫囧┑鐐烘？閸楀啿顕ｉ崼鏇炵闁挎稑瀚ˇ鈺呮⒑?KeyInterceptor闂?    // =========================================================================
+    // KeyInterceptor — intercepts key events for editor tool shortcuts
+// =========================================================================
 
     private void showNodeSelectPanel(final Activity activity) {
         Logger.i(TAG, "[KeyEventHook] showNodeSelectPanel for " + activity.getPackageName());
@@ -497,7 +501,8 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     }
 
     // =========================================================================
-    // 濠电儑绲藉ù鍌炲窗濡ゅ懎鏋侀柣鎾冲閻旂厧鐏崇€规洖娲ㄩ、鍛存煟閻斿摜鎳曢梻鍕楠炲﹤顭ㄩ崟顐ょ獮闂佸憡娲﹂崢浠嬪磹閻愮儤鐓ユ繛鎴烆焽婢ф洟鎮?TouchInterceptor闂?    // =========================================================================
+    // TouchInterceptor — touch event interception and view selection / gesturing
+// =========================================================================
 
     private boolean handleModifyTouch(View v, MotionEvent event) {
         int action = event.getActionMasked();
@@ -528,7 +533,8 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     }
 
     // =========================================================================
-    // 闂備胶顭堢换鎰亹婢舵劖顥婇柍鍝勫暞閸犲棝鏌ㄩ弮鍥撻柛銈咁儑閳ь剚顔栭崰鎺楀磻閹炬枼鏀?缂傚倸鍊烽悞锕傚箰鐠囧樊鐒芥い鎰剁畱濡炵晫鈧厜鍋撻柛鏇ㄥ墯閻︼綁姊洪崷顓х劸妞わ缚鍗宠棢闁告侗鍔堕崷顓涘亾閿濆懎顣崇紒鈧崟顖涚厱?TouchInterceptor闂?    // =========================================================================
+    // TouchInterceptor — intercepts touch events for view selection / gesturing
+// =========================================================================
 
     private boolean beginTouch(View v, boolean isModifyMode) {
         boolean[] draggingRef = new boolean[1];
@@ -553,7 +559,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
         mDragging = false;
     }
 
-    /** 闂傚倸鍊甸崑鎾绘煙缁嬪潡顎楅柣锕€顭烽幃宄扳枎濞嗘垹鏆犻悷婊勬緲閸婂潡寮鍜佹僵妞ゆ挾濮撮ˉ鎴︽⒑绾拋鍤冮柛鐘愁殙閸燁垶鎮楀▓鍨灈缂佺粯鍔欓獮鍡樻償閵娿儳顦梺闈涱煬閻忔繈鍩￠崨顔规寖闂侀潧鐗嗗Λ妤呮倶濡も偓鑿愰柛銉ㄦ硾閺嬬喖鏌℃担鎼炲仮妤犵偛绻樺浠嬪Ω閵夘喕鑲?*/
+    /** Handle long press gesture on view — starts drag for modify or remove mode. */
     private void onLongPress(View v, boolean isModifyMode) {
         if (isModifyMode) {
             View target = getSelectedView();
@@ -568,7 +574,8 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     }
 
     // =========================================================================
-    // 闂佽绻掗崑鐔煎磻閻愬搫鐒垫い鎴墮閸燁偆绱炴笟鈧弻锟犲炊椤忓懎娑х紓浣介哺閻熲晛鐣?KeyInterceptor + TouchInterceptor 闂備礁鎲￠懝楣冩偋閸℃稒鍤愰柣鏂垮悑閺?    // =========================================================================
+    // Property change listener — KeyInterceptor + TouchInterceptor integration
+    // =========================================================================
 
     @Override
     public void onPropertyChange(Boolean enable) {

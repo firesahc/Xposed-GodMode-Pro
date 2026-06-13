@@ -43,17 +43,16 @@ import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedHelpers;
 
 /**
- * 闂佽绻掗崑鐔煎磻閻愬搫鐒垫い鎴墮閹虫劕顪冩禒瀣骇闁割偆鍠庨悘瀛樼箾闂傛潙宓嗙€?闂?闂?濠?闂傚倷绶￠崑鍕崲閹存惊锝夊箣閻愭潙鍔?濠电偠鎻徊鐣岀矓閸洘鍋?闂備礁鎼崐绋棵洪敃鈧敃?闂備焦鎮堕崕杈ㄦ櫠閼恒儲娅犻柡宥庡亗濞岊亪鏌ｉ幇顔克夐柛瀣崄椤﹀绱掓鏍︾凹婵炵厧绻橀獮瀣枎鐏炴垝澹?
- * 缂傚倷鑳舵刊瀵告閺囥垹绠栧┑鐘蹭紖瑜版帩鏁婇柤濮愬€涙竟姗€姊洪悜鈺傛珦闁哥姵顨婇幃銉╂晲閸℃ê鍔呴梺鍝勫暙閸婂綊寮宠箛鎾闁哄倹顑欓崕搴ｇ磼濡も偓閸婂潡骞嗛崘顔肩妞ゆ牗顨呮禍楣冩煙闁箑鐏辨繛鍏煎浮閺屾盯濡烽敃鈧崝銈夋煟椤愶綇鑰挎鐐╁亾閻熸粌鐭傞獮鍫ュΩ閳轰胶鍝楅悷婊呭鐢顩奸妸鈺傜厸濠㈣泛鍑芥蹇涙煃?
+ * Property editor panel for modifying view attributes.
  * <p>
- * 闂備胶鍘у畷顒勬儗娓氣偓閹苯螖閸涱喗娅?
+ * Displays a floating panel allowing the user to adjust width, height, alpha,
+ * text, image, and position of the selected view.
  * <ul>
- *   <li>闂備礁鎲″缁樻叏閹灐褰掑炊椤掑倸绁﹂梺鑲╊焾閻忔岸鍩㈤弮鍌滅＜闁逞屽墯濞碱亪鎮ч崼婵嗕紟闂備浇銆€閸嬫挾鎲搁悧鍫濈瑲婵℃ぜ鍔戦弻?UI</li>
- *   <li>闂佽楠稿﹢閬嶅磻閻愬樊娓婚柛灞惧喕缁憋綁鏌涢弴銊ユ珮婵炲吋妫冮幃?濠?闂傚倷绶￠崑鍕崲閹存惊锝夊箣閻愭潙鍔?濠电偠鎻徊鐣岀矓閸洘鍋?闂備礁鎼崐绋棵洪敃鈧敃?闂備焦鎮堕崕杈ㄦ櫠閼恒儲娅犻柡宥庡幖閻淇婇婊呭笡缂?/li>
- *   <li>濠电儑绲藉ú锔炬崲閸岀偞鍋ら柕濞у嫬鏋傞梺绯曞墲椤ㄥ棛绮嬮崼銉︾厱婵☆垳鍘ч弸搴亜椤愶絽濮嶉柟顔规櫊閹虫粎鍠婂Ο杞板婵炶揪绲块崕銈夊汲韫囨拋鐟邦煥閸愵噮鈧鎲搁弶鎸庢悙闁?闂佸搫顦弲婊堟晪闁?/li>
- *   <li>缂備胶铏庨崣搴ㄥ窗濞戙埄鏁囩紓浣诡焽閳瑰秵銇勯弮鍥撻柡鍡╁弮閺屾稑顫濋鍕碘偓妤呮煕閻斿憡宕岀€?{@link #mTempModifications} 闁诲骸鐏氬姗€骞婂鍥ㄥ床婵ɑ澧庨崑鎾斥槈濞嗘鍔稿銈庡亜椤﹂潧鐣?/li>
- *   <li>闂備礁缍婇弲鎻掝渻閹烘梻涓嶆繛鍡樻尭缁€宀勬煛瀹擃喖妫楅悵顖毼旈悩闈涗沪閻庣瑳鍥х闁告鍎愰崯鍛存椤愵偄骞樼紒鐘辩矙閹鈽夊▎妯煎姺濠电偛鐗婇崹鍓佺矚闁稁鏁婇柤鎭掑劜濮?/li>
- *   <li>Hook Activity.onActivityResult 濠电偛顕慨浼村磿闁单鍥煛閸涱喖浠╅梺绯曞墲椤ㄥ棛绮嬮崼銉︾厽婵°倐鍋撴繛璇х畱闇夋繛鎴欏灩缁?/li>
+ *   <li>UI built from R.layout.panel_modify with sliders, text fields, and preview</li>
+ *   <li>Supports image replacement via gallery/file picker (Activity result)</li>
+ *   <li>Tracks pending modifications in {@link #mTempModifications} for batch save/cancel</li>
+ *   <li>Captures original view state via {@link ViewSnapshot} before editing</li>
+ *   <li>Hooks Activity.onActivityResult to handle image picker result</li>
  * </ul>
  */
 public class PropertyEditorPanel {
@@ -67,10 +66,10 @@ public class PropertyEditorPanel {
     private Bitmap mPendingImageBitmap;
     private HashMap<String, Bitmap> mPendingModBitmaps = new HashMap<>();
 
-    // 闁诲骸鐏氬姗€骞婂鍥ㄥ床婵ɑ澧庨崑鎾斥槈濞嗘鍔峰┑鐐茬墛閸ㄥ墎绮氶柆宥庢晩闁兼亽鍎插В澶愭煟閻斿摜鎳冮悗姘煎墴瀹?
+    // Pending modifications keyed by rule key — batch saved or cancelled together
     final HashMap<String, RuleRecord> mTempModifications = new HashMap<>();
 
-    // 闂備線娼荤拹鐔煎礉瀹€鍕仾闁告洦鍨扮猾宥夋煕椤愶絾澶勯柡鍡樻礋閹嘲鈻庤箛鏇烆暪闂侀€涚┒閸旀垵顕ｉ妸鈺傚仭闁哄顑欓弸鈧梻浣侯攰椤煤濠靛宓侀煫鍥ㄧ⊕閸庡秹鏌涢弴銊ユ珮婵炲吋甯￠弻娑㈠Ψ閿曗偓閸斻倝鎮介锝呬簼闁逛究鍔庨埀顒婄秵閸撴瑧鐟ч梻?
+    // Saved original view state before modification — used for revert / cancel
     private ViewGroup.MarginLayoutParams mSavedLayoutParams;
     private int mSavedWidth = -1;
     private int mSavedHeight = -1;
@@ -79,17 +78,18 @@ public class PropertyEditorPanel {
     private float mSavedAlpha;
     private CharSequence mSavedText;
 
-    /** 闂佽娲﹂妶锝夋綖閸掑棝鏆熼幘锟犳⒒椤倸宕撮柛鎰敎濮橆剙鎳楃换鎺撴嫚椤╋箓鏌ｉ弻娑㈠箰椤旇鍘ч崫钟? */
+    /** Snapshot of the view state before editing. */
     private ViewSnapshot mSnapshot;
 
-    // 濠电儑绲藉ú锔炬崲閸岀偞鍋ら柕濞у嫬鏋傞梺绯曞墲椤ㄥ棛绮嬮崼銉︾厸鐎广儱鎳忕粚鍧楁煟閿旇棄鐏︾紒宀勪憾閸╁嫰宕樿缁€鈧梻浣瑰缁嬫垿鎯夋總绋挎瀬闁靛牆妫涢々?Activity 闂傚倷鐒﹁ぐ鍐矓鐎靛摜纾介柟鎹愵嚙鐟欙箓骞栧ǎ顒€濡兼繛鍛灲閺岋繝宕掑鍐炬毉闂佺粯鎼换婵嬬嵁?
+    // Depth path and activity class of the view being modified — used to lock
+    // the rule lookup to the correct Activity context
     private int[] mModifyingViewDepth;
     private String mModifyingViewActClass;
 
     private boolean mActivityResultHooked;
 
     /**
-     * 闂備礁鎼€氼剚鏅舵禒瀣︽慨妯哄綁濞岊亪鏌ｉ幇顔克夐柛瀣崄椤﹀绱掓鏍︾凹婵炵厧绻橀獮瀣晜閼恒儯鈧啴姊洪崫鍕垫Ъ闁跨喆鍎甸崺鈧?
+     * Show the property editor panel for the target view.
      */
     public void show(View targetView, Activity activity, ViewGroup container) {
         if (mPanelView != null || targetView == null) return;
@@ -119,7 +119,7 @@ public class PropertyEditorPanel {
         }
     }
 
-    /** 闂備胶顭堢换鎴炵箾婵犲伣娑㈠箻椤旂瓔妫冮梺闈涚箚閸撴繄娆?*/
+    /** Dismiss the property editor panel. */
     public void dismiss() {
         if (mPanelView == null) return;
         View panel = mPanelView;
@@ -130,15 +130,15 @@ public class PropertyEditorPanel {
         mModifyingViewDepth = null;
         mModifyingViewActClass = null;
         mSnapshot = null;
-        // 婵犵數鍋涢ˇ顓㈠礉瀹ュ绀堝ù鐓庣摠閺咁剚鎱ㄥ鍡椾簽闁荤喐绻堥弻娑㈠Ψ瑜嶆禒锕傛煛?婵犵數鍋為幐鎼佸箠閹版澘鐓?mPendingModBitmaps 闂備胶鍋ㄩ崕鏌ュ蓟閿熺姴鐒?濠电偠鎻徊鐣岀矓閺夋嚚鐟邦潨閳ь剙鐣烽敐澶樻晬婵犻潧妫楅獮瀣箾鐎电孝缂佸鍏橀敐?ImageView 闁诲孩顔栭崰妤€煤濠婂牆鏋侀柕鍫濐槸閸欏﹪鏌涢幘妞炬缁敻姊?
-        // 濠?saveAll() 闂傚倸鍊稿ú鐘诲磻閹剧粯鍋￠柡鍥ㄦ皑椤︼箓鏌ｉ敐鍥ｇ紒鍌涘浮椤㈡鎷呰ぐ鎺擃€栭梻浣哥秺閺呮彃顪冮幒鏃備笉婵炲棙鎸哥粈宀勬煛瀹擃喖瀚々顓㈡⒑缂佹﹩娈旀繛璇х畵瀵悂宕橀埡鍐炬祫闂傚鍓氱粊鎾磻閹捐纾兼慨姗嗗弨閸?cancel() 闂?saveAll() 濠电偞鍨堕幖鈺呭储婵傛潌鍥煛閸涱喖浠╅梺绯曞墲閸斿繘宕?
+        // Recycle pending mod bitmaps on dismiss (mPendingModBitmaps stores loaded replacement images).
+        // For cancel() / saveAll() see the confirm/cancel button handlers.
         panel.animate().alpha(0).setDuration(150).withEndAction(() -> {
             ViewGroup parent = (ViewGroup) panel.getParent();
             if (parent != null) parent.removeView(panel);
         }).start();
     }
 
-    /** 闂備礁鎲￠悷锕傛偋濡ゅ啰鐭撻梺鍨儑閳瑰秵銇勯弮鍥撻柡鍡╁弮閺屻劌鈽夊▎搴濆缂備胶绮ú鐔风暦閵忋倖鍋勬繛鑼帛缂嶅﹪姊洪幖鐐插姎濠⒀嗗Г閹便劑骞栨担鍝ョ暠婵炶揪绲鹃悺鏇犫偓姘懇閺屾稖绠涢弬搴撴灆濠碘槅鍋呴幐鍐参涢崘顔碱潊闁斥晛鍟伴崙?*/
+    /** Handle Activity onActivityResult for image picker callback. */
     public void cancel() {
         revertViewState();
         for (Map.Entry<String, Bitmap> entry : mPendingModBitmaps.entrySet()) {
@@ -209,7 +209,7 @@ public class PropertyEditorPanel {
         });
     }
 
-    // ---- 濠电偠鎻徊鐣岀矓閸洘鍋柛鈩冾殢閸ゆ銇勯弮鍥ㄧ《婵?----
+    // ---- Image replacement ----
 
     private void setupPositionNudge(View panel, View selectedView) {
         View.OnClickListener nudgeListener = v -> {
@@ -233,7 +233,7 @@ public class PropertyEditorPanel {
         panel.findViewById(R.id.mod_pos_right).setOnClickListener(nudgeListener);
     }
 
-    // ---- 缂備胶铏庨崣搴ㄥ窗濞戙埄鏁?/ 闂備礁鎲￠悷锕傛偋濡ゅ啰鐭撻柣鎴ｆ缁犳澘顭块懜闈涘閻?----
+    // ---- Position nudge (margin adjustment) ----
 
     private void setupConfirmCancel(View panel, View selectedView) {
         SeekBar widthSeek = panel.findViewById(R.id.mod_width_seek);
@@ -363,7 +363,7 @@ public class PropertyEditorPanel {
         return java.util.Arrays.equals(mModifyingViewDepth, currentDepth);
     }
 
-    // ---- 闂佸湱鍘ч悺銊ヮ潖婵犳艾鏋侀柕鍫濇閳瑰秵銇勯弮鍥撻柡?/ 濠电儑绲藉ú锔炬崲閸岀偞鍋?----
+    // ---- Confirm / Cancel buttons ----
 
     /** 应用 UI 控件的修改值到 RuleRecord（创建或更新）。
      * <p>

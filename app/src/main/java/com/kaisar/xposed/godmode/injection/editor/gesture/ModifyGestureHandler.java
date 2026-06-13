@@ -102,7 +102,7 @@ public final class ModifyGestureHandler {
         public View dragTarget;
         public int startMarginX, startMarginY;
         public int gridSizePx, snapThresholdPx;
-        /** 闂佽娲﹂妶锝夋綖閸掑棝鏆熼幘锟犳⒒椤倸宕撮柛鎰敎濮橆剙鎳楃换鎺撴嫚椤╎嚙鏆熼幖?startDrag 鏃舵崏鑾凤級 */
+        /** View snapshot captured at drag start (before modification applies). */
         public ViewSnapshot snapshot;
     }
 }
