@@ -65,8 +65,7 @@ public final class BackupUtils {
             try {
                 for (RuleRecord viewRule : viewRules) {
                     RuleRecord viewRuleCopy = viewRule.clone();
-                    try {
-                        ParcelFileDescriptor parcelFileDescriptor = RuleServiceClient.getDefault().openImageFileDescriptor(viewRule.imagePath);
+                    try (ParcelFileDescriptor parcelFileDescriptor = RuleServiceClient.getDefault().openImageFileDescriptor(viewRule.imagePath)) {
                         if (parcelFileDescriptor != null) {
                             try (FileChannel inChannel = new FileInputStream(parcelFileDescriptor.getFileDescriptor()).getChannel()) {
                                 File file = new File(backupDir, new File(viewRule.imagePath).getName());
@@ -85,8 +84,7 @@ public final class BackupUtils {
                     }
                     if (viewRule.isModifyRule() && !TextUtils.isEmpty(viewRule.modImagePath)
                             && !viewRule.modImagePath.equals(viewRule.imagePath)) {
-                        try {
-                            ParcelFileDescriptor modPfd = RuleServiceClient.getDefault().openImageFileDescriptor(viewRule.modImagePath);
+                        try (ParcelFileDescriptor modPfd = RuleServiceClient.getDefault().openImageFileDescriptor(viewRule.modImagePath)) {
                             if (modPfd != null) {
                                 try (FileChannel inChannel = new FileInputStream(modPfd.getFileDescriptor()).getChannel()) {
                                     File file = new File(backupDir, "mod_" + new File(viewRule.modImagePath).getName());

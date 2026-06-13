@@ -77,8 +77,7 @@ public class GmGlideModule extends AppGlideModule {
         public void loadData(@NonNull Priority priority, @NonNull DataCallback<? super Bitmap> callback) {
             ParcelFileDescriptor pfd = RuleServiceClient.getDefault().openImageFileDescriptor(mRuleRecord.imagePath);
             if (pfd != null) {
-                try {
-                    InputStream in = new ParcelFileDescriptor.AutoCloseInputStream(pfd);
+                try (InputStream in = new ParcelFileDescriptor.AutoCloseInputStream(pfd)) {
                     ByteArrayOutputStream buffer = new ByteArrayOutputStream();
                     byte[] temp = new byte[8192];
                     int n;
