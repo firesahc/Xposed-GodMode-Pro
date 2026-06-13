@@ -216,4 +216,10 @@ public final class RuleServiceServer extends IGodModeManager.Stub {
         mToolbarHiddenItems = items != null ? items : "";
         mOrchestrator.persistToolbarHiddenItems(mToolbarHiddenItems);
     }
+
+    /** 关闭服务，释放工作线程资源。 */
+    public void shutdown() {
+        mStarted = false;
+        mOrchestrator.shutdown();
+    }
 }

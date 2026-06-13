@@ -1,6 +1,7 @@
 package com.kaisar.xposed.godmode.service;
 
 import android.graphics.Bitmap;
+import android.os.Build;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Message;
@@ -105,6 +106,7 @@ final class WorkflowOrchestrator implements Handler.Callback {
     // ===== 运行时状态 =====
     private volatile boolean mDataLoaded;
     private volatile boolean mOrphanCleanPending;
+    private final HandlerThread mWorkThread;
 
     WorkflowOrchestrator(Gson gson, Logger logger, RuleCacheManager cacheManager,
                          Consumer<String> toolbarItemsCallback) {
@@ -112,9 +114,9 @@ final class WorkflowOrchestrator implements Handler.Callback {
         this.mCacheManager = cacheManager;
         this.mToolbarItemsCallback = toolbarItemsCallback;
 
-        HandlerThread workThread = new HandlerThread("work-thread");
-        workThread.start();
-        mHandle = new Handler(workThread.getLooper(), this);
+        mWorkThread = new HandlerThread("work-thread");
+        mWorkThread.start();
+        mHandle = new Handler(mWorkThread.getLooper(), this);
 
         mPersistManager = new RulePersistManager(gson, Logger.getLogger("RulePersistManager"), mHandle, mCacheManager);
         mObserverManager = new ObserverRegistry(Logger.getLogger("ObserverRegistry"), mHandle, CLEAN_OBSERVERS);
@@ -188,6 +190,14 @@ final class WorkflowOrchestrator implements Handler.Callback {
                 // JSON 路径：cache 立即更新（无 I/O 风险）
                 RuleCacheManager.CacheResult cr =
                         mCacheManager.applyRuleToCache(packageName, viewRule, true);
+                // 清理旧截图文件，避免成为孤儿文件
+                if (cr.oldImagePath != null) {
+                    try {
+                        FileUtils.delete(cr.oldImagePath);
+                    } catch (Exception e) {
+                        mLogger.w("write rule (json path): delete old image failed", e);
+                    }
+                }
                 writeMsg = new WriteRuleMsg(packageName, viewRule, cr.json, cr.snapshotRules);
             }
             mHandle.obtainMessage(WRITE_RULE, writeMsg).sendToTarget();
@@ -272,6 +282,16 @@ final class WorkflowOrchestrator implements Handler.Callback {
 
     void persistToolbarHiddenItems(String items) {
         mPersistManager.persistToolbarHiddenItems(items);
+    }
+
+    /** 关闭工作线程，释放资源。调用后不应再使用此实例。 */
+    void shutdown() {
+        mHandle.removeCallbacksAndMessages(null);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2) {
+            mWorkThread.quitSafely();
+        } else {
+            mWorkThread.quit();
+        }
     }
 
     // ===================================================================
