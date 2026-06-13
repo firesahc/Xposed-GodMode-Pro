@@ -24,7 +24,7 @@ final class ObserverRegistry {
     static final long CLEAN_INTERVAL = 60_000L;
 
     private final RemoteCallbackList<ObserverProxy> mRemoteCallbackList = new RemoteCallbackList<>();
-    private final HashMap<String, IBinder> mRegisteredObserverMap = new HashMap<>();
+    private final HashMap<String, HashMap<IBinder, ObserverProxy>> mRegisteredObserverMap = new HashMap<>();
     private final Logger mLogger;
     private final Handler mHandle;
     private final int mCleanObserversMsgCode;
@@ -50,14 +50,16 @@ final class ObserverRegistry {
         synchronized (mRemoteCallbackList) {
             synchronized (mRegisteredObserverMap) {
                 IBinder binder = observer.asBinder();
-                if (mRegisteredObserverMap.containsKey(packageName)
-                        && mRegisteredObserverMap.get(packageName) == binder) {
+                HashMap<IBinder, ObserverProxy> packageObservers =
+                        mRegisteredObserverMap.computeIfAbsent(packageName, k -> new HashMap<>());
+                if (packageObservers.containsKey(binder)) {
                     mLogger.d("observer already registered for: " + packageName);
                     return;
                 }
-                mRegisteredObserverMap.put(packageName, binder);
+                ObserverProxy proxy = new ObserverProxy(packageName, observer);
+                packageObservers.put(binder, proxy);
+                mRemoteCallbackList.register(proxy);
             }
-            mRemoteCallbackList.register(new ObserverProxy(packageName, observer));
             scheduleDeadObserverCleanup();
         }
         // 立即通知新注册的观察者当前状态
@@ -72,9 +74,21 @@ final class ObserverRegistry {
     /** 注销观察者 */
     void removeObserver(String packageName, IObserver observer) {
         synchronized (mRemoteCallbackList) {
-            mRemoteCallbackList.unregister(new ObserverProxy(packageName, observer));
+            ObserverProxy proxy = null;
             synchronized (mRegisteredObserverMap) {
-                mRegisteredObserverMap.remove(packageName);
+                HashMap<IBinder, ObserverProxy> packageObservers =
+                        mRegisteredObserverMap.get(packageName);
+                if (packageObservers != null) {
+                    proxy = packageObservers.remove(observer.asBinder());
+                    if (packageObservers.isEmpty()) {
+                        mRegisteredObserverMap.remove(packageName);
+                    }
+                }
+            }
+            if (proxy != null) {
+                mRemoteCallbackList.unregister(proxy);
+            } else {
+                mRemoteCallbackList.unregister(new ObserverProxy(packageName, observer));
             }
         }
     }
@@ -119,8 +133,14 @@ final class ObserverRegistry {
                     try {
                         mRemoteCallbackList.unregister(proxy);
                         synchronized (mRegisteredObserverMap) {
-                            mRegisteredObserverMap.remove(proxy.packageName,
-                                    proxy.observer.asBinder());
+                            HashMap<IBinder, ObserverProxy> packageObservers =
+                                    mRegisteredObserverMap.get(proxy.packageName);
+                            if (packageObservers != null) {
+                                packageObservers.remove(proxy.observer.asBinder());
+                                if (packageObservers.isEmpty()) {
+                                    mRegisteredObserverMap.remove(proxy.packageName);
+                                }
+                            }
                         }
                         mLogger.d("cleaned dead observer: " + proxy.packageName);
                     } catch (Exception e) {

@@ -34,22 +34,23 @@ public class SharedViewModel extends ViewModel {
     public final MutableLiveData<AppRules> appRules = new MutableLiveData<>();
     public final MutableLiveData<List<RuleRecord>> actRules = new MutableLiveData<>();
     public final MutableLiveData<String> selectedPackage = new MutableLiveData<>();
+    private final IObserver mRuleObserver = new IObserver.Stub() {
+        @Override
+        public void onEditModeChanged(boolean enable) {
+        }
+
+        @Override
+        public void onViewRuleChanged(String packageName, ActRules actRules) {
+            appRules.postValue(RuleServiceClient.getDefault().getAllRules());
+            if (TextUtils.equals(packageName, selectedPackage.getValue())) {
+                selectedPackage.postValue(packageName);
+            }
+        }
+    };
 
     public SharedViewModel() {
         try {
-            RuleServiceClient.getDefault().addObserver("*", new IObserver.Stub() {
-                @Override
-                public void onEditModeChanged(boolean enable) {
-                }
-
-                @Override
-                public void onViewRuleChanged(String packageName, ActRules actRules) {
-                    appRules.postValue(RuleServiceClient.getDefault().getAllRules());
-                    if (TextUtils.equals(packageName, selectedPackage.getValue())) {
-                        selectedPackage.postValue(packageName);
-                    }
-                }
-            });
+            RuleServiceClient.getDefault().addObserver("*", mRuleObserver);
         } catch (Exception e) {
             Logger.w(TAG, "SharedViewModel: register observer failed", e);
         }
@@ -58,6 +59,7 @@ public class SharedViewModel extends ViewModel {
     @Override
     protected void onCleared() {
         super.onCleared();
+        RuleServiceClient.getDefault().removeObserver("*", mRuleObserver);
         mExecutor.shutdownNow();
         mMainHandler.removeCallbacksAndMessages(null);
     }
