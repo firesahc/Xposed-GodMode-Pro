@@ -15,6 +15,7 @@ import com.kaisar.xposed.godmode.engine.matcher.TargetLevel;
 import com.kaisar.xposed.godmode.engine.rule.RuleFields;
 
 import java.util.Arrays;
+import java.util.Objects;
 
 /**
  * app 模块的规则记录 — Parcelable（IPC 序列化）+ Gson @SerializedName（持久化）。
@@ -352,7 +353,9 @@ public final class RuleRecord implements RuleFields, Parcelable, Cloneable {
     public int getViewId(Resources res) {
         if (!TextUtils.isEmpty(resourceName)) {
             String[] start = resourceName.split(":");
+            if (start.length < 2) return View.NO_ID;
             String[] end = start[1].split("/");
+            if (end.length < 2) return View.NO_ID;
             return res.getIdentifier(end[1], end[0], start[0]);
         }
         return View.NO_ID;
@@ -389,8 +392,8 @@ public final class RuleRecord implements RuleFields, Parcelable, Cloneable {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         RuleRecord that = (RuleRecord) o;
-        if (!activityClass.equals(that.activityClass)) return false;
-        if (!viewClass.equals(that.viewClass)) return false;
+        if (!Objects.equals(activityClass, that.activityClass)) return false;
+        if (!Objects.equals(viewClass, that.viewClass)) return false;
         if (repeatable && that.repeatable) {
             return Arrays.equals(itemPath, that.itemPath);
         }
@@ -399,8 +402,8 @@ public final class RuleRecord implements RuleFields, Parcelable, Cloneable {
 
     @Override
     public int hashCode() {
-        int result = activityClass.hashCode();
-        result = 31 * result + viewClass.hashCode();
+        int result = Objects.hashCode(activityClass);
+        result = 31 * result + Objects.hashCode(viewClass);
         if (repeatable && itemPath != null) {
             result = 31 * result + Arrays.hashCode(itemPath);
         } else {
