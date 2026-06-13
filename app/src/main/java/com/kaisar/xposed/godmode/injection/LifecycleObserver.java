@@ -43,8 +43,9 @@ public final class LifecycleObserver extends XC_MethodHook {
         super.afterHookedMethod(param);
         Activity activity = (Activity) param.thisObject;
         String methodName = param.method.getName();
-        ViewGroup decorView = (ViewGroup) activity.getWindow().getDecorView();
         if ("onPostResume".equals(methodName)) {
+            ViewGroup decorView = getDecorView(activity);
+            if (decorView == null) return;
             if (!mActivities.containsKey(activity)) {
                 OnLayoutChangeListener listener = new OnLayoutChangeListener(activity);
                 decorView.getViewTreeObserver().addOnGlobalLayoutListener(listener);
@@ -58,12 +59,32 @@ public final class LifecycleObserver extends XC_MethodHook {
             Logger.d(TAG, "[Lifecycle] resume: " + activity.getClass().getSimpleName() + " (total=" + mActivities.size() + ")");
         } else if ("onDestroy".equals(methodName)) {
             OnLayoutChangeListener listener = mActivities.remove(activity);
-            decorView.getViewTreeObserver().removeOnGlobalLayoutListener(listener);
+            removeLayoutListener(activity, listener);
             synchronized (mPendingReapply) {
                 Runnable r = mPendingReapply.remove(activity);
                 if (r != null) mDebounceHandler.removeCallbacks(r);
             }
             Logger.d(TAG, "[Lifecycle] destroy: " + activity.getClass().getSimpleName() + " (total=" + mActivities.size() + ")");
+        }
+    }
+
+    private static ViewGroup getDecorView(Activity activity) {
+        if (activity == null || activity.getWindow() == null) return null;
+        try {
+            return (ViewGroup) activity.getWindow().getDecorView();
+        } catch (Exception e) {
+            Logger.w(TAG, "[Lifecycle] getDecorView failed: " + e.getMessage());
+            return null;
+        }
+    }
+
+    private static void removeLayoutListener(Activity activity, OnLayoutChangeListener listener) {
+        if (listener == null) return;
+        ViewGroup decorView = getDecorView(activity);
+        if (decorView == null) return;
+        ViewTreeObserver observer = decorView.getViewTreeObserver();
+        if (observer != null && observer.isAlive()) {
+            observer.removeOnGlobalLayoutListener(listener);
         }
     }
 
