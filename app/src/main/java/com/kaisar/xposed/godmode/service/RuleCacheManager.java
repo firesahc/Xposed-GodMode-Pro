@@ -214,7 +214,11 @@ final class RuleCacheManager {
         if (source == null) return new ActRules();
         ActRules copy = new ActRules();
         for (Map.Entry<String, List<RuleRecord>> entry : source.entrySet()) {
-            copy.put(entry.getKey(), new ArrayList<>(entry.getValue()));
+            List<RuleRecord> clonedList = new ArrayList<>(entry.getValue().size());
+            for (RuleRecord r : entry.getValue()) {
+                clonedList.add(r.clone());
+            }
+            copy.put(entry.getKey(), clonedList);
         }
         return copy;
     }

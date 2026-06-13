@@ -27,7 +27,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.WeakHashMap;
+
 
 /**
  * 规则持久化管理器 — JSON 序列化 + Bitmap 图片 + 工具栏配置持久化。
@@ -52,7 +52,7 @@ final class RulePersistManager {
     /** 防抖写入延迟(ms) — 多次写入合并为一次持久化操作 */
     private static final long DEBOUNCE_DELAY_MS = 300L;
     /** 防抖队列 — 待写入的包名 */
-    private final Map<String, String> mPendingWrites = new WeakHashMap<>();
+    private final Map<String, String> mPendingWrites = new HashMap<>();
 
     RulePersistManager(Gson gson, Logger logger, Handler handle, RuleCacheManager cacheManager) {
         this.mGson = gson;
