@@ -1,6 +1,7 @@
 package com.kaisar.xposed.godmode.injection.bridge;
 
 import android.graphics.Bitmap;
+import android.os.DeadObjectException;
 import android.os.IBinder;
 import android.os.ParcelFileDescriptor;
 import android.os.RemoteException;
@@ -16,12 +17,13 @@ import com.kaisar.xservicemanager.XServiceManager;
 public final class RuleServiceClient {
 
     private static final String TAG = "RuleServiceClient";
+    private static final IGodModeManager FALLBACK = new IGodModeManager.Default();
 
     private static volatile RuleServiceClient instance;
-    private final IGodModeManager mGMM;
+    private volatile IGodModeManager mGMM;
+    private volatile IBinder mBinder;
 
-    private RuleServiceClient(IGodModeManager gmm) {
-        this.mGMM = gmm;
+    private RuleServiceClient() {
     }
 
     public static RuleServiceClient getDefault() {
@@ -30,15 +32,8 @@ public final class RuleServiceClient {
             synchronized (RuleServiceClient.class) {
                 result = instance;
                 if (result == null) {
-                    IBinder service = XServiceManager.getService("godmode");
-                    if (service != null) {
-                        result = new RuleServiceClient(IGodModeManager.Stub.asInterface(service));
-                        Logger.i(TAG, "connected to godmode service via clipboard delegate");
-                    } else {
-                        Logger.e(TAG, "godmode service is null — XServiceManager proxy not installed"
-                                + " or RuleServiceServer not created");
-                        result = new RuleServiceClient(new IGodModeManager.Default());
-                    }
+                    result = new RuleServiceClient();
+                    result.ensureService();
                     instance = result;
                 }
             }
@@ -46,13 +41,67 @@ public final class RuleServiceClient {
         return result;
     }
 
-    private static void logError(String method, RemoteException e) {
+    private IGodModeManager ensureService() {
+        IGodModeManager current = mGMM;
+        IBinder binder = mBinder;
+        if (current != null && binder != null && binder.isBinderAlive()) {
+            return current;
+        }
+        synchronized (this) {
+            current = mGMM;
+            binder = mBinder;
+            if (current != null && binder != null && binder.isBinderAlive()) {
+                return current;
+            }
+            IBinder service = XServiceManager.getService("godmode");
+            if (service == null) {
+                mBinder = null;
+                mGMM = null;
+                Logger.e(TAG, "godmode service is null - XServiceManager proxy not installed"
+                        + " or RuleServiceServer not created");
+                return FALLBACK;
+            }
+            try {
+                service.linkToDeath(() -> {
+                    synchronized (RuleServiceClient.this) {
+                        if (mBinder == service) {
+                            mBinder = null;
+                            mGMM = null;
+                        }
+                    }
+                    Logger.w(TAG, "godmode service binder died, will reconnect on next call");
+                }, 0);
+            } catch (RemoteException e) {
+                mBinder = null;
+                mGMM = null;
+                Logger.w(TAG, "godmode service died before linkToDeath", e);
+                return FALLBACK;
+            }
+            mBinder = service;
+            mGMM = IGodModeManager.Stub.asInterface(service);
+            Logger.i(TAG, "connected to godmode service via clipboard delegate");
+            return mGMM;
+        }
+    }
+
+    private void markServiceDead() {
+        synchronized (this) {
+            mBinder = null;
+            mGMM = null;
+        }
+    }
+
+    private void logError(String method, RemoteException e) {
+        IBinder binder = mBinder;
+        if (e instanceof DeadObjectException || binder == null || !binder.isBinderAlive()) {
+            markServiceDead();
+        }
         Logger.e(TAG, "RuleServiceClient#" + method + " failed: " + e.getMessage());
     }
 
     public boolean hasLight() {
         try {
-            return mGMM.hasLight();
+            return ensureService().hasLight();
         } catch (RemoteException e) {
             logError("hasLight", e);
             return false;
@@ -61,7 +110,7 @@ public final class RuleServiceClient {
 
     public void setEditMode(boolean enable) {
         try {
-            mGMM.setEditMode(enable);
+            ensureService().setEditMode(enable);
         } catch (RemoteException e) {
             logError("setEditMode", e);
         }
@@ -69,7 +118,7 @@ public final class RuleServiceClient {
 
     public boolean isInEditMode() {
         try {
-            return mGMM.isInEditMode();
+            return ensureService().isInEditMode();
         } catch (RemoteException e) {
             logError("isInEditMode", e);
             return false;
@@ -78,21 +127,27 @@ public final class RuleServiceClient {
 
     public void addObserver(String packageName, IObserver observer) {
         try {
-            mGMM.addObserver(packageName, observer);
+            ensureService().addObserver(packageName, observer);
         } catch (RemoteException e) {
             logError("addObserver", e);
         }
     }
 
+    public void removeObserver(String packageName, IObserver observer) {
+        try {
+            ensureService().removeObserver(packageName, observer);
+        } catch (RemoteException e) {
+            logError("removeObserver", e);
+        }
+    }
+
     public AppRules getAllRules() {
         try {
-            return mGMM.getAllRules();
+            return ensureService().getAllRules();
         } catch (RemoteException e) {
             logError("getAllRules", e);
             return new AppRules();
         } catch (RuntimeException e) {
-            // BadParcelableException: ViewRule → RuleRecord 重命名后，
-            // system_server 中旧服务可能仍含有 ViewRule 实例，需静默降级
             logError("getAllRules", new RemoteException(e.getMessage()));
             return new AppRules();
         }
@@ -100,7 +155,7 @@ public final class RuleServiceClient {
 
     public ActRules getRules(String packageName) {
         try {
-            return mGMM.getRules(packageName);
+            return ensureService().getRules(packageName);
         } catch (RemoteException e) {
             logError("getRules", e);
             return new ActRules();
@@ -112,7 +167,7 @@ public final class RuleServiceClient {
 
     public boolean writeRule(String packageName, RuleRecord viewRule, Bitmap bitmap) {
         try {
-            return mGMM.writeRule(packageName, viewRule, bitmap);
+            return ensureService().writeRule(packageName, viewRule, bitmap);
         } catch (RemoteException e) {
             logError("writeRule", e);
             return false;
@@ -121,7 +176,7 @@ public final class RuleServiceClient {
 
     public boolean updateRule(String packageName, RuleRecord viewRule) {
         try {
-            return mGMM.updateRule(packageName, viewRule);
+            return ensureService().updateRule(packageName, viewRule);
         } catch (RemoteException e) {
             logError("updateRule", e);
             return false;
@@ -130,7 +185,7 @@ public final class RuleServiceClient {
 
     public boolean deleteRule(String packageName, RuleRecord viewRule) {
         try {
-            return mGMM.deleteRule(packageName, viewRule);
+            return ensureService().deleteRule(packageName, viewRule);
         } catch (RemoteException e) {
             logError("deleteRule", e);
             return false;
@@ -139,7 +194,7 @@ public final class RuleServiceClient {
 
     public boolean deleteRules(String packageName) {
         try {
-            return mGMM.deleteRules(packageName);
+            return ensureService().deleteRules(packageName);
         } catch (RemoteException e) {
             logError("deleteRules", e);
             return false;
@@ -148,7 +203,7 @@ public final class RuleServiceClient {
 
     public ParcelFileDescriptor openImageFileDescriptor(String filePath) {
         try {
-            return mGMM.openImageFileDescriptor(filePath);
+            return ensureService().openImageFileDescriptor(filePath);
         } catch (RemoteException e) {
             logError("openImageFileDescriptor", e);
             return null;
@@ -157,7 +212,7 @@ public final class RuleServiceClient {
 
     public String saveImageFile(String packageName, Bitmap bitmap) {
         try {
-            return mGMM.saveImageFile(packageName, bitmap);
+            return ensureService().saveImageFile(packageName, bitmap);
         } catch (RemoteException e) {
             logError("saveImageFile", e);
             return null;
@@ -166,7 +221,7 @@ public final class RuleServiceClient {
 
     public String getToolbarHiddenItems() {
         try {
-            return mGMM.getToolbarHiddenItems();
+            return ensureService().getToolbarHiddenItems();
         } catch (RemoteException e) {
             logError("getToolbarHiddenItems", e);
             return "";
@@ -175,7 +230,7 @@ public final class RuleServiceClient {
 
     public void setToolbarHiddenItems(String items) {
         try {
-            mGMM.setToolbarHiddenItems(items);
+            ensureService().setToolbarHiddenItems(items);
         } catch (RemoteException e) {
             logError("setToolbarHiddenItems", e);
         }
