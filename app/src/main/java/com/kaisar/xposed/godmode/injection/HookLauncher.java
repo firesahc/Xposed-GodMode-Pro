@@ -208,11 +208,11 @@ public final class HookLauncher implements IXposedHookLoadPackage, IXposedHookZy
         }
         Logger.i(TAG, "[GodMode] edit mode " + enable + " state=" + state
                 + " pkg=" + loadPackageParam.packageName);
-        // 先更新 UI 显示，再通知开关属性变更，确保 Activity 引用与编辑模式状态一致
-        sEditorOrchestrator.setDisplay(enable);
+        // 先更新开关属性，再更新 UI 显示，确保 setDisplay 能正确读取 switchProp 状态
         if (state == State.ALLOWED) {
-            switchProp.set(enable);                        // 通知开关属性变更，触发编辑模式切换
+            switchProp.set(enable);                        // 先通知开关属性变更
         }
+        sEditorOrchestrator.setDisplay(enable);            // 再更新 UI 显示
     }
 
     public static void notifyViewRulesChanged(ActRules actRules) {
