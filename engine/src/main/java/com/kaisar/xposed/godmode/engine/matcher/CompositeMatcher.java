@@ -114,8 +114,8 @@ public final class CompositeMatcher implements IMatcher {
                     MatchSpec spec = specs.get(entry.getKey());
                     if (!itemRoot.getClass().getName().equals(spec.itemRootClass)) continue;
 
-                    Integer expectedViewType = spec.matchThreshold > 0
-                            ? spec.matchThreshold : null;
+                    Integer expectedViewType = spec.viewType > 0
+                            ? spec.viewType : null;
                     if (expectedViewType != null
                             && !checkViewType(rv, itemRoot, expectedViewType)) {
                         continue;
@@ -200,7 +200,7 @@ public final class CompositeMatcher implements IMatcher {
         if (isRecyclerView) {
             ViewGroup rv = (ViewGroup) view;
 
-            Integer expectedViewType = spec.matchThreshold > 0 ? spec.matchThreshold : null;
+            Integer expectedViewType = spec.viewType > 0 ? spec.viewType : null;
 
             for (int i = 0; i < rv.getChildCount()
                     && results.size() < GmConstants.MAX_REPEATABLE_RESULTS; i++) {

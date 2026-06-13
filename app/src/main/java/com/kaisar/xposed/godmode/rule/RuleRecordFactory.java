@@ -168,8 +168,8 @@ public final class RuleRecordFactory {
                 // 新规则默认使用 CARD 模式：以整张卡片为操作单位，稳定性更高
                 rule.targetLevel = TargetLevel.CARD;
 
-                // 捕获 viewType（复用 matchThreshold 字段）
-                int viewType = -1;
+                // 捕获 RecyclerView 的 itemViewType 用于精确匹配过滤
+                int vt = -1;
                 try {
                     if (rv instanceof androidx.recyclerview.widget.RecyclerView) {
                         androidx.recyclerview.widget.RecyclerView recyclerView =
@@ -178,12 +178,12 @@ public final class RuleRecordFactory {
                                 recyclerView.getAdapter();
                         if (adapter != null) {
                             int pos = recyclerView.getChildAdapterPosition(current);
-                            if (pos >= 0) viewType = adapter.getItemViewType(pos);
+                            if (pos >= 0) vt = adapter.getItemViewType(pos);
                         }
                     }
                 } catch (Exception ignored) {
                 }
-                if (viewType >= 0) rule.matchThreshold = viewType;
+                if (vt >= 0) rule.viewType = vt;
             }
         } catch (Exception e) {
             Logger.w(TAG, "[RuleRecordFactory] populateRepeatableInfo failed", e);

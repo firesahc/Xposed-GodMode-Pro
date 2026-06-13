@@ -67,7 +67,7 @@ public final class RuleMapper {
         dst.text = src.getText();
         dst.description = src.getDescription();
         dst.matchMode = src.getMatchMode();
-        dst.matchThreshold = src.getMatchThreshold();
+        dst.viewType = src.getInfoFlowViewType();
         TargetLevel tl = src.getTargetLevel();
         dst.targetLevel = tl != null ? tl : TargetLevel.ELEMENT;
         dst.visibility = src.getVisibility();

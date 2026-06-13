@@ -42,8 +42,8 @@ public interface RuleFields {
     // ===== 匹配配置 =====
     /** 匹配模式（精确/包含/前缀/后缀/正则），null 等价于 EXACT */
     MatchMode getMatchMode();
-    /** 匹配阈值（0=使用系统默认宽松阈值），越大越严格 */
-    int getMatchThreshold();
+    /** 信息流模式下 RecyclerView 的 getItemViewType() 值，用于过滤匹配项类型（0=不过滤） */
+    int getInfoFlowViewType();
     /** 匹配目标层级，null 等价于 ELEMENT（向后兼容） */
     TargetLevel getTargetLevel();
 

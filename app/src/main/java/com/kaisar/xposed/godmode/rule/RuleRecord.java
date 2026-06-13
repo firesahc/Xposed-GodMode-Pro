@@ -84,8 +84,8 @@ public final class RuleRecord implements RuleFields, Parcelable, Cloneable {
     // ===== 匹配配置 =====
     @SerializedName("match_mode")
     public MatchMode matchMode;
-    @SerializedName("match_threshold")
-    public int matchThreshold;
+    @SerializedName(value = "view_type", alternate = {"match_threshold"})
+    public int viewType;
     @SerializedName("target_level")
     public TargetLevel targetLevel;
 
@@ -151,7 +151,7 @@ public final class RuleRecord implements RuleFields, Parcelable, Cloneable {
     @Override public String getText() { return text; }
     @Override public String getDescription() { return description; }
     @Override public MatchMode getMatchMode() { return matchMode; }
-    @Override public int getMatchThreshold() { return matchThreshold; }
+    @Override public int getInfoFlowViewType() { return viewType; }
     @Override public TargetLevel getTargetLevel() { return targetLevel; }
     @Override public int getVisibility() { return visibility; }
     @Override public long getTimestamp() { return timestamp; }
@@ -223,7 +223,7 @@ public final class RuleRecord implements RuleFields, Parcelable, Cloneable {
         description = in.readString();
         String modeName = in.readString();
         matchMode = modeName != null ? MatchMode.valueOf(modeName) : null;
-        matchThreshold = in.readInt();
+        viewType = in.readInt();
         visibility = in.readInt();
         timestamp = in.readLong();
         modWidth = in.readInt();
@@ -272,7 +272,7 @@ public final class RuleRecord implements RuleFields, Parcelable, Cloneable {
         dest.writeString(text);
         dest.writeString(description);
         dest.writeString(matchMode != null ? matchMode.name() : null);
-        dest.writeInt(matchThreshold);
+        dest.writeInt(viewType);
         dest.writeInt(visibility);
         dest.writeLong(timestamp);
         dest.writeInt(modWidth);
@@ -341,7 +341,7 @@ public final class RuleRecord implements RuleFields, Parcelable, Cloneable {
         v.parentClass = parentClass;
         v.repeatable = repeatable;
         v.matchMode = matchMode;
-        v.matchThreshold = matchThreshold;
+        v.viewType = viewType;
         v.targetLevel = targetLevel;
         return v;
     }
