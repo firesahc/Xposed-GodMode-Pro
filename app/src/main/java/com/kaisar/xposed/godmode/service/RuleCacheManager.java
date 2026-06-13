@@ -31,7 +31,9 @@ final class RuleCacheManager {
     AppRules getAllRules() {
         synchronized (mAppRulesCache) {
             AppRules copy = new AppRules();
-            copy.putAll(mAppRulesCache);
+            for (Map.Entry<String, ActRules> entry : mAppRulesCache.entrySet()) {
+                copy.put(entry.getKey(), snapshotActRules(entry.getValue()));
+            }
             return copy;
         }
     }
@@ -40,7 +42,7 @@ final class RuleCacheManager {
     ActRules getRules(String packageName) {
         synchronized (mAppRulesCache) {
             return mAppRulesCache.containsKey(packageName)
-                    ? mAppRulesCache.get(packageName) : new ActRules();
+                    ? snapshotActRules(mAppRulesCache.get(packageName)) : new ActRules();
         }
     }
 
@@ -219,9 +221,10 @@ final class RuleCacheManager {
         if (source == null) return new ActRules();
         ActRules copy = new ActRules();
         for (Map.Entry<String, List<RuleRecord>> entry : source.entrySet()) {
+            if (entry.getValue() == null) continue;
             List<RuleRecord> clonedList = new ArrayList<>(entry.getValue().size());
             for (RuleRecord r : entry.getValue()) {
-                clonedList.add(r.clone());
+                if (r != null) clonedList.add(r.clone());
             }
             copy.put(entry.getKey(), clonedList);
         }
