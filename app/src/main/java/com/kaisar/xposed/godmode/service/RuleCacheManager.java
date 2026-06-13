@@ -104,6 +104,11 @@ final class RuleCacheManager {
                 if (captureOldImagePath) {
                     oldImagePath = viewRules.get(index).imagePath;
                 }
+                // 合并：保留旧记录中新增规则未提供的非空字段（如 alias），防止字段丢失
+                RuleRecord existing = viewRules.get(index);
+                if (viewRule.alias == null && existing.alias != null) {
+                    viewRule.alias = existing.alias;
+                }
                 viewRules.set(index, viewRule);
             } else {
                 viewRules.add(viewRule);

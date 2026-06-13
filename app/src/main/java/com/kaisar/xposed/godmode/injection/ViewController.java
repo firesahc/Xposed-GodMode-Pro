@@ -269,7 +269,10 @@ public final class ViewController {
         if (viewRule.isModifyRule()) {
             getModifyApplier().revoke(v, spec);
         } else {
-            getRemoveApplier().revoke(v, spec);
+            if (!getRemoveApplier().revoke(v, spec)) {
+                Logger.w(TAG, "[ViewController] revokeRule: RemoveApplier.revoke() returned false"
+                        + " for view=" + v + " rule=" + viewRule);
+            }
         }
     }
 
