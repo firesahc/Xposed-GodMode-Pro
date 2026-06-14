@@ -112,7 +112,7 @@ public final class HookLauncher implements IXposedHookLoadPackage, IXposedHookZy
             @Override public void i(String tag, String msg) { Logger.i(tag, msg); }
             @Override public void w(String tag, String msg) { Logger.w(tag, msg); }
             @Override public void w(String tag, String msg, Throwable tr) { Logger.w(tag, msg, tr); }
-            @Override public void e(String tag, String msg) { Logger.w(tag, msg); }
+            @Override public void e(String tag, String msg) { Logger.e(tag, msg); }
             @Override public void e(String tag, String msg, Throwable tr) { Logger.e(tag, msg, tr); }
         });
         XServiceManager.initForSystemServer();
