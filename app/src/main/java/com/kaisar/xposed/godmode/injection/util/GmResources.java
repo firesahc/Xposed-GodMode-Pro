@@ -28,4 +28,12 @@ public final class GmResources {
     public static String getString(int id, Object... formatArgs) throws Resources.NotFoundException {
         return sModuleRes.getString(id, formatArgs);
     }
+
+    public static int getColor(int id) throws Resources.NotFoundException {
+        return sModuleRes.getColor(id);
+    }
+
+    public static android.graphics.drawable.Drawable getDrawable(int id) throws Resources.NotFoundException {
+        return sModuleRes.getDrawable(id);
+    }
 }
