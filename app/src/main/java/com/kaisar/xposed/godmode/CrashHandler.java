@@ -84,8 +84,6 @@ public final class CrashHandler implements Thread.UncaughtExceptionHandler {
                 PendingIntent.FLAG_CANCEL_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         AlarmManager mgr = (AlarmManager) mContext.getSystemService(Context.ALARM_SERVICE);
         if (mgr != null) {
-            // 使用 setExactAndAllowWhileIdle 确保在 Android 14+ 上也能可靠触发
-            // （低于 API 19 的设备降级到普通 set）
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
                 mgr.setExactAndAllowWhileIdle(AlarmManager.RTC,
                         System.currentTimeMillis() + 100, restartIntent);
@@ -93,7 +91,15 @@ public final class CrashHandler implements Thread.UncaughtExceptionHandler {
                 mgr.set(AlarmManager.RTC, System.currentTimeMillis() + 100, restartIntent);
             }
         }
-        android.os.Process.killProcess(android.os.Process.myPid());
+        // 给 AlarmManager 足够时间注册待办 Intent，然后优雅退出
+        // 相比 killProcess() 立即杀死进程，System.exit() 会触发 JVM shutdown hook，
+        // 让资源清理和 Alarm 注册有机会完成
+        try {
+            Thread.sleep(500);
+        } catch (InterruptedException ignored) {
+            Thread.currentThread().interrupt();
+        }
+        System.exit(1);
     }
 
 }
