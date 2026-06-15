@@ -35,9 +35,6 @@ dependencies {
     implementation project(path: ':libxservicemanager')
     implementation libs.androidx.constraintlayout
     implementation libs.bundles.navigation
-    androidTestImplementation(libs.espresso.core) {
-        exclude group: 'com.android.support', module: 'support-annotations'
-    }
     implementation libs.androidx.appcompat
     implementation libs.androidx.viewpager2
     implementation libs.androidx.fragment
