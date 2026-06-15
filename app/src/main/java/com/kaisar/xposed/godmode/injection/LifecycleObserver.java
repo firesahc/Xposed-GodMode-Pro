@@ -15,9 +15,9 @@ import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 
 import java.lang.ref.WeakReference;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.WeakHashMap;
 
 import de.robv.android.xposed.XC_MethodHook;
@@ -97,45 +97,50 @@ public final class LifecycleObserver extends XC_MethodHook {
     public void onRulesChanged(RulesChangedEvent event) {
         ActRules newActRules = (ActRules) event.rules;
         if (newActRules == null) return;
-        // 先保存旧规则用于对比差异（mActRules 缓存当前已应用的规则）
-        // 旧规则由 IPC addObserver 提前推送到此，在 onPostResume 时通过 applyRuleBatch 应用
         if (newActRules.equals(mActRules)) return;
         ViewController.getDefault().clearBlockedCache();
-        Set<Map.Entry<String, List<RuleRecord>>> entries = newActRules.entrySet();
-        for (Map.Entry<String, List<RuleRecord>> entry : entries) {
-            String key = entry.getKey();
-            List<RuleRecord> oldRules = mActRules.get(key);
-            List<RuleRecord> newRules = entry.getValue();
-            if (newRules != null && oldRules != null) {
-                oldRules.removeAll(newRules);
-                if (oldRules.isEmpty()) mActRules.remove(key);
-            }
-        }
-        // revoke old rules
-        if (!mActRules.isEmpty()) {
-            entries = mActRules.entrySet();
-            for (Map.Entry<String, List<RuleRecord>> entry : entries) {
-                List<RuleRecord> rules = entry.getValue();
-                if (rules == null || rules.isEmpty()) continue;
-                List<RuleRecord> revRemove = new java.util.ArrayList<>();
-                List<RuleRecord> revModify = new java.util.ArrayList<>();
-                for (RuleRecord r : rules) {
-                    if (r.isModifyRule()) revModify.add(r);
-                    else revRemove.add(r);
-                }
-                for (Activity activity : mActivities.keySet()) {
-                    if (TextUtils.equals(activity.getComponentName().getClassName(), entry.getKey())) {
-                        if (!revRemove.isEmpty()) ViewController.getDefault().revokeRuleBatch(activity, revRemove);
-                        if (!revModify.isEmpty()) ViewController.getDefault().revokeRuleBatch(activity, revModify);
-                    }
+
+        // Step 1: 基于旧规则快照计算差异（需要撤销的规则 = 旧规则中不在新规则内的部分）
+        // 克隆旧规则快照以避免在原地修改 mActRules 时产生并发修改问题
+        ActRules oldRulesSnapshot = new ActRules();
+        for (Map.Entry<String, List<RuleRecord>> oldEntry : mActRules.entrySet()) {
+            List<RuleRecord> newList = newActRules.get(oldEntry.getKey());
+            if (newList == null) {
+                // 该 Activity 的新规则完全消失，撤销全部旧规则
+                oldRulesSnapshot.put(oldEntry.getKey(), new ArrayList<>(oldEntry.getValue()));
+            } else {
+                // 计算差集：旧规则中存在但新规则中不存在的规则需要撤销
+                List<RuleRecord> diff = new ArrayList<>(oldEntry.getValue());
+                diff.removeAll(newList);
+                if (!diff.isEmpty()) {
+                    oldRulesSnapshot.put(oldEntry.getKey(), diff);
                 }
             }
         }
-        // apply new rules
+
+        // Step 2: 撤销旧规则（只撤销 diff 部分）
+        for (Map.Entry<String, List<RuleRecord>> entry : oldRulesSnapshot.entrySet()) {
+            List<RuleRecord> rules = entry.getValue();
+            List<RuleRecord> revRemove = new java.util.ArrayList<>();
+            List<RuleRecord> revModify = new java.util.ArrayList<>();
+            for (RuleRecord r : rules) {
+                if (r.isModifyRule()) revModify.add(r);
+                else revRemove.add(r);
+            }
+            for (Activity activity : mActivities.keySet()) {
+                if (TextUtils.equals(activity.getComponentName().getClassName(), entry.getKey())) {
+                    if (!revRemove.isEmpty()) ViewController.getDefault().revokeRuleBatch(activity, revRemove);
+                    if (!revModify.isEmpty()) ViewController.getDefault().revokeRuleBatch(activity, revModify);
+                }
+            }
+        }
+
+        // Step 3: 更新缓存的规则集
         mActRules.clear();
         mActRules.putAll(newActRules);
-        entries = mActRules.entrySet();
-        for (Map.Entry<String, List<RuleRecord>> entry : entries) {
+
+        // Step 4: 应用新规则
+        for (Map.Entry<String, List<RuleRecord>> entry : mActRules.entrySet()) {
             List<RuleRecord> rules = entry.getValue();
             for (Activity activity : mActivities.keySet()) {
                 if (TextUtils.equals(activity.getComponentName().getClassName(), entry.getKey())) {
@@ -145,6 +150,7 @@ public final class LifecycleObserver extends XC_MethodHook {
                 }
             }
         }
+
         // 注意：applyRuleBatch 对每个 Activity 应用规则，但不保证立即生效
         // 对于动态内容（如 RecyclerView、Fragment），布局可能在应用后发生变化
         // 因此通过 onGlobalLayout 监听 UI 布局变化后重新调度规则
