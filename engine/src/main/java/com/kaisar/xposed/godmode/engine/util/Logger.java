@@ -136,38 +136,40 @@ public final class Logger {
     }
 
     public static int d(String tag, String msg) {
-        fileLog('D', tag, msg);
+        if (sLogFile != null) fileLog('D', tag, msg);
         return isLoggable(tag, Log.DEBUG) ? Log.d(tag, msg) : 0;
     }
 
     public static int d(String tag, String format, Object... args) {
+        boolean logcat = isLoggable(tag, Log.DEBUG);
+        if (!logcat && sLogFile == null) return 0;
         String msg = String.format(format, args);
-        fileLog('D', tag, msg);
-        return isLoggable(tag, Log.DEBUG) ? Log.d(tag, msg) : 0;
+        if (sLogFile != null) fileLog('D', tag, msg);
+        return logcat ? Log.d(tag, msg) : 0;
     }
 
     public static int i(String tag, String msg) {
-        fileLog('I', tag, msg);
+        if (sLogFile != null) fileLog('I', tag, msg);
         return isLoggable(tag, Log.INFO) ? Log.i(tag, msg) : 0;
     }
 
     public static int w(String tag, String msg) {
-        fileLog('W', tag, msg);
+        if (sLogFile != null) fileLog('W', tag, msg);
         return isLoggable(tag, Log.WARN) ? Log.w(tag, msg) : 0;
     }
 
     public static int w(String tag, String msg, Throwable tr) {
-        fileLog('W', tag, msg + '\n' + Log.getStackTraceString(tr));
+        if (sLogFile != null) fileLog('W', tag, msg + '\n' + Log.getStackTraceString(tr));
         return isLoggable(tag, Log.WARN) ? Log.w(tag, msg, tr) : 0;
     }
 
     public static int e(String tag, String msg) {
-        fileLog('E', tag, msg);
+        if (sLogFile != null) fileLog('E', tag, msg);
         return isLoggable(tag, Log.ERROR) ? Log.e(tag, msg) : 0;
     }
 
     public static int e(String tag, String msg, Throwable tr) {
-        fileLog('E', tag, msg + '\n' + Log.getStackTraceString(tr));
+        if (sLogFile != null) fileLog('E', tag, msg + '\n' + Log.getStackTraceString(tr));
         return isLoggable(tag, Log.ERROR) ? Log.e(tag, msg, tr) : 0;
     }
 
