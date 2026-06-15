@@ -7,11 +7,13 @@ import androidx.annotation.Keep;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.FileReader;
-import java.io.FileWriter;
 import java.io.IOException;
-import java.text.SimpleDateFormat;
-import java.util.Date;
+import java.io.OutputStreamWriter;
+import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -32,7 +34,7 @@ public final class Logger {
         t.setDaemon(true);
         return t;
     });
-    private static final SimpleDateFormat sDateFormat = new SimpleDateFormat("MM-dd HH:mm:ss.SSS", Locale.US);
+    private static final DateTimeFormatter sDateFormat = DateTimeFormatter.ofPattern("MM-dd HH:mm:ss.SSS", Locale.US);
 
     /**
      * 启用文件日志。每个进程按包名/进程名命名独立文件（godmodepro-{name}.log），
@@ -62,19 +64,23 @@ public final class Logger {
         sLogFile = null;
     }
 
-    /** 创建文件并设为世界可读写（多进程共享），创建目录并设为世界可执行（跨进程访问）。*/
+    /**
+     * 创建文件并设为仅 owner 可读写。目录保留世界可执行和可写（跨 UID 共享目录创建文件需要），
+     * 但目录列表（读取）限制为 owner-only。文件本身仅 owner 可访问，
+     * 因为每个进程只访问自己创建的日志文件。
+     */
     private static void ensureWorldAccessible(File f) throws IOException {
         File parent = f.getParentFile();
         if (parent != null && !parent.exists()) {
             parent.mkdirs();
-            parent.setReadable(true, false);
-            parent.setWritable(true, false);
-            parent.setExecutable(true, false);
+            parent.setReadable(true, true);   // 仅 owner 可读
+            parent.setWritable(true, false);  // 世界可写（跨 UID 创建文件）
+            parent.setExecutable(true, false); // 世界可执行（跨 UID 遍历）
         }
         if (!f.exists()) {
             f.createNewFile();
-            f.setReadable(true, false);
-            f.setWritable(true, false);
+            f.setReadable(true, true);   // 仅 owner 可读
+            f.setWritable(true, true);   // 仅 owner 可写
         }
     }
 
@@ -124,8 +130,8 @@ public final class Logger {
             try {
                 ensureWorldAccessible(f);
                 rotateLogFile();
-                try (FileWriter fw = new FileWriter(f, true)) {
-                    fw.append(sDateFormat.format(new Date()))
+                try (OutputStreamWriter fw = new OutputStreamWriter(new FileOutputStream(f, true), StandardCharsets.UTF_8)) {
+                    fw.append(sDateFormat.format(LocalDateTime.now()))
                       .append(" ").append(level).append("/").append(tag)
                       .append(": ").append(msg).append("\n");
                 }
