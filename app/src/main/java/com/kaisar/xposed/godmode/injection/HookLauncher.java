@@ -1,7 +1,8 @@
 package com.kaisar.xposed.godmode.injection;
 
 import android.app.Activity;
-import android.content.res.XModuleResources;
+import android.content.res.AssetManager;
+import android.content.res.Resources;
 import android.os.Binder;
 import android.os.Bundle;
 import android.view.KeyEvent;
@@ -23,6 +24,8 @@ import com.kaisar.xposed.godmode.injection.util.BlockListChecker;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.service.RuleServiceServer;
 import com.kaisar.xservicemanager.XServiceManager;
+
+import java.lang.reflect.Method;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.IXposedHookZygoteInit;
@@ -72,8 +75,17 @@ public final class HookLauncher implements IXposedHookLoadPackage, IXposedHookZy
 
     @Override
     public void initZygote(StartupParam startupParam) {
-        ModuleResources.init(startupParam.modulePath,
-                XModuleResources.createInstance(startupParam.modulePath, null));
+        // 通过反射创建 Resources 实例，替代已废弃的 XModuleResources
+        Resources moduleRes = null;
+        try {
+            AssetManager am = AssetManager.class.getDeclaredConstructor().newInstance();
+            Method addAssetPath = AssetManager.class.getDeclaredMethod("addAssetPath", String.class);
+            addAssetPath.invoke(am, startupParam.modulePath);
+            moduleRes = new Resources(am, null, null);
+        } catch (Exception e) {
+            Logger.e(TAG, "[HookLauncher] Failed to create module Resources via reflection", e);
+        }
+        ModuleResources.init(startupParam.modulePath, moduleRes);
     }
 
     // =========================================================================
