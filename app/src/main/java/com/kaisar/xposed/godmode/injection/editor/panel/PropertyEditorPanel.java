@@ -150,7 +150,7 @@ public class PropertyEditorPanel {
         dismiss();
     }
 
-    // ---- 闂備礁鎲￠崝鏇㈠箠濮椻偓瀹?Seeker 缂傚倸鍊烽悞锕傚垂閻㈠憡鍋?----
+    // ---- Seeker 状态更新（宽/高/透明度滑块）----
 
     private void setupSeekers(View panel, View selectedView) {
         SeekBar widthSeek = panel.findViewById(R.id.mod_width_seek);
@@ -188,7 +188,7 @@ public class PropertyEditorPanel {
         });
     }
 
-    // ---- 闂備焦鎮堕崕杈ㄦ櫠閼恒儲娅犻柡宥庡幖閸楁娊鏌熺粙鍧楊€楅幖?----
+    // ---- 文本修改处理（编辑文本）----
 
     private void setupImageReplacement(View panel, View selectedView, Activity activity) {
         LinearLayout imageSection = panel.findViewById(R.id.mod_image_section);
@@ -270,9 +270,10 @@ public class PropertyEditorPanel {
 
     private enum SeekerType { WIDTH, HEIGHT, ALPHA }
 
-    // ---- 闂佽崵鍠愰悷銉ノ涘Δ鈧湁婵せ鍋撻柟顔规櫊閹虫粎鍠婂Ο杞板婵炶揪缍侀ˉ鎾剁不娴犲鍊?/ 闂佸搫顦弲婊堟晪闁?----
+    // ---- 修改状态保存与恢复 — 缓存修改前的视图值以便撤销 ----
 
-    /** 闂備線娼荤拹鐔煎礉瀹ュ憘鐔稿緞瀹€鈧惌鍡樼箾瀹割喕绨兼俊妞煎姂閺屸剝寰勬繝鍕檸婵犫拃鍛ｇ紒灞藉船閳规垿宕卞▎鎰枛闂佽崵鍠愰悷銉ノ涘Δ鈧湁婵せ鍋撶€规洏鍨介幃銏＄附婢跺绋勯梻浣虹帛椤牓宕洪弽顓炵劦妞ゆ垼娉曠粵蹇曠磼鏉堛劎绠為柟顔荤矙婵℃悂濡堕崶顏勵棟闂備礁鎲￠悷锕傛偋濡ゅ啰鐭撻梺鍨儐娴溿倖淇婇姘儓闁?*/
+    /** 保存视图修改前的状态快照（宽高、透明度、文本、图片等），
+     *  在用户确认修改或撤销修改时用于对比和恢复。 */
     private void saveViewState(View view) {
         mSavedLayoutParams = null;
         mSavedWidth = -1;
@@ -352,7 +353,7 @@ public class PropertyEditorPanel {
         mTempModifications.remove(viewKey);
     }
 
-    /** 婵犵妲呴崑鈧柛瀣崌閺岋紕浠︾拠鎻掑Г濡炪値鍋勯澶婄暦閸洖鐭楅柕澹懐鍘抽梻浣告惈閻楀棝藝娴兼潙鐤鹃柕澶涘閳绘棃鏌￠崒姘挃闁荤喆鍨硅彁闁搞儯鍔庣粻鎾绘煟鎺抽崝鎴﹀箚閸愵喖绀嬫い鎺戝€婚悾鎶芥煙?缂傚倷绶￠崑澶愵敋瑜旈獮鍐即閵忕姷顦遍悷婊呭鐢帞鏁?*/
+    /** 验证目标视图是否仍然是修改时选中的那个视图（通过层级深度和 Activity 身份校验）*/
     private boolean verifyViewIdentity(View view) {
         if (!view.isAttachedToWindow()) return false;
         if (mModifyingViewDepth == null || mModifyingViewActClass == null) return true;
@@ -407,7 +408,8 @@ public class PropertyEditorPanel {
     }
 
     /**
-     * 闂備礁缍婇弲鎻掝渻閹烘梻涓嶆繛鍡樻尭缁€宀勬煛瀹ュ啫濡兼い锝嗙叀閺岋繝宕煎┑鎰︾紓浣稿閸犳劗绮氶崡鐐╂斀闁糕剝鐟﹂幉濂告⒑濮瑰洤濡奸悗姘间邯楠炲牓濡搁埡浣哄摋闂佽崵鍠愭刊鐣屸偓姘懇濮婃椽顢曢敐鍡欐闂佺粯鎼槐鏇㈠礌閺嶎厽鍤掗柕鍫濇搐閻撴岸姊洪崫鍕缂佸鐡ㄩ幈銊╂偄閻撳宫?
+     * 保存所有修改到规则文件，同时生成截图快照，
+     * 清理临时修改缓存，完成后通过回调通知结果。
      */
     public void saveAll(Activity activity, View nodeSelectorPanel, View maskView, View modifyPanel) {
         if (mTempModifications.isEmpty()) {
@@ -470,9 +472,9 @@ public class PropertyEditorPanel {
                 Logger.w(TAG, "[ModifyPanel] saveAll: snapshot failed for rule", e);
             }
         }
-        // 濠电偞鍨堕幐鍝ョ矓閻戝鈧懘鏁冮崒姘卞€為梺缁樺姇閻°劑寮?mPendingModBitmaps 濠电偞鍨堕幖鈺呭储閹€鏋旈柟瀵稿仦婵鈧箍鍎遍幊蹇曠矉閸儲鐓冮柕澶涢檮閻撴盯鏌嶈閸撴岸寮婚妸鈺傚仼闁绘ê纾々閿嬨亜閹达絾纭堕柣顓熺箞閹?ImageView 闁诲孩顔栭崰妤€煤濠婂牆鏋侀柕鍫濐槸閸欏﹪鏌涢幘妞炬缁敻姊?
-        // 闁?writeRule 婵°倗濮烽崑鐐碘偓绗涘洤绠伴梺顒€绉寸憴锕傚箹閹碱厼鐏ｇ紒鈧繅顪秔lyModificationToView 濠电偞娼欓崥瀣儗椤旀儳鍨濋柣姗€娼чˉ姘归敐鍥у妺缁剧偓鎮傞弻娑㈠籍閸屾顒佺箾閺夋垶鍠樼€殿噮鍓氶敍鎰媴閾忓墣銏ゆ⒑閹肩偛鍔ら柛瀣尭闇夋繛鎴欏灩缁犲弶銇勯顐㈡灓缂佲偓?
-        // 闂備礁鎼崬鏌ュ磼濠婂憛銏ゆ⒑閹肩偛鍔滈柛搴㈠▕閹洦銈ｉ崘銊х潉闂佸憡鎸烽悞锕傚汲?GC 闂備焦鎮堕崕鎶藉磻閻愬搫鏋佺憸鐗堝笒杩?
+        // 回收临时缓存的位图（mPendingModBitmaps），它们已通过 writeRule 写入文件，
+        // 稍后 applyModificationToView 会替换 ImageView 的 src 为文件路径。
+        // 清理内存中的临时修改和位图，等待 GC 回收。
         mPendingModBitmaps.clear();
         mTempModifications.clear();
         android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
@@ -509,7 +511,7 @@ public class PropertyEditorPanel {
         });
     }
 
-    // ---- Xposed Hook 闂備焦妞垮鍧楀礉鐎ｎ剝濮虫い鎺戝閻愬﹪鏌涢幘妤€鍠氶弳顒勬⒒娓氬洤浜滄い锔藉閳ь剚鍝庨崝搴ｆ閹烘绠婚悗鐢告櫜閸?----
+    // ---- Xposed Hook 图片替换（拦截图片选择器返回结果进行位图替换）----
 
     private void hookActivityResult(Activity activity) {
         if (mActivityResultHooked) return;
@@ -572,7 +574,7 @@ public class PropertyEditorPanel {
         }
     }
 
-    // ---- 闂佽崵濮崇粈浣割焽閳ユ緞娑㈠醇閺囩偤妫?----
+    // ---- 公共方法 ----
 
     public View getPanelView() { return mPanelView; }
     public View getTargetView() { return mTargetView; }

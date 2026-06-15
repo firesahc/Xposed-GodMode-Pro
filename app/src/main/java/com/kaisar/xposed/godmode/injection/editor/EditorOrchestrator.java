@@ -208,7 +208,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     }
 
     // =========================================================================
-    // Activity 闂備焦鐪归崹濠氬窗鎼淬劌绠犻柨鐔哄Т瀹告繈鏌曟繝蹇涙闁糕晛鍊块弻銊モ槈濡厧鈪遍梺?HookLauncher 闂佽崵濮撮鍛村疮娴兼潙鏋侀柕鍫濐槹閺?    // =========================================================================
+    // Activity 管理 — 由 HookLauncher 注入 onResume 回调设置当前 Activity    // =========================================================================
 
     public void setActivity(final Activity a) {
         Activity current = mCurrentActivityRef.get();
@@ -233,9 +233,9 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     }
 
     // =========================================================================
-    // 闂佽崵鍠愰悷銉ノ涘Δ鈧湁婵せ鍋撻柡灞芥噺瀵板嫮鈧綆浜舵禒鎾⒑閹稿海鈽夐柣妤€妫涢弫?KeyInterceptor闂?    // =========================================================================
+    // 节点选择导航 — 音量键导航选择控件（KeyInterceptor 相关）    // =========================================================================
 
-    /** 闂傚倷绶￠崑鍛┍閾忚宕查柛鎰靛枟閸婄兘鏌ｉ悢鍛婄凡婵絽锕ら湁婵犲﹤鍠氶崕搴㈢箾閸℃劕鐏查柡灞芥噺瀵板嫭寰勬惔鈥崇畱闂佽崵鍠愰悷銉ノ涘Δ鈧湁婵せ鍋撻柡浣哥Ч瀹曠厧顭ㄩ崨顖滃幘闂佽崵鍠愰悷閬嶆⒔閸曨垰绠犳繝濠傜墕缁犮儵鎮楅敐搴濈盎闁崇鍨介弻娑㈠箳閹寸儐妫為悷婊勬緲閸婂骞忛锕€绀冩い蹇撴噺濞堛垽姊?*/
+    /** 点击视图选择控件：从节点列表中查找匹配的视图并设为当前选中 */
     public void selectViewByTap(View tappedView) {
         if (!mNodePanel.isKeySelecting() || mPropertyEditor.isShowing()) return;
         List<WeakReference<View>> nodes = mNodePanel.getViewNodes();
@@ -250,7 +250,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
         }
     }
 
-    /** 闂備礁鍚嬮崕鎶藉床閼艰翰浜归柛銉簵娴滃綊鏌熼幆褍鏆辨い銈呮嚇濮婃椽顢曢姀鈺傂ラ梺鐓庣仛閸ㄥ潡骞嗛崘顔肩妞ゆ洖鎳忕紞濠囨⒑閹肩偛鍔滈柟閿嬬箘濡叉劕鈻庨幘鏉戜缓闂佸憡鐟﹁摫闁告瑥绻橀弻锟犲焵椤掑倹鍠嗛柛鏇楀亾濞达絽澹婇崵鏇㈢叓閸ャ劍鐓ラ柣婵囩洴閺岀喎鐣￠幍鍐蹭壕闁绘梻鍎ら宥夋⒑濮瑰洤鐒洪柣鎾愁槺濡?*/
+    /** 获取当前选中的视图（节点选择面板中高亮的那个） */
     public View getSelectedView() {
         return mNodePanel.getSelectedView();
     }
@@ -267,7 +267,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     }
 
     // =========================================================================
-    // 闂佽崵鍠愰悷銉ノ涘Δ鈧湁婵☆垰鐨烽崑鎾存媴閸愵煈妫堥梺绯曟櫅閹虫﹢寮澶婇唶婵犻潧妫欓弸?KeyInterceptor闂?    // =========================================================================
+    // 信息流模式切换 — 在信息流模式下展示视图类型信息（KeyInterceptor 相关）    // =========================================================================
 
     private void toggleInfoFlowMode() {
         mInfoFlowMode = !mInfoFlowMode;
@@ -332,7 +332,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     }
 
     // =========================================================================
-    // 缂傚倷绀侀ˇ顖炩€﹀畡鎵虫瀺閹兼番鍔嶉弲顒勬煕椤愶絿绠樻繛鐓庣焸閺岋箓宕熼浣轰紕缂備浇椴稿畝鎼佺嵁濞嗗浚鍚嬮柛鏇ㄥ幘閳绘洟姊洪幐搴ｂ槈闁绘妫涢弫?KeyInterceptor闂?    // =========================================================================
+    // 屏蔽视图 — 执行视图移除/屏蔽操作，含快照和动画（BlockHandler 相关）    // =========================================================================
 
     private void performBlock(final Activity activity, final ViewGroup container) {
         try {
@@ -375,7 +375,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
         }
     }
 
-    /** 濠电偞鍨堕幐鎼佹偤閵娿儺娓婚柛宀€鍋為埛鏇㈡煙闁箑鐏℃い銉﹀灴閺岀喓鈧稒顭囨晶顒佷繆椤栨凹妲虹紒顔肩墦閹粌螣娓氼垱娈归梻?GodMode 闂佽崵鍠愬ú鏍涘☉妯忕儤绻濋崟顏呭媰闂佺鏈换宥咁焽閹烘鐓?*/
+    /** 隐藏 GodMode 所有覆盖层（截图前隐藏面板，截完后恢复）*/
     private void hideGmOverlays(int visibility) {
         View panelView = mNodePanel.getPanelView();
         if (panelView != null) panelView.setVisibility(visibility);
@@ -386,7 +386,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     }
 
     // =========================================================================
-    // 濠碘槅鍋呭妯尖偓姘煎灦閿濈偛顓兼径瀣珫闂佸壊鍋呯换鍌炲棘?KeyInterceptor闂?    // =========================================================================
+    // 预览模式 — 切换控件高亮预览/还原状态（PreviewHandler 相关）    // =========================================================================
 
     private void togglePreview(final Activity activity) {
         if (mPreviewHandler.isPreviewing()) {
@@ -419,12 +419,14 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
                             ? R.string.accessibility_preview_exit : R.string.accessibility_preview));
         }
     }
-
     // =========================================================================
-    // 闂佽崵鍠愰悷閬嶆⒔閸曨垰绠犳繝濠傚椤╂煡鎮楅敐鍌涙珕妞ゆ劒绮欓弻娑㈠箳閹寸儐妫為悷婊勬緲閸婂潡寮澶婇唶婵犻潧妫欓弸?TouchInterceptor 闂備焦鐪归崝宀€鈧凹鍙冮幃褏鈧湱濮烽悿鈧梺鍛婂姌濞夋洜绮?    // =========================================================================
+    // 触摸事件处理 — 编辑模式下拦截触摸事件实现选择/拖拽/修改（TouchInterceptor 相关）    // =========================================================================
 
     /**
-     * 缂傚倸鍊搁崐褰掓偋閻愬灚顐芥い鎰ㄦ嚒閻旂厧鐏崇€规洖娲ㄩ、鍛箾閹寸偞灏い鎴濇搐閳绘捇骞嬮悩鍐叉瀭闂佹寧妫佹慨銈夊吹鐎ｎ€㈢懓顭ㄩ崘鎯у壆濠电偛妫庨崹鍝勵嚗閸曨垰绀嬫い鎾跺枎閳ь剛鍋ら弻娑滅疀鐎ｎ亜濮庨悷婊呭閻╊垶寮鍛殕闁逞屽墴瀵?TouchHook 闂佽崵濮撮鍛村疮娴兼潙鏋侀柕鍫濐槸杩?     * 闂佸搫顦弲婊堝蓟閵娿儍?true 闂佽崵鍋炵粙蹇涘礉鎼淬劌桅婵﹩鍘鹃々鏌ユ倵閿濆倹娅嗘い鎰櫕閳ь剝顫夐悺鏇犱焊椤忓牞缍栭柨鏇楀亾闁宠棄顦靛畷濂告晲閸涱垪鍋撻銏＄厪?     */
+     * 编辑模式触摸事件入口，由 TouchHook 调用。
+     * 判断是否处于编辑模式、是否为 GodMode 控件、窗口类型是否可编辑，
+     * 然后分发到具体手势处理器。
+     */
     public boolean onTouchEvent(View view, MotionEvent event) {
         if (!mIsInEditMode) return false;
         if (TAG_GM_CMP.equals(view.getTag())) return false;
@@ -468,7 +470,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     }
 
     // =========================================================================
-    // 缂傚倷绀侀ˇ顖炩€﹀畡鎵虫瀺閹肩补鍨鹃悢鐓庣伋鐎规洖娲ㄩ、鍛存煟閻斿摜鎳曢梻鍕楠炲﹤顭ㄩ崟顐ょ獮闂佸憡娲﹂崢浠嬪磹閻愮儤鐓ユ繛鎴烆焽婢ф洟鎮?TouchInterceptor闂?    // =========================================================================
+    // 移除模式触摸处理 — 长按拖拽视图到取消区域执行移除（TouchInterceptor 相关）    // =========================================================================
 
     private boolean handleRemoveTouch(View v, MotionEvent event, int action) {
         if (action == MotionEvent.ACTION_DOWN) {

@@ -87,7 +87,7 @@ public final class RuleServiceServer extends IGodModeManager.Stub {
         return mInEditMode;
     }
 
-    // ---- 鐟欏倸鐧傞懓?----
+    // ---- 观察者管理 ----
 
     @Override
     public void addObserver(String packageName, com.kaisar.xposed.godmode.IObserver observer)
@@ -163,7 +163,7 @@ public final class RuleServiceServer extends IGodModeManager.Stub {
         return mOrchestrator.deleteRulesAsync(packageName);
     }
 
-    // ---- 閸ュ墽澧栭幙宥勭稊 ----
+    // ---- 图片文件操作 ----
 
     @Override
     public String saveImageFile(String packageName, Bitmap bitmap) throws RemoteException {
@@ -202,7 +202,7 @@ public final class RuleServiceServer extends IGodModeManager.Stub {
         }
     }
 
-    // ---- 瀹搞儱鍙块弽蹇撲焊婵?----
+    // ---- 工具栏偏好 ----
 
     @Override
     public String getToolbarHiddenItems() throws RemoteException {

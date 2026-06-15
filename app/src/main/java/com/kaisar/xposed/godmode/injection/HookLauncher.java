@@ -151,7 +151,7 @@ public final class HookLauncher implements IXposedHookLoadPackage, IXposedHookZy
                 Activity activity = (Activity) param.thisObject;
                 ModuleResources.injectInto(activity.getResources());
                 if (switchProp.get()) {
-                    // post 闂?DecorView 缂佺虎鍙庨崰鏇犳崲?setContentView 閻庣懓鎲¤ぐ鍐偩椤掑嫬绠ｉ柟鎵虫杹閸嬫挻鎷呯粵瀣秺闂佹悶鍎抽崑鎾绘偉閼碱兘鍋撻悷鐗堟拱闁哄棴缍佸畷銉︽償閳ヨ櫕娅冮梺鍝勫婢т粙濡靛鑸殿棃闁靛繆鍓濈欢?
+                    // post 到 DecorView 等待 setContentView 完成后显示编辑面板
                     activity.getWindow().getDecorView().post(() -> sEditorOrchestrator.setDisplay(true));
                 }
                 super.afterHookedMethod(param);
