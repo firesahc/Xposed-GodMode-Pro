@@ -24,7 +24,7 @@ import java.util.Objects;
  * 配合 {@link com.kaisar.xposed.godmode.engine.rule.RuleMapper} 实现类型安全的 app→engine 转换。
  * <p>
  * 【同步保障】对方文件 {@code engine/.../engine/rule/RuleMatchSpec.java}（纯 POJO 版）
- * <br>引擎字段总数: 38 &nbsp;|&nbsp; app 字段总数: 38
+ * <br>引擎字段总数: 40 &nbsp;|&nbsp; app 字段总数: 40
  * <br>若此处增减字段，请同步修改对方文件的同名字段。Parcel 读写、clone() 和 equals()/hashCode()。
  *
  * @see RuleFields
