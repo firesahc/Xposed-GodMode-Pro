@@ -5,6 +5,7 @@ import android.content.res.AssetManager;
 import android.content.res.Resources;
 import android.os.Binder;
 import android.os.Bundle;
+import android.text.TextUtils;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
@@ -106,14 +107,35 @@ public final class HookLauncher implements IXposedHookLoadPackage, IXposedHookZy
             return;
         }
 
-        HookLauncher.loadPackageParam = lpp;
         final String packageName = lpp.packageName;
 
         if ("android".equals(packageName)) {
+            HookLauncher.loadPackageParam = lpp;
             bootstrapSystemService();
-        } else {
-            injectIntoTargetApp(lpp, packageName);
+            return;
         }
+
+        if (!shouldInjectIntoTargetApp(lpp, packageName)) {
+            return;
+        }
+
+        HookLauncher.loadPackageParam = lpp;
+        injectIntoTargetApp(lpp, packageName);
+    }
+
+    private static boolean shouldInjectIntoTargetApp(XC_LoadPackage.LoadPackageParam lpp,
+                                                     String packageName) {
+        String processName = lpp.processName;
+        if (!TextUtils.equals(packageName, processName)) {
+            Logger.i(TAG, "[GodMode] skip non-main process: pkg=" + packageName
+                    + " process=" + processName);
+            return false;
+        }
+        if (BlockListChecker.isBlocked(packageName)) {
+            Logger.i(TAG, "[GodMode] skip blocked package before hooks: " + packageName);
+            return false;
+        }
+        return true;
     }
 
     /** 向 system_server 注入 RuleServiceServer 作为系统级 Service */

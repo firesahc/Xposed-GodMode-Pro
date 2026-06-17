@@ -40,7 +40,8 @@ public final class BlockListChecker {
                 return true;
             }
         } catch (Throwable t) {
-            Logger.e(TAG, "[BlockListChecker] checkBlockList failed, allowing all", t);
+            Logger.e(TAG, "[BlockListChecker] checkBlockList failed, block for safety", t);
+            return true;
         }
         return false;
     }
@@ -77,6 +78,6 @@ public final class BlockListChecker {
 
     private static boolean hasNoActivities(String packageName) {
         PackageInfo packageInfo = PackageManagerUtils.getPackageInfo(packageName, PackageManager.GET_ACTIVITIES, 0);
-        return packageInfo != null && packageInfo.activities != null && packageInfo.activities.length == 0;
+        return packageInfo == null || packageInfo.activities == null || packageInfo.activities.length == 0;
     }
 }
