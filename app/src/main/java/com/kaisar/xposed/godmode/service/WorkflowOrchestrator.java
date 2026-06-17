@@ -1,7 +1,6 @@
 package com.kaisar.xposed.godmode.service;
 
 import android.graphics.Bitmap;
-import android.os.Build;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Message;
@@ -287,11 +286,7 @@ final class WorkflowOrchestrator implements Handler.Callback {
     /** 关闭工作线程，释放资源。调用后不应再使用此实例。 */
     void shutdown() {
         mHandle.removeCallbacksAndMessages(null);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2) {
-            mWorkThread.quitSafely();
-        } else {
-            mWorkThread.quit();
-        }
+        mWorkThread.quitSafely();
     }
 
     // ===================================================================

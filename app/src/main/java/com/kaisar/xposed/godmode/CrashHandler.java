@@ -4,7 +4,6 @@ import android.app.AlarmManager;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
-import android.os.Build;
 
 import androidx.annotation.NonNull;
 
@@ -84,12 +83,8 @@ public final class CrashHandler implements Thread.UncaughtExceptionHandler {
                 PendingIntent.FLAG_CANCEL_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         AlarmManager mgr = (AlarmManager) mContext.getSystemService(Context.ALARM_SERVICE);
         if (mgr != null) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-                mgr.setExactAndAllowWhileIdle(AlarmManager.RTC,
-                        System.currentTimeMillis() + 100, restartIntent);
-            } else {
-                mgr.set(AlarmManager.RTC, System.currentTimeMillis() + 100, restartIntent);
-            }
+            mgr.setExactAndAllowWhileIdle(AlarmManager.RTC,
+                    System.currentTimeMillis() + 100, restartIntent);
         }
         // 给 AlarmManager 足够时间注册待办 Intent，然后优雅退出
         // 相比 killProcess() 立即杀死进程，System.exit() 会触发 JVM shutdown hook，

@@ -3,7 +3,6 @@ package com.kaisar.xposed.godmode;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.os.Build;
 
 import androidx.preference.PreferenceManager;
 
@@ -18,11 +17,7 @@ public final class EditModeController {
     public static void startNotificationService(Context context) {
         try {
             Intent intent = new Intent(context, NotificationService.class);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent);
-            } else {
-                context.startService(intent);
-            }
+            context.startForegroundService(intent);
         } catch (Exception e) {
             Logger.w(TAG, "startNotificationService failed", e);
         }

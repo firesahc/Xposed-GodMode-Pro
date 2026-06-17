@@ -63,12 +63,10 @@ public final class NotificationService extends Service implements SharedPreferen
     }
 
     private void createControlChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel channel = new NotificationChannel(TAG, "Control panel", NotificationManager.IMPORTANCE_LOW);
-            channel.setDescription("Let there be light");
-            NotificationManager nm = getSystemService(NotificationManager.class);
-            nm.createNotificationChannel(channel);
-        }
+        NotificationChannel channel = new NotificationChannel(TAG, "Control panel", NotificationManager.IMPORTANCE_LOW);
+        channel.setDescription("Let there be light");
+        NotificationManager nm = getSystemService(NotificationManager.class);
+        nm.createNotificationChannel(channel);
     }
 
     private void showNotification(boolean editMode) {

@@ -4,7 +4,6 @@ import static com.kaisar.xposed.godmode.engine.util.GmConstants.TAG_GM_CMP;
 
 import android.graphics.Canvas;
 import android.graphics.Paint;
-import android.os.Build;
 import android.view.View;
 import android.view.ViewGroup;
 
@@ -32,13 +31,9 @@ public final class DebugLayoutHook {
     private DebugLayoutHook() {}
 
     public static void install(Property<Boolean> switchProp) {
-        boolean legacyOk = false, modernOk = false, suppressOk = false;
+        boolean modernOk = false, suppressOk = false;
         try {
-            if (Build.VERSION.SDK_INT < 29) {
-                legacyOk = installLegacyHooksSafe(switchProp);
-            } else {
-                modernOk = installModernHooksSafe(switchProp);
-            }
+            modernOk = installModernHooksSafe(switchProp);
         } catch (Throwable e) {
             Logger.e(TAG, "[DebugLayout] Hook debug layout properties error (non-fatal)", e);
         }
@@ -47,22 +42,8 @@ public final class DebugLayoutHook {
         } catch (Throwable e) {
             Logger.e(TAG, "[DebugLayout] Hook debug draw suppression error (non-fatal)", e);
         }
-        Logger.i(TAG, String.format("[DebugLayout] install result: legacy=%b modern=%b suppress=%b",
-                legacyOk, modernOk, suppressOk));
-    }
-
-    private static boolean installLegacyHooksSafe(Property<Boolean> switchProp) {
-        try {
-            LegacyHook hook = new LegacyHook();
-            switchProp.addOnPropertyChangeListener(hook);
-            XposedHelpers.findAndHookMethod("android.os.SystemProperties",
-                    ClassLoader.getSystemClassLoader(),
-                    "native_get_boolean", String.class, boolean.class, hook);
-            return true;
-        } catch (Throwable t) {
-            Logger.w(TAG, "[DebugLayout] legacy hook failed (non-fatal): " + t.getMessage());
-            return false;
-        }
+        Logger.i(TAG, String.format("[DebugLayout] install result: modern=%b suppress=%b",
+                modernOk, suppressOk));
     }
 
     private static boolean installModernHooksSafe(Property<Boolean> switchProp) {
@@ -128,20 +109,6 @@ public final class DebugLayoutHook {
         @Override
         public void onPropertyChange(Boolean debugLayout) {
             mDebugLayout = debugLayout;
-        }
-    }
-
-    private static final class LegacyHook extends BaseDebugHook {
-
-        @Override
-        protected void beforeHookedMethod(MethodHookParam param) {
-            try {
-                if (mDebugLayout && "debug.layout".equals(param.args[0])) {
-                    param.setResult(true);
-                }
-            } catch (Throwable t) {
-                Logger.w(TAG, "[DebugLayout] LegacyHook error (suppressed): " + t.getMessage());
-            }
         }
     }
 
