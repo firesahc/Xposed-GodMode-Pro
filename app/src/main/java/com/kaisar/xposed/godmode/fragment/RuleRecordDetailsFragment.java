@@ -30,8 +30,7 @@ import com.kaisar.xposed.godmode.model.SharedViewModel;
 import com.kaisar.xposed.godmode.preference.ImageViewPreference;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 
-import java.io.ByteArrayOutputStream;
-import java.io.InputStream;
+
 import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.Date;
@@ -221,14 +220,8 @@ public final class RuleRecordDetailsFragment extends PreferenceFragmentCompat im
             ParcelFileDescriptor pfd = RuleServiceClient.getDefault().openImageFileDescriptor(viewRule.imagePath);
             Objects.requireNonNull(pfd, String.format("Can not open %s", viewRule.imagePath));
             try {
-                InputStream in = new ParcelFileDescriptor.AutoCloseInputStream(pfd);
-                ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-                byte[] temp = new byte[8192];
-                int n;
-                while ((n = in.read(temp)) != -1) {
-                    buffer.write(temp, 0, n);
-                }
-                return BitmapFactory.decodeByteArray(buffer.toByteArray(), 0, buffer.size());
+                // 直接使用 decodeFileDescriptor 解码，避免 ByteArrayOutputStream 中间缓冲区
+                return BitmapFactory.decodeFileDescriptor(pfd.getFileDescriptor());
             } finally {
                 try { pfd.close(); } catch (Exception e) { /* closeSilently */ }
             }

@@ -27,9 +27,7 @@ import com.bumptech.glide.signature.ObjectKey;
 import com.kaisar.xposed.godmode.injection.bridge.RuleServiceClient;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 
-import java.io.ByteArrayOutputStream;
 import java.io.FileNotFoundException;
-import java.io.InputStream;
 
 @GlideModule
 public class GmGlideModule extends AppGlideModule {
@@ -77,14 +75,8 @@ public class GmGlideModule extends AppGlideModule {
         public void loadData(@NonNull Priority priority, @NonNull DataCallback<? super Bitmap> callback) {
             ParcelFileDescriptor pfd = RuleServiceClient.getDefault().openImageFileDescriptor(mRuleRecord.imagePath);
             if (pfd != null) {
-                try (InputStream in = new ParcelFileDescriptor.AutoCloseInputStream(pfd)) {
-                    ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-                    byte[] temp = new byte[8192];
-                    int n;
-                    while ((n = in.read(temp)) != -1) {
-                        buffer.write(temp, 0, n);
-                    }
-                    Bitmap bitmap = BitmapFactory.decodeByteArray(buffer.toByteArray(), 0, buffer.size());
+                // 直接使用 decodeFileDescriptor 解码，避免 ByteArrayOutputStream 中间缓冲区
+                Bitmap bitmap = BitmapFactory.decodeFileDescriptor(pfd.getFileDescriptor());
                 if (mRuleRecord.x >= 0 && mRuleRecord.y >= 0 && mRuleRecord.width > 0 && mRuleRecord.height > 0
                         && bitmap != null
                         && mRuleRecord.x + mRuleRecord.width <= bitmap.getWidth()
@@ -102,9 +94,6 @@ public class GmGlideModule extends AppGlideModule {
                     recycleNullableBitmap(croppedBitmap);
                 } else {
                     callback.onDataReady(bitmap);
-                }
-                } catch (Exception e) {
-                    callback.onLoadFailed(e);
                 }
             } else {
                 callback.onLoadFailed(new FileNotFoundException(mRuleRecord.imagePath));
