@@ -249,7 +249,7 @@ public class PropertyEditorPanel {
         });
     }
 
-    // ---- 闁诲氦顫夐幃鍫曞磿闁秴鐭?----
+    // ---- SeekBar 绑定逻辑 ----
 
     private void bindSeek(SeekBar seekBar, EditText text, View target, SeekerType type) {
         seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
@@ -311,7 +311,7 @@ public class PropertyEditorPanel {
         }
     }
 
-    /** 闂佸搫顦弲婊堟晪闁汇埄鍨奸崑鍡涘箟閹绢喖骞㈡俊銈勮兌椤╊參姊洪崨濠傛诞妞わ綇濡囬幑銏狀潩閹典礁浜炬繛鎴炵懐閻掕姤绻涢崼鐔风伌鐎规洏鍨介幃銏＄附婢跺绋勯梻浣虹帛椤牓宕洪弽顓炵劦?*/
+    /** 恢复视图修改前的状态，撤销尚未保存的编辑。 */
     private void revertViewState() {
         if (mTargetView == null) return;
         if (!verifyViewIdentity(mTargetView)) {

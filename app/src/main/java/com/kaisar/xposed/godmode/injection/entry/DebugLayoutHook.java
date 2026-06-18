@@ -100,7 +100,8 @@ public final class DebugLayoutHook {
     }
 
     // =========================================================================
-    // 闁告劕鎳橀崕?Hook 缂?    // =========================================================================
+    // 调试布局 Hook 基类
+    // =========================================================================
 
     private static abstract class BaseDebugHook extends XC_MethodHook implements Property.OnPropertyChangeListener<Boolean> {
 
