@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 复合匹配器 — IMatcher 的默认实现。
@@ -255,18 +256,34 @@ public final class CompositeMatcher implements IMatcher {
         }
     }
 
-    /** viewType 检查（反射避免 RecyclerView 编译期依赖） */
+    /** viewType 检查（反射避免 RecyclerView 编译期依赖）；缓存 Method 避免反复反射 */
+    private static final Map<Class<?>, java.lang.reflect.Method> sGetAdapterCache = new ConcurrentHashMap<>();
+    private static final Map<Class<?>, java.lang.reflect.Method> sGetChildAdapterPositionCache = new ConcurrentHashMap<>();
+    private static final Map<Class<?>, java.lang.reflect.Method> sGetItemViewTypeCache = new ConcurrentHashMap<>();
+
     private static boolean checkViewType(ViewGroup rv, View itemRoot, int expectedViewType) {
         try {
-            java.lang.reflect.Method getAdapter = rv.getClass().getMethod("getAdapter");
+            Class<?> rvClass = rv.getClass();
+            java.lang.reflect.Method getAdapter = sGetAdapterCache.get(rvClass);
+            if (getAdapter == null) {
+                getAdapter = rvClass.getMethod("getAdapter");
+                sGetAdapterCache.put(rvClass, getAdapter);
+            }
             Object adapter = getAdapter.invoke(rv);
             if (adapter != null) {
-                java.lang.reflect.Method getChildAdapterPosition =
-                        rv.getClass().getMethod("getChildAdapterPosition", View.class);
+                java.lang.reflect.Method getChildAdapterPosition = sGetChildAdapterPositionCache.get(rvClass);
+                if (getChildAdapterPosition == null) {
+                    getChildAdapterPosition = rvClass.getMethod("getChildAdapterPosition", View.class);
+                    sGetChildAdapterPositionCache.put(rvClass, getChildAdapterPosition);
+                }
                 int pos = (int) getChildAdapterPosition.invoke(rv, itemRoot);
                 if (pos >= 0) {
-                    java.lang.reflect.Method getItemViewType =
-                            adapter.getClass().getMethod("getItemViewType", int.class);
+                    Class<?> adapterClass = adapter.getClass();
+                    java.lang.reflect.Method getItemViewType = sGetItemViewTypeCache.get(adapterClass);
+                    if (getItemViewType == null) {
+                        getItemViewType = adapterClass.getMethod("getItemViewType", int.class);
+                        sGetItemViewTypeCache.put(adapterClass, getItemViewType);
+                    }
                     int viewType = (int) getItemViewType.invoke(adapter, pos);
                     return viewType == expectedViewType;
                 }
