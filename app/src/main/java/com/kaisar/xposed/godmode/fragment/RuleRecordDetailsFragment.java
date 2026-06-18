@@ -157,6 +157,8 @@ public final class RuleRecordDetailsFragment extends PreferenceFragmentCompat im
         mImagePreference = (ImageViewPreference) findPreference(getString(R.string.pref_key_detail_preview_image));
         if (!TextUtils.isEmpty(mRuleRecord.imagePath)) {
             loadRuleImage();
+        } else {
+            mImagePreference.setVisible(false);
         }
 
         if (mRuleRecord.isModifyRule()) {
