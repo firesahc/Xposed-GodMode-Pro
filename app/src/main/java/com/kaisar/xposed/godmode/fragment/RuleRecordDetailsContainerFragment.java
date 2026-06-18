@@ -104,7 +104,7 @@ public final class RuleRecordDetailsContainerFragment extends Fragment {
     @Override
     public void onStart() {
         super.onStart();
-        mSharedViewModel.actRules.observe(this, newData -> {
+        mSharedViewModel.actRules.observe(getViewLifecycleOwner(), newData -> {
             if (newData.isEmpty()) {
                 NavHostFragment.findNavController(this).popBackStack();
             } else {
