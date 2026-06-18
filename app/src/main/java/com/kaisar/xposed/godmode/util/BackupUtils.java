@@ -148,26 +148,37 @@ public final class BackupUtils {
                 for (int i = 0; i < jsonArray.size(); i++) {
                     String ruleJson = jsonArray.get(i).toString();
                     RuleRecord viewRule = gson.fromJson(ruleJson, RuleRecord.class);
+
+                    // 先保存主图，获取持久化路径
+                    Bitmap bitmap = null;
                     if (!TextUtils.isEmpty(viewRule.imagePath)) {
                         String imagePath = new File(restoreDir, viewRule.imagePath).getPath();
-                        Bitmap bitmap = BitmapFactory.decodeFile(imagePath);
-                        RuleServiceClient.getDefault().writeRule(viewRule.packageName, viewRule, bitmap);
-                        recycleNullableBitmap(bitmap);
-                    } else {
-                        RuleServiceClient.getDefault().writeRule(viewRule.packageName, viewRule, null);
+                        bitmap = BitmapFactory.decodeFile(imagePath);
+                        if (bitmap != null) {
+                            String savedPath = RuleServiceClient.getDefault().saveImageFile(viewRule.packageName, bitmap);
+                            if (savedPath != null) {
+                                viewRule.imagePath = savedPath;
+                            }
+                        }
                     }
+
+                    // 有修改图时一并保存，组装完整规则
                     if (viewRule.isModifyRule() && !TextUtils.isEmpty(viewRule.modImagePath)) {
                         String modPath = new File(restoreDir, viewRule.modImagePath).getPath();
                         Bitmap modBitmap = BitmapFactory.decodeFile(modPath);
                         if (modBitmap != null) {
-                            String savedPath = RuleServiceClient.getDefault().saveImageFile(viewRule.packageName, modBitmap);
-                            if (savedPath != null) {
-                                viewRule.modImagePath = savedPath;
-                                RuleServiceClient.getDefault().updateRule(viewRule.packageName, viewRule);
+                            String savedModPath = RuleServiceClient.getDefault().saveImageFile(viewRule.packageName, modBitmap);
+                            if (savedModPath != null) {
+                                viewRule.modImagePath = savedModPath;
                             }
                             recycleNullableBitmap(modBitmap);
                         }
                     }
+
+                    // 一次调用写入完整规则（包含主图和修改图路径），消除异步竞态
+                    RuleServiceClient.getDefault().writeRule(viewRule.packageName, viewRule, bitmap);
+
+                    recycleNullableBitmap(bitmap);
                 }
                 Logger.i(TAG, "[Backup] restoreRules: success, ruleCount=" + jsonArray.size());
                 return jsonArray.size();
