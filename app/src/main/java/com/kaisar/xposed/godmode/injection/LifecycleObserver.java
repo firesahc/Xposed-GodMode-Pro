@@ -4,13 +4,20 @@ import android.app.Activity;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.TextUtils;
+import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
 
+import com.kaisar.xposed.godmode.engine.matcher.CompositeMatcher;
+import com.kaisar.xposed.godmode.engine.matcher.TargetLevel;
+import com.kaisar.xposed.godmode.engine.matcher.ViewTraversal;
 import com.kaisar.xposed.godmode.engine.event.RulesChangedEvent;
 import com.kaisar.xposed.godmode.engine.event.Subscribe;
+import com.kaisar.xposed.godmode.engine.rule.MatchSpec;
+import com.kaisar.xposed.godmode.engine.rule.RuleMapper;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.engine.util.Preconditions;
+import com.kaisar.xposed.godmode.injection.util.ViewUtils;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 
@@ -171,7 +178,7 @@ public final class LifecycleObserver extends XC_MethodHook {
                 if (listener != null) listener.applyRuleIfMatchCondition();
             };
             mPendingReapply.put(activity, r);
-            mDebounceHandler.postDelayed(r, 200);
+            mDebounceHandler.post(r);
         }
     }
 
@@ -188,10 +195,58 @@ public final class LifecycleObserver extends XC_MethodHook {
                     }
                 }
             });
+            Class<?> viewHolderClass = XposedHelpers.findClass(
+                    "androidx.recyclerview.widget.RecyclerView$ViewHolder",
+                    activity.getClassLoader());
+            XposedHelpers.findAndHookMethod(adapterClass, "bindViewHolder",
+                    viewHolderClass, int.class, new XC_MethodHook() {
+                        @Override
+                        protected void afterHookedMethod(MethodHookParam param) {
+                            if (mActRules.isEmpty()) return;
+                            Object holder = param.args[0];
+                            if (holder == null) return;
+                            View itemView = (View) XposedHelpers.getObjectField(holder, "itemView");
+                            applyRepeatableRulesToBoundItem(itemView);
+                        }
+                    });
             mRecyclerViewHooksInstalled = true;
             Logger.i(TAG, "[Lifecycle] DynamicContent: RecyclerView adapter hook installed");
         } catch (Throwable t) {
             Logger.d(TAG, "[Lifecycle] DynamicContent: RecyclerView hook skipped: " + t.getMessage());
+        }
+    }
+
+    private void applyRepeatableRulesToBoundItem(View itemRoot) {
+        if (itemRoot == null || itemRoot.getVisibility() != View.VISIBLE) return;
+        Activity activity = ViewUtils.getAttachedActivityFromView(itemRoot);
+        if (activity == null || activity.isFinishing()) return;
+        List<RuleRecord> rules = mActRules.get(activity.getComponentName().getClassName());
+        if (rules == null || rules.isEmpty()) return;
+
+        for (RuleRecord rule : rules) {
+            if (!rule.isRepeatable()) continue;
+            try {
+                MatchSpec spec = RuleMapper.toEngine(rule).getMatchSpec();
+                if (spec.itemPath == null || spec.itemPath.length == 0
+                        || spec.itemRootClass == null
+                        || !itemRoot.getClass().getName().equals(spec.itemRootClass)) {
+                    continue;
+                }
+
+                View matched = ViewTraversal.findViewByItemPath(itemRoot, spec.itemPath, 0);
+                if (matched == null) {
+                    matched = ViewTraversal.findViewByClassChain(itemRoot, spec.itemPath, 0);
+                }
+                if (matched == null
+                        || !CompositeMatcher.isStructuralMatch(matched, spec, false)) {
+                    continue;
+                }
+
+                View target = spec.targetLevel == TargetLevel.CARD ? itemRoot : matched;
+                ViewController.getDefault().applyRule(target, rule);
+            } catch (Throwable t) {
+                Logger.w(TAG, "[Lifecycle] apply bound item rule failed", t);
+            }
         }
     }
 

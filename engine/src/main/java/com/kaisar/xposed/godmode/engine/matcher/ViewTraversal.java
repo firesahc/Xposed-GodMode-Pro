@@ -183,4 +183,23 @@ public final class ViewTraversal {
         }
         return null;
     }
+
+    public static View findViewByClassChain(View root, String[] path, int index) {
+        if (path == null || index >= path.length) return root;
+        String entry = path[index];
+        int colonPos = entry.indexOf(':');
+        if (colonPos < 0) return null;
+        String className = entry.substring(colonPos + 1);
+
+        if (root instanceof ViewGroup) {
+            ViewGroup vg = (ViewGroup) root;
+            for (int i = 0; i < vg.getChildCount(); i++) {
+                View child = vg.getChildAt(i);
+                if (child != null && child.getClass().getName().equals(className)) {
+                    return findViewByClassChain(child, path, index + 1);
+                }
+            }
+        }
+        return null;
+    }
 }

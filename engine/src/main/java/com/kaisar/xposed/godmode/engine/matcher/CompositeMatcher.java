@@ -130,7 +130,7 @@ public final class CompositeMatcher implements IMatcher {
                         View found = ViewTraversal.findViewByItemPath(
                                 itemRoot, spec.itemPath, 0);
                         if (found == null) {
-                            found = navigateByClassChain(itemRoot, spec.itemPath, 0);
+                            found = ViewTraversal.findViewByClassChain(itemRoot, spec.itemPath, 0);
                         }
                         if (found != null && isStructuralMatch(found, spec, false)) {
                             if (!partial.contains(itemRoot)) {
@@ -142,7 +142,7 @@ public final class CompositeMatcher implements IMatcher {
                         View found = ViewTraversal.findViewByItemPath(
                                 itemRoot, spec.itemPath, 0);
                         if (found == null) {
-                            found = navigateByClassChain(itemRoot, spec.itemPath, 0);
+                            found = ViewTraversal.findViewByClassChain(itemRoot, spec.itemPath, 0);
                         }
                         if (found != null && isStructuralMatch(found, spec, false)) {
                             if (!partial.contains(found)) {
@@ -223,7 +223,7 @@ public final class CompositeMatcher implements IMatcher {
                     View found = ViewTraversal.findViewByItemPath(
                             itemRoot, spec.itemPath, 0);
                     if (found == null) {
-                        found = navigateByClassChain(itemRoot, spec.itemPath, 0);
+                        found = ViewTraversal.findViewByClassChain(itemRoot, spec.itemPath, 0);
                     }
                     if (found != null && isStructuralMatch(found, spec, false)) {
                         if (!results.contains(itemRoot)) {
@@ -234,7 +234,7 @@ public final class CompositeMatcher implements IMatcher {
                     // ELEMENT 模式：itemPath 导航 + classChain 回退
                     View found = ViewTraversal.findViewByItemPath(itemRoot, spec.itemPath, 0);
                     if (found == null) {
-                        found = navigateByClassChain(itemRoot, spec.itemPath, 0);
+                        found = ViewTraversal.findViewByClassChain(itemRoot, spec.itemPath, 0);
                     }
                     if (found != null && isStructuralMatch(found, spec, false)) {
                         if (!results.contains(found)) {
@@ -309,7 +309,7 @@ public final class CompositeMatcher implements IMatcher {
      * @param strictParent true=单元素模式，parentClass 也必须匹配；
      *                     false=信息流模式，parentClass 提供但不强制
      */
-    static boolean isStructuralMatch(View view, MatchSpec spec, boolean strictParent) {
+    public static boolean isStructuralMatch(View view, MatchSpec spec, boolean strictParent) {
         if (view == null || spec == null) return false;
 
         // ── viewClass ──
@@ -353,26 +353,4 @@ public final class CompositeMatcher implements IMatcher {
         return s != null && !s.isEmpty();
     }
 
-    /**
-     * 按类链导航（不依赖 index），处理卡片间结构微变。
-     * 从 itemPath 数组提取每个元素的 ":ClassName" 部分做纯类链匹配。
-     */
-    private static View navigateByClassChain(View root, String[] itemPath, int startIndex) {
-        if (itemPath == null || startIndex >= itemPath.length) return root;
-        String entry = itemPath[startIndex];
-        int colonPos = entry.indexOf(':');
-        if (colonPos < 0) return null;
-        String className = entry.substring(colonPos + 1);
-
-        if (root instanceof ViewGroup) {
-            ViewGroup vg = (ViewGroup) root;
-            for (int i = 0; i < vg.getChildCount(); i++) {
-                View child = vg.getChildAt(i);
-                if (child != null && child.getClass().getName().equals(className)) {
-                    return navigateByClassChain(child, itemPath, startIndex + 1);
-                }
-            }
-        }
-        return null;
-    }
 }
