@@ -253,8 +253,10 @@ final class RulePersistManager {
     /** 检查文件路径是否在 GodMode 数据目录下 */
     boolean isValidImagePath(String filePath) {
         try {
-            return new File(filePath).getCanonicalPath()
-                    .startsWith(new File(getBaseDir()).getCanonicalPath())
+            String base = new File(getBaseDir()).getCanonicalPath();
+            String target = new File(filePath).getCanonicalPath();
+            // 精确匹配或 base + 分隔符前缀，防止 /data/godmode_evil 此类前缀路径绕过
+            return (target.equals(base) || target.startsWith(base + File.separator))
                     && filePath.endsWith(IMAGE_FILE_SUFFIX);
         } catch (IOException e) {
             return false;
