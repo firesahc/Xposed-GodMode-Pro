@@ -84,7 +84,20 @@ public final class RuleRecordListFragment extends Fragment {
         }
         mBackupLauncher = registerForActivityResult(new ActivityResultContracts.CreateDocument(), this::onBackupFileSelected);
         mSharedViewModel.selectedPackage.observe(this, packageName -> mSharedViewModel.updateRuleRecordList(packageName));
-        mSharedViewModel.actRules.observe(this, newData -> {
+    }
+
+    @Override
+    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
+        RecyclerView recyclerView = (RecyclerView) view;
+        ListAdapter adapter = (ListAdapter) recyclerView.getAdapter();
+        if (adapter == null) {
+            LinearLayoutManager linearLayoutManager = new LinearLayoutManager(requireContext());
+            recyclerView.setLayoutManager(linearLayoutManager);
+            recyclerView.setItemAnimator(null);
+            recyclerView.setAdapter(new ListAdapter());
+        }
+        // 使用 viewLifecycleOwner 避免视图销毁后仍收到通知
+        mSharedViewModel.actRules.observe(getViewLifecycleOwner(), newData -> {
             mAllRules = newData != null ? newData : new ArrayList<>();
             if (!mIsBatchOperation) {
                 updateFilteredList();
@@ -179,18 +192,6 @@ public final class RuleRecordListFragment extends Fragment {
         }
     }
 
-    @Override
-    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
-        RecyclerView recyclerView = (RecyclerView) view;
-        ListAdapter adapter = (ListAdapter) recyclerView.getAdapter();
-        if (adapter == null) {
-            LinearLayoutManager linearLayoutManager = new LinearLayoutManager(requireContext());
-            recyclerView.setLayoutManager(linearLayoutManager);
-            recyclerView.setItemAnimator(null);
-            recyclerView.setAdapter(new ListAdapter());
-        }
-    }
-
     private static final class Callback extends DiffUtil.Callback {
 
         final List<RuleRecord> mOldData, mNewData;
@@ -213,7 +214,7 @@ public final class RuleRecordListFragment extends Fragment {
 
         @Override
         public boolean areContentsTheSame(int oldItemPosition, int newItemPosition) {
-            return Objects.equals(mOldData.get(oldItemPosition), mNewData.get(newItemPosition));
+            return mOldData.get(oldItemPosition).contentEquals(mNewData.get(newItemPosition));
         }
     }
 

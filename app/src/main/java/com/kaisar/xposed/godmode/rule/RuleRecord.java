@@ -384,7 +384,7 @@ public final class RuleRecord implements RuleFields, Parcelable, Cloneable {
     }
 
     // =========================================================================
-    // equals / hashCode（完全不动，保持原有窄匹配语义）
+    // equals / hashCode（窄匹配语义 — 仅用于定位身份）
     // =========================================================================
 
     @Override
@@ -410,6 +410,29 @@ public final class RuleRecord implements RuleFields, Parcelable, Cloneable {
             result = 31 * result + Arrays.hashCode(depth);
         }
         return result;
+    }
+
+    /**
+     * 内容相等判断 — 用于 DiffUtil.areContentsTheSame。
+     * 覆盖所有 UI 展示字段（alias、visibility、mod 字段等），
+     * 避免 equals() 窄匹配语义导致列表不刷新。
+     */
+    public boolean contentEquals(@NonNull RuleRecord that) {
+        if (!Objects.equals(alias, that.alias)) return false;
+        if (visibility != that.visibility) return false;
+        if (isRemoveRule()) {
+            if (x != that.x || y != that.y) return false;
+            if (width != that.width || height != that.height) return false;
+        }
+        if (isModifyRule()) {
+            if (modWidth != that.modWidth) return false;
+            if (modHeight != that.modHeight) return false;
+            if (Float.compare(modAlpha, that.modAlpha) != 0) return false;
+            if (modXOffset != that.modXOffset || modYOffset != that.modYOffset) return false;
+            if (!Objects.equals(modText, that.modText)) return false;
+            if (!Objects.equals(modImagePath, that.modImagePath)) return false;
+        }
+        return true;
     }
 
     // =========================================================================
