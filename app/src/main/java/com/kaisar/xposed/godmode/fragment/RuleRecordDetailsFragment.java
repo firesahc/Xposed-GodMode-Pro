@@ -156,6 +156,8 @@ public final class RuleRecordDetailsFragment extends PreferenceFragmentCompat im
 
         mImagePreference = (ImageViewPreference) findPreference(getString(R.string.pref_key_detail_preview_image));
         if (!TextUtils.isEmpty(mRuleRecord.imagePath)) {
+            // 同步解码图片尺寸，抢在 View 绑定前设置占位高度
+            reserveImagePlaceholder();
             loadRuleImage();
         } else {
             mImagePreference.setVisible(false);
@@ -201,16 +203,41 @@ public final class RuleRecordDetailsFragment extends PreferenceFragmentCompat im
         }
     }
 
+    private void reserveImagePlaceholder() {
+        try {
+            ParcelFileDescriptor pfd = RuleServiceClient.getDefault().openImageFileDescriptor(mRuleRecord.imagePath);
+            if (pfd == null) return;
+            BitmapFactory.Options opts = new BitmapFactory.Options();
+            opts.inJustDecodeBounds = true;
+            BitmapFactory.decodeFileDescriptor(pfd.getFileDescriptor(), null, opts);
+            try { pfd.close(); } catch (Exception ignored) { }
+            if (opts.outWidth > 0 && opts.outHeight > 0) {
+                int screenWidth = getResources().getDisplayMetrics().widthPixels;
+                int marginPx = (int) (20 * getResources().getDisplayMetrics().density);
+                int availableWidth = screenWidth - marginPx;
+                int height = (int) ((float) availableWidth * opts.outHeight / opts.outWidth);
+                mImagePreference.reserveHeight(Math.max(height, 1));
+            }
+        } catch (Exception e) {
+            Logger.w(TAG, "[reserveImagePlaceholder] " + e.getMessage());
+        }
+    }
+
     private void loadRuleImage() {
         if (mHandler == null) {
             mHandler = new Handler(Looper.getMainLooper());
         }
-            TaskExecutor.executeImageLoad(() -> {
+        TaskExecutor.executeImageLoad(() -> {
             if (!isAdded()) return;
             Bitmap bitmap = loadRuleImageBitmap(mRuleRecord);
+            if (bitmap == null) return;
+            int screenWidth = getResources().getDisplayMetrics().widthPixels;
+            int marginPx = (int) (20 * getResources().getDisplayMetrics().density);
+            int availableWidth = screenWidth - marginPx;
+            int fixedHeight = (int) ((float) availableWidth * bitmap.getHeight() / bitmap.getWidth());
             mHandler.post(() -> {
-                if (bitmap != null && isAdded()) {
-                    mImagePreference.setImageBitmap(bitmap);
+                if (isAdded()) {
+                    mImagePreference.displayBitmap(bitmap, Math.max(fixedHeight, 1));
                 }
             });
         });
