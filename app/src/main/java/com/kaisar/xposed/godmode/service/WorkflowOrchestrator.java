@@ -304,19 +304,12 @@ final class WorkflowOrchestrator implements Handler.Callback {
     private void handleWriteRule(Message msg) {
         WriteRuleMsg m = (WriteRuleMsg) msg.obj;
         if (m.snapshot != null) {
-            // ── 快照分支：I/O 先于缓存更新 ──
+            // ── 快照分支：先 I/O 保存新图，成功后再更新缓存 + 持久化，最后清理旧图 ──
 
-            // 1) 查询缓存中旧 imagePath（只读），删除旧截图文件
+            // 1) 查询缓存中旧 imagePath（只读），待新图保存并持久化成功后再清理
             String oldImagePath = mCacheManager.getOldImagePath(m.packageName, m.viewRule);
-            if (!android.text.TextUtils.isEmpty(oldImagePath)) {
-                try {
-                    FileUtils.delete(oldImagePath);
-                } catch (Exception e) {
-                    mLogger.w("write rule: delete old image failed", e);
-                }
-            }
 
-            // 2) I/O 边界：保存新截图。失败则直接返回，缓存未修改
+            // 2) I/O 边界：保存新截图。失败则直接返回，缓存未修改，旧图仍有效
             String newImagePath;
             try {
                 newImagePath = mPersistManager.saveBitmap(m.snapshot,
@@ -338,6 +331,14 @@ final class WorkflowOrchestrator implements Handler.Callback {
                         m.packageName, m.viewRule, false);
                 mObserverManager.notifyObserverRuleChanged(m.packageName, cr.snapshotRules);
                 mPersistManager.safePersistRules(m.packageName, cr.json);
+                // 4) 持久化成功后安全删除旧图，此时即使删除失败也不影响规则完整性
+                if (!android.text.TextUtils.isEmpty(oldImagePath)) {
+                    try {
+                        FileUtils.delete(oldImagePath);
+                    } catch (Exception e) {
+                        mLogger.w("write rule: delete old image failed", e);
+                    }
+                }
                 scheduleOrphanCleanup();
             } catch (Exception e) {
                 mLogger.w("write rule: persist after snapshot failed", e);
@@ -357,9 +358,16 @@ final class WorkflowOrchestrator implements Handler.Callback {
     private void handleDeleteRule(Message msg) {
         try {
             DeleteRuleMsg m = (DeleteRuleMsg) msg.obj;
-            FileUtils.delete(m.imagePath);
+            // 先持久化规则，再清理图片，确保持久化不因图片删除失败被跳过
             mObserverManager.notifyObserverRuleChanged(m.packageName, m.snapshotRules);
             mPersistManager.safePersistRules(m.packageName, m.json);
+            if (!android.text.TextUtils.isEmpty(m.imagePath)) {
+                try {
+                    FileUtils.delete(m.imagePath);
+                } catch (Exception e) {
+                    mLogger.w("delete rule: delete image failed", e);
+                }
+            }
             scheduleOrphanCleanup();
         } catch (Exception e) {
             mLogger.w("delete rule failed", e);
