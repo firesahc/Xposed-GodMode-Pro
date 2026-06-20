@@ -31,9 +31,10 @@ import com.kaisar.xposed.godmode.preference.ImageViewPreference;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 
 
-import java.text.SimpleDateFormat;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
-import java.util.Date;
 import java.util.Locale;
 import java.util.Objects;
 
@@ -81,8 +82,9 @@ public final class RuleRecordDetailsFragment extends PreferenceFragmentCompat im
 
         Preference preference = findPreference(getString(R.string.pref_key_detail_rule_created_time));
         preference.setTitle(R.string.rule_details_field_create_time);
-        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss", Locale.getDefault());
-        preference.setSummary(dateFormat.format(new Date(mRuleRecord.timestamp)));
+        DateTimeFormatter dateFormat = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss").withLocale(Locale.getDefault());
+        Instant instant = Instant.ofEpochMilli(mRuleRecord.timestamp);
+        preference.setSummary(dateFormat.format(instant.atZone(ZoneId.systemDefault()).toLocalDateTime()));
 
         preference = findPreference(getString(R.string.pref_key_detail_rule_match_version));
         preference.setTitle(R.string.rule_details_field_generate_version);
