@@ -125,7 +125,8 @@ public final class CompositeMatcher implements IMatcher {
                     if (spec.targetLevel == TargetLevel.CARD) {
                         // CARD 模式：跳过已隐藏的卡片根（防止级联重应用），
                         // 然后导航 itemPath + isStructuralMatch 验证精度同 ELEMENT，
-                        // 匹配通过后返回卡片根视图而非内部元素。
+                        // 匹配通过后直接返回内部目标元素（由 ViewController.resolveCardTarget 承
+                        // 认已解析视图，不再重复导航）。
                         if (itemRoot.getVisibility() != View.VISIBLE) continue;
                         View found = ViewTraversal.findViewByItemPath(
                                 itemRoot, spec.itemPath, 0);
@@ -133,8 +134,8 @@ public final class CompositeMatcher implements IMatcher {
                             found = ViewTraversal.findViewByClassChain(itemRoot, spec.itemPath, 0);
                         }
                         if (found != null && isStructuralMatch(found, spec, false)) {
-                            if (!partial.contains(itemRoot)) {
-                                partial.add(itemRoot);
+                            if (!partial.contains(found)) {
+                                partial.add(found);
                             }
                         }
                     } else {
@@ -218,7 +219,8 @@ public final class CompositeMatcher implements IMatcher {
                 if (spec.targetLevel == TargetLevel.CARD) {
                     // CARD 模式：跳过已隐藏的卡片根（防止级联重应用），
                     // 然后导航 itemPath + isStructuralMatch 验证精度同 ELEMENT，
-                    // 匹配通过后返回卡片根视图而非内部元素。
+                    // 匹配通过后直接返回内部目标元素（由 ViewController.resolveCardTarget 承
+                    // 认已解析视图，不再重复导航）。
                     if (itemRoot.getVisibility() != View.VISIBLE) continue;
                     View found = ViewTraversal.findViewByItemPath(
                             itemRoot, spec.itemPath, 0);
@@ -226,8 +228,8 @@ public final class CompositeMatcher implements IMatcher {
                         found = ViewTraversal.findViewByClassChain(itemRoot, spec.itemPath, 0);
                     }
                     if (found != null && isStructuralMatch(found, spec, false)) {
-                        if (!results.contains(itemRoot)) {
-                            results.add(itemRoot);
+                        if (!results.contains(found)) {
+                            results.add(found);
                         }
                     }
                 } else {

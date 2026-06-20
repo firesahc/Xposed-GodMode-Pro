@@ -190,25 +190,38 @@ public final class ViewController {
         if (onComplete != null) onComplete.run();
     }
 
+    /**
+     * CARD 模式目标解析：若规则为 CARD 模式且当前视图为卡片根，则通过 itemPath
+     * 导航到内部目标元素；若当前视图已是目标元素（类名匹配），则直接返回避免重复导航。
+     *
+     * @param v    当前视图（可能是卡片根 or 已解析的内部元素）
+     * @param rule 目标规则
+     * @return 解析后的目标视图
+     */
+    private static View resolveCardTarget(View v, RuleRecord rule) {
+        TargetLevel targetLevel = rule.getTargetLevel();
+        if (targetLevel != TargetLevel.CARD) return v;
+        if (rule.getItemPath() == null || rule.getItemPath().length == 0) return v;
+
+        // 智能跳过：若 v 已是目标元素（来自 matchAllViewsBatch 的预解析结果），
+        // 则无需再次导航。只对 CARD 模式生效——旧规则 targetLevel=null，此处早已返回。
+        String viewClass = rule.getViewClass();
+        if (viewClass != null && v.getClass().getName().equals(viewClass)) {
+            return v;
+        }
+
+        // v 是卡片根，需要导航到内部目标元素
+        View target = ViewTraversal.findViewByItemPath(v, rule.getItemPath(), 0);
+        return target != null ? target : v;
+    }
+
     /** 应用单条规则 */
     public boolean applyRule(View v, RuleRecord viewRule) {
         if (v == null || viewRule == null) return false;
         RuleMatchSpec engineRule = toEngineRule(viewRule);
         ActionSpec spec = engineRule.getActionSpec();
 
-        // CARD 模式：从卡片根导航到内部目标元素再执行操作（修改或移除）。
-        // 匹配阶段（matchAllViewsBatch）对 CARD 模式返回的是卡片根 View，
-        // 但用户实际选中的是卡片内部的元素，因此需要通过 itemPath 导航到具体元素。
-        // 若导航失败（v 可能已是内部元素，编辑器首次应用场景），降级到直接操作 v。
-        TargetLevel targetLevel = viewRule.getTargetLevel();
-        if (targetLevel == TargetLevel.CARD
-                && viewRule.getItemPath() != null && viewRule.getItemPath().length > 0) {
-            View target = ViewTraversal.findViewByItemPath(v, viewRule.getItemPath(), 0);
-            if (target != null) {
-                v = target;
-            }
-            // fall through: v 可能是内部元素，直接操作
-        }
+        v = resolveCardTarget(v, viewRule);
 
         if (viewRule.isModifyRule()) {
             return getModifyApplier().apply(v, spec);
@@ -253,18 +266,7 @@ public final class ViewController {
         RuleMatchSpec engineRule = toEngineRule(viewRule);
         ActionSpec spec = engineRule.getActionSpec();
 
-        // CARD 模式：从卡片根导航到内部目标元素再撤销操作（修改或移除）。
-        // 与 applyRule() 对称，确保 CARD 模式撤销时也定位到用户实际选中的内部元素。
-        // 若导航失败（v 可能已是内部元素），降级到直接撤销 v。
-        TargetLevel targetLevel = viewRule.getTargetLevel();
-        if (targetLevel == TargetLevel.CARD
-                && viewRule.getItemPath() != null && viewRule.getItemPath().length > 0) {
-            View target = ViewTraversal.findViewByItemPath(v, viewRule.getItemPath(), 0);
-            if (target != null) {
-                v = target;
-            }
-            // fall through: v 可能是内部元素，直接撤销
-        }
+        v = resolveCardTarget(v, viewRule);
 
         if (viewRule.isModifyRule()) {
             getModifyApplier().revoke(v, spec);

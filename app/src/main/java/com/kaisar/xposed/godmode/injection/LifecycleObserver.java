@@ -233,17 +233,22 @@ public final class LifecycleObserver extends XC_MethodHook {
                     continue;
                 }
 
+                if (spec.targetLevel == TargetLevel.CARD) {
+                    // CARD 模式：将卡片根传给 applyRule，由 resolveCardTarget
+                    // 负责唯一的 itemPath 导航，避免在此处重复导航。
+                    ViewController.getDefault().applyRule(itemRoot, rule);
+                    continue;
+                }
+
+                // ELEMENT 模式：在此处完成 itemPath 导航 + 结构验证，
+                // 然后直接将已验证的内部元素传给 applyRule。
                 View matched = ViewTraversal.findViewByItemPath(itemRoot, spec.itemPath, 0);
                 if (matched == null) {
                     matched = ViewTraversal.findViewByClassChain(itemRoot, spec.itemPath, 0);
                 }
-                if (matched == null
-                        || !CompositeMatcher.isStructuralMatch(matched, spec, false)) {
-                    continue;
+                if (matched != null && CompositeMatcher.isStructuralMatch(matched, spec, false)) {
+                    ViewController.getDefault().applyRule(matched, rule);
                 }
-
-                View target = spec.targetLevel == TargetLevel.CARD ? itemRoot : matched;
-                ViewController.getDefault().applyRule(target, rule);
             } catch (Throwable t) {
                 Logger.w(TAG, "[Lifecycle] apply bound item rule failed", t);
             }
