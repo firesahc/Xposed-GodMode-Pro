@@ -1,5 +1,7 @@
 package com.kaisar.xposed.godmode.service;
 
+import androidx.annotation.NonNull;
+
 import com.google.gson.Gson;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.rule.ActRules;
@@ -63,6 +65,16 @@ final class RuleCacheManager {
     // ---- 规则 CRUD 操作 ----
 
     /**
+     * 在规则列表中查找与 target 匹配的索引，未找到返回 -1。
+     */
+    private static int findRuleIndex(@NonNull List<RuleRecord> rules, @NonNull RuleRecord target) {
+        for (int i = 0; i < rules.size(); i++) {
+            if (rules.get(i).isSameViewAs(target)) return i;
+        }
+        return -1;
+    }
+
+    /**
      * 查询某规则在缓存中的旧 imagePath（读操作，不修改缓存）。
      * 供 WorkflowOrchestrator 在持久化前获取旧截图路径用于清理。
      *
@@ -76,10 +88,8 @@ final class RuleCacheManager {
             if (actRules == null) return null;
             List<RuleRecord> rules = actRules.get(viewRule.activityClass);
             if (rules == null) return null;
-            for (RuleRecord r : rules) {
-                if (r.isSameViewAs(viewRule)) return r.imagePath;
-            }
-            return null;
+            int idx = findRuleIndex(rules, viewRule);
+            return idx >= 0 ? rules.get(idx).imagePath : null;
         }
     }
 
@@ -94,13 +104,7 @@ final class RuleCacheManager {
                 mAppRulesCache.put(packageName, actRules = new ActRules());
             }
             List<RuleRecord> viewRules = actRules.computeIfAbsent(viewRule.activityClass, k -> new ArrayList<>());
-            int index = -1;
-            for (int i = 0; i < viewRules.size(); i++) {
-                if (viewRules.get(i).isSameViewAs(viewRule)) {
-                    index = i;
-                    break;
-                }
-            }
+            int index = findRuleIndex(viewRules, viewRule);
             String oldImagePath = null;
             if (index >= 0) {
                 if (captureOldImagePath) {
@@ -131,13 +135,7 @@ final class RuleCacheManager {
             if (actRules == null) return null;
             List<RuleRecord> viewRules = actRules.get(viewRule.activityClass);
             if (viewRules == null) return null;
-            int idx = -1;
-            for (int i = 0; i < viewRules.size(); i++) {
-                if (viewRules.get(i).isSameViewAs(viewRule)) {
-                    idx = i;
-                    break;
-                }
-            }
+            int idx = findRuleIndex(viewRules, viewRule);
             boolean removed = idx >= 0 ? viewRules.remove(idx) != null : false;
             if (!removed) return null;
             if (viewRules.isEmpty()) {
@@ -160,33 +158,6 @@ final class RuleCacheManager {
                 return true;
             }
             return false;
-        }
-    }
-
-    /**
-     * 更新缓存中某条规则的 imagePath（快照路径变更）
-     */
-    CacheResult updateImagePath(String packageName, RuleRecord viewRule, String newImagePath) {
-        synchronized (mAppRulesCache) {
-            ActRules actRules = mAppRulesCache.get(packageName);
-            if (actRules != null) {
-                List<RuleRecord> rules = actRules.get(viewRule.activityClass);
-                if (rules != null) {
-                    int idx = -1;
-                    for (int i = 0; i < rules.size(); i++) {
-                        if (rules.get(i).isSameViewAs(viewRule)) {
-                            idx = i;
-                            break;
-                        }
-                    }
-                    if (idx >= 0) {
-                        rules.get(idx).imagePath = newImagePath;
-                    }
-                }
-            }
-            String json = mGson.toJson(actRules);
-            ActRules snapshotRules = snapshotActRules(actRules);
-            return new CacheResult(null, json, snapshotRules);
         }
     }
 

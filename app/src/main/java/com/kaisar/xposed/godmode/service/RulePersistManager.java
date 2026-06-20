@@ -3,10 +3,10 @@ package com.kaisar.xposed.godmode.service;
 import static com.kaisar.xposed.godmode.engine.util.FileUtils.S_IRWXG;
 import static com.kaisar.xposed.godmode.engine.util.FileUtils.S_IRWXO;
 import static com.kaisar.xposed.godmode.engine.util.FileUtils.S_IRWXU;
+import static com.kaisar.xposed.godmode.engine.util.GmConstants.DATA_DIR;
 
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
-import android.os.Environment;
 import android.os.Handler;
 import android.os.Message;
 
@@ -36,8 +36,7 @@ import java.util.Map;
 final class RulePersistManager {
 
     // /data/misc/godmode
-    private static final String BASE_DIR = String.format("%s/misc/%s",
-            Environment.getDataDirectory().getAbsolutePath(), "godmode");
+    private static final String BASE_DIR = DATA_DIR;
     // /data/misc/godmode/{package}/package.rule
     static final String RULE_FILE_SUFFIX = ".rule";
     // /data/misc/godmode/{package}/xxxxxxxxx.webp

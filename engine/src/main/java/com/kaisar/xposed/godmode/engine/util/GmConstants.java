@@ -15,4 +15,7 @@ public final class GmConstants {
 
     /** 可重复匹配视图的最大结果数限制，防止 RecyclerView 等大量匹配时 OOM */
     public static final int MAX_REPEATABLE_RESULTS = 50;
+
+    /** GodMode 数据根目录（运行于 system_server 进程，需 SELinux 可访问） */
+    public static final String DATA_DIR = "/data/misc/godmode";
 }

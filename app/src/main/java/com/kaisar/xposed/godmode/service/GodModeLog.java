@@ -1,7 +1,8 @@
 package com.kaisar.xposed.godmode.service;
 
-import android.os.Environment;
 import android.util.Log;
+
+import com.kaisar.xposed.godmode.engine.util.GmConstants;
 
 import java.io.BufferedWriter;
 import java.io.File;
@@ -30,9 +31,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 final class GodModeLog {
 
     private static final String TAG = "GodModeLog";
-    private static final File sLogFile = new File(
-            Environment.getDataDirectory().getAbsolutePath() + "/misc/godmode",
-            "godmodepro.log");
+    private static final File sLogFile = new File(GmConstants.DATA_DIR, "godmodepro.log");
 
     private static final long MAX_SIZE = 2 * 1024 * 1024; // 2MB
     private static final int MAX_FILES = 3;
