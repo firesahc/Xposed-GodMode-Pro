@@ -39,7 +39,7 @@ public final class RuleRecordFactory {
      * @return 构造完成的 RuleRecord
      * @throws PackageManager.NameNotFoundException 无法获取包信息时抛出
      */
-    public static RuleRecord makeRule(View v) throws PackageManager.NameNotFoundException {
+    static RuleRecord makeRule(View v) throws PackageManager.NameNotFoundException {
         Activity activity = ViewUtils.getAttachedActivityFromView(v);
         Objects.requireNonNull(activity, "Can't found attached activity");
         int[] out = new int[2];

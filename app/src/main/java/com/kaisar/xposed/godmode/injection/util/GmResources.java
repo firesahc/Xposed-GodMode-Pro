@@ -29,10 +29,6 @@ public final class GmResources {
         return sModuleRes.getString(id, formatArgs);
     }
 
-    public static int getColor(int id) throws Resources.NotFoundException {
-        return sModuleRes.getColor(id);
-    }
-
     public static android.graphics.drawable.Drawable getDrawable(int id) throws Resources.NotFoundException {
         return sModuleRes.getDrawable(id);
     }

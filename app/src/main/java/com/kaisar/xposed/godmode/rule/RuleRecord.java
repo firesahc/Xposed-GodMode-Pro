@@ -375,9 +375,6 @@ public final class RuleRecord implements RuleFields, Parcelable, Cloneable {
     public boolean isPositionModified() { return modXOffset != 0 || modYOffset != 0; }
     public boolean isTextModified() { return modText != null; }
     public boolean isImageModified() { return modImagePath != null; }
-    /** @deprecated 使用 {@link #isRepeatable()} 替代 */
-    @Deprecated public boolean isRepeatableRule() { return repeatable; }
-
     public boolean hasModifications() {
         return isWidthModified() || isHeightModified() || isAlphaModified()
                 || isPositionModified() || isTextModified() || isImageModified();

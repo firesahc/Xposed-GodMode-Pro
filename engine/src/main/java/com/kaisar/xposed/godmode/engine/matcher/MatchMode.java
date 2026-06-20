@@ -24,11 +24,4 @@ public enum MatchMode {
     /** 正则表达式匹配，Pattern.matches(value, target) */
     REGEX;
 
-    /**
-     * 判断此模式是否需要目标值（value）非空。
-     * REGEX 模式下空字符串视为"不匹配"。
-     */
-    public boolean requiresValue() {
-        return this != EXACT;
-    }
 }

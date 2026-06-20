@@ -21,10 +21,4 @@ public final class EditorInteractionMode {
     public static final int MODIFY = 2;
 
     private EditorInteractionMode() {}
-
-    /** 交互模式变更监听器。 */
-    public interface OnModeChangeListener {
-        /** 当交互模式发生变更时回调。 */
-        void onModeChanged(@Mode int mode);
-    }
 }

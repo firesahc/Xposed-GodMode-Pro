@@ -60,8 +60,6 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
 
     private static final String TAG = "EditorOrchestrator";
     private static final int OVERLAY_COLOR = Color.argb(150, 255, 0, 0);
-    @SuppressWarnings("unused")
-    private static final int OVERLAY_COLOR_REPEATABLE = Color.argb(150, 255, 165, 0);
     private static final int LONG_PRESS_TIMEOUT = ViewConfiguration.getLongPressTimeout();
 
     // =========================================================================

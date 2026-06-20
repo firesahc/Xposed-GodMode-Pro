@@ -83,20 +83,4 @@ public final class ActionSpec {
         return spec;
     }
 
-    /**
-     * 使用当前修改规则的值覆盖 target 的同名字段（仅覆盖已修改的维度）。
-     * 用于从一个 ActionSpec 合并到另一个。
-     */
-    public void mergeInto(ActionSpec target) {
-        if (target == null) return;
-        if (isWidthModified()) target.modWidth = modWidth;
-        if (isHeightModified()) target.modHeight = modHeight;
-        if (isAlphaModified()) target.modAlpha = modAlpha;
-        if (isPositionModified()) {
-            target.modXOffset = modXOffset;
-            target.modYOffset = modYOffset;
-        }
-        if (isTextModified()) target.modText = modText;
-        if (isImageModified()) target.modImagePath = modImagePath;
-    }
 }

@@ -9,29 +9,7 @@ import android.view.ViewGroup;
  */
 public final class ViewSnapper {
 
-    /** 默认网格间距 (dp) */
-    public static final int GRID_SIZE_DP = 16;
-
-    /** 边缘吸附阈值 (dp) */
-    public static final int EDGE_SNAP_THRESHOLD_DP = 12;
-
     private ViewSnapper() {}
-
-    /**
-     * 对边距进行网格吸附。
-     * @param margin 原始边距值 (px)
-     * @param gridSizePx 网格大小 (px)
-     * @return 吸附后的边距值
-     */
-    public static int snapToGrid(int margin, int gridSizePx) {
-        if (gridSizePx <= 0) return margin;
-        int remainder = margin % gridSizePx;
-        if (remainder < gridSizePx / 2) {
-            return margin - remainder;
-        } else {
-            return margin + (gridSizePx - remainder);
-        }
-    }
 
     /**
      * 将目标边距吸附到兄弟视图边缘。
@@ -83,11 +61,4 @@ public final class ViewSnapper {
         return new int[]{snappedX, snappedY};
     }
 
-    /**
-     * 将 dp 值转换为当前密度的 px 值。
-     */
-    public static int dpToPx(View view, int dp) {
-        float density = view.getContext().getResources().getDisplayMetrics().density;
-        return (int) (dp * density + 0.5f);
-    }
 }

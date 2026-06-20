@@ -76,7 +76,6 @@ public final class ParticleView extends View implements OverlayWidget {
                     location[1] + view.getMeasuredHeight());
             Bitmap cacheBitmap = getCacheBitmapFromView(view);
             mParticles = Particle.generateParticles(cacheBitmap, rect);
-            cacheBitmap.recycle();
             mParticleAnimator = ValueAnimator.ofFloat(0.0f, 1.0f);
             mParticleAnimator.setDuration(duration);
             mParticleAnimator.addListener(new AnimatorListenerAdapter() {
