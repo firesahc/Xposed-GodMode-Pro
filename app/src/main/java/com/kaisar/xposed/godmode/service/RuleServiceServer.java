@@ -14,8 +14,6 @@ import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.AppRules;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 
-import android.os.Environment;
-
 import java.io.File;
 import java.io.FileNotFoundException;
 
@@ -54,8 +52,10 @@ public final class RuleServiceServer extends IGodModeManager.Stub {
         mCacheManager = new RuleCacheManager(mGson, Logger.getLogger("RuleCacheManager"));
         mOrchestrator = new WorkflowOrchestrator(mGson, Logger.getLogger("WorkflowOrchestrator"), mCacheManager,
                 items -> mToolbarHiddenItems = items);
-        // 在 system_server 进程启用文件日志（可写 /data/misc）
-        Logger.enableFileLog(Environment.getDataDirectory().getAbsolutePath() + "/misc/godmode");
+        // 将 system_server 自身日志也汇入统一日志文件 godmodepro.log
+        Logger.setWriter((level, tag, msg, timestamp) -> {
+            GodModeLog.write(level, "system_server", tag, msg, timestamp);
+        });
         mStarted = true;
         mLogger.i("GMMService started, loading rules from /data/misc/godmode");
     }
@@ -215,6 +215,17 @@ public final class RuleServiceServer extends IGodModeManager.Stub {
         mPermissionEnforcer.enforcePermission("set toolbar prefs fail permission denied");
         mToolbarHiddenItems = items != null ? items : "";
         mOrchestrator.persistToolbarHiddenItems(mToolbarHiddenItems);
+    }
+
+    // ---- 日志转发 ----
+
+    @Override
+    public void log(int level, String packageName, long timestamp, String tag, String msg)
+            throws RemoteException {
+        mPermissionEnforcer.enforcePermission(
+                new String[]{packageName, BuildConfig.APPLICATION_ID},
+                "log forward fail permission denied");
+        GodModeLog.write(level, packageName, tag, msg, timestamp);
     }
 
     /** 关闭服务，释放工作线程资源。 */

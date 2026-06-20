@@ -9,6 +9,7 @@ import android.os.RemoteException;
 import com.kaisar.xposed.godmode.IGodModeManager;
 import com.kaisar.xposed.godmode.IObserver;
 import com.kaisar.xposed.godmode.engine.util.Logger;
+import com.kaisar.xposed.godmode.injection.HookLauncher;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.AppRules;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
@@ -233,6 +234,28 @@ public final class RuleServiceClient {
             ensureService().setToolbarHiddenItems(items);
         } catch (RemoteException e) {
             logError("setToolbarHiddenItems", e);
+        }
+    }
+
+    // ---- 日志转发（Logger.Writer 回调）----
+
+    /**
+     * 通过 IPC 向 system_server 转发一条日志。
+     * 此方法仅供 {@link com.kaisar.xposed.godmode.engine.util.Logger.Writer} 使用，
+     * 内部直接用 android.util.Log 处理异常，避免通过 Logger 导致无限递归。
+     */
+    public void forwardLog(int level, String tag, String msg, long timestamp) {
+        try {
+            ensureService().log(level,
+                    HookLauncher.loadPackageParam != null
+                            ? HookLauncher.loadPackageParam.packageName
+                            : "unknown",
+                    timestamp,
+                    tag, msg);
+        } catch (RemoteException e) {
+            android.util.Log.w(TAG, "forwardLog IPC failed: " + e.getMessage());
+        } catch (Throwable t) {
+            android.util.Log.w(TAG, "forwardLog unexpected error", t);
         }
     }
 }
