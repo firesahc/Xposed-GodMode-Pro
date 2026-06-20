@@ -40,7 +40,7 @@ dependencies {
     implementation libs.androidx.viewpager2
     implementation libs.androidx.fragment
     implementation libs.androidx.preference
-    compileOnly fileTree(include: ['*.jar'], dir: 'src/main/lib')
+    compileOnly files("${rootProject.projectDir}/libs/xposed-api-89.jar")
     implementation libs.gson
     implementation libs.material
     implementation libs.glide
