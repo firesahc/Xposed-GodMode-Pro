@@ -218,9 +218,15 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
 
     public void setDisplay(Boolean display) {
         Activity act = mCurrentActivityRef.get();
-        if (act == null) return;
+        if (act == null) {
+            Logger.w(TAG, "[EditorOrchestrator] setDisplay(" + display + ") ignored — no current activity");
+            return;
+        }
         if (display == null) return;
-        if (display && !mSwitchProp.get()) return;
+        if (display && !mSwitchProp.get()) {
+            Logger.w(TAG, "[EditorOrchestrator] setDisplay(true) ignored — edit mode switch is off");
+            return;
+        }
         if (display) {
             if (!mNodePanel.isKeySelecting()) {
                 showNodeSelectPanel(act);

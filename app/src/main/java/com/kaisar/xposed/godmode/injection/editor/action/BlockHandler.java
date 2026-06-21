@@ -64,6 +64,7 @@ public final class BlockHandler {
     public static void execute(final Activity activity, final View view,
             final ViewGroup container, final Bitmap snapshot,
             final int blockedViewIndex, final OnBlockListener listener) {
+        Logger.i(TAG, "execute: blocking " + view + " in " + activity.getPackageName());
         try {
             final RuleRecord viewRule = RuleRecordFactory.makeRemoveRule(view);
             final ParticleView particleView = new ParticleView(activity);
@@ -104,6 +105,7 @@ public final class BlockHandler {
                 }
             });
             particleView.boom(view);
+            Logger.d(TAG, "execute: particle animation started for " + activity.getPackageName());
         } catch (Exception e) {
             Logger.e(TAG, "execute fail", e);
             if (listener != null) {

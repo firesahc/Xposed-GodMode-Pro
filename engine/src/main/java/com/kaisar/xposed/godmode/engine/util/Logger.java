@@ -115,6 +115,8 @@ public final class Logger {
 
     public void d(String message) { d(mName, message); }
     public void i(String message) { i(mName, message); }
+    public void w(String message) { w(mName, message); }
     public void w(String message, Throwable tr) { w(mName, message, tr); }
+    public void e(String message) { e(mName, message); }
     public void e(String message, Throwable tr) { e(mName, message, tr); }
 }

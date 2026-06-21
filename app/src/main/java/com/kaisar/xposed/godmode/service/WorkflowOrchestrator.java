@@ -340,6 +340,7 @@ final class WorkflowOrchestrator implements Handler.Callback {
                     }
                 }
                 scheduleOrphanCleanup();
+                mLogger.d("write rule: snapshot persist complete for " + m.packageName);
             } catch (Exception e) {
                 mLogger.w("write rule: persist after snapshot failed", e);
             }
@@ -349,6 +350,7 @@ final class WorkflowOrchestrator implements Handler.Callback {
                 mObserverManager.notifyObserverRuleChanged(m.packageName, m.snapshotRules);
                 mPersistManager.safePersistRules(m.packageName, m.json);
                 scheduleOrphanCleanup();
+                mLogger.d("write rule: json persist complete for " + m.packageName);
             } catch (Exception e) {
                 mLogger.w("write rule: persist failed", e);
             }
@@ -369,6 +371,7 @@ final class WorkflowOrchestrator implements Handler.Callback {
                 }
             }
             scheduleOrphanCleanup();
+            mLogger.d("delete rule: complete for " + m.packageName);
         } catch (Exception e) {
             mLogger.w("delete rule failed", e);
         }

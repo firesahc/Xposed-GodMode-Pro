@@ -111,6 +111,7 @@ public final class HookLauncher implements IXposedHookLoadPackage, IXposedHookZy
 
         if ("android".equals(packageName)) {
             HookLauncher.loadPackageParam = lpp;
+            Logger.i(TAG, "[GodMode] injecting RuleServiceServer into system_server");
             bootstrapSystemService();
             return;
         }

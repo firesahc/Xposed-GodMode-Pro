@@ -137,6 +137,7 @@ final class RulePersistManager {
         synchronized (mPendingWrites) {
             mPendingWrites.remove(packageName);
         }
+        mLogger.d("persisted rules for " + packageName);
     }
 
     static final int MSG_DEBOUNCE_WRITE = 0x1000;
@@ -268,7 +269,8 @@ final class RulePersistManager {
             FileUtils.setPermissions(dir, S_IRWXU | S_IRWXG | S_IRWXO, -1, -1);
             return dir.getAbsolutePath();
         }
-        throw new FileNotFoundException();
+        mLogger.e("getAppDataDir: failed to create dir for " + packageName + " at " + dir.getAbsolutePath());
+        throw new FileNotFoundException("Cannot create app data dir: " + dir.getAbsolutePath());
     }
 
     String getAppRuleFilePath(String packageName) throws IOException {

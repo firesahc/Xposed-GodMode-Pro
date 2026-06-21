@@ -75,7 +75,7 @@ public final class RuleServiceServer extends IGodModeManager.Stub {
     @Override
     public void setEditMode(boolean enable) throws RemoteException {
         mPermissionEnforcer.enforcePermission("set edit mode fail permission denied");
-        if (!mStarted) return;
+        if (!mStarted) { mLogger.w("setEditMode ignored — service not started"); return; }
         mLogger.d("setEditMode: " + enable);
         mInEditMode = enable;
         mOrchestrator.notifyEditModeChanged(enable);
@@ -95,7 +95,7 @@ public final class RuleServiceServer extends IGodModeManager.Stub {
         mPermissionEnforcer.enforcePermission(
                 new String[]{packageName, BuildConfig.APPLICATION_ID},
                 "register observer fail permission denied");
-        if (!mStarted) return;
+        if (!mStarted) { mLogger.w("addObserver(" + packageName + ") ignored — service not started"); return; }
         ActRules rules = mCacheManager.getRules(packageName);
         mOrchestrator.addObserver(packageName, observer, mInEditMode, rules);
     }
@@ -106,7 +106,7 @@ public final class RuleServiceServer extends IGodModeManager.Stub {
         mPermissionEnforcer.enforcePermission(
                 new String[]{packageName, BuildConfig.APPLICATION_ID},
                 "unregister observer fail permission denied");
-        if (!mStarted) return;
+        if (!mStarted) { mLogger.w("removeObserver(" + packageName + ") ignored — service not started"); return; }
         mOrchestrator.removeObserver(packageName, observer);
     }
 
@@ -136,14 +136,14 @@ public final class RuleServiceServer extends IGodModeManager.Stub {
         mPermissionEnforcer.enforcePermission(
                 new String[]{packageName, BuildConfig.APPLICATION_ID},
                 "write rule fail permission denied");
-        if (!mStarted) return false;
+        if (!mStarted) { mLogger.w("writeRule(" + packageName + ") ignored — service not started"); return false; }
         return mOrchestrator.writeRuleAsync(packageName, viewRule, snapshot);
     }
 
     @Override
     public boolean updateRule(String packageName, RuleRecord viewRule) throws RemoteException {
         mPermissionEnforcer.enforcePermission("update rule fail permission denied");
-        if (!mStarted) return false;
+        if (!mStarted) { mLogger.w("updateRule(" + packageName + ") ignored — service not started"); return false; }
         return mOrchestrator.updateRuleAsync(packageName, viewRule);
     }
 
@@ -152,14 +152,14 @@ public final class RuleServiceServer extends IGodModeManager.Stub {
     @Override
     public boolean deleteRule(String packageName, RuleRecord viewRule) throws RemoteException {
         mPermissionEnforcer.enforcePermission("delete rule fail permission denied");
-        if (!mStarted) return false;
+        if (!mStarted) { mLogger.w("deleteRule(" + packageName + ") ignored — service not started"); return false; }
         return mOrchestrator.deleteRuleAsync(packageName, viewRule);
     }
 
     @Override
     public boolean deleteRules(String packageName) throws RemoteException {
         mPermissionEnforcer.enforcePermission("delete rules fail permission denied");
-        if (!mStarted) return false;
+        if (!mStarted) { mLogger.w("deleteRules(" + packageName + ") ignored — service not started"); return false; }
         return mOrchestrator.deleteRulesAsync(packageName);
     }
 
@@ -170,7 +170,11 @@ public final class RuleServiceServer extends IGodModeManager.Stub {
         mPermissionEnforcer.enforcePermission(
                 new String[]{packageName, BuildConfig.APPLICATION_ID},
                 "save image fail permission denied");
-        if (!mStarted || bitmap == null || bitmap.isRecycled()) return null;
+        if (!mStarted || bitmap == null || bitmap.isRecycled()) {
+            if (!mStarted) mLogger.w("saveImageFile(" + packageName + ") ignored — service not started");
+            else mLogger.w("saveImageFile(" + packageName + ") ignored — bitmap invalid");
+            return null;
+        }
         try {
             return mOrchestrator.saveBitmap(bitmap,
                 mOrchestrator.getAppDataDir(packageName));
