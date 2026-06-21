@@ -44,7 +44,6 @@ public final class RemoveApplier implements RuleApplier {
                     lp.height = viewProperty.layoutParamsHeight;
                     break;
             }
-            view.requestLayout();
         }
         ViewCompat.setVisibility(view, spec.visibility);
         mBlockedViewCache.put(cacheKey, Pair.create(

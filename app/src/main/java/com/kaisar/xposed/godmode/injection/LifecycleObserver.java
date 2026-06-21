@@ -158,12 +158,13 @@ public final class LifecycleObserver extends XC_MethodHook {
             }
         }
 
-        // 注意：applyRuleBatch 对每个 Activity 应用规则，但不保证立即生效
-        // 对于动态内容（如 RecyclerView、Fragment），布局可能在应用后发生变化
-        // 因此通过 onGlobalLayout 监听 UI 布局变化后重新调度规则
-        // scheduleRuleReapplication 使用 200ms 防抖延迟，避免频繁重新应用
-        for (Activity activity : mActivities.keySet()) {
-            scheduleRuleReapplication(activity);
+        // 仅对有规则的 Activity 调度重应用，避免对所有存活 Activity 无谓排程
+        for (Map.Entry<String, List<RuleRecord>> entry : mActRules.entrySet()) {
+            for (Activity activity : mActivities.keySet()) {
+                if (TextUtils.equals(activity.getComponentName().getClassName(), entry.getKey())) {
+                    scheduleRuleReapplication(activity);
+                }
+            }
         }
     }
 
@@ -190,8 +191,13 @@ public final class LifecycleObserver extends XC_MethodHook {
                 @Override
                 protected void afterHookedMethod(MethodHookParam param) {
                     if (mActRules.isEmpty()) return; // 没有活跃规则时跳过
-                    for (Activity act : mActivities.keySet()) {
-                        if (act != null && !act.isFinishing()) scheduleRuleReapplication(act);
+                    for (Map.Entry<String, List<RuleRecord>> entry : mActRules.entrySet()) {
+                        for (Activity act : mActivities.keySet()) {
+                            if (act != null && !act.isFinishing()
+                                    && TextUtils.equals(act.getComponentName().getClassName(), entry.getKey())) {
+                                scheduleRuleReapplication(act);
+                            }
+                        }
                     }
                 }
             });
@@ -223,6 +229,8 @@ public final class LifecycleObserver extends XC_MethodHook {
         List<RuleRecord> rules = mActRules.get(activity.getComponentName().getClassName());
         if (rules == null || rules.isEmpty()) return;
 
+        OnLayoutChangeListener listener = mActivities.get(activity);
+
         for (RuleRecord rule : rules) {
             if (!rule.isRepeatable()) continue;
             try {
@@ -237,6 +245,7 @@ public final class LifecycleObserver extends XC_MethodHook {
                     // CARD 模式：将卡片根传给 applyRule，由 resolveCardTarget
                     // 负责唯一的 itemPath 导航，避免在此处重复导航。
                     ViewController.getDefault().applyRule(itemRoot, rule);
+                    if (listener != null) listener.mSelfTriggeredLayout = true;
                     continue;
                 }
 
@@ -248,6 +257,7 @@ public final class LifecycleObserver extends XC_MethodHook {
                 }
                 if (matched != null && CompositeMatcher.isStructuralMatch(matched, spec, false)) {
                     ViewController.getDefault().applyRule(matched, rule);
+                    if (listener != null) listener.mSelfTriggeredLayout = true;
                 }
             } catch (Throwable t) {
                 Logger.w(TAG, "[Lifecycle] apply bound item rule failed", t);
@@ -258,7 +268,8 @@ public final class LifecycleObserver extends XC_MethodHook {
     final class OnLayoutChangeListener implements ViewTreeObserver.OnGlobalLayoutListener {
 
         final WeakReference<Activity> activityReference;
-        private volatile boolean mApplying; // 防止重复应用
+        private volatile boolean mApplying; // 同步守卫：同一调用链内防止重入
+        volatile boolean mSelfTriggeredLayout; // 异步守卫：跳过任何规则应用自身触发的 onGlobalLayout
 
         OnLayoutChangeListener(Activity activity) {
             activityReference = new WeakReference<>(activity);
@@ -266,25 +277,37 @@ public final class LifecycleObserver extends XC_MethodHook {
 
         @Override
         public void onGlobalLayout() {
-            if (mApplying) return; // 正在应用规则中，跳过本次布局回调
+            if (mApplying) return;
+            if (mSelfTriggeredLayout) {
+                // 此布局由规则应用（bindViewHolder 或 applyRuleBatch）自身触发——
+                // 规则已在应用阶段精确处理，无需再执行全树扫描。
+                mSelfTriggeredLayout = false;
+                return;
+            }
             applyRuleIfMatchCondition();
         }
 
         void applyRuleIfMatchCondition() {
             if (mApplying) return;
             mApplying = true;
+            // 标记下一次 onGlobalLayout 为"自身触发"——applyRuleBatch 内部修改 View
+            // 属性后将触发 requestLayout()，对应的 onGlobalLayout 回调应被跳过，
+            // 避免无意义的全树扫描反馈循环。
+            mSelfTriggeredLayout = true;
             try {
                 Activity activity = Preconditions.checkNotNull(activityReference.get());
                 List<RuleRecord> rules = mActRules.get(activity.getComponentName().getClassName());
                 if (rules != null && !rules.isEmpty()) {
-                    // 异步匹配 + 应用，完成后重置 mApplying 防止重复进入
-                    ViewController.getDefault().applyRuleBatch(activity, rules, () -> mApplying = false);
+                    ViewController.getDefault().applyRuleBatch(activity, rules,
+                            () -> mApplying = false);
                 } else {
                     mApplying = false;
+                    mSelfTriggeredLayout = false;
                 }
             } catch (Exception e) {
                 Logger.w(TAG, "[Lifecycle] OnLayoutChange: applyRuleIfMatchCondition failed: " + e.getMessage());
                 mApplying = false;
+                mSelfTriggeredLayout = false;
             }
         }
 
