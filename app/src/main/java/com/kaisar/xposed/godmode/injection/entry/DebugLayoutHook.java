@@ -42,7 +42,7 @@ public final class DebugLayoutHook {
         } catch (Throwable e) {
             Logger.e(TAG, "[DebugLayout] Hook debug draw suppression error (non-fatal)", e);
         }
-        Logger.i(TAG, String.format("[DebugLayout] install result: modern=%b suppress=%b",
+        Logger.d(TAG, String.format("[DebugLayout] install result: modern=%b suppress=%b",
                 modernOk, suppressOk));
     }
 

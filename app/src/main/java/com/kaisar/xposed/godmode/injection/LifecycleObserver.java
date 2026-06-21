@@ -63,7 +63,6 @@ public final class LifecycleObserver extends XC_MethodHook {
                 scheduleRuleReapplication(activity);
             }
             installRecyclerViewHooks(activity);
-            Logger.d(TAG, "[Lifecycle] resume: " + activity.getClass().getSimpleName() + " (total=" + mActivities.size() + ")");
         } else if ("onDestroy".equals(methodName)) {
             OnLayoutChangeListener listener = mActivities.remove(activity);
             removeLayoutListener(activity, listener);
@@ -71,7 +70,6 @@ public final class LifecycleObserver extends XC_MethodHook {
                 Runnable r = mPendingReapply.remove(activity);
                 if (r != null) mDebounceHandler.removeCallbacks(r);
             }
-            Logger.d(TAG, "[Lifecycle] destroy: " + activity.getClass().getSimpleName() + " (total=" + mActivities.size() + ")");
         }
     }
 

@@ -76,7 +76,7 @@ public final class RuleServiceServer extends IGodModeManager.Stub {
     public void setEditMode(boolean enable) throws RemoteException {
         mPermissionEnforcer.enforcePermission("set edit mode fail permission denied");
         if (!mStarted) return;
-        mLogger.i("setEditMode: " + enable);
+        mLogger.d("setEditMode: " + enable);
         mInEditMode = enable;
         mOrchestrator.notifyEditModeChanged(enable);
     }

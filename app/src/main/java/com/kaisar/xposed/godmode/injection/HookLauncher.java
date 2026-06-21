@@ -127,12 +127,12 @@ public final class HookLauncher implements IXposedHookLoadPackage, IXposedHookZy
                                                      String packageName) {
         String processName = lpp.processName;
         if (!TextUtils.equals(packageName, processName)) {
-            Logger.i(TAG, "[GodMode] skip non-main process: pkg=" + packageName
+            Logger.d(TAG, "[GodMode] skip non-main process: pkg=" + packageName
                     + " process=" + processName);
             return false;
         }
         if (BlockListChecker.isBlocked(packageName)) {
-            Logger.i(TAG, "[GodMode] skip blocked package before hooks: " + packageName);
+            Logger.d(TAG, "[GodMode] skip blocked package before hooks: " + packageName);
             return false;
         }
         return true;
@@ -161,12 +161,11 @@ public final class HookLauncher implements IXposedHookLoadPackage, IXposedHookZy
         Logger.setWriter((level, tag, msg, timestamp) -> {
             RuleServiceClient.getDefault().forwardLog(level, tag, msg, timestamp);
         });
-        Logger.i(TAG, "[GodMode] inject into app: " + packageName);
+        Logger.d(TAG, "[GodMode] inject into app: " + packageName);
         hookActivityOnResume();
         hookActivityOnCreate();
         registerHooks();
         registerObserver(packageName);
-        Logger.d(TAG, "[GodMode] injection complete for: " + packageName);
     }
 
     /** Hook Activity.onResume 用于记录 mCurrentActivity 引用，方便后续获取当前 Activity */
@@ -197,7 +196,6 @@ public final class HookLauncher implements IXposedHookLoadPackage, IXposedHookZy
 
     /** 注册各类 Hook — 生命周期观察者、调试布局、触摸事件和按键事件 */
     private void registerHooks() {
-        Logger.d(TAG, "[GodMode] registering hooks...");
         // Activity 生命周期 Hook — 监听 Activity 的 onPostResume 和 onDestroy 事件，
         // 由 LifecycleObserver 统一处理，通过 EventBus 接收规则变更通知
         LifecycleObserver lifecycleObserver = new LifecycleObserver();
@@ -223,7 +221,6 @@ public final class HookLauncher implements IXposedHookLoadPackage, IXposedHookZy
     /** 注册 IPC 观察者 — 监听来自系统服务的规则变更通知并推送给编辑器 */
     private void registerObserver(String packageName) {
         RuleServiceClient gmManager = RuleServiceClient.getDefault();
-        Logger.d(TAG, "[GodMode] registering observer for: " + packageName);
         // addObserver 通过 IPC 注册回调，当规则变更时推送 EditModeChanged + onViewRuleChanged
         // 通过 switchProp / actRuleProp 分发状态；BLOCKED 状态的应用阻止编辑模式启动
         gmManager.addObserver(packageName, new ServiceObserver());

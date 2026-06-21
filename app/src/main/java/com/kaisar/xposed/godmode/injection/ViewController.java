@@ -184,9 +184,6 @@ public final class ViewController {
                 Logger.w(TAG, "[ViewController] apply rule failed", e);
             }
         }
-        if (applied > 0) {
-            Logger.d(TAG, "[ViewController] applied " + applied + " rules for " + activity);
-        }
         if (onComplete != null) onComplete.run();
     }
 

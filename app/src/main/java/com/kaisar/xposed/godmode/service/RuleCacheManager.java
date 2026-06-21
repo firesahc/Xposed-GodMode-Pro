@@ -53,7 +53,6 @@ final class RuleCacheManager {
         synchronized (mAppRulesCache) {
             mAppRulesCache.putAll(appRules);
         }
-        mLogger.d("app rules cache=" + mAppRulesCache.size());
     }
 
     int size() {

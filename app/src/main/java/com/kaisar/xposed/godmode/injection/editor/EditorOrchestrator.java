@@ -341,7 +341,6 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
                         mNodePanel.getSelectedView(), () -> updatePreviewButton(false));
             }
             final View view = mNodePanel.getSelectedView();
-            Logger.d(TAG, "[KeyEventHook] block view = " + view);
             if (view == null) return;
             MaskView maskView = mNodePanel.getMaskView();
             if (maskView != null) maskView.updateOverlayBounds(new Rect());
@@ -581,7 +580,6 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     public void onPropertyChange(Boolean enable) {
         if (enable == null) return;
         mIsInEditMode = enable;
-        Logger.d(TAG, "[EditorOrchestrator] edit mode: " + enable);
         if (!enable) {
             mInteractionMode = EditorInteractionMode.INITIAL;
             getHandler().removeCallbacksAndMessages(null);

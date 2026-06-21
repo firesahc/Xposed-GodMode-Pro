@@ -53,7 +53,6 @@ final class ObserverRegistry {
                 HashMap<IBinder, ObserverProxy> packageObservers =
                         mRegisteredObserverMap.computeIfAbsent(packageName, k -> new HashMap<>());
                 if (packageObservers.containsKey(binder)) {
-                    mLogger.d("observer already registered for: " + packageName);
                     return;
                 }
                 ObserverProxy proxy = new ObserverProxy(packageName, observer);
