@@ -78,6 +78,13 @@ final class GodModeLog {
                 sWriter.flush();
             } catch (Exception e) {
                 Log.w(TAG, "Failed to write: " + e.getMessage());
+                // 写失败后强制重建 Writer，防止级联失败
+                sEnsured = false;
+                BufferedWriter old = sWriter;
+                sWriter = null;
+                if (old != null) {
+                    try { old.close(); } catch (IOException ignored) {}
+                }
             }
         });
     }

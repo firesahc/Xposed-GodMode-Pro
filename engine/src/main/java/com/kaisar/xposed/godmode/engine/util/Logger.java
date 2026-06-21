@@ -20,7 +20,7 @@ public final class Logger {
      *   <li>system_server：实现为直接调用 {@code GodModeLog.write()}，写入 godmodepro.log</li>
      *   <li>应用进程：实现为 IPC 调用，将日志发送给 system_server 统一写入</li>
      * </ul>
-     * 实现方负责自身的异步调度，Logger 在本线程同步调用 writer。
+     * 实现方不需要自行处理异步，Logger 统一通过单线程 Executor 派发。
      */
     @FunctionalInterface
     public interface Writer {
