@@ -13,6 +13,7 @@ import com.kaisar.xposed.godmode.engine.matcher.ViewTraversal;
 import com.kaisar.xposed.godmode.engine.event.RulesChangedEvent;
 import com.kaisar.xposed.godmode.engine.event.Subscribe;
 import com.kaisar.xposed.godmode.engine.rule.MatchSpec;
+import com.kaisar.xposed.godmode.engine.rule.MatchFields;
 import com.kaisar.xposed.godmode.engine.rule.RuleMapper;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.engine.util.Preconditions;
@@ -54,6 +55,7 @@ public final class LifecycleObserver extends XC_MethodHook {
     private static final long REAPPLY_DEBOUNCE_MS = 50L;
 
     private final WeakHashMap<Activity, OnLayoutChangeListener> mActivities = new WeakHashMap<>();
+    private final WeakHashMap<Activity, ViewController> mViewControllers = new WeakHashMap<>();
     private final ActRules mActRules = new ActRules();
     private final Handler mDebounceHandler = new Handler(Looper.getMainLooper());
     private final Map<Activity, Runnable> mPendingReapply = new WeakHashMap<>();
@@ -85,12 +87,21 @@ public final class LifecycleObserver extends XC_MethodHook {
             decorView.post(listener::applyRuleIfMatchCondition);
             scheduleRuleReapplication(activity);
         }
+        // Activity 级 ViewController（缓存隔离）
+        if (!mViewControllers.containsKey(activity)) {
+            mViewControllers.put(activity, new ViewController(activity));
+        }
         installRecyclerViewHooks(activity);
     }
 
     private void onActivityDestroy(Activity activity) {
         OnLayoutChangeListener listener = mActivities.remove(activity);
         removeLayoutListener(activity, listener);
+        // 清理 Activity 级 ViewController 及其 Applier 缓存
+        ViewController vc = mViewControllers.remove(activity);
+        if (vc != null) {
+            vc.clearBlockedCache();
+        }
         synchronized (mPendingReapply) {
             Runnable r = mPendingReapply.remove(activity);
             if (r != null) mDebounceHandler.removeCallbacks(r);
@@ -122,8 +133,33 @@ public final class LifecycleObserver extends XC_MethodHook {
     }
 
     // =========================================================================
-    // 规则变更处理（EventBus 订阅）
+    // ViewController 辅助方法
     // =========================================================================
+
+    /**
+     * 获取指定 Activity 的 ViewController 实例。
+     * <p>
+     * 优先返回 Activity 级实例（缓存隔离），
+     * 不存在时回退到进程级单例（向后兼容）。
+     */
+    private ViewController getViewControllerFor(Activity activity) {
+        ViewController vc = mViewControllers.get(activity);
+        return vc != null ? vc : ViewController.getDefault();
+    }
+
+    /**
+     * 遍历所有 Activity 级 ViewController 清空 Applier 缓存。
+     * <p>
+     * 用于 notifyDataSetChanged Hook——RecyclerView 数据变更后
+     * 需要清空所有 Activity 的缓存（ViewHolder 被重新绑定后旧缓存失效）。
+     */
+    private void clearAllViewControllersCache() {
+        for (ViewController vc : mViewControllers.values()) {
+            if (vc != null) vc.clearBlockedCache();
+        }
+        // 同时清空进程级单例缓存（向后兼容）
+        ViewController.getDefault().clearBlockedCache();
+    }
 
     /**
      * 接收规则变更事件，通过 EventBus 订阅。
@@ -136,10 +172,9 @@ public final class LifecycleObserver extends XC_MethodHook {
      *   <li>防抖重应用 — 50ms 延迟确保布局稳定</li>
      * </ol>
      */
-    @SuppressWarnings("unchecked")
     @Subscribe
     public void onRulesChanged(RulesChangedEvent event) {
-        ActRules newRules = (ActRules) event.rules;
+        ActRules newRules = toActRules(event.rules);
         if (newRules == null || newRules.equals(mActRules)) return;
 
         // Step 1: 撤销被删除/修改的旧规则（必须在 clearBlockedCache 之前）
@@ -148,8 +183,8 @@ public final class LifecycleObserver extends XC_MethodHook {
             revokeRulesForActivities(toRevoke);
         }
 
-        // Step 2: 清除 RemoveApplier/ModifyApplier 缓存
-        ViewController.getDefault().clearBlockedCache();
+        // Step 2: 清除所有 Activity 级 ViewController 的 Applier 缓存
+        clearAllViewControllersCache();
 
         // Step 3: 替换规则集并应用新规则
         mActRules.clear();
@@ -158,6 +193,21 @@ public final class LifecycleObserver extends XC_MethodHook {
 
         // Step 4: 防抖重应用（仅对受影响的 Activity）
         scheduleReapplyForActivities(newRules);
+    }
+
+    // =========================================================================
+    // 强制转型辅助（engine 层无法引用 app 层的 RuleRecord 类型，转型不可避免）
+    // =========================================================================
+
+    /**
+     * 将 engine 层 {@code Map<String, ?>} 安全转型为 app 层 {@link ActRules}。
+     * <p>
+     * 架构限制：RulesChangedEvent 位于 engine 层，无法声明 {@code Map<String, List<RuleRecord>>} 泛型。
+     * 此方法将强制转型集中封装，并附加类型检查。
+     */
+    @SuppressWarnings("unchecked")
+    private static ActRules toActRules(Map<String, ?> rules) {
+        return (rules instanceof ActRules) ? (ActRules) rules : new ActRules();
     }
 
     /**
@@ -192,15 +242,15 @@ public final class LifecycleObserver extends XC_MethodHook {
                 if (r.isModifyRule()) revModify.add(r);
                 else revRemove.add(r);
             }
-            if (!revRemove.isEmpty()) ViewController.getDefault().revokeRuleBatch(activity, revRemove);
-            if (!revModify.isEmpty()) ViewController.getDefault().revokeRuleBatch(activity, revModify);
+            if (!revRemove.isEmpty()) getViewControllerFor(activity).revokeRuleBatch(activity, revRemove);
+            if (!revModify.isEmpty()) getViewControllerFor(activity).revokeRuleBatch(activity, revModify);
         });
     }
 
     private void applyRulesForActivities(ActRules rules) {
         forEachMatchingActivity(rules, (activity, ruleList) -> {
             if (!ruleList.isEmpty()) {
-                ViewController.getDefault().applyRuleBatch(activity, ruleList);
+                getViewControllerFor(activity).applyRuleBatch(activity, ruleList);
             }
         });
     }
@@ -277,7 +327,7 @@ public final class LifecycleObserver extends XC_MethodHook {
                         @Override
                         protected void afterHookedMethod(MethodHookParam param) {
                             if (mActRules.isEmpty()) return;
-                            ViewController.getDefault().clearBlockedCache();
+                            clearAllViewControllersCache();
                             scheduleReapplyForActivities(mActRules);
                         }
                     });
@@ -295,6 +345,26 @@ public final class LifecycleObserver extends XC_MethodHook {
                             if (holder == null) return;
                             View itemView = (View) XposedHelpers.getObjectField(holder, "itemView");
                             applyRepeatableRulesToBoundItem(itemView);
+                        }
+                    });
+
+            // Hook 3: onViewRecycled → 递归撤销 itemView 子树中所有已应用的规则
+            // 解决 RecyclerView 回收复用时 RemoveApplier 缓存误命中的根因：
+            // View 回收时先撤销，后续 bindViewHolder 重新应用时缓存已清空。
+            XposedHelpers.findAndHookMethod(adapterClass, "onViewRecycled",
+                    viewHolderClass, new XC_MethodHook() {
+                        @Override
+                        protected void beforeHookedMethod(MethodHookParam param) {
+                            Object holder = param.args[0];
+                            if (holder == null) return;
+                            View itemView = (View) XposedHelpers.getObjectField(holder, "itemView");
+                            if (itemView == null) return;
+                            Activity activity = ViewUtils.getAttachedActivityFromView(itemView);
+                            if (activity == null) return;
+                            ViewController vc = mViewControllers.get(activity);
+                            if (vc != null) {
+                                vc.revokeAllRules(itemView);
+                            }
                         }
                     });
 
@@ -328,7 +398,7 @@ public final class LifecycleObserver extends XC_MethodHook {
                 // 消除 730b660 引入的 CARD 分支不对称行为（盲传 itemRoot 无验证）。
                 View target = navigateAndValidate(itemRoot, spec);
                 if (target != null) {
-                    ViewController.getDefault().applyRule(target, rule);
+                    getViewControllerFor(activity).applyRule(target, rule);
                     if (listener != null) listener.onRuleApplied();
                 }
             } catch (Throwable t) {
@@ -340,10 +410,10 @@ public final class LifecycleObserver extends XC_MethodHook {
     /**
      * 检查规则规格是否适用于当前 itemRoot。
      */
-    private static boolean isApplicableToItem(MatchSpec spec, View itemRoot) {
-        return spec.itemPath != null && spec.itemPath.length > 0
-                && spec.itemRootClass != null
-                && itemRoot.getClass().getName().equals(spec.itemRootClass);
+    private static boolean isApplicableToItem(MatchFields spec, View itemRoot) {
+        return spec.getItemPath() != null && spec.getItemPath().length > 0
+                && spec.getItemRootClass() != null
+                && itemRoot.getClass().getName().equals(spec.getItemRootClass());
     }
 
     /**
@@ -358,10 +428,10 @@ public final class LifecycleObserver extends XC_MethodHook {
      *
      * @return 验证通过的目标 View，导航失败或验证失败返回 null
      */
-    private static View navigateAndValidate(View itemRoot, MatchSpec spec) {
-        View target = ViewTraversal.findViewByItemPath(itemRoot, spec.itemPath, 0);
+    private static View navigateAndValidate(View itemRoot, MatchFields spec) {
+        View target = ViewTraversal.findViewByItemPath(itemRoot, spec.getItemPath(), 0);
         if (target == null) {
-            target = ViewTraversal.findViewByClassChain(itemRoot, spec.itemPath, 0);
+            target = ViewTraversal.findViewByClassChain(itemRoot, spec.getItemPath(), 0);
         }
         if (target != null && CompositeMatcher.isStructuralMatch(target, spec, false)) {
             return target;
@@ -420,7 +490,7 @@ public final class LifecycleObserver extends XC_MethodHook {
                 Activity activity = Preconditions.checkNotNull(activityReference.get());
                 List<RuleRecord> rules = mActRules.get(activity.getComponentName().getClassName());
                 if (rules != null && !rules.isEmpty()) {
-                    ViewController.getDefault().applyRuleBatch(activity, rules,
+                    getViewControllerFor(activity).applyRuleBatch(activity, rules,
                             () -> mApplying = false);
                 } else {
                     resetGuards();

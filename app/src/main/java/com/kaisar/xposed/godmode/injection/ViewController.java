@@ -12,6 +12,8 @@ import com.kaisar.xposed.godmode.engine.matcher.IMatcher;
 import com.kaisar.xposed.godmode.engine.matcher.TargetLevel;
 import com.kaisar.xposed.godmode.engine.matcher.ViewTraversal;
 import com.kaisar.xposed.godmode.engine.rule.ActionSpec;
+import com.kaisar.xposed.godmode.engine.rule.MatchFields;
+import com.kaisar.xposed.godmode.engine.rule.MatchSpec;
 import com.kaisar.xposed.godmode.engine.rule.RuleMapper;
 import com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec;
 import com.kaisar.xposed.godmode.engine.util.Logger;
@@ -32,7 +34,12 @@ import java.util.Map;
  * </ul>
  * <p>
  * 匹配使用 {@link CompositeMatcher}（{@link IMatcher} 接口）。
- * 通过 {@link #getDefault()} 获取单例实例。
+ * <p>
+ * <b>实例管理：</b>
+ * <ul>
+ *   <li>{@link #ViewController(String)} — Activity 级实例（推荐），Applier 缓存按 Activity 隔离</li>
+ *   <li>{@link #getDefault()} — 进程级单例（向后兼容），缓存跨 Activity 共享</li>
+ * </ul>
  */
 public final class ViewController {
 
@@ -44,23 +51,56 @@ public final class ViewController {
     private RuleApplier mRemoveApplier;
     private IMatcher mMatcher;
 
+    /** Activity 类名，Activity 级实例时非 null */
+    private final String mActivityClassName;
+
     // =========================================================================
-    // 单例模式
+    // 单例模式（向后兼容）
     // =========================================================================
 
-    /** 获取单例实例，使用双重检查锁定（DCL）保证线程安全。*/
+    /**
+     * 获取进程级单例实例（向后兼容过渡）。
+     * <p>
+     * 新代码应优先使用 {@link #ViewController(String)} 创建 Activity 级实例，
+     * 以实现 Applier 缓存按 Activity 隔离。
+     */
+    @Deprecated
     public static ViewController getDefault() {
         if (sInstance == null) {
             synchronized (ViewController.class) {
                 if (sInstance == null) {
-                    sInstance = new ViewController();
+                    sInstance = new ViewController((String) null);
                 }
             }
         }
         return sInstance;
     }
 
-    private ViewController() {}
+    /** 进程级单例私有构造 */
+    private ViewController(String activityClassName) {
+        this.mActivityClassName = activityClassName;
+    }
+
+    /**
+     * 创建 Activity 级 ViewController 实例。
+     * <p>
+     * Applier 缓存（RemoveApplier/ModifyApplier）将按此 Activity 隔离，
+     * 不同 Activity 的缓存互不污染。Activity 销毁时调用 {@link #clearBlockedCache()}
+     * 后进行 GC。
+     *
+     * @param activity Activity 实例（用于获取类名）
+     */
+    public ViewController(Activity activity) {
+        this.mActivityClassName = activity != null
+                ? activity.getComponentName().getClassName() : null;
+    }
+
+    /**
+     * 获取当前绑定的 Activity 类名。
+     */
+    public String getActivityClassName() {
+        return mActivityClassName;
+    }
 
     // =========================================================================
     // Applier 懒加载
@@ -69,14 +109,17 @@ public final class ViewController {
     private RuleApplier getModifyApplier() {
         if (mModifyApplier == null) {
             mModifyApplier = new ModifyApplier(
-                    path -> RuleServiceClient.getDefault().openImageFileDescriptor(path));
+                    path -> RuleServiceClient.getDefault().openImageFileDescriptor(path),
+                    mActivityClassName);
         }
         return mModifyApplier;
     }
 
     private RuleApplier getRemoveApplier() {
         if (mRemoveApplier == null) {
-            mRemoveApplier = new RemoveApplier();
+            mRemoveApplier = mActivityClassName != null
+                    ? new RemoveApplier(mActivityClassName)
+                    : new RemoveApplier();
         }
         return mRemoveApplier;
     }
@@ -139,7 +182,7 @@ public final class ViewController {
 
         // 收集所有 repeatable 规则，使用批次匹配（单次视图树遍历）
         List<RuleRecord> batchRules = new ArrayList<>();
-        List<com.kaisar.xposed.godmode.engine.rule.MatchSpec> batchSpecs = new ArrayList<>();
+        List<MatchFields> batchSpecs = new ArrayList<>();
         for (RuleRecord rule : rules) {
             if (rule.isRepeatable()) {
                 batchRules.add(rule);
@@ -272,6 +315,41 @@ public final class ViewController {
                 Logger.w(TAG, "[ViewController] revokeRule: RemoveApplier.revoke() returned false"
                         + " for view=" + v + " rule=" + viewRule);
             }
+        }
+    }
+
+    /**
+     * 递归撤销 root 子树中所有被应用过规则的 View（不依赖规则集，纯缓存操作）。
+     * <p>
+     * 用于 onViewRecycled 回调——当 RecyclerView 回收 itemView 时，
+     * 递归遍历其子树，撤销所有被 RemoveApplier/ModifyApplier 应用过的子 View。
+     * 未被应用过的 View 则 revokeForView 返回 false（无副作用）。
+     * <p>
+     * CARD 模式自动兼容：卡片根 apply 时 itemPath 导航到内部子 View，
+     * 子 View 进入缓存 → onViewRecycled 递归遍历卡片根的子树 → 子 View 被命中。
+     *
+     * @param root 被回收的 itemView 根
+     */
+    public void revokeAllRules(View root) {
+        if (root == null) return;
+        // 先撤销 root 本身
+        revokeForView(root);
+        // 递归子树
+        if (root instanceof ViewGroup) {
+            ViewGroup vg = (ViewGroup) root;
+            for (int i = 0; i < vg.getChildCount(); i++) {
+                revokeAllRules(vg.getChildAt(i));
+            }
+        }
+    }
+
+    /** 对单个 View 撤销（RemoveApplier + ModifyApplier），不依赖规则集 */
+    private void revokeForView(View view) {
+        if (mRemoveApplier != null && mRemoveApplier instanceof RemoveApplier) {
+            ((RemoveApplier) mRemoveApplier).revokeForView(view);
+        }
+        if (mModifyApplier != null && mModifyApplier instanceof ModifyApplier) {
+            ((ModifyApplier) mModifyApplier).revokeForView(view);
         }
     }
 

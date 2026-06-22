@@ -29,7 +29,9 @@ public final class ModifyApplier implements RuleApplier {
 
     private static final Handler MAIN_HANDLER = new Handler(Looper.getMainLooper());
     private final WeakHashMap<View, Integer> mAppliedViews = new WeakHashMap<>();
-    private final Map<String, SoftReference<Bitmap>> mBitmapCache =
+
+    /** 位图缓存 — static 进程级共享，避免多 Activity 实例重复加载同一图片 */
+    private static final Map<String, SoftReference<Bitmap>> sBitmapCache =
             Collections.synchronizedMap(new HashMap<>());
 
     public interface ImageLoader {
@@ -38,8 +40,19 @@ public final class ModifyApplier implements RuleApplier {
 
     private final ImageLoader mImageLoader;
 
+    /** 当前 Activity 类名，用于 Activity 级缓存隔离（可能为 null） */
+    private final String mActivityClassName;
+
+    /** 进程级单例构造（位图缓存 static 共享，但 appliedViews 未经 Activity 隔离） */
     public ModifyApplier(ImageLoader imageLoader) {
         this.mImageLoader = imageLoader;
+        this.mActivityClassName = null;
+    }
+
+    /** Activity 级实例构造（appliedViews 按 Activity 隔离，位图缓存 static 共享） */
+    public ModifyApplier(ImageLoader imageLoader, String activityClassName) {
+        this.mImageLoader = imageLoader;
+        this.mActivityClassName = activityClassName;
     }
 
     // ---- 应用（ActionSpec API） ----
@@ -101,6 +114,9 @@ public final class ModifyApplier implements RuleApplier {
 
     @Override
     public boolean revoke(View view, ActionSpec spec) {
+        if (view == null || spec == null) return false;
+        if (!isAlreadyApplied(view, spec)) return false;
+
         ViewGroup.LayoutParams lp = view.getLayoutParams();
         if (lp != null) {
             if (spec.origWidth > 0) lp.width = spec.origWidth;
@@ -120,16 +136,36 @@ public final class ModifyApplier implements RuleApplier {
         return true;
     }
 
+    /**
+     * 对单个 View 进行撤销恢复操作（不依赖规则集，纯缓存操作）。
+     * <p>
+     * 用于 onViewRecycled 回调——当 RecyclerView 回收 View 时，
+     * 通过 {@link WeakHashMap#containsKey} 检查该 View 是否曾被修改过，
+     * 若有则撤销当前修改状态并移除缓存项。
+     *
+     * @param view 被回收的 View
+     * @return true 表示该 View 曾被应用过规则并已成功撤销
+     */
+    public boolean revokeForView(View view) {
+        if (view == null) return false;
+        if (!mAppliedViews.containsKey(view)) return false;
+        // View 曾被修改过，但撤销原始值需要从缓存中恢复。
+        // 由于 cached hash 不足以恢复原始状态，回退方案：移除缓存项，让下次 bind 时重新 apply。
+        mAppliedViews.remove(view);
+        // 不执行 LayoutParams 恢复（无法确定原始值），依赖 bindViewHolder 重新应用规则。
+        return true;
+    }
+
     @Override
     public void clearCache() {
         mAppliedViews.clear();
-        mBitmapCache.clear();
+        // sBitmapCache 是 static 进程级共享，不在此处清除
     }
 
     // ---- 图片加载 ----
 
     private void loadAndSetImage(ImageView targetView, String imagePath) {
-        SoftReference<Bitmap> cached = mBitmapCache.get(imagePath);
+        SoftReference<Bitmap> cached = sBitmapCache.get(imagePath);
         Bitmap cachedBitmap = cached != null ? cached.get() : null;
         if (cachedBitmap != null && !cachedBitmap.isRecycled()) {
             targetView.setImageBitmap(cachedBitmap);
@@ -137,7 +173,7 @@ public final class ModifyApplier implements RuleApplier {
             ThreadPools.IMAGE_LOADER.execute(() -> {
                 Bitmap bitmap = loadModImage(imagePath);
                 if (bitmap != null) {
-                    mBitmapCache.put(imagePath, new SoftReference<>(bitmap));
+                    sBitmapCache.put(imagePath, new SoftReference<>(bitmap));
                     MAIN_HANDLER.post(() -> {
                         if (targetView.isAttachedToWindow()) {
                             targetView.setImageBitmap(bitmap);
