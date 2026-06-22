@@ -1,10 +1,10 @@
 package com.kaisar.xposed.godmode.injection.editor.panel;
 
-import android.graphics.Color;
 import android.view.View;
 import android.widget.SeekBar;
 
 import com.kaisar.xposed.godmode.engine.matcher.ViewTraversal;
+import com.kaisar.xposed.godmode.engine.util.GmConstants;
 import com.kaisar.xposed.godmode.injection.editor.overlay.MaskView;
 import com.kaisar.xposed.godmode.injection.util.ViewUtils;
 
@@ -18,8 +18,8 @@ import java.util.List;
  */
 public final class SeekBarHandler implements SeekBar.OnSeekBarChangeListener {
 
-    private static final int OVERLAY_COLOR = Color.argb(150, 255, 0, 0);
-    private static final int OVERLAY_COLOR_REPEATABLE = Color.argb(150, 255, 165, 0);
+    private static final int OVERLAY_COLOR = GmConstants.OVERLAY_COLOR_RED;
+    private static final int OVERLAY_COLOR_REPEATABLE = GmConstants.OVERLAY_COLOR_ORANGE;
 
     private final NodeSelectorPanel mNodePanel;
     private final PropertyEditorPanel mPropertyEditor;

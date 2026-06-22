@@ -62,6 +62,10 @@ public class PropertyEditorPanel {
 
     private static final String TAG = "PropertyEditorPanel";
 
+    private static final int REQUEST_CODE_PICK_IMAGE = 0x5A45;
+    private static final int ANIM_DURATION_SHORT = 200;
+    private static final int ANIM_DURATION_MEDIUM = 150;
+
     private View mPanelView;
     private View mTargetView;
     private ImageView mPendingImageView;
@@ -123,7 +127,7 @@ public class PropertyEditorPanel {
 
             container.addView(mPanelView);
             mPanelView.setAlpha(0);
-            mPanelView.animate().alpha(1).setDuration(200).start();
+            mPanelView.animate().alpha(1).setDuration(ANIM_DURATION_SHORT).start();
         } catch (Exception e) {
             Logger.e(TAG, "[ModifyPanel] showModifyPanel fail", e);
             dismiss();
@@ -145,7 +149,7 @@ public class PropertyEditorPanel {
         mTempModifications.clear();
         // Recycle pending mod bitmaps on dismiss (mPendingModBitmaps stores loaded replacement images).
         // For cancel() / saveAll() see the confirm/cancel button handlers.
-        panel.animate().alpha(0).setDuration(150).withEndAction(() -> {
+            panel.animate().alpha(0).setDuration(ANIM_DURATION_MEDIUM).withEndAction(() -> {
             ViewGroup parent = (ViewGroup) panel.getParent();
             if (parent != null) parent.removeView(panel);
         }).start();
@@ -215,7 +219,7 @@ public class PropertyEditorPanel {
                 Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
                 intent.addCategory(Intent.CATEGORY_OPENABLE);
                 intent.setType("image/*");
-                activity.startActivityForResult(intent, 0x5A45);
+                activity.startActivityForResult(intent, REQUEST_CODE_PICK_IMAGE);
             } catch (Exception e) {
                 Toast.makeText(activity, "无法打开图片选择器", Toast.LENGTH_SHORT).show();
             }
@@ -274,6 +278,8 @@ public class PropertyEditorPanel {
                     case WIDTH: if (lp != null) { lp.width = val; target.setLayoutParams(lp); } break;
                     case HEIGHT: if (lp != null) { lp.height = val; target.setLayoutParams(lp); } break;
                     case ALPHA: target.setAlpha(val / 255f); break;
+                    default:
+                        throw new IllegalArgumentException("Unknown SeekerType: " + type);
                 }
             }
             @Override public void onStartTrackingTouch(SeekBar sb) {}
@@ -558,7 +564,7 @@ public class PropertyEditorPanel {
                             int requestCode = (int) param.args[0];
                             int resultCode = (int) param.args[1];
                             Intent data = (Intent) param.args[2];
-                            if (requestCode != 0x5A45 || resultCode != Activity.RESULT_OK || data == null) return;
+                            if (requestCode != REQUEST_CODE_PICK_IMAGE || resultCode != Activity.RESULT_OK || data == null) return;
 
                             try {
                                 android.net.Uri uri = data.getData();

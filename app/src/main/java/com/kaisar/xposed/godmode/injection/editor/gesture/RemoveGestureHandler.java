@@ -4,11 +4,11 @@ import android.animation.Animator;
 import android.app.Activity;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
-import android.graphics.Color;
 import android.view.View;
 import android.view.ViewGroup;
 
 import com.kaisar.xposed.godmode.engine.util.CommonUtils;
+import com.kaisar.xposed.godmode.engine.util.GmConstants;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.engine.util.Preconditions;
 import com.kaisar.xposed.godmode.injection.ViewController;
@@ -29,7 +29,7 @@ import com.kaisar.xposed.godmode.rule.RuleRecord;
 public final class RemoveGestureHandler {
 
     private static final String TAG = "RemoveGestureHandler";
-    private static final int MARK_COLOR = Color.argb(150, 139, 195, 75);
+    private static final int MARK_COLOR = GmConstants.OVERLAY_COLOR_GREEN;
 
     private RemoveGestureHandler() {}
 
@@ -78,7 +78,7 @@ public final class RemoveGestureHandler {
             // 未拖入取消区域：执行粒子动画并保存规则到 IPC
             ViewGroup container = (ViewGroup) activity.getWindow().getDecorView();
             ParticleView particleView = new ParticleView(activity);
-            particleView.setDuration(1000);
+            particleView.setDuration(GmConstants.PARTICLE_ANIM_DURATION_MS);
             particleView.attachToContainer(container);
             particleView.setOnAnimationListener(new ParticleView.OnAnimationListener() {
                 @Override

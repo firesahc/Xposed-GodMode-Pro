@@ -18,4 +18,16 @@ public final class GmConstants {
 
     /** GodMode 数据根目录（运行于 system_server 进程，需 SELinux 可访问） */
     public static final String DATA_DIR = "/data/misc/godmode";
+
+    // 覆盖层颜色常量 — 使用 ARGB 字面值避免 engine 模块依赖 android.graphics.Color
+    public static final int OVERLAY_COLOR_RED = 0x96FF0000;      // Color.argb(150, 255, 0, 0)
+    public static final int OVERLAY_COLOR_GREEN = 0x968BC34B;    // Color.argb(150, 139, 195, 75)
+    public static final int OVERLAY_COLOR_ORANGE = 0x96FFA500;   // Color.argb(150, 255, 165, 0)
+
+    // 动画时长常量
+    public static final int PARTICLE_ANIM_DURATION_MS = 1000;
+
+    // 文件大小限制常量
+    public static final int MAX_IMAGE_FILE_SIZE_BYTES = 5 * 1024 * 1024;
+    public static final int MAX_LOG_FILE_SIZE_BYTES = 2 * 1024 * 1024;
 }

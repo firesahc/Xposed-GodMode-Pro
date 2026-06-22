@@ -8,6 +8,7 @@ import android.graphics.Bitmap;
 import android.view.View;
 import android.view.ViewGroup;
 
+import com.kaisar.xposed.godmode.engine.util.GmConstants;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.injection.ViewController;
 import com.kaisar.xposed.godmode.injection.bridge.RuleServiceClient;
@@ -68,7 +69,7 @@ public final class BlockHandler {
         try {
             final RuleRecord viewRule = RuleRecordFactory.makeRemoveRule(view);
             final ParticleView particleView = new ParticleView(activity);
-            particleView.setDuration(1000);
+            particleView.setDuration(GmConstants.PARTICLE_ANIM_DURATION_MS);
             particleView.attachToContainer(container);
             particleView.setOnAnimationListener(new ParticleView.OnAnimationListener() {
                 @Override

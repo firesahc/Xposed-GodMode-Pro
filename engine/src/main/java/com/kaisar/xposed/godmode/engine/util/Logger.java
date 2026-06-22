@@ -4,9 +4,6 @@ import android.util.Log;
 
 import androidx.annotation.Keep;
 
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-
 @Keep
 public final class Logger {
 
@@ -28,23 +25,18 @@ public final class Logger {
     }
 
     private static volatile Writer sWriter;
-    private static final ExecutorService sLogExecutor = Executors.newSingleThreadExecutor(r -> {
-        Thread t = new Thread(r, "Logger-Writer");
-        t.setDaemon(true);
-        return t;
-    });
 
     /** 设置日志 Writer，供 HookLauncher（应用进程）和 RuleServiceServer（system_server）调用 */
     public static void setWriter(Writer writer) {
         sWriter = writer;
     }
 
-    /** 异步派发日志给 Writer */
+    /** 异步派发日志给 Writer — 使用 ThreadPools.IO 共享线程池代替专用单线程池，减少线程资源占用 */
     private static void dispatch(int level, String tag, String msg) {
         Writer w = sWriter;
         if (w == null) return;
         long timestamp = System.currentTimeMillis();
-        sLogExecutor.execute(() -> {
+        ThreadPools.IO.execute(() -> {
             try {
                 w.write(level, tag, msg, timestamp);
             } catch (Throwable ignored) {}

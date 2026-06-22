@@ -33,13 +33,14 @@ final class GodModeLog {
     private static final String TAG = "GodModeLog";
     private static final File sLogFile = new File(GmConstants.DATA_DIR, "godmodepro.log");
 
-    private static final long MAX_SIZE = 2 * 1024 * 1024; // 2MB
+    private static final long MAX_SIZE = GmConstants.MAX_LOG_FILE_SIZE_BYTES; // 2MB
     private static final int MAX_FILES = 3;
 
     private static final AtomicBoolean sRotating = new AtomicBoolean(false);
     private static volatile boolean sEnsured;
     private static volatile BufferedWriter sWriter;
 
+    // 保持独立单线程池：GodModeLog 需要严格顺序写入 + 文件轮转原子性，共用线程池有乱序风险
     private static final ExecutorService sExecutor = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "GodModeLog");
         t.setDaemon(true);

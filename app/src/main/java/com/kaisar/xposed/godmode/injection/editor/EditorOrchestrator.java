@@ -2,21 +2,15 @@ package com.kaisar.xposed.godmode.injection.editor;
 
 import static com.kaisar.xposed.godmode.engine.util.GmConstants.TAG_GM_CMP;
 
+import com.kaisar.xposed.godmode.engine.util.GmConstants;
+
 import android.app.Activity;
 import android.graphics.Bitmap;
-import android.graphics.Color;
 import android.graphics.Rect;
-import android.os.Handler;
-import android.os.Looper;
-import android.view.HapticFeedbackConstants;
-import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
-import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.view.ViewParent;
-import android.view.WindowManager;
-import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.widget.TooltipCompat;
@@ -28,9 +22,6 @@ import com.kaisar.xposed.godmode.engine.matcher.ViewTraversal;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.injection.editor.action.BlockHandler;
 import com.kaisar.xposed.godmode.injection.editor.action.PreviewHandler;
-import com.kaisar.xposed.godmode.injection.editor.gesture.GestureDispatcher;
-import com.kaisar.xposed.godmode.injection.editor.gesture.ModifyGestureHandler;
-import com.kaisar.xposed.godmode.injection.editor.gesture.RemoveGestureHandler;
 import com.kaisar.xposed.godmode.injection.editor.overlay.MaskView;
 import com.kaisar.xposed.godmode.injection.editor.panel.NodeSelectorPanel;
 import com.kaisar.xposed.godmode.injection.editor.panel.PropertyEditorPanel;
@@ -41,7 +32,6 @@ import com.kaisar.xposed.godmode.injection.util.GmResources;
 import com.kaisar.xposed.godmode.injection.util.ViewUtils;
 
 import java.lang.ref.WeakReference;
-import java.lang.reflect.Field;
 import java.util.List;
 
 /**
@@ -53,21 +43,20 @@ import java.util.List;
  * 按键事件通过 {@link com.kaisar.xposed.godmode.injection.entry.ActivityKeyHook}
  * 和 {@link com.kaisar.xposed.godmode.injection.entry.TouchHook} 注入。
  */
-public final class EditorOrchestrator implements Property.OnPropertyChangeListener<Boolean> {
+public final class EditorOrchestrator implements Property.OnPropertyChangeListener<Boolean>,
+        TouchEventHandler.ITouchCallback, KeyEventHandler.IKeyCallback {
 
     // =========================================================================
     // 常量定义    // =========================================================================
 
     private static final String TAG = "EditorOrchestrator";
-    private static final int OVERLAY_COLOR = Color.argb(150, 255, 0, 0);
-    private static final int LONG_PRESS_TIMEOUT = ViewConfiguration.getLongPressTimeout();
+    private static final int OVERLAY_COLOR = GmConstants.OVERLAY_COLOR_RED;
 
     // =========================================================================
     // Interaction mode and info-flow mode
 // =========================================================================
 
     private int mInteractionMode = EditorInteractionMode.INITIAL;
-    private boolean mInfoFlowMode = false;
 
     // =========================================================================
     // 预览处理器    // =========================================================================
@@ -115,42 +104,25 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
 
                 @Override
                 public void onInfoFlowRequested() {
-                    toggleInfoFlowMode();
+                    mKeyEventHandler.toggleInfoFlowMode();
                 }
             };
 
     // =========================================================================
-    // 触摸状态字段（TouchInterceptor 相关）    // =========================================================================
+    // 编辑模式状态    // =========================================================================
 
     private boolean mIsInEditMode;
-    private boolean mMultiPointLock;
-    private boolean mDragging;
-    private boolean mLongClick;
-    private Handler mHandler;
 
-    private Handler getHandler() {
-        if (mHandler == null) {
-            mHandler = new Handler(Looper.getMainLooper());
-        }
-        return mHandler;
-    }
-    private boolean mHasBlockEvent;
+    // =========================================================================
+    // 触摸 / 按键 子组件    // =========================================================================
 
-    private RemoveGestureHandler.RemoveState mRemoveState;
-    private ModifyGestureHandler.ModifyState mModifyState;
-    @SuppressWarnings({"FieldCanBeLocal", "unused"})
-    private float mDeltaX, mDeltaY;
-    private float mDragStartRawX, mDragStartRawY;
+    private final TouchEventHandler mTouchEventHandler = new TouchEventHandler(this);
+    private final KeyEventHandler mKeyEventHandler = new KeyEventHandler(this);
 
     // =========================================================================
     // 开关属性引用    // =========================================================================
 
     private final Property<Boolean> mSwitchProp;
-
-    // =========================================================================
-    // 窗口属性反射字段（TouchInterceptor 相关）    // =========================================================================
-
-    private static Field sWindowAttributesField;
 
     // =========================================================================
     // 构造器    // =========================================================================
@@ -171,11 +143,11 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     }
 
     public boolean isInfoFlowMode() {
-        return mInfoFlowMode;
+        return mKeyEventHandler.isInfoFlowMode();
     }
 
     public boolean isDragging() {
-        return mDragging;
+        return mTouchEventHandler.isDragging();
     }
 
     // =========================================================================
@@ -186,24 +158,17 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
      * 由 ActivityKeyHook 通过按键事件触发调用。
      */
     public void onVolumeKeyToggle(Activity activity) {
-        if (!mNodePanel.isKeySelecting() && activity != null) {
-            showNodeSelectPanel(activity);
-        } else if (mNodePanel.isKeySelecting()) {
-            dismissNodeSelectPanel();
-        }
+        mKeyEventHandler.onVolumeKeyToggle(activity);
     }
 
     /**
      * Integrates with ActivityKeyHook for key event dispatch and
- * TouchHook for touch interception in edit mode.
- */
+     * TouchHook for touch interception in edit mode.
+     */
     public void onVolumeKeyNavigate(int keyCode) {
-        if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) {
-            navigatePrevious();
-        } else if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
-            navigateNext();
-        }
+        mKeyEventHandler.onVolumeKeyNavigate(keyCode);
     }
+
 
     // =========================================================================
     // Activity 管理 — 由 HookLauncher 注入 onResume 回调设置当前 Activity    // =========================================================================
@@ -271,49 +236,8 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     }
 
     // =========================================================================
-    // 信息流模式切换 — 在信息流模式下展示视图类型信息（KeyInterceptor 相关）    // =========================================================================
-
-    private void toggleInfoFlowMode() {
-        mInfoFlowMode = !mInfoFlowMode;
-        updateInfoFlowModeButton();
-        Activity act = mCurrentActivityRef.get();
-        if (act != null) {
-            Toast.makeText(act, GmResources.getString(mInfoFlowMode
-                            ? R.string.accessibility_info_flow_on : R.string.accessibility_info_flow_off),
-                    Toast.LENGTH_SHORT).show();
-        }
-    }
-
-    private void updateInfoFlowModeButton() {
-        View panelView = mNodePanel.getPanelView();
-        if (panelView == null) return;
-        TextView btn = panelView.findViewById(R.id.info_flow_mode_btn);
-        if (btn == null) return;
-        if (mInfoFlowMode) {
-            btn.setText(GmResources.getText(R.string.mode_info_flow_on));
-            btn.setTextColor(android.graphics.Color.parseColor("#FFA500"));
-        } else {
-            btn.setText(GmResources.getText(R.string.mode_info_flow_off));
-            btn.setTextColor(android.graphics.Color.GRAY);
-        }
-    }
-
-    private void navigate(int delta) {
-        if (mPropertyEditor.isShowing()) return;
-        mNodePanel.navigate(delta);
-    }
-
-    private void navigateNext() {
-        navigate(+1);
-    }
-
-    private void navigatePrevious() {
-        navigate(-1);
-    }
-
-    // =========================================================================
     // KeyInterceptor — intercepts key events for editor tool shortcuts
-// =========================================================================
+    // =========================================================================
 
     private void showNodeSelectPanel(final Activity activity) {
         Logger.i(TAG, "[KeyEventHook] showNodeSelectPanel for " + activity.getPackageName());
@@ -324,7 +248,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
         if (!mNodePanel.isKeySelecting()) return;
         ToolbarVisibilityController.apply(mNodePanel.getPanelView());
         mNodePanel.wireButtons(activity, container, mNodePanelCallbacks);
-        updateInfoFlowModeButton();
+        mKeyEventHandler.updateInfoFlowModeButton();
     }
 
     private void dismissNodeSelectPanel() {
@@ -423,159 +347,16 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
         }
     }
     // =========================================================================
-    // 触摸事件处理 — 编辑模式下拦截触摸事件实现选择/拖拽/修改（TouchInterceptor 相关）    // =========================================================================
+    // 触摸事件处理 — 委托给 TouchEventHandler（TouchInterceptor 相关）    // =========================================================================
 
     /**
      * 编辑模式触摸事件入口，由 TouchHook 调用。
-     * 判断是否处于编辑模式、是否为 GodMode 控件、窗口类型是否可编辑，
-     * 然后分发到具体手势处理器。
+     * 判断是否处于编辑模式、是否为 GodMode 控件，然后委托给 TouchEventHandler。
      */
     public boolean onTouchEvent(View view, MotionEvent event) {
         if (!mIsInEditMode) return false;
         if (TAG_GM_CMP.equals(view.getTag())) return false;
-        if (!isEditableWindow(view)) return false;
-        return dispatchTouchEvent(view, event);
-    }
-
-    private boolean isEditableWindow(View v) {
-        WindowManager.LayoutParams wl = getWindowLayoutParams(v);
-        if (wl == null) return false;
-        int type = wl.type;
-        if (type < WindowManager.LayoutParams.FIRST_SYSTEM_WINDOW) return true;
-        return type > WindowManager.LayoutParams.LAST_SYSTEM_WINDOW;
-    }
-
-    private WindowManager.LayoutParams getWindowLayoutParams(View v) {
-        Object viewRootImpl = ViewUtils.findViewRootImplByChildView(v.getParent());
-        if (viewRootImpl == null) return null;
-        try {
-            if (sWindowAttributesField == null) {
-                sWindowAttributesField = viewRootImpl.getClass().getDeclaredField("mWindowAttributes");
-                sWindowAttributesField.setAccessible(true);
-            }
-            return (WindowManager.LayoutParams) sWindowAttributesField.get(viewRootImpl);
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    private boolean dispatchTouchEvent(View v, MotionEvent event) {
-        int mode = mInteractionMode;
-        int action = event.getActionMasked();
-
-        if (mode == EditorInteractionMode.INITIAL) {
-            return true;
-        }
-        if (mode == EditorInteractionMode.MODIFY) {
-            return handleModifyTouch(v, event);
-        }
-        return handleRemoveTouch(v, event, action);
-    }
-
-    // =========================================================================
-    // 移除模式触摸处理 — 长按拖拽视图到取消区域执行移除（TouchInterceptor 相关）    // =========================================================================
-
-    private boolean handleRemoveTouch(View v, MotionEvent event, int action) {
-        if (action == MotionEvent.ACTION_DOWN) {
-            if (!beginTouch(v, false)) return false;
-            Rect bounds = ViewUtils.getLocationInWindow(v);
-            mDeltaX = event.getRawX() - bounds.left;
-            mDeltaY = event.getRawY() - bounds.top;
-
-        } else if (action == MotionEvent.ACTION_MOVE) {
-            if (mLongClick && mRemoveState != null && mRemoveState.maskView != null) {
-                mRemoveState.maskView.updateOverlayBounds(
-                        (int) (event.getRawX() - mDeltaX), (int) (event.getRawY() - mDeltaY),
-                        v.getWidth(), v.getHeight());
-                mRemoveState.maskView.setMarked(
-                        mRemoveState.cancelView.getRealBounds().intersect(
-                                mRemoveState.maskView.getRealBounds()));
-            }
-
-        } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
-            if (mLongClick && mRemoveState != null) {
-                RemoveGestureHandler.finishDrag(v, mRemoveState);
-                RemoveGestureHandler.clearState(mRemoveState);
-                mRemoveState = null;
-            } else if (action == MotionEvent.ACTION_UP && isKeySelecting()) {
-                selectViewByTap(v);
-            }
-            endTouch(v);
-        }
-        return true;
-    }
-
-    // =========================================================================
-    // TouchInterceptor — touch event interception and view selection / gesturing
-// =========================================================================
-
-    private boolean handleModifyTouch(View v, MotionEvent event) {
-        int action = event.getActionMasked();
-
-        if (action == MotionEvent.ACTION_DOWN) {
-            if (!beginTouch(v, true)) return false;
-            mDragStartRawX = event.getRawX();
-            mDragStartRawY = event.getRawY();
-
-        } else if (action == MotionEvent.ACTION_MOVE) {
-            if (mLongClick && mModifyState != null) {
-                float dx = event.getRawX() - mDragStartRawX;
-                float dy = event.getRawY() - mDragStartRawY;
-                ModifyGestureHandler.moveTarget(mModifyState, dx, dy);
-            }
-
-        } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
-            if (mLongClick && mModifyState != null) {
-                ModifyGestureHandler.finalizeDrag(mModifyState,
-                        v.getContext().getPackageName());
-                mModifyState = null;
-            } else if (action == MotionEvent.ACTION_UP && !mLongClick) {
-                selectViewByTap(v);
-            }
-            endTouch(v);
-        }
-        return true;
-    }
-
-    // =========================================================================
-    // TouchInterceptor — intercepts touch events for view selection / gesturing
-// =========================================================================
-
-    private boolean beginTouch(View v, boolean isModifyMode) {
-        boolean[] draggingRef = new boolean[1];
-        if (!GestureDispatcher.tryBeginTouch(v, isModifyMode,
-                mMultiPointLock, new boolean[]{mHasBlockEvent},
-                this::getWindowLayoutParams, draggingRef)) {
-            return false;
-        }
-        mDragging = draggingRef[0];
-        mMultiPointLock = true;
-        getHandler().postDelayed(() -> onLongPress(v, isModifyMode), LONG_PRESS_TIMEOUT);
-        return true;
-    }
-
-    private void endTouch(View v) {
-        ViewParent parent = v.getParent();
-        if (parent != null) parent.requestDisallowInterceptTouchEvent(false);
-        getHandler().removeCallbacksAndMessages(null);
-        mLongClick = false;
-        mHasBlockEvent = false;
-        mMultiPointLock = false;
-        mDragging = false;
-    }
-
-    /** Handle long press gesture on view — starts drag for modify or remove mode. */
-    private void onLongPress(View v, boolean isModifyMode) {
-        if (isModifyMode) {
-            View target = getSelectedView();
-            if (target != null) {
-                mModifyState = ModifyGestureHandler.startDrag(target);
-            }
-        } else {
-            mRemoveState = RemoveGestureHandler.startDrag(v);
-        }
-        v.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
-        mLongClick = true;
+        return mTouchEventHandler.onTouchEvent(view, event);
     }
 
     // =========================================================================
@@ -588,13 +369,58 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
         mIsInEditMode = enable;
         if (!enable) {
             mInteractionMode = EditorInteractionMode.INITIAL;
-            getHandler().removeCallbacksAndMessages(null);
-            mLongClick = false;
-            mMultiPointLock = false;
-            mDragging = false;
-            RemoveGestureHandler.clearState(mRemoveState);
-            mRemoveState = null;
-            mModifyState = null;
+            mTouchEventHandler.resetState();
         }
+    }
+
+    // =========================================================================
+    // ITouchCallback / IKeyCallback 实现
+    // 注：isKeySelecting()、getSelectedView()、getInteractionMode()、selectViewByTap()
+    //     均已在 EditorOrchestrator 中作为 public 方法存在，直接满足 ITouchCallback 接口。
+    // =========================================================================
+
+    @Override
+    public NodeSelectorPanel getNodePanel() {
+        return mNodePanel;
+    }
+
+    @Override
+    public PropertyEditorPanel getPropertyEditor() {
+        return mPropertyEditor;
+    }
+
+    @Override
+    public PreviewHandler getPreviewHandler() {
+        return mPreviewHandler;
+    }
+
+    @Override
+    public WeakReference<Activity> getCurrentActivityRef() {
+        return mCurrentActivityRef;
+    }
+
+    @Override
+    public void setInteractionMode(int mode) {
+        mInteractionMode = mode;
+    }
+
+    @Override
+    public int getOverlayColor() {
+        return OVERLAY_COLOR;
+    }
+
+    @Override
+    public void onShowNodeSelectPanel(Activity activity, int overlayColor) {
+        showNodeSelectPanel(activity);
+    }
+
+    @Override
+    public void onDismissNodeSelectPanel() {
+        dismissNodeSelectPanel();
+    }
+
+    @Override
+    public void onHideGmOverlays(int visibility) {
+        hideGmOverlays(visibility);
     }
 }

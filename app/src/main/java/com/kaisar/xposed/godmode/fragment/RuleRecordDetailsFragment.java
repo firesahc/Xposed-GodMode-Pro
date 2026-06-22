@@ -212,7 +212,7 @@ public final class RuleRecordDetailsFragment extends PreferenceFragmentCompat im
             BitmapFactory.Options opts = new BitmapFactory.Options();
             opts.inJustDecodeBounds = true;
             BitmapFactory.decodeFileDescriptor(pfd.getFileDescriptor(), null, opts);
-            try { pfd.close(); } catch (Exception ignored) { }
+            try { pfd.close(); } catch (Exception e) { /* closeSilently: ParcelFileDescriptor.close() may throw */ }
             if (opts.outWidth > 0 && opts.outHeight > 0) {
                 int screenWidth = getResources().getDisplayMetrics().widthPixels;
                 int marginPx = (int) (20 * getResources().getDisplayMetrics().density);
