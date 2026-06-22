@@ -2,7 +2,7 @@ package com.kaisar.xposed.godmode.engine.matcher;
 
 import android.view.View;
 
-import com.kaisar.xposed.godmode.engine.rule.MatchSpec;
+import com.kaisar.xposed.godmode.engine.rule.MatchFields;
 
 import java.util.List;
 import java.util.Map;
@@ -15,10 +15,10 @@ import java.util.Map;
 public interface IMatcher {
 
     /** 在视图树中查找单个最佳匹配视图 */
-    View matchView(View root, MatchSpec spec);
+    View matchView(View root, MatchFields spec);
 
     /** 在视图树中查找所有匹配的视图 */
-    List<View> matchAllViews(View root, MatchSpec spec);
+    List<View> matchAllViews(View root, MatchFields spec);
 
     /**
      * 批量匹配可重复规则——共享一次视图树遍历。
@@ -31,5 +31,5 @@ public interface IMatcher {
      * @param specs 多条匹配规格（长度随意，结果按原索引映射）
      * @return 匹配结果映射 key=spec 在列表中的索引, value=匹配到的视图列表
      */
-    Map<Integer, List<View>> matchAllViewsBatch(View root, List<MatchSpec> specs);
+    Map<Integer, List<View>> matchAllViewsBatch(View root, List<? extends MatchFields> specs);
 }

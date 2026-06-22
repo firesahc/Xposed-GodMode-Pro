@@ -11,51 +11,85 @@ import java.util.Arrays;
  * 从 {@link RuleMatchSpec} 拆分的纯匹配部分，只包含匹配器（IMatcher）需要的字段。
  * 不包含任何修改规则或原始值字段。
  * <p>
- * 由 {@link RuleMatchSpec#getMatchSpec()} 生成，或直接构造用于纯匹配场景。
+ * 由 {@link RuleMatchSpec#getMatchSpec()} 生成，或通过 {@link Builder} 直接构造用于纯匹配场景。
+ * <p>
+ * 不可变对象 — 所有字段通过 {@link Builder} 构建，构造完成后不可修改。
  */
-public final class MatchSpec {
+public final class MatchSpec implements MatchFields {
 
     /** 深度路径 — 视图树中从 DecorView 到目标 View 的 childIndex 链 */
-    public int[] depth;
+    private final int[] depth;
 
     /** 目标 Activity 完整类名 */
-    public String activityClass;
+    private final String activityClass;
 
     /** 目标 View 完整类名 */
-    public String viewClass;
+    private final String viewClass;
 
     /** android:resourceName (R.id.xxx) */
-    public String resourceName;
+    private final String resourceName;
 
     /** RecyclerView item 路径（repeatable 规则） */
-    public String[] itemPath;
+    private final String[] itemPath;
 
     /** RecyclerView item 根 View 类名 */
-    public String itemRootClass;
+    private final String itemRootClass;
 
     /** 父 View 完整类名 */
-    public String parentClass;
+    private final String parentClass;
 
     /** 是否为可重复规则（在 RecyclerView/ListView 中匹配多个同类元素） */
-    public boolean repeatable;
+    private final boolean repeatable;
 
     /** TextView 文本内容 */
-    public String text;
+    private final String text;
 
     /** contentDescription 无障碍描述 */
-    public String description;
+    private final String description;
 
     /** 匹配模式（精确/包含/前缀/后缀/正则），null 等价于 EXACT */
-    public MatchMode matchMode;
+    private final MatchMode matchMode;
 
     /** 信息流模式下 RecyclerView 的 getItemViewType() 值，用于过滤匹配项类型（0=不过滤） */
-    public int viewType;
+    private final int viewType;
 
     /** 匹配目标层级，默认 ELEMENT（向后兼容） */
-    public TargetLevel targetLevel = TargetLevel.ELEMENT;
+    private final TargetLevel targetLevel;
 
-    public MatchSpec() {
+    private MatchSpec(Builder builder) {
+        this.depth = builder.depth;
+        this.activityClass = builder.activityClass;
+        this.viewClass = builder.viewClass;
+        this.resourceName = builder.resourceName;
+        this.itemPath = builder.itemPath;
+        this.itemRootClass = builder.itemRootClass;
+        this.parentClass = builder.parentClass;
+        this.repeatable = builder.repeatable;
+        this.text = builder.text;
+        this.description = builder.description;
+        this.matchMode = builder.matchMode;
+        this.viewType = builder.viewType;
+        this.targetLevel = builder.targetLevel;
     }
+
+    // ===== Getter =====
+
+    public int[] getDepth() { return depth; }
+    public String getActivityClass() { return activityClass; }
+    public String getViewClass() { return viewClass; }
+    public String getResourceName() { return resourceName; }
+    public String[] getItemPath() { return itemPath; }
+    public String getItemRootClass() { return itemRootClass; }
+    public String getParentClass() { return parentClass; }
+    public boolean isRepeatable() { return repeatable; }
+    public String getText() { return text; }
+    public String getDescription() { return description; }
+    public MatchMode getMatchMode() { return matchMode; }
+    @Override
+    public int getInfoFlowViewType() { return viewType; }
+    public TargetLevel getTargetLevel() { return targetLevel; }
+
+    // ===== 工厂方法 =====
 
     /**
      * 从 RuleFields 提取匹配字段构造。
@@ -65,29 +99,49 @@ public final class MatchSpec {
      * 文本内容唯一，参与匹配会阻止定位到其他卡片的同位置元素。</p>
      */
     public static MatchSpec from(RuleFields fields) {
-        MatchSpec spec = new MatchSpec();
-        spec.depth = fields.getDepth() != null ? fields.getDepth().clone() : null;
-        spec.activityClass = fields.getActivityClass();
-        spec.viewClass = fields.getViewClass();
-        spec.resourceName = fields.getResourceName();
-        spec.itemPath = fields.getItemPath() != null ? fields.getItemPath().clone() : null;
-        spec.itemRootClass = fields.getItemRootClass();
-        spec.parentClass = fields.getParentClass();
-        spec.repeatable = fields.isRepeatable();
+        Builder b = new Builder();
+        b.depth = fields.getDepth() != null ? fields.getDepth().clone() : null;
+        b.activityClass = fields.getActivityClass();
+        b.viewClass = fields.getViewClass();
+        b.resourceName = fields.getResourceName();
+        b.itemPath = fields.getItemPath() != null ? fields.getItemPath().clone() : null;
+        b.itemRootClass = fields.getItemRootClass();
+        b.parentClass = fields.getParentClass();
+        b.repeatable = fields.isRepeatable();
         // repeatable 规则：匹配只靠 itemPath 位置 + viewClass/parentClass 结构，
         // text/description 内容在卡片间唯一，参与匹配会破坏跨卡片匹配
-        if (spec.repeatable && spec.itemPath != null && spec.itemPath.length > 0) {
-            spec.text = null;
-            spec.description = null;
+        if (b.repeatable && b.itemPath != null && b.itemPath.length > 0) {
+            b.text = null;
+            b.description = null;
         } else {
-            spec.text = fields.getText();
-            spec.description = fields.getDescription();
+            b.text = fields.getText();
+            b.description = fields.getDescription();
         }
-        spec.matchMode = fields.getMatchMode();
-        spec.viewType = fields.getInfoFlowViewType();
+        b.matchMode = fields.getMatchMode();
+        b.viewType = fields.getInfoFlowViewType();
         TargetLevel tl = fields.getTargetLevel();
-        spec.targetLevel = tl != null ? tl : TargetLevel.ELEMENT;
-        return spec;
+        b.targetLevel = tl != null ? tl : TargetLevel.ELEMENT;
+        return b.build();
+    }
+
+    // ===== clone / equals / hashCode =====
+
+    public MatchSpec clone() {
+        Builder b = new Builder();
+        b.depth = this.depth != null ? this.depth.clone() : null;
+        b.activityClass = this.activityClass;
+        b.viewClass = this.viewClass;
+        b.resourceName = this.resourceName;
+        b.itemPath = this.itemPath != null ? this.itemPath.clone() : null;
+        b.itemRootClass = this.itemRootClass;
+        b.parentClass = this.parentClass;
+        b.repeatable = this.repeatable;
+        b.text = this.text;
+        b.description = this.description;
+        b.matchMode = this.matchMode;
+        b.viewType = this.viewType;
+        b.targetLevel = this.targetLevel;
+        return b.build();
     }
 
     @Override
@@ -127,25 +181,59 @@ public final class MatchSpec {
         return result;
     }
 
-    public MatchSpec clone() {
-        MatchSpec cloned = new MatchSpec();
-        cloned.depth = depth != null ? depth.clone() : null;
-        cloned.activityClass = activityClass;
-        cloned.viewClass = viewClass;
-        cloned.resourceName = resourceName;
-        cloned.itemPath = itemPath != null ? itemPath.clone() : null;
-        cloned.itemRootClass = itemRootClass;
-        cloned.parentClass = parentClass;
-        cloned.repeatable = repeatable;
-        cloned.text = text;
-        cloned.description = description;
-        cloned.matchMode = matchMode;
-        cloned.viewType = viewType;
-        cloned.targetLevel = targetLevel;
-        return cloned;
-    }
-
     private static boolean equalsNullable(Object a, Object b) {
         return (a == null) ? (b == null) : a.equals(b);
+    }
+
+    // =========================================================================
+    // Builder
+    // =========================================================================
+
+    /**
+     * MatchSpec 构建器 — 链式调用，构建不可变的 {@link MatchSpec} 实例。
+     * <p>
+     * 调用 {@link #repeatable(boolean)} 设为 true 时会自动清空 text/description，
+     * 因为信息流匹配依赖卡片内相对位置而非文本内容。
+     */
+    public static final class Builder {
+        int[] depth;
+        String activityClass;
+        String viewClass;
+        String resourceName;
+        String[] itemPath;
+        String itemRootClass;
+        String parentClass;
+        boolean repeatable;
+        String text;
+        String description;
+        MatchMode matchMode;
+        int viewType;
+        TargetLevel targetLevel = TargetLevel.ELEMENT;
+
+        public Builder depth(int[] depth) { this.depth = depth != null ? depth.clone() : null; return this; }
+        public Builder activityClass(String activityClass) { this.activityClass = activityClass; return this; }
+        public Builder viewClass(String viewClass) { this.viewClass = viewClass; return this; }
+        public Builder resourceName(String resourceName) { this.resourceName = resourceName; return this; }
+        public Builder itemPath(String[] itemPath) { this.itemPath = itemPath != null ? itemPath.clone() : null; return this; }
+        public Builder itemRootClass(String itemRootClass) { this.itemRootClass = itemRootClass; return this; }
+        public Builder parentClass(String parentClass) { this.parentClass = parentClass; return this; }
+
+        /**
+         * 设置 repeatable 标志。若为 true 且 itemPath 非空，自动清空 text/description。
+         */
+        public Builder repeatable(boolean repeatable) {
+            this.repeatable = repeatable;
+            return this;
+        }
+
+        public Builder text(String text) { this.text = text; return this; }
+        public Builder description(String description) { this.description = description; return this; }
+        public Builder matchMode(MatchMode matchMode) { this.matchMode = matchMode; return this; }
+        public Builder viewType(int viewType) { this.viewType = viewType; return this; }
+        public Builder targetLevel(TargetLevel targetLevel) { this.targetLevel = targetLevel; return this; }
+
+        public MatchSpec build() {
+            return new MatchSpec(this);
+        }
     }
 }

@@ -7,8 +7,9 @@ import android.view.ViewGroup;
 import android.view.ViewParent;
 import android.widget.TextView;
 
-import com.kaisar.xposed.godmode.engine.rule.MatchSpec;
+import com.kaisar.xposed.godmode.engine.rule.MatchFields;
 import com.kaisar.xposed.godmode.engine.util.GmConstants;
+import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.engine.util.TextMatcher;
 
 import java.util.ArrayList;
@@ -41,12 +42,12 @@ public final class CompositeMatcher implements IMatcher {
     // ---- IMatcher 实现 ----
 
     @Override
-    public View matchView(View root, MatchSpec spec) {
+    public View matchView(View root, MatchFields spec) {
         if (root == null || spec == null) return null;
 
         // 非 repeatable 规则必须有可靠锚定（resourceId/depth）
         // ── 策略 1: resourceId 锚定 ──
-        if (!TextUtils.isEmpty(spec.resourceName)) {
+        if (!TextUtils.isEmpty(spec.getResourceName())) {
             View viewById = findByResourceId(root, spec);
             if (viewById != null && isStructuralMatch(viewById, spec, true)) {
                 return viewById;
@@ -54,8 +55,8 @@ public final class CompositeMatcher implements IMatcher {
         }
 
         // ── 策略 2: depth 路径锚定 ──
-        if (spec.depth != null && spec.depth.length > 0) {
-            View depthView = ViewTraversal.findViewByDepth(root, spec.depth);
+        if (spec.getDepth() != null && spec.getDepth().length > 0) {
+            View depthView = ViewTraversal.findViewByDepth(root, spec.getDepth());
             if (depthView != null && isVisibleView(depthView)
                     && isStructuralMatch(depthView, spec, true)) {
                 return depthView;
@@ -66,13 +67,13 @@ public final class CompositeMatcher implements IMatcher {
     }
 
     @Override
-    public List<View> matchAllViews(View root, MatchSpec spec) {
+    public List<View> matchAllViews(View root, MatchFields spec) {
         if (root == null || spec == null) return new ArrayList<>();
 
         // 信息流规则：itemPath 导航 + AND 验证，无全树兜底
         List<View> results = new ArrayList<>();
-        if (spec.repeatable && spec.itemPath != null && spec.itemPath.length > 0
-                && spec.itemRootClass != null) {
+        if (spec.isRepeatable() && spec.getItemPath() != null && spec.getItemPath().length > 0
+                && spec.getItemRootClass() != null) {
             collectRecyclerMatches(root, spec, results);
             if (!results.isEmpty()) return results;
         }
@@ -81,16 +82,16 @@ public final class CompositeMatcher implements IMatcher {
     }
 
     @Override
-    public Map<Integer, List<View>> matchAllViewsBatch(View root, List<MatchSpec> specs) {
+    public Map<Integer, List<View>> matchAllViewsBatch(View root, List<? extends MatchFields> specs) {
         Map<Integer, List<View>> results = new HashMap<>();
         if (root == null || specs == null || specs.isEmpty()) return results;
 
         // 初始化结果映射：只包含符合条件的 repeatable 规则
         int eligibleCount = 0;
         for (int i = 0; i < specs.size(); i++) {
-            MatchSpec spec = specs.get(i);
-            if (spec != null && spec.repeatable && spec.itemPath != null
-                    && spec.itemPath.length > 0 && spec.itemRootClass != null) {
+            MatchFields spec = specs.get(i);
+            if (spec != null && spec.isRepeatable() && spec.getItemPath() != null
+                    && spec.getItemPath().length > 0 && spec.getItemRootClass() != null) {
                 results.put(i, new ArrayList<>());
                 eligibleCount++;
             }
@@ -112,44 +113,23 @@ public final class CompositeMatcher implements IMatcher {
                     List<View> partial = entry.getValue();
                     if (partial.size() >= GmConstants.MAX_REPEATABLE_RESULTS) continue;
 
-                    MatchSpec spec = specs.get(entry.getKey());
-                    if (!itemRoot.getClass().getName().equals(spec.itemRootClass)) continue;
+                    MatchFields spec = specs.get(entry.getKey());
+                    if (!itemRoot.getClass().getName().equals(spec.getItemRootClass())) continue;
 
-                    Integer expectedViewType = spec.viewType > 0
-                            ? spec.viewType : null;
+                    Integer expectedViewType = spec.getInfoFlowViewType() > 0
+                            ? spec.getInfoFlowViewType() : null;
                     if (expectedViewType != null
                             && !checkViewType(rv, itemRoot, expectedViewType)) {
                         continue;
                     }
 
-                    if (spec.targetLevel == TargetLevel.CARD) {
-                        // CARD 模式：跳过已隐藏的卡片根（防止级联重应用），
-                        // 然后导航 itemPath + isStructuralMatch 验证精度同 ELEMENT，
-                        // 匹配通过后直接返回内部目标元素（由 ViewController.resolveCardTarget 承
-                        // 认已解析视图，不再重复导航）。
+                    if (spec.getTargetLevel() == TargetLevel.CARD) {
+                        // CARD 模式：跳过已隐藏的卡片根（防止级联重应用）
                         if (itemRoot.getVisibility() != View.VISIBLE) continue;
-                        View found = ViewTraversal.findViewByItemPath(
-                                itemRoot, spec.itemPath, 0);
-                        if (found == null) {
-                            found = ViewTraversal.findViewByClassChain(itemRoot, spec.itemPath, 0);
-                        }
-                        if (found != null && isStructuralMatch(found, spec, false)) {
-                            if (!partial.contains(found)) {
-                                partial.add(found);
-                            }
-                        }
-                    } else {
-                        // ELEMENT 模式：itemPath 导航 + classChain 回退
-                        View found = ViewTraversal.findViewByItemPath(
-                                itemRoot, spec.itemPath, 0);
-                        if (found == null) {
-                            found = ViewTraversal.findViewByClassChain(itemRoot, spec.itemPath, 0);
-                        }
-                        if (found != null && isStructuralMatch(found, spec, false)) {
-                            if (!partial.contains(found)) {
-                                partial.add(found);
-                            }
-                        }
+                    }
+                    View found = matchSingleItem(itemRoot, spec);
+                    if (found != null && !partial.contains(found)) {
+                        partial.add(found);
                     }
                 }
             }
@@ -164,10 +144,10 @@ public final class CompositeMatcher implements IMatcher {
      * 按 resourceName 锚定：解析为 int ID，通过 findViewById 精确查找。
      * 不包含评分验证，由调用方负责 isStructuralMatch 检查。
      */
-    private static View findByResourceId(View root, MatchSpec spec) {
-        if (root == null || TextUtils.isEmpty(spec.resourceName)) return null;
+    private static View findByResourceId(View root, MatchFields spec) {
+        if (root == null || TextUtils.isEmpty(spec.getResourceName())) return null;
         try {
-            int id = root.getResources().getIdentifier(spec.resourceName, "id", null);
+            int id = root.getResources().getIdentifier(spec.getResourceName(), "id", null);
             if (id == 0 || id == View.NO_ID) return null;
             View found = root.findViewById(id);
             if (found == null || !isVisibleView(found)) return null;
@@ -195,20 +175,20 @@ public final class CompositeMatcher implements IMatcher {
      * 递归遍历视图树，收集 RecyclerView 中按 itemPath 导航 + AND 验证匹配的视图。
      * 无 collectMatches 全树兜底。
      */
-    private static void collectRecyclerMatches(View view, MatchSpec spec, List<View> results) {
+    private static void collectRecyclerMatches(View view, MatchFields spec, List<View> results) {
         if (results.size() >= GmConstants.MAX_REPEATABLE_RESULTS) return;
         boolean isRecyclerView = view.getClass().getName().contains("RecyclerView")
                 && view instanceof ViewGroup;
         if (isRecyclerView) {
             ViewGroup rv = (ViewGroup) view;
 
-            Integer expectedViewType = spec.viewType > 0 ? spec.viewType : null;
+            Integer expectedViewType = spec.getInfoFlowViewType() > 0 ? spec.getInfoFlowViewType() : null;
 
             for (int i = 0; i < rv.getChildCount()
                     && results.size() < GmConstants.MAX_REPEATABLE_RESULTS; i++) {
                 View itemRoot = rv.getChildAt(i);
                 if (itemRoot == null) continue;
-                if (!itemRoot.getClass().getName().equals(spec.itemRootClass)) continue;
+                if (!itemRoot.getClass().getName().equals(spec.getItemRootClass())) continue;
 
                 // viewType 检查（反射避免 RecyclerView 编译期依赖）
                 if (expectedViewType != null
@@ -216,33 +196,13 @@ public final class CompositeMatcher implements IMatcher {
                     continue;
                 }
 
-                if (spec.targetLevel == TargetLevel.CARD) {
-                    // CARD 模式：跳过已隐藏的卡片根（防止级联重应用），
-                    // 然后导航 itemPath + isStructuralMatch 验证精度同 ELEMENT，
-                    // 匹配通过后直接返回内部目标元素（由 ViewController.resolveCardTarget 承
-                    // 认已解析视图，不再重复导航）。
+                if (spec.getTargetLevel() == TargetLevel.CARD) {
+                    // CARD 模式：跳过已隐藏的卡片根（防止级联重应用）
                     if (itemRoot.getVisibility() != View.VISIBLE) continue;
-                    View found = ViewTraversal.findViewByItemPath(
-                            itemRoot, spec.itemPath, 0);
-                    if (found == null) {
-                        found = ViewTraversal.findViewByClassChain(itemRoot, spec.itemPath, 0);
-                    }
-                    if (found != null && isStructuralMatch(found, spec, false)) {
-                        if (!results.contains(found)) {
-                            results.add(found);
-                        }
-                    }
-                } else {
-                    // ELEMENT 模式：itemPath 导航 + classChain 回退
-                    View found = ViewTraversal.findViewByItemPath(itemRoot, spec.itemPath, 0);
-                    if (found == null) {
-                        found = ViewTraversal.findViewByClassChain(itemRoot, spec.itemPath, 0);
-                    }
-                    if (found != null && isStructuralMatch(found, spec, false)) {
-                        if (!results.contains(found)) {
-                            results.add(found);
-                        }
-                    }
+                }
+                View found = matchSingleItem(itemRoot, spec);
+                if (found != null && !results.contains(found)) {
+                    results.add(found);
                 }
             }
             return;
@@ -290,7 +250,8 @@ public final class CompositeMatcher implements IMatcher {
                     return viewType == expectedViewType;
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            Logger.d("CompositeMatcher", "checkViewType reflection failed: " + e.getMessage());
         }
         return false;
     }
@@ -302,48 +263,79 @@ public final class CompositeMatcher implements IMatcher {
     }
 
     // =========================================================================
+    // matchSingleItem — CARD/ELEMENT 统一导航+验证管线
+    // =========================================================================
+
+    /**
+     * 对单个 itemRoot 执行 itemPath 导航 + AND 布尔验证。
+     * <p>
+     * CARD 和 ELEMENT 模式使用完全相同的管线：
+     * <ol>
+     *   <li>精确索引 + 类名导航</li>
+     *   <li>失败 → 纯类名链回退</li>
+     *   <li>成功 → isStructuralMatch 验证</li>
+     * </ol>
+     * <p>
+     * 调用方负责 CARD 模式的可见性检查和结果去重。
+     *
+     * @param itemRoot RecyclerView item 根 View
+     * @param spec     匹配规格
+     * @return 验证通过的目标 View，导航失败或验证失败返回 null
+     */
+    private static View matchSingleItem(View itemRoot, MatchFields spec) {
+        View found = ViewTraversal.findViewByItemPath(itemRoot, spec.getItemPath(), 0);
+        if (found == null) {
+            found = ViewTraversal.findViewByClassChain(itemRoot, spec.getItemPath(), 0);
+        }
+        if (found != null && isStructuralMatch(found, spec, false)) {
+            return found;
+        }
+        return null;
+    }
+
+    // =========================================================================
     // isStructuralMatch — AND 布尔匹配（最终验证）
     // =========================================================================
 
     /**
-     * AND 布尔匹配：MatchSpec 中所有非空字段必须全部匹配。
+     * AND 布尔匹配：MatchFields 中所有非空字段必须全部匹配。
      *
      * @param strictParent true=单元素模式，parentClass 也必须匹配；
      *                     false=信息流模式，parentClass 提供但不强制
      */
-    public static boolean isStructuralMatch(View view, MatchSpec spec, boolean strictParent) {
+    public static boolean isStructuralMatch(View view, MatchFields spec, boolean strictParent) {
         if (view == null || spec == null) return false;
 
         // ── viewClass ──
-        if (hasContent(spec.viewClass)
-                && !view.getClass().getName().equals(spec.viewClass)) {
+        if (hasContent(spec.getViewClass())
+                && !view.getClass().getName().equals(spec.getViewClass())) {
             return false;
         }
 
         // ── text ──
-        if (hasContent(spec.text)) {
+        if (hasContent(spec.getText())) {
             if (!(view instanceof TextView)) return false;
             CharSequence t = ((TextView) view).getText();
             if (t == null) return false;
-            if (!TextMatcher.matchText(t.toString(), spec.text, spec.matchMode)) {
+            if (!TextMatcher.matchText(t.toString(), spec.getText(), spec.getMatchMode())) {
                 return false;
             }
         }
 
         // ── description ──
-        if (hasContent(spec.description)) {
+        if (hasContent(spec.getDescription())) {
             CharSequence d = view.getContentDescription();
             if (d == null) return false;
-            if (!TextMatcher.matchText(d.toString(), spec.description, spec.matchMode)) {
+            if (!TextMatcher.matchText(d.toString(), spec.getDescription(), spec.getMatchMode())) {
                 return false;
             }
         }
 
         // ── parentClass（条件检） ──
-        if (hasContent(spec.parentClass) && strictParent) {
+        if (hasContent(spec.getParentClass()) && strictParent) {
             ViewParent p = view.getParent();
             if (!(p instanceof View)
-                    || !p.getClass().getName().equals(spec.parentClass)) {
+                    || !p.getClass().getName().equals(spec.getParentClass())) {
                 return false;
             }
         }

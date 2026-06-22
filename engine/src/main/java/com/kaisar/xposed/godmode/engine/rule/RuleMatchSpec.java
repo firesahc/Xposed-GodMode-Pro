@@ -78,7 +78,7 @@ public final class RuleMatchSpec implements RuleFields, Cloneable {
     }
 
     // =========================================================================
-    // RuleFields 接口实现 — 37 个 getter（委托到 public 字段）
+    // RuleFields 接口实现 — 40 个 getter（委托到 public 字段）
     // =========================================================================
 
     @Override public String getRuleTag() { return ruleTag; }

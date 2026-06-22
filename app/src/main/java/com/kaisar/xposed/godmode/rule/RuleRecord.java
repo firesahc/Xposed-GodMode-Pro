@@ -23,12 +23,17 @@ import java.util.Objects;
  * 实现 {@link RuleFields} 接口以提供编译期安全的字段访问，
  * 配合 {@link com.kaisar.xposed.godmode.engine.rule.RuleMapper} 实现类型安全的 app→engine 转换。
  * <p>
+ * 【内部实现细节】此类的 public 字段是为兼容 Parcelable/Gson 而保留的。
+ * 编辑器层操作修改字段应优先使用 {@link #asActionSpec()} 获取 {@code ActionSpec}，
+ * 或通过 {@link com.kaisar.xposed.godmode.engine.rule.ActionSpec.Builder} 直接构造。
+ * <p>
  * 【同步保障】对方文件 {@code engine/.../engine/rule/RuleMatchSpec.java}（纯 POJO 版）
  * <br>引擎字段总数: 40 &nbsp;|&nbsp; app 字段总数: 40
  * <br>若此处增减字段，请同步修改对方文件的同名字段。Parcel 读写、clone() 和 equals()/hashCode()。
  *
  * @see RuleFields
  * @see com.kaisar.xposed.godmode.engine.rule.RuleMapper
+ * @see com.kaisar.xposed.godmode.engine.rule.ActionSpec
  */
 @Keep
 public final class RuleRecord implements RuleFields, Parcelable, Cloneable {
@@ -125,7 +130,7 @@ public final class RuleRecord implements RuleFields, Parcelable, Cloneable {
     public int origTopMargin;
 
     // =========================================================================
-    // RuleFields 接口实现 — 37 个 getter（委托到 public 字段）
+    // RuleFields 接口实现 — 40 个 getter（委托到 public 字段）
     // =========================================================================
 
     @Override public String getRuleTag() { return ruleTag; }
@@ -378,6 +383,16 @@ public final class RuleRecord implements RuleFields, Parcelable, Cloneable {
     public boolean hasModifications() {
         return isWidthModified() || isHeightModified() || isAlphaModified()
                 || isPositionModified() || isTextModified() || isImageModified();
+    }
+
+    /**
+     * 从当前 RuleRecord 导出 ActionSpec（修改/移除字段子集）。
+     * <p>
+     * 编辑器层应优先使用 ActionSpec.Builder 直接构造动作字段，
+     * 此方法主要用于需要从已有 RuleRecord 读取动作字段的场景（如 PropertyEditorPanel 的取消操作）。
+     */
+    public com.kaisar.xposed.godmode.engine.rule.ActionSpec asActionSpec() {
+        return com.kaisar.xposed.godmode.engine.rule.ActionSpec.from(this);
     }
 
     // =========================================================================
