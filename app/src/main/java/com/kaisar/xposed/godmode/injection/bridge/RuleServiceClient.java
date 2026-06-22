@@ -247,8 +247,8 @@ public final class RuleServiceClient {
     public void forwardLog(int level, String tag, String msg, long timestamp) {
         try {
             ensureService().log(level,
-                    HookLauncher.loadPackageParam != null
-                            ? HookLauncher.loadPackageParam.packageName
+                    HookLauncher.getLoadPackageParam() != null
+                            ? HookLauncher.getLoadPackageParam().packageName
                             : "unknown",
                     timestamp,
                     tag, msg);

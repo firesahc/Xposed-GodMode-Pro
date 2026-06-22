@@ -56,8 +56,8 @@ public final class HookLauncher implements IXposedHookLoadPackage, IXposedHookZy
 
     // 注意：所有字段访问前必须判空，避免在模块未初始化时触发 NPE
     // Property 使用 AtomicReference 确保线程安全，初始值为 null 直到注入完成
-    public final static Property<Boolean> switchProp = new Property<>(false);
-    public static volatile XC_LoadPackage.LoadPackageParam loadPackageParam;
+    private final static Property<Boolean> switchProp = new Property<>(false);
+    private static volatile XC_LoadPackage.LoadPackageParam loadPackageParam;
 
     // EventBus — 仅用于规则变更通知（RulesChangedEvent），编辑模式通过 Property 分发
     private static final EventBus sEventBus = EventBus.getDefault();
@@ -67,6 +67,20 @@ public final class HookLauncher implements IXposedHookLoadPackage, IXposedHookZy
 
     /** 获取编辑器编排器实例（EditorOrchestrator 单例）*/
     public static EditorOrchestrator getEditorOrchestrator() { return sEditorOrchestrator; }
+
+    /** 获取编辑器开关属性（用于注册监听器） */
+    public static Property<Boolean> getSwitchProp() { return switchProp; }
+
+    /** 查询编辑器开关状态 */
+    public static boolean isSwitchEnabled() { return switchProp.get(); }
+
+    /** 获取当前加载包参数（可能为 null） */
+    public static XC_LoadPackage.LoadPackageParam getLoadPackageParam() { return loadPackageParam; }
+
+    /** 获取当前应用包名（可能为 null） */
+    public static String getPackageName() {
+        return loadPackageParam != null ? loadPackageParam.packageName : null;
+    }
 
     private enum State { UNKNOWN, ALLOWED, BLOCKED }
 
@@ -120,7 +134,7 @@ public final class HookLauncher implements IXposedHookLoadPackage, IXposedHookZy
             return;
         }
 
-        HookLauncher.loadPackageParam = lpp;
+        loadPackageParam = lpp;
         injectIntoTargetApp(lpp, packageName);
     }
 
@@ -186,7 +200,7 @@ public final class HookLauncher implements IXposedHookLoadPackage, IXposedHookZy
             protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                 Activity activity = (Activity) param.thisObject;
                 ModuleResources.injectInto(activity.getResources());
-                if (switchProp.get()) {
+                if (isSwitchEnabled()) {
                     // post 到 DecorView 等待 setContentView 完成后显示编辑面板
                     activity.getWindow().getDecorView().post(() -> sEditorOrchestrator.setDisplay(true));
                 }
@@ -205,11 +219,11 @@ public final class HookLauncher implements IXposedHookLoadPackage, IXposedHookZy
         XposedHelpers.findAndHookMethod(Activity.class, "onDestroy", lifecycleObserver);
 
         // 调试布局模式 Hook — 用于显示控件边界信息，由开关属性控制
-        DebugLayoutHook.install(switchProp);
+        DebugLayoutHook.install(getSwitchProp());
 
         // 触摸事件 Hook — 用于拦截触摸操作，实现选择/移除/修改交互
         TouchHook touchHook = new TouchHook(sEditorOrchestrator);
-        switchProp.addOnPropertyChangeListener(sEditorOrchestrator);
+        getSwitchProp().addOnPropertyChangeListener(sEditorOrchestrator);
         XposedHelpers.findAndHookMethod(View.class, "dispatchTouchEvent",
                 MotionEvent.class, touchHook);
 
@@ -232,27 +246,26 @@ public final class HookLauncher implements IXposedHookLoadPackage, IXposedHookZy
     // =========================================================================
 
     public static void notifyEditModeChanged(boolean enable) {
-        if (loadPackageParam == null) {
+        if (getLoadPackageParam() == null) {
             Logger.w(TAG, "[GodMode] edit mode change ignored: loadPackageParam not ready");
             return;
         }
         if (state == State.UNKNOWN) {
-            state = BlockListChecker.isBlocked(loadPackageParam.packageName)
+            state = BlockListChecker.isBlocked(getPackageName())
                     ? State.BLOCKED : State.ALLOWED;
         }
         Logger.i(TAG, "[GodMode] edit mode " + enable + " state=" + state
-                + " pkg=" + loadPackageParam.packageName);
-        // 先更新开关属性，再更新 UI 显示，确保 setDisplay 能正确读取 switchProp 状态
+                + " pkg=" + getPackageName());
         if (state == State.ALLOWED) {
-            switchProp.set(enable);                        // 先通知开关属性变更
+            switchProp.set(enable);
         }
-        sEditorOrchestrator.setDisplay(enable);            // 再更新 UI 显示
+        sEditorOrchestrator.setDisplay(enable);
     }
 
     public static void notifyViewRulesChanged(ActRules actRules) {
         if (actRules == null) return;
         sEventBus.post(new RulesChangedEvent(
-                loadPackageParam != null ? loadPackageParam.packageName : "", actRules));
+                getPackageName() != null ? getPackageName() : "", actRules));
     }
 
     // 模块资源注入 — ModuleResources 在 injectIntoTargetApp 时被调用，通过 ModuleResources.injectInto() 注入模块资源

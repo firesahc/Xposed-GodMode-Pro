@@ -21,6 +21,7 @@ import android.widget.Toast;
 import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.engine.matcher.CompositeMatcher;
 import com.kaisar.xposed.godmode.engine.matcher.ViewTraversal;
+import com.kaisar.xposed.godmode.engine.rule.ActionSpec;
 import com.kaisar.xposed.godmode.engine.rule.RuleMapper;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.injection.ModuleResources;
@@ -50,8 +51,10 @@ import de.robv.android.xposed.XposedHelpers;
  * <ul>
  *   <li>UI built from R.layout.panel_modify with sliders, text fields, and preview</li>
  *   <li>Supports image replacement via gallery/file picker (Activity result)</li>
- *   <li>Tracks pending modifications in {@link #mTempModifications} for batch save/cancel</li>
- *   <li>Captures original view state via {@link ViewSnapshot} before editing</li>
+ *   <li>Tracks pending modifications in {@link #mTempModifications} as {@link ActionSpec}
+ *       for batch save/cancel — cancel discards ActionSpec with no side effects</li>
+ *   <li>{@link #mOriginalRule} stores structure fields (depth/viewClass/resourceName)
+ *       captured once, merged with ActionSpec on save</li>
  *   <li>Hooks Activity.onActivityResult to handle image picker result</li>
  * </ul>
  */
@@ -66,8 +69,16 @@ public class PropertyEditorPanel {
     private Bitmap mPendingImageBitmap;
     private HashMap<String, Bitmap> mPendingModBitmaps = new HashMap<>();
 
-    // Pending modifications keyed by rule key — batch saved or cancelled together
-    final HashMap<String, RuleRecord> mTempModifications = new HashMap<>();
+    // Pending modifications keyed by view key — batch saved or cancelled together.
+    // Changed from RuleRecord to ActionSpec: only stores modify fields,
+    // cancel discards with no side effects.
+    final HashMap<String, ActionSpec> mTempModifications = new HashMap<>();
+
+    // Original rule with structure fields (depth/viewClass/activityClass/itemPath etc.)
+    // — captured once when editing begins, merged with mTempModifications on save.
+    private RuleRecord mOriginalRule;
+
+    // Saved original view state before modification — used for revert / cancel
 
     // Saved original view state before modification — used for revert / cancel
     private ViewGroup.MarginLayoutParams mSavedLayoutParams;
@@ -130,6 +141,8 @@ public class PropertyEditorPanel {
         mModifyingViewDepth = null;
         mModifyingViewActClass = null;
         mSnapshot = null;
+        mOriginalRule = null;
+        mTempModifications.clear();
         // Recycle pending mod bitmaps on dismiss (mPendingModBitmaps stores loaded replacement images).
         // For cancel() / saveAll() see the confirm/cancel button handlers.
         panel.animate().alpha(0).setDuration(150).withEndAction(() -> {
@@ -366,10 +379,11 @@ public class PropertyEditorPanel {
 
     // ---- Confirm / Cancel buttons ----
 
-    /** 应用 UI 控件的修改值到 RuleRecord（创建或更新）。
+    /** 应用 UI 控件的修改值到 ActionSpec（创建或更新）。
      * <p>
-     * 结构信息和原始值来自预捕获的 {@link #mSnapshot}（视图未修改时冻结），
-     * 修改值（mod*）来自 UI 控件当前状态。创建时无需后置修正。 */
+     * 仅存储修改字段（mod*），结构字段始终从 {@link #mOriginalRule} 获取。
+     * 取消时丢弃 ActionSpec 即可，无副作用。
+     * 修改值（mod*）来自 UI 控件当前状态。 */
     private void applyModification(View view, SeekBar widthSeek, SeekBar heightSeek,
                                     SeekBar alphaSeek, EditText textInput) {
         int w = widthSeek.getProgress();
@@ -377,32 +391,36 @@ public class PropertyEditorPanel {
         float a = alphaSeek.getProgress() / 255f;
 
         String viewKey = ViewUtils.getViewKey(view);
-        RuleRecord rule = mTempModifications.get(viewKey);
-        if (rule == null) {
-            // 使用快照创建规则 — 结构来自视图，原始值来自快照，无需后置修正
-            rule = RuleRecordFactory.makeModifyRule(view, mSnapshot);
-            mTempModifications.put(viewKey, rule);
+        ActionSpec spec = mTempModifications.get(viewKey);
+        if (spec == null) {
+            // 第一次修改：创建 mOriginalRule（结构字段）和 ActionSpec（修改字段）
+            if (mOriginalRule == null) {
+                mOriginalRule = RuleRecordFactory.makeModifyRule(view, mSnapshot);
+            }
+            spec = mOriginalRule.asActionSpec();
+            mTempModifications.put(viewKey, spec);
         }
-        // 规则已存在（如 image-pick 预创建）— 创建时已用快照，orig* 正确，无需修正
 
-        if (rule.origWidth > 0 && w != rule.origWidth) {
-            rule.modWidth = w;
+        if (mOriginalRule.origWidth > 0 && w != mOriginalRule.origWidth) {
+            spec.modWidth = w;
         }
-        if (rule.origHeight > 0 && h != rule.origHeight) {
-            rule.modHeight = h;
+        if (mOriginalRule.origHeight > 0 && h != mOriginalRule.origHeight) {
+            spec.modHeight = h;
         }
-        if (Math.abs(rule.origAlpha - a) > 0.01f) {
-            rule.modAlpha = a;
+        if (Math.abs(mOriginalRule.origAlpha - a) > 0.01f) {
+            spec.modAlpha = a;
         }
 
         if (view instanceof TextView && textInput != null && textInput.getVisibility() == View.VISIBLE) {
             String newText = textInput.getText().toString();
-            if (!newText.equals(rule.origText)) {
-                rule.modText = newText;
+            if (!newText.equals(mOriginalRule.origText)) {
+                spec.modText = newText;
             }
         }
 
-        if (!rule.hasModifications()) {
+        if (!spec.isWidthModified() && !spec.isHeightModified() && !spec.isAlphaModified()
+                && !spec.isTextModified() && !spec.isImageModified()
+                && !spec.isPositionModified()) {
             mTempModifications.remove(viewKey);
         }
     }
@@ -412,12 +430,32 @@ public class PropertyEditorPanel {
      * 清理临时修改缓存，完成后通过回调通知结果。
      */
     public void saveAll(Activity activity, View nodeSelectorPanel, View maskView, View modifyPanel) {
-        if (mTempModifications.isEmpty()) {
+        if (mTempModifications.isEmpty() || mOriginalRule == null) {
             Toast.makeText(activity, "没有需要保存的修改", Toast.LENGTH_SHORT).show();
             return;
         }
         String pkg = activity.getPackageName();
-        for (RuleRecord rule : mTempModifications.values()) {
+
+        // 合并 ActionSpec 修改字段到 RuleRecord 结构 → 完整 RuleRecord 列表
+        final List<RuleRecord> rulesToSave = new ArrayList<>();
+        for (Map.Entry<String, ActionSpec> entry : mTempModifications.entrySet()) {
+            RuleRecord rule = mOriginalRule.clone();
+            ActionSpec spec = entry.getValue();
+            // 将 ActionSpec 的修改字段拷贝到 RuleRecord
+            rule.modWidth = spec.modWidth;
+            rule.modHeight = spec.modHeight;
+            rule.modAlpha = spec.modAlpha;
+            rule.modXOffset = spec.modXOffset;
+            rule.modYOffset = spec.modYOffset;
+            rule.modText = spec.modText;
+            rule.modImagePath = spec.modImagePath;
+            rule.origWidth = spec.origWidth;
+            rule.origHeight = spec.origHeight;
+            rule.origAlpha = spec.origAlpha;
+            rule.origText = spec.origText;
+            rule.origLeftMargin = spec.origLeftMargin;
+            rule.origTopMargin = spec.origTopMargin;
+
             if ("pending".equals(rule.modImagePath)) {
                 StringBuilder sb = new StringBuilder(rule.activityClass);
                 if (rule.depth != null) {
@@ -427,19 +465,17 @@ public class PropertyEditorPanel {
                 Bitmap bmp = mPendingModBitmaps.get(viewKey);
                 if (bmp != null && !bmp.isRecycled()) {
                     String savedPath = RuleServiceClient.getDefault().saveImageFile(pkg, bmp);
-                    if (savedPath != null) {
-                        rule.modImagePath = savedPath;
-                    } else {
-                        rule.modImagePath = null;
-                        Logger.w(TAG, "[ModifyPanel] saveAll: save modification image failed via IPC");
-                    }
+                    rule.modImagePath = savedPath != null ? savedPath : null;
                 } else {
                     rule.modImagePath = null;
                 }
             }
+
+            if (rule.hasModifications()) {
+                rulesToSave.add(rule);
+            }
         }
-        mTempModifications.entrySet().removeIf(entry -> !entry.getValue().hasModifications());
-        if (mTempModifications.isEmpty()) {
+        if (rulesToSave.isEmpty()) {
             Toast.makeText(activity, "没有需要保存的修改", Toast.LENGTH_SHORT).show();
             return;
         }
@@ -447,7 +483,6 @@ public class PropertyEditorPanel {
         if (modifyPanel != null) modifyPanel.setVisibility(View.INVISIBLE);
         if (maskView != null) maskView.setVisibility(View.INVISIBLE);
 
-        final List<RuleRecord> rulesToSave = new ArrayList<>(mTempModifications.values());
         final HashMap<RuleRecord, Bitmap> snapshots = new HashMap<>();
         for (RuleRecord rule : rulesToSave) {
             try {
@@ -555,12 +590,15 @@ public class PropertyEditorPanel {
                                     mPendingImageBitmap = bitmap;
                                     ((ImageView) targetView).setImageBitmap(bitmap);
                                     String viewKey = ViewUtils.getViewKey(targetView);
-                                    RuleRecord rule = mTempModifications.get(viewKey);
-                                    if (rule == null) {
-                                        rule = RuleRecordFactory.makeModifyRule(targetView, mSnapshot);
-                                        mTempModifications.put(viewKey, rule);
+                                    ActionSpec spec = mTempModifications.get(viewKey);
+                                    if (spec == null) {
+                                        if (mOriginalRule == null) {
+                                            mOriginalRule = RuleRecordFactory.makeModifyRule(targetView, mSnapshot);
+                                        }
+                                        spec = mOriginalRule.asActionSpec();
+                                        mTempModifications.put(viewKey, spec);
                                     }
-                                    rule.modImagePath = "pending";
+                                    spec.modImagePath = "pending";
                                     mPendingModBitmaps.put(viewKey, bitmap);
                                 }
                             } catch (Exception e) {

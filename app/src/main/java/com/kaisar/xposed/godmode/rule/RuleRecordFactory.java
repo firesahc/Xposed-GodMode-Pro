@@ -75,7 +75,7 @@ public final class RuleRecordFactory {
                 x, y, width, height, viewHierarchyDepth,
                 activityClassName, viewClassName, resourceName, text, description,
                 View.INVISIBLE, System.currentTimeMillis());
-        populateRepeatableInfo(v, rule);
+        populateRepeatableInfo(v, rule, HookLauncher.getEditorOrchestrator().isInfoFlowMode());
         return rule;
     }
 
@@ -142,9 +142,12 @@ public final class RuleRecordFactory {
         rule.height = v.getHeight();
     }
 
-    /** 填充可重复规则信息（itemPath、itemRootClass、parentClass）*/
-    private static void populateRepeatableInfo(View v, RuleRecord rule) {
-        if (!HookLauncher.getEditorOrchestrator().isInfoFlowMode()) return;
+    /** 填充可重复规则信息（itemPath、itemRootClass、parentClass）
+     * @param v 目标视图
+     * @param rule 规则记录
+     * @param isInfoFlowMode 是否为信息流模式（由调用方通过 EditorOrchestrator.isInfoFlowMode() 传入）*/
+    private static void populateRepeatableInfo(View v, RuleRecord rule, boolean isInfoFlowMode) {
+        if (!isInfoFlowMode) return;
         try {
             ViewGroup rv = ViewTraversal.findRecyclerViewAncestor(v);
             if (rv == null) return;

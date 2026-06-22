@@ -22,7 +22,7 @@ public final class ActivityKeyHook extends XC_MethodHook {
 
     @Override
     protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-        if (!HookLauncher.switchProp.get() || mOrchestrator.isDragging()) return;
+        if (!HookLauncher.isSwitchEnabled() || mOrchestrator.isDragging()) return;
         Activity activity = (Activity) param.thisObject;
         KeyEvent event = (KeyEvent) param.args[0];
         int action = event.getAction();
