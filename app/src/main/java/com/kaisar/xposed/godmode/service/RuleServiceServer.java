@@ -222,16 +222,16 @@ public final class RuleServiceServer extends IGodModeManager.Stub {
     }
 
     // ---- 工具栏偏好 ----
+    // 注意：工具栏偏好不包含敏感信息，允许任意进程读写，
+    // 避免目标应用进程调用 getToolbarHiddenItems 时因权限校验失败导致自定义工具栏失效。
 
     @Override
     public String getToolbarHiddenItems() throws RemoteException {
-        mPermissionEnforcer.enforcePermission("get toolbar hidden items fail permission denied");
         return mToolbarHiddenItems;
     }
 
     @Override
     public void setToolbarHiddenItems(String items) throws RemoteException {
-        mPermissionEnforcer.enforcePermission("set toolbar prefs fail permission denied");
         mToolbarHiddenItems = items != null ? items : "";
         mOrchestrator.persistToolbarHiddenItems(mToolbarHiddenItems);
     }
