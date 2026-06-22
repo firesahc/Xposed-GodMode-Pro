@@ -5,6 +5,7 @@ import android.os.Looper;
 import android.os.Message;
 
 import com.kaisar.xposed.godmode.IObserver;
+import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.injection.HookLauncher;
 import com.kaisar.xposed.godmode.rule.ActRules;
 
@@ -14,6 +15,8 @@ import com.kaisar.xposed.godmode.rule.ActRules;
  */
 
 public final class ServiceObserver extends IObserver.Stub implements Handler.Callback {
+
+    private static final String TAG = "ServiceObserver";
 
     private final Handler mHandler = new Handler(Looper.getMainLooper(), this);
     private static final int ACTION_EDIT_MODE_CHANGED = 0;
@@ -31,7 +34,10 @@ public final class ServiceObserver extends IObserver.Stub implements Handler.Cal
 
     @Override
     public boolean handleMessage(Message msg) {
-        if (msg.obj == null) return true;
+        if (msg.obj == null) {
+            Logger.w(TAG, "handleMessage: received null message object");
+            return true;
+        }
         if (msg.what == ACTION_EDIT_MODE_CHANGED) {
             HookLauncher.notifyEditModeChanged((Boolean) msg.obj);
         } else if (msg.what == ACTION_VIEW_RULES_CHANGED) {

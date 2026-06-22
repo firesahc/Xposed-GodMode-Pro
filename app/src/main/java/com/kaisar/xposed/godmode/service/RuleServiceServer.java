@@ -9,6 +9,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.kaisar.xposed.godmode.BuildConfig;
 import com.kaisar.xposed.godmode.IGodModeManager;
+import com.kaisar.xposed.godmode.engine.util.GmConstants;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.AppRules;
@@ -40,7 +41,7 @@ public final class RuleServiceServer extends IGodModeManager.Stub {
 
     // ===== 运行时状态 =====
     private volatile boolean mInEditMode;
-    private boolean mStarted;
+    private volatile boolean mStarted;
 
     // ===== 工具栏隐藏项（由 RuleServiceServer 管理持久化）=====
     private String mToolbarHiddenItems = "";
@@ -115,7 +116,14 @@ public final class RuleServiceServer extends IGodModeManager.Stub {
     @Override
     public AppRules getAllRules() throws RemoteException {
         mPermissionEnforcer.enforcePermission("get all rules fail permission denied");
-        if (!mStarted || !mOrchestrator.isDataLoaded()) return new AppRules();
+        if (!mStarted) {
+            mLogger.w("getAllRules: service not started");
+            return new AppRules();
+        }
+        if (!mOrchestrator.isDataLoaded()) {
+            mLogger.w("getAllRules: data not loaded yet");
+            return new AppRules();
+        }
         return mCacheManager.getAllRules();
     }
 
@@ -124,7 +132,14 @@ public final class RuleServiceServer extends IGodModeManager.Stub {
         mPermissionEnforcer.enforcePermission(
                 new String[]{packageName, BuildConfig.APPLICATION_ID},
                 "get rules fail permission denied");
-        if (!mStarted || !mOrchestrator.isDataLoaded()) return new ActRules();
+        if (!mStarted) {
+            mLogger.w("getRules: service not started");
+            return new ActRules();
+        }
+        if (!mOrchestrator.isDataLoaded()) {
+            mLogger.w("getRules: data not loaded yet");
+            return new ActRules();
+        }
         return mCacheManager.getRules(packageName);
     }
 
@@ -195,7 +210,7 @@ public final class RuleServiceServer extends IGodModeManager.Stub {
         File file = new File(filePath);
         if (!file.exists() || !file.isFile())
             throw new RemoteException("File not found: " + filePath);
-        if (file.length() > 5 * 1024 * 1024)
+        if (file.length() > GmConstants.MAX_IMAGE_FILE_SIZE_BYTES)
             throw new RemoteException("File too large (>5MB): " + filePath);
         try {
             return ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY);

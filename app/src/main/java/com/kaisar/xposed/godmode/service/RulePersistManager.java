@@ -154,7 +154,10 @@ final class RulePersistManager {
         String json;
         synchronized (mPendingWrites) {
             json = mPendingWrites.get(packageName);
-            if (json == null) return;
+            if (json == null) {
+                mLogger.w("debouncedWrite skipped: json is null for " + packageName);
+                return;
+            }
         }
         try {
             doPersist(packageName, json);
@@ -259,6 +262,7 @@ final class RulePersistManager {
             return (target.equals(base) || target.startsWith(base + File.separator))
                     && filePath.endsWith(IMAGE_FILE_SUFFIX);
         } catch (IOException e) {
+            mLogger.w("isValidImagePath: cannot resolve path for " + filePath, e);
             return false;
         }
     }

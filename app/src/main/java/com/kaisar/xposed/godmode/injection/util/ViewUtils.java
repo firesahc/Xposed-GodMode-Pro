@@ -9,6 +9,7 @@ import android.view.ViewGroup;
 import android.view.ViewParent;
 
 import com.kaisar.xposed.godmode.engine.matcher.ViewTraversal;
+import com.kaisar.xposed.godmode.engine.util.Logger;
 
 import java.lang.ref.WeakReference;
 import java.util.List;
@@ -22,6 +23,8 @@ import de.robv.android.xposed.XposedHelpers;
  * Split from {@code ViewHelper} for single-responsibility.
  */
 public final class ViewUtils {
+
+    private static final String TAG = "ViewUtils";
 
     private ViewUtils() {}
 
@@ -56,6 +59,7 @@ public final class ViewUtils {
                 try {
                     baseContext = (Context) XposedHelpers.getObjectField(context, "mBase");
                 } catch (Exception e) {
+                    Logger.w(TAG, "getActivityFromViewContext reflection failed for context", e);
                     return null;
                 }
             }

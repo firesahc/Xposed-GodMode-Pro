@@ -175,7 +175,11 @@ public final class LifecycleObserver extends XC_MethodHook {
     @Subscribe
     public void onRulesChanged(RulesChangedEvent event) {
         ActRules newRules = toActRules(event.rules);
-        if (newRules == null || newRules.equals(mActRules)) return;
+        if (newRules == null) {
+            Logger.w(TAG, "onRulesChanged received null rules");
+            return;
+        }
+        if (newRules.equals(mActRules)) return;
 
         // Step 1: 撤销被删除/修改的旧规则（必须在 clearBlockedCache 之前）
         ActRules toRevoke = computeRuleDiff(mActRules, newRules);

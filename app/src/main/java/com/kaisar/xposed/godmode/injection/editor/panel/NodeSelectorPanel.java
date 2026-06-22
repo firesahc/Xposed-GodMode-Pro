@@ -15,6 +15,7 @@ import androidx.appcompat.widget.TooltipCompat;
 
 import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.engine.EditorInteractionMode;
+import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.injection.ModuleResources;
 import com.kaisar.xposed.godmode.injection.editor.overlay.MaskView;
 import com.kaisar.xposed.godmode.injection.util.GmResources;
@@ -29,6 +30,8 @@ import java.util.List;
  * 面板自身的 UI 操作（导航、位置切换）在内部完成。
  */
 public class NodeSelectorPanel {
+
+    private static final String TAG = "NodeSelectorPanel";
 
     // 交互模式（复用 EditorInteractionMode 常量）
 
@@ -284,14 +287,18 @@ public class NodeSelectorPanel {
                     if (toolbarColumn != null && toolbarColumn.getBackground() == null) {
                         try {
                             toolbarColumn.setBackground(GmResources.getDrawable(R.drawable.rounded_bg_full));
-                        } catch (Exception ignored) {}
+                        } catch (Exception e) {
+                            Logger.d(TAG, "toolbar resource fallback failed: " + e.getMessage(), e);
+                        }
                     }
                 }
             }
 
             // ── 按钮背景 ripple_drawable_20dp (所有交互按钮) ──
             Drawable rippleBg = null;
-            try { rippleBg = GmResources.getDrawable(R.drawable.ripple_drawable_20dp); } catch (Exception ignored) {}
+            try { rippleBg = GmResources.getDrawable(R.drawable.ripple_drawable_20dp); } catch (Exception e) {
+                Logger.d(TAG, "toolbar resource fallback failed: " + e.getMessage(), e);
+            }
             if (rippleBg != null) {
                 int[] rippleViewIds = {
                         R.id.exchange, R.id.info_flow_mode_btn,
@@ -313,7 +320,9 @@ public class NodeSelectorPanel {
             if (removeMenu != null && removeMenu.getBackground() == null) {
                 try {
                     removeMenu.setBackground(GmResources.getDrawable(R.drawable.rounded_bg_bottom_background));
-                } catch (Exception ignored) {}
+                } catch (Exception e) {
+                    Logger.d(TAG, "toolbar resource fallback failed: " + e.getMessage(), e);
+                }
             }
 
             // ── ImageButton src drawable ──
@@ -338,7 +347,9 @@ public class NodeSelectorPanel {
                 View saveBtn = panelView.findViewById(R.id.save_modify);
                 if (saveBtn != null) TooltipCompat.setTooltipText(saveBtn,
                         GmResources.getText(R.string.accessibility_save_modify));
-            } catch (Exception ignored) {}
+            } catch (Exception e) {
+                Logger.d(TAG, "toolbar resource fallback failed: " + e.getMessage(), e);
+            }
         } catch (Exception e) {
             // 回退设置失败不应阻止 toolbar 显示,静默处理
         }
@@ -352,7 +363,9 @@ public class NodeSelectorPanel {
                 try {
                     Drawable d = GmResources.getDrawable(drawableResId);
                     if (d != null) ib.setImageDrawable(d);
-                } catch (Exception ignored) {}
+                } catch (Exception e) {
+                    Logger.d(TAG, "toolbar resource fallback failed: " + e.getMessage(), e);
+                }
             }
         }
     }
@@ -365,7 +378,9 @@ public class NodeSelectorPanel {
                 try {
                     CharSequence text = GmResources.getText(stringResId);
                     if (text != null) tv.setText(text);
-                } catch (Exception ignored) {}
+                } catch (Exception e) {
+                    Logger.d(TAG, "toolbar resource fallback failed: " + e.getMessage(), e);
+                }
             }
         }
     }

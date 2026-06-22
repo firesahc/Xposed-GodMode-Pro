@@ -57,8 +57,8 @@ public final class RuleRecordFactory {
         String resourceName = null;
         try {
             resourceName = v.getId() != View.NO_ID ? res.getResourceName(v.getId()) : null;
-        } catch (Resources.NotFoundException ignore) {
-            //the resource id may be declared in the plugin apk
+        } catch (Resources.NotFoundException e) {
+            Logger.d(TAG, "resourceName not found for view id=" + v.getId(), e);
         }
         String text = (v instanceof TextView && !TextUtils.isEmpty(((TextView) v).getText()))
                 ? ((TextView) v).getText().toString() : "";
@@ -184,7 +184,8 @@ public final class RuleRecordFactory {
                             if (pos >= 0) vt = adapter.getItemViewType(pos);
                         }
                     }
-                } catch (Exception ignored) {
+                } catch (Exception e) {
+                    Logger.d(TAG, "itemViewType capture failed", e);
                 }
                 if (vt >= 0) rule.viewType = vt;
             }

@@ -17,6 +17,7 @@ public final class ViewCompat {
         try {
             view.setVisibility(visibility);
         } catch (Exception e) {
+            Logger.w(TAG, "setVisibility failed, using alpha fallback", e);
             try {
                 view.setAlpha(visibility == View.VISIBLE ? 1f : 0f);
             } catch (Exception inner) {
