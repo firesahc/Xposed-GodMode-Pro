@@ -28,6 +28,7 @@ import com.kaisar.xposed.godmode.injection.bridge.RuleServiceClient;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 
 import java.io.FileNotFoundException;
+import java.io.IOException;
 
 @GlideModule
 public class GmGlideModule extends AppGlideModule {
@@ -75,25 +76,29 @@ public class GmGlideModule extends AppGlideModule {
         public void loadData(@NonNull Priority priority, @NonNull DataCallback<? super Bitmap> callback) {
             ParcelFileDescriptor pfd = RuleServiceClient.getDefault().openImageFileDescriptor(mRuleRecord.imagePath);
             if (pfd != null) {
-                // 直接使用 decodeFileDescriptor 解码，避免 ByteArrayOutputStream 中间缓冲区
-                Bitmap bitmap = BitmapFactory.decodeFileDescriptor(pfd.getFileDescriptor());
-                if (mRuleRecord.x >= 0 && mRuleRecord.y >= 0 && mRuleRecord.width > 0 && mRuleRecord.height > 0
-                        && bitmap != null
-                        && mRuleRecord.x + mRuleRecord.width <= bitmap.getWidth()
-                        && mRuleRecord.y + mRuleRecord.height <= bitmap.getHeight()) {
-                    Bitmap croppedBitmap = Bitmap.createBitmap(bitmap, mRuleRecord.x, mRuleRecord.y, mRuleRecord.width, mRuleRecord.height);
-                    Bitmap markedBitmap = Bitmap.createBitmap(croppedBitmap.getWidth(), croppedBitmap.getHeight(), Bitmap.Config.ARGB_8888);
-                    Canvas canvas = new Canvas(markedBitmap);
-                    canvas.drawBitmap(croppedBitmap, 0, 0, null);
-                    Paint borderPaint = new Paint();
-                    borderPaint.setStyle(Paint.Style.STROKE);
-                    borderPaint.setColor(Color.RED);
-                    borderPaint.setStrokeWidth(3);
-                    canvas.drawRect(1, 1, markedBitmap.getWidth() - 1, markedBitmap.getHeight() - 1, borderPaint);
-                    callback.onDataReady(markedBitmap);
-                    recycleNullableBitmap(croppedBitmap);
-                } else {
-                    callback.onDataReady(bitmap);
+                try {
+                    // 直接使用 decodeFileDescriptor 解码，避免 ByteArrayOutputStream 中间缓冲区
+                    Bitmap bitmap = BitmapFactory.decodeFileDescriptor(pfd.getFileDescriptor());
+                    if (mRuleRecord.x >= 0 && mRuleRecord.y >= 0 && mRuleRecord.width > 0 && mRuleRecord.height > 0
+                            && bitmap != null
+                            && mRuleRecord.x + mRuleRecord.width <= bitmap.getWidth()
+                            && mRuleRecord.y + mRuleRecord.height <= bitmap.getHeight()) {
+                        Bitmap croppedBitmap = Bitmap.createBitmap(bitmap, mRuleRecord.x, mRuleRecord.y, mRuleRecord.width, mRuleRecord.height);
+                        Bitmap markedBitmap = Bitmap.createBitmap(croppedBitmap.getWidth(), croppedBitmap.getHeight(), Bitmap.Config.ARGB_8888);
+                        Canvas canvas = new Canvas(markedBitmap);
+                        canvas.drawBitmap(croppedBitmap, 0, 0, null);
+                        Paint borderPaint = new Paint();
+                        borderPaint.setStyle(Paint.Style.STROKE);
+                        borderPaint.setColor(Color.RED); // 截图边框描边颜色
+                        borderPaint.setStrokeWidth(3);
+                        canvas.drawRect(1, 1, markedBitmap.getWidth() - 1, markedBitmap.getHeight() - 1, borderPaint);
+                        callback.onDataReady(markedBitmap);
+                        recycleNullableBitmap(croppedBitmap);
+                    } else {
+                        callback.onDataReady(bitmap);
+                    }
+                } finally {
+                    try { pfd.close(); } catch (IOException ignored) { }
                 }
             } else {
                 callback.onLoadFailed(new FileNotFoundException(mRuleRecord.imagePath));

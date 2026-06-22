@@ -106,9 +106,8 @@ public final class FileUtils {
      * @throws IOException if something goes wrong reading the file
      */
     public static String readTextFile(File file, int max, String ellipsis) throws IOException {
-        InputStream input = new FileInputStream(file);
-        BufferedInputStream bis = new BufferedInputStream(input);
-        try {
+        try (InputStream input = new FileInputStream(file);
+             BufferedInputStream bis = new BufferedInputStream(input)) {
             long size = file.length();
             if (max > 0 || (size > 0 && max == 0)) {  // "head" mode: read the first N bytes
                 if (size > 0 && (max == 0 || size < max)) max = (int) size;
@@ -151,9 +150,6 @@ public final class FileUtils {
                 } while (len == data.length);
                 return contents.toString();
             }
-        } finally {
-            bis.close();
-            input.close();
         }
     }
 
