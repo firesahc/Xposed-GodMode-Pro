@@ -22,67 +22,7 @@ import java.util.function.Consumer;
  */
 final class WorkflowOrchestrator implements Handler.Callback {
 
-    // ===== POJO 消息体（通过 msg.obj 传递）=====
-
-    /** WRITE_RULE 消息体 */
-    static final class WriteRuleMsg {
-        final String packageName;
-        final RuleRecord viewRule;
-        /** 快照路径：非 null = 带截图写入（I/O 后更新缓存），null = 纯 JSON 写入（缓存已更新） */
-        @androidx.annotation.Nullable final Bitmap snapshot;
-        /** 纯 JSON 写入时：缓存已更新后的序列化 JSON（供 handler 持久化） */
-        @androidx.annotation.Nullable final String json;
-        /** 纯 JSON 写入时：缓存已更新后的快照（供 handler 通知观察者） */
-        @androidx.annotation.Nullable final ActRules snapshotRules;
-
-        /** 带快照的构造方法 — cache 在 handleWriteRule 中 saveBitmap 成功后更新 */
-        WriteRuleMsg(String packageName, RuleRecord viewRule, Bitmap snapshot) {
-            this.packageName = packageName;
-            this.viewRule = viewRule;
-            this.snapshot = snapshot;
-            this.json = null;
-            this.snapshotRules = null;
-        }
-
-        /** 带 JSON 数据的构造方法 — cache 在 writeRuleAsync 中已更新，handler 只做持久化 */
-        WriteRuleMsg(String packageName, RuleRecord viewRule, String json, ActRules snapshotRules) {
-            this.packageName = packageName;
-            this.viewRule = viewRule;
-            this.snapshot = null;
-            this.json = json;
-            this.snapshotRules = snapshotRules;
-        }
-    }
-
-    /** DELETE_RULE 消息体 */
-    static final class DeleteRuleMsg {
-        final String packageName;
-        final String json;
-        final ActRules snapshotRules;
-        final String imagePath;
-
-        DeleteRuleMsg(String packageName, String json, ActRules snapshotRules, String imagePath) {
-            this.packageName = packageName;
-            this.json = json;
-            this.snapshotRules = snapshotRules;
-            this.imagePath = imagePath;
-        }
-    }
-
-    /** UPDATE_RULE 消息体 */
-    static final class UpdateRuleMsg {
-        final String packageName;
-        final String json;
-        final ActRules snapshotRules;
-
-        UpdateRuleMsg(String packageName, String json, ActRules snapshotRules) {
-            this.packageName = packageName;
-            this.json = json;
-            this.snapshotRules = snapshotRules;
-        }
-    }
-
-    // ===== 消息代码 =====
+    // ===== 消息码 =====
     static final int LOAD_RULES = 0x00001;
     static final int WRITE_RULE = 0x00002;
     static final int DELETE_RULE = 0x00004;
@@ -90,6 +30,64 @@ final class WorkflowOrchestrator implements Handler.Callback {
     static final int UPDATE_RULE = 0x000010;
     static final int CLEAN_OBSERVERS = 0x000020;
     static final int CLEAN_ORPHANS = 0x000040;
+
+    // ===== 消息码枚举 — 类型安全的操作标识 =====
+
+    enum MessageCode {
+        LOAD_RULES,
+        WRITE_RULE,
+        DELETE_RULE,
+        DELETE_RULES,
+        UPDATE_RULE,
+        CLEAN_OBSERVERS,
+        CLEAN_ORPHANS
+    }
+
+    // ===== 泛型消息体（通过 msg.obj 传递）=====
+
+    /** 统一规则操作消息体 — 替代 WriteRuleMsg/DeleteRuleMsg/UpdateRuleMsg */
+    static final class RuleMessage {
+        final MessageCode code;
+        final String packageName;
+        @androidx.annotation.Nullable final RuleRecord viewRule;
+        @androidx.annotation.Nullable final Bitmap snapshot;
+        @androidx.annotation.Nullable final String json;
+        @androidx.annotation.Nullable final ActRules snapshotRules;
+        @androidx.annotation.Nullable final String imagePath;
+
+        private RuleMessage(MessageCode code, String packageName, RuleRecord viewRule,
+                Bitmap snapshot, String json, ActRules snapshotRules, String imagePath) {
+            this.code = code;
+            this.packageName = packageName;
+            this.viewRule = viewRule;
+            this.snapshot = snapshot;
+            this.json = json;
+            this.snapshotRules = snapshotRules;
+            this.imagePath = imagePath;
+        }
+
+        static RuleMessage forWrite(String packageName, RuleRecord viewRule, Bitmap snapshot) {
+            return new RuleMessage(MessageCode.WRITE_RULE, packageName, viewRule,
+                    snapshot, null, null, null);
+        }
+
+        static RuleMessage forWriteWithJson(String packageName, RuleRecord viewRule,
+                String json, ActRules snapshotRules) {
+            return new RuleMessage(MessageCode.WRITE_RULE, packageName, viewRule,
+                    null, json, snapshotRules, null);
+        }
+
+        static RuleMessage forDelete(String packageName, String json,
+                ActRules snapshotRules, String imagePath) {
+            return new RuleMessage(MessageCode.DELETE_RULE, packageName, null,
+                    null, json, snapshotRules, imagePath);
+        }
+
+        static RuleMessage forUpdate(String packageName, String json, ActRules snapshotRules) {
+            return new RuleMessage(MessageCode.UPDATE_RULE, packageName, null,
+                    null, json, snapshotRules, null);
+        }
+    }
     private static final long ORPHAN_CLEAN_INTERVAL = 120_000L;
 
     // ===== 核心 Manager =====
@@ -183,13 +181,10 @@ final class WorkflowOrchestrator implements Handler.Callback {
         try {
             Object writeMsg;
             if (snapshot != null) {
-                // 快照路径：cache 在 handleWriteRule 中 saveBitmap 成功后更新
-                writeMsg = new WriteRuleMsg(packageName, viewRule, snapshot);
+                writeMsg = RuleMessage.forWrite(packageName, viewRule, snapshot);
             } else {
-                // JSON 路径：cache 立即更新（无 I/O 风险）
                 RuleCacheManager.CacheResult cr =
                         mCacheManager.applyRuleToCache(packageName, viewRule, true);
-                // 清理旧截图文件，避免成为孤儿文件
                 if (cr.oldImagePath != null) {
                     try {
                         FileUtils.delete(cr.oldImagePath);
@@ -197,7 +192,7 @@ final class WorkflowOrchestrator implements Handler.Callback {
                         mLogger.w("write rule (json path): delete old image failed", e);
                     }
                 }
-                writeMsg = new WriteRuleMsg(packageName, viewRule, cr.json, cr.snapshotRules);
+                writeMsg = RuleMessage.forWriteWithJson(packageName, viewRule, cr.json, cr.snapshotRules);
             }
             mHandle.obtainMessage(WRITE_RULE, writeMsg).sendToTarget();
             return true;
@@ -213,7 +208,7 @@ final class WorkflowOrchestrator implements Handler.Callback {
             RuleCacheManager.CacheResult cr =
                     mCacheManager.applyRuleToCache(packageName, viewRule, false);
             mHandle.obtainMessage(UPDATE_RULE,
-                    new UpdateRuleMsg(packageName, cr.json, cr.snapshotRules)).sendToTarget();
+                    RuleMessage.forUpdate(packageName, cr.json, cr.snapshotRules)).sendToTarget();
             return true;
         } catch (Exception e) {
             mLogger.w("update rule failed", e);
@@ -227,7 +222,7 @@ final class WorkflowOrchestrator implements Handler.Callback {
             RuleCacheManager.DeleteResult dr = mCacheManager.deleteRule(packageName, viewRule);
             if (dr == null) return false;
             mHandle.obtainMessage(DELETE_RULE,
-                    new DeleteRuleMsg(packageName, dr.json, dr.snapshotRules, dr.imagePath))
+                    RuleMessage.forDelete(packageName, dr.json, dr.snapshotRules, dr.imagePath))
                     .sendToTarget();
             return true;
         } catch (Exception e) {
@@ -302,7 +297,7 @@ final class WorkflowOrchestrator implements Handler.Callback {
      * <b>JSON 分支</b>：缓存已在 writeRuleAsync 中更新，handler 只负责持久化 + 通知。
      */
     private void handleWriteRule(Message msg) {
-        WriteRuleMsg m = (WriteRuleMsg) msg.obj;
+        RuleMessage m = (RuleMessage) msg.obj;
         if (m.snapshot != null) {
             // ── 快照分支：先 I/O 保存新图，成功后再更新缓存 + 持久化，最后清理旧图 ──
 
@@ -359,7 +354,7 @@ final class WorkflowOrchestrator implements Handler.Callback {
 
     private void handleDeleteRule(Message msg) {
         try {
-            DeleteRuleMsg m = (DeleteRuleMsg) msg.obj;
+            RuleMessage m = (RuleMessage) msg.obj;
             // 先持久化规则，再清理图片，确保持久化不因图片删除失败被跳过
             mObserverManager.notifyObserverRuleChanged(m.packageName, m.snapshotRules);
             mPersistManager.safePersistRules(m.packageName, m.json);
@@ -389,7 +384,7 @@ final class WorkflowOrchestrator implements Handler.Callback {
 
     private void handleUpdateRule(Message msg) {
         try {
-            UpdateRuleMsg m = (UpdateRuleMsg) msg.obj;
+            RuleMessage m = (RuleMessage) msg.obj;
             mPersistManager.safePersistRules(m.packageName, m.json);
             mObserverManager.notifyObserverRuleChanged(m.packageName, m.snapshotRules);
         } catch (Exception e) {
