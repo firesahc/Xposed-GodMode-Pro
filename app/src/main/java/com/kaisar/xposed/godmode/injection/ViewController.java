@@ -106,7 +106,7 @@ public final class ViewController {
     // Applier 懒加载
     // =========================================================================
 
-    private RuleApplier getModifyApplier() {
+    private synchronized RuleApplier getModifyApplier() {
         if (mModifyApplier == null) {
             mModifyApplier = new ModifyApplier(
                     path -> RuleServiceClient.getDefault().openImageFileDescriptor(path),
@@ -115,7 +115,7 @@ public final class ViewController {
         return mModifyApplier;
     }
 
-    private RuleApplier getRemoveApplier() {
+    private synchronized RuleApplier getRemoveApplier() {
         if (mRemoveApplier == null) {
             mRemoveApplier = mActivityClassName != null
                     ? new RemoveApplier(mActivityClassName)
@@ -124,7 +124,7 @@ public final class ViewController {
         return mRemoveApplier;
     }
 
-    private IMatcher getMatcher() {
+    private synchronized IMatcher getMatcher() {
         if (mMatcher == null) {
             // CompositeMatcher 是无状态的策略容器，可安全复用
             mMatcher = new CompositeMatcher();

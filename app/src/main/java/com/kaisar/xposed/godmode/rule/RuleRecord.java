@@ -178,6 +178,7 @@ public final class RuleRecord implements RuleFields, Parcelable, Cloneable {
     // 构造方法
     // =========================================================================
 
+    // Gson 反序列化使用反射调用此私有构造器
     @SuppressWarnings("unused")
     private RuleRecord() {
     }
@@ -342,6 +343,7 @@ public final class RuleRecord implements RuleFields, Parcelable, Cloneable {
         v.origLeftMargin = origLeftMargin;
         v.origTopMargin = origTopMargin;
         v.itemPath = itemPath != null ? itemPath.clone() : null;
+        v.depth = depth != null ? depth.clone() : null;
         v.itemRootClass = itemRootClass;
         v.parentClass = parentClass;
         v.repeatable = repeatable;
