@@ -1,21 +1,20 @@
 package com.kaisar.xposed.godmode.engine.applier;
 
-import android.util.Pair;
-import android.util.SparseArray;
 import android.view.View;
 import android.view.ViewGroup;
 
 import com.kaisar.xposed.godmode.engine.rule.ActionSpec;
 
-import java.lang.ref.WeakReference;
+import java.util.WeakHashMap;
 
 /**
  * 移除规则应用器 — 将视图设置为 GONE/INVISIBLE 或恢复原始状态。
  */
 public final class RemoveApplier implements RuleApplier {
 
-    private final SparseArray<Pair<WeakReference<View>, ViewProperty>> mBlockedViewCache
-            = new SparseArray<>();
+    // 改 WeakHashMap 替代 SparseArray<identityHashCode>——消除哈希碰撞风险，
+    // 由 JVM 保证 View 对象唯一性，与 ModifyApplier.mAppliedViews 风格统一
+    private final WeakHashMap<View, ViewProperty> mBlockedViewCache = new WeakHashMap<>();
 
     /** 当前 Activity 类名，用于构造 {@link IApplierCache.CacheKey} 实现 Activity 级缓存隔离 */
     private final String mActivityClassName;
@@ -35,14 +34,11 @@ public final class RemoveApplier implements RuleApplier {
     @Override
     public boolean apply(View view, ActionSpec spec) {
         if (view == null || spec == null) return false;
-        int cacheKey = System.identityHashCode(view);
-        Pair<WeakReference<View>, ViewProperty> viewInfo = mBlockedViewCache.get(cacheKey);
-        View blockedView = viewInfo != null ? viewInfo.first.get() : null;
-        if (blockedView == view && view.getVisibility() == spec.visibility) {
-            return false;
+        ViewProperty cached = mBlockedViewCache.get(view);
+        if (cached != null && view.getVisibility() == spec.visibility) {
+            return false; // 已应用相同规则，跳过
         }
-        ViewProperty viewProperty = blockedView == view
-                ? viewInfo.second : ViewProperty.create(view);
+        ViewProperty vp = cached != null ? cached : ViewProperty.create(view);
         view.setAlpha(0f);
         view.setClickable(false);
         ViewGroup.LayoutParams lp = view.getLayoutParams();
@@ -53,38 +49,31 @@ public final class RemoveApplier implements RuleApplier {
                     lp.height = 0;
                     break;
                 case View.INVISIBLE:
-                    lp.width = viewProperty.layoutParamsWidth;
-                    lp.height = viewProperty.layoutParamsHeight;
+                    lp.width = vp.layoutParamsWidth;
+                    lp.height = vp.layoutParamsHeight;
                     break;
             }
         }
         ViewCompat.setVisibility(view, spec.visibility);
-        mBlockedViewCache.put(cacheKey, Pair.create(
-                new WeakReference<>(view), viewProperty));
+        mBlockedViewCache.put(view, vp);
         return true;
     }
 
     @Override
     public boolean revoke(View view, ActionSpec spec) {
         if (view == null || spec == null) return false;
-        int cacheKey = System.identityHashCode(view);
-        Pair<WeakReference<View>, ViewProperty> viewInfo = mBlockedViewCache.get(cacheKey);
-        if (viewInfo != null && viewInfo.first.get() == view) {
-            ViewProperty vp = viewInfo.second;
-            view.setAlpha(vp.alpha);
-            view.setClickable(vp.clickable);
-            ViewCompat.setVisibility(view, vp.visibility);
-            ViewGroup.LayoutParams lp = view.getLayoutParams();
-            if (lp != null) {
-                lp.width = vp.layoutParamsWidth;
-                lp.height = vp.layoutParamsHeight;
-                view.requestLayout();
-            }
-            mBlockedViewCache.delete(cacheKey);
-            return true;
+        ViewProperty vp = mBlockedViewCache.remove(view);
+        if (vp == null) return false;
+        view.setAlpha(vp.alpha);
+        view.setClickable(vp.clickable);
+        ViewCompat.setVisibility(view, vp.visibility);
+        ViewGroup.LayoutParams lp = view.getLayoutParams();
+        if (lp != null) {
+            lp.width = vp.layoutParamsWidth;
+            lp.height = vp.layoutParamsHeight;
+            view.requestLayout();
         }
-        // 非缓存视图：不做任何操作，静默返回 false
-        return false;
+        return true;
     }
 
     /**
@@ -98,23 +87,18 @@ public final class RemoveApplier implements RuleApplier {
      */
     public boolean revokeForView(View view) {
         if (view == null) return false;
-        int cacheKey = System.identityHashCode(view);
-        Pair<WeakReference<View>, ViewProperty> viewInfo = mBlockedViewCache.get(cacheKey);
-        if (viewInfo != null && viewInfo.first.get() == view) {
-            ViewProperty vp = viewInfo.second;
-            view.setAlpha(vp.alpha);
-            view.setClickable(vp.clickable);
-            ViewCompat.setVisibility(view, vp.visibility);
-            ViewGroup.LayoutParams lp = view.getLayoutParams();
-            if (lp != null) {
-                lp.width = vp.layoutParamsWidth;
-                lp.height = vp.layoutParamsHeight;
-                view.requestLayout();
-            }
-            mBlockedViewCache.delete(cacheKey);
-            return true;
+        ViewProperty vp = mBlockedViewCache.remove(view);
+        if (vp == null) return false;
+        view.setAlpha(vp.alpha);
+        view.setClickable(vp.clickable);
+        ViewCompat.setVisibility(view, vp.visibility);
+        ViewGroup.LayoutParams lp = view.getLayoutParams();
+        if (lp != null) {
+            lp.width = vp.layoutParamsWidth;
+            lp.height = vp.layoutParamsHeight;
+            view.requestLayout();
         }
-        return false;
+        return true;
     }
 
     @Override
