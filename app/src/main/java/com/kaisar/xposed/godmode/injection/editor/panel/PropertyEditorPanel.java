@@ -73,6 +73,34 @@ public class PropertyEditorPanel {
     private Bitmap mPendingImageBitmap;
     private HashMap<String, Bitmap> mPendingModBitmaps = new HashMap<>();
 
+    // SeekBar 拖动帧级合并：避免每次 onProgressChanged 触发 setLayoutParams → requestLayout
+    private int mPendingSeekWidth = -1;
+    private int mPendingSeekHeight = -1;
+    private boolean mSeekLayoutPending = false;
+    private final Runnable mApplySeekLayoutRunnable = new Runnable() {
+        @Override
+        public void run() {
+            mSeekLayoutPending = false;
+            if (mTargetView == null) return;
+            ViewGroup.LayoutParams lp = mTargetView.getLayoutParams();
+            if (lp == null) return;
+            boolean changed = false;
+            if (mPendingSeekWidth > 0 && lp.width != mPendingSeekWidth) {
+                lp.width = mPendingSeekWidth;
+                changed = true;
+            }
+            if (mPendingSeekHeight > 0 && lp.height != mPendingSeekHeight) {
+                lp.height = mPendingSeekHeight;
+                changed = true;
+            }
+            if (changed) {
+                mTargetView.setLayoutParams(lp);
+            }
+            mPendingSeekWidth = -1;
+            mPendingSeekHeight = -1;
+        }
+    };
+
     // Pending modifications keyed by view key — batch saved or cancelled together.
     // Changed from RuleRecord to ActionSpec: only stores modify fields,
     // cancel discards with no side effects.
@@ -147,6 +175,9 @@ public class PropertyEditorPanel {
         mSnapshot = null;
         mOriginalRule = null;
         mTempModifications.clear();
+        mSeekLayoutPending = false;
+        mPendingSeekWidth = -1;
+        mPendingSeekHeight = -1;
         // Recycle pending mod bitmaps on dismiss (mPendingModBitmaps stores loaded replacement images).
         // For cancel() / saveAll() see the confirm/cancel button handlers.
             panel.animate().alpha(0).setDuration(ANIM_DURATION_MEDIUM).withEndAction(() -> {
@@ -273,11 +304,18 @@ public class PropertyEditorPanel {
             @Override public void onProgressChanged(SeekBar sb, int val, boolean fromUser) {
                 if (!fromUser) return;
                 text.setText(String.valueOf(val));
-                ViewGroup.LayoutParams lp = target.getLayoutParams();
                 switch (type) {
-                    case WIDTH: if (lp != null) { lp.width = val; target.setLayoutParams(lp); } break;
-                    case HEIGHT: if (lp != null) { lp.height = val; target.setLayoutParams(lp); } break;
-                    case ALPHA: target.setAlpha(val / 255f); break;
+                    case WIDTH:
+                        mPendingSeekWidth = val;
+                        scheduleSeekLayoutApply(target);
+                        break;
+                    case HEIGHT:
+                        mPendingSeekHeight = val;
+                        scheduleSeekLayoutApply(target);
+                        break;
+                    case ALPHA:
+                        target.setAlpha(val / 255f);
+                        break;
                     default:
                         throw new IllegalArgumentException("Unknown SeekerType: " + type);
                 }
@@ -285,6 +323,17 @@ public class PropertyEditorPanel {
             @Override public void onStartTrackingTouch(SeekBar sb) {}
             @Override public void onStopTrackingTouch(SeekBar sb) {}
         });
+    }
+
+    /**
+     * 调度 SeekBar 修改的布局应用。同一帧内多次调用只触发一次 setLayoutParams。
+     * 使用 View.post 确保在下一帧绘制前批量应用，避免每次 onProgressChanged 触发布局重排。
+     */
+    private void scheduleSeekLayoutApply(View target) {
+        if (!mSeekLayoutPending) {
+            mSeekLayoutPending = true;
+            target.post(mApplySeekLayoutRunnable);
+        }
     }
 
     private enum SeekerType { WIDTH, HEIGHT, ALPHA }
