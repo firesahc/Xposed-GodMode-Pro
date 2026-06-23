@@ -498,6 +498,15 @@ public final class LifecycleObserver extends XC_MethodHook {
             mSelfTriggeredLayout = true;
             try {
                 Activity activity = Preconditions.checkNotNull(activityReference.get());
+                // 每次规则匹配周期前清空 RecyclerView 收集缓存，
+                // 防止 Fragment 切换后新增的 RecyclerView 被过时缓存遗漏
+                ViewController vc = getViewControllerFor(activity);
+                if (vc != null) {
+                    IMatcher m = vc.getMatcher();
+                    if (m instanceof CompositeMatcher) {
+                        ((CompositeMatcher) m).invalidateRecyclerCache();
+                    }
+                }
                 List<RuleRecord> rules = mActRules.get(activity.getComponentName().getClassName());
                 if (rules != null && !rules.isEmpty()) {
                     getViewControllerFor(activity).applyRuleBatch(activity, rules,
