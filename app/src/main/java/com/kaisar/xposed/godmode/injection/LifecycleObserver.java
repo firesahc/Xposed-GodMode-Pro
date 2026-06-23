@@ -9,6 +9,7 @@ import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
 
 import com.kaisar.xposed.godmode.engine.matcher.CompositeMatcher;
+import com.kaisar.xposed.godmode.engine.matcher.IMatcher;
 import com.kaisar.xposed.godmode.engine.matcher.ViewTraversal;
 import com.kaisar.xposed.godmode.engine.event.RulesChangedEvent;
 import com.kaisar.xposed.godmode.engine.event.Subscribe;
@@ -101,6 +102,11 @@ public final class LifecycleObserver extends XC_MethodHook {
         ViewController vc = mViewControllers.remove(activity);
         if (vc != null) {
             vc.clearBlockedCache();
+            // 清除 RecyclerView 收集缓存，释放对已销毁 DecorView 的引用
+            IMatcher matcher = vc.getMatcher();
+            if (matcher instanceof CompositeMatcher) {
+                ((CompositeMatcher) matcher).invalidateRecyclerCache();
+            }
         }
         synchronized (mPendingReapply) {
             Runnable r = mPendingReapply.remove(activity);

@@ -12,6 +12,7 @@ import com.kaisar.xposed.godmode.engine.util.GmConstants;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.engine.util.TextMatcher;
 
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -38,6 +39,11 @@ public final class CompositeMatcher implements IMatcher {
 
     public CompositeMatcher() {
     }
+
+    // RecyclerView 收集缓存——同一 DecorView 在短时间内避免重复全树遍历。
+    // WeakReference 持有 root，Activity 重建或 GC 后自动失效。
+    private WeakReference<View> mCachedRoot;
+    private List<ViewGroup> mCachedRecyclerViews;
 
     // ---- IMatcher 实现 ----
 
@@ -98,9 +104,8 @@ public final class CompositeMatcher implements IMatcher {
         }
         if (eligibleCount == 0) return results;
 
-        // 单次视图树遍历，收集所有 RecyclerView
-        List<ViewGroup> recyclerViews = new ArrayList<>();
-        collectRecyclerViews(root, recyclerViews);
+        // 单次视图树遍历，收集所有 RecyclerView（使用缓存避免同一 DecorView 重复遍历）
+        List<ViewGroup> recyclerViews = getCachedRecyclerViews(root);
 
         // 对每个 RecyclerView 的子项批量匹配所有规格
         for (ViewGroup rv : recyclerViews) {
@@ -139,6 +144,30 @@ public final class CompositeMatcher implements IMatcher {
     }
 
     // ---- 内部辅助方法 ----
+
+    /**
+     * 获取 DecorView 下的 RecyclerView 列表——同一 DecorView 复用缓存避免重复遍历。
+     * 缓存通过 WeakReference 持有 root，Activity 重建或 GC 后自动失效。
+     */
+    private List<ViewGroup> getCachedRecyclerViews(View root) {
+        if (mCachedRoot != null && mCachedRoot.get() == root && mCachedRecyclerViews != null) {
+            return mCachedRecyclerViews;
+        }
+        List<ViewGroup> result = new ArrayList<>();
+        collectRecyclerViews(root, result);
+        mCachedRoot = new WeakReference<>(root);
+        mCachedRecyclerViews = result;
+        return result;
+    }
+
+    /**
+     * 清除 RecyclerView 收集缓存。
+     * 应在 Activity 切换或视图树结构变更时调用。
+     */
+    public void invalidateRecyclerCache() {
+        mCachedRoot = null;
+        mCachedRecyclerViews = null;
+    }
 
     /**
      * 按 resourceName 锚定：解析为 int ID，通过 findViewById 精确查找。

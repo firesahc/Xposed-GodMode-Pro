@@ -124,7 +124,7 @@ public final class ViewController {
         return mRemoveApplier;
     }
 
-    private synchronized IMatcher getMatcher() {
+    public synchronized IMatcher getMatcher() {
         if (mMatcher == null) {
             // CompositeMatcher 是无状态的策略容器，可安全复用
             mMatcher = new CompositeMatcher();
