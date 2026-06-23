@@ -7,11 +7,12 @@ import android.view.ViewGroup;
 
 import com.kaisar.xposed.godmode.engine.util.CommonUtils;
 import com.kaisar.xposed.godmode.injection.bridge.RuleServiceClient;
-import com.kaisar.xposed.godmode.rule.RuleRecordFactory;
-import com.kaisar.xposed.godmode.rule.ViewSnapshot;
 import com.kaisar.xposed.godmode.injection.util.BitmapUtils;
+import com.kaisar.xposed.godmode.injection.util.TaskExecutor;
 import com.kaisar.xposed.godmode.injection.util.ViewUtils;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
+import com.kaisar.xposed.godmode.rule.RuleRecordFactory;
+import com.kaisar.xposed.godmode.rule.ViewSnapshot;
 
 /**
  * 修改手势处理器：长按拖拽修改视图位置，支持网格和兄弟视图边缘吸附，并通过 IPC 持久化。
@@ -47,7 +48,11 @@ public final class ModifyGestureHandler {
         return state;
     }
 
-    /** 移动拖拽目标，应用网格和兄弟视图边缘吸附 */
+    /**
+     * 移动拖拽目标，使用 translation（渲染级变换）避免每次 MOVE 触发布局重排。
+     * 网格对齐和兄弟吸附照旧计算，但通过 {@link View#setTranslationX} / {@link View#setTranslationY}
+     * 应用偏移，不修改 MarginLayoutParams。最终偏移量在 {@link #finalizeDrag} 中落实为 modXOffset/modYOffset。
+     */
     public static void moveTarget(ModifyState state, float dx, float dy) {
         if (state == null || state.dragTarget == null) return;
 
@@ -59,41 +64,45 @@ public final class ModifyGestureHandler {
 
         int[] snapped = ViewSnapper.snapToSiblings(state.dragTarget,
                 newMarginX, newMarginY, state.snapThresholdPx);
-        newMarginX = snapped[0];
-        newMarginY = snapped[1];
 
-        ViewGroup.LayoutParams lp = state.dragTarget.getLayoutParams();
-        if (lp instanceof ViewGroup.MarginLayoutParams) {
-            ViewGroup.MarginLayoutParams mlp = (ViewGroup.MarginLayoutParams) lp;
-            mlp.leftMargin = newMarginX;
-            mlp.topMargin = newMarginY;
-            state.dragTarget.setLayoutParams(mlp);
-        }
+        int deltaX = snapped[0] - state.startMarginX;
+        int deltaY = snapped[1] - state.startMarginY;
+
+        state.dragTarget.setTranslationX(deltaX);
+        state.dragTarget.setTranslationY(deltaY);
+        state.totalDx = deltaX;
+        state.totalDy = deltaY;
     }
 
-    /** 将最终拖拽位置持久化为修改规则 */
+    /**
+     * 将最终拖拽位置持久化为修改规则。
+     * 快照捕获（View.draw）在主线程执行，IPC 写入通过 {@link TaskExecutor#executeIo} 异步执行。
+     */
     public static void finalizeDrag(ModifyState state, String packageName) {
         if (state == null || state.dragTarget == null) return;
-        ViewGroup.LayoutParams lp = state.dragTarget.getLayoutParams();
-        int finalMarginX = 0, finalMarginY = 0;
-        if (lp instanceof ViewGroup.MarginLayoutParams) {
-            ViewGroup.MarginLayoutParams mlp = (ViewGroup.MarginLayoutParams) lp;
-            finalMarginX = mlp.leftMargin;
-            finalMarginY = mlp.topMargin;
-        }
-        int deltaX = finalMarginX - state.startMarginX;
-        int deltaY = finalMarginY - state.startMarginY;
+
+        // 重置 translation——偏移量已记录在 totalDx/totalDy
+        state.dragTarget.setTranslationX(0);
+        state.dragTarget.setTranslationY(0);
+
+        int deltaX = state.totalDx;
+        int deltaY = state.totalDy;
 
         if (deltaX != 0 || deltaY != 0) {
-            // 使用快照创建规则 — origLeftMargin/origTopMargin 来自 startDrag 时捕获的快照（原始值）
+            // 主线程：创建规则 + 截图（View.draw 必须在主线程）
             RuleRecord rule = RuleRecordFactory.makeModifyRule(state.dragTarget, state.snapshot);
             rule.modXOffset = deltaX;
             rule.modYOffset = deltaY;
             Bitmap snapshot = BitmapUtils.snapshotView(
                     ViewUtils.findTopParentViewByChildView(state.dragTarget));
             BitmapUtils.drawRuleMask(snapshot, rule);
-            RuleServiceClient.getDefault().writeRule(packageName, rule, snapshot);
-            CommonUtils.recycleNullableBitmap(snapshot);
+
+            // IO 线程：仅 IPC 写入（参照 PropertyEditorPanel.saveAll 的 TaskExecutor.executeIo 模式）
+            final RuleRecord finalRule = rule;
+            TaskExecutor.executeIo(() -> {
+                RuleServiceClient.getDefault().writeRule(packageName, finalRule, snapshot);
+                CommonUtils.recycleNullableBitmap(snapshot);
+            });
         }
     }
 
@@ -104,5 +113,8 @@ public final class ModifyGestureHandler {
         public int gridSizePx, snapThresholdPx;
         /** View snapshot captured at drag start (before modification applies). */
         public ViewSnapshot snapshot;
+        /** 拖拽过程中 setTranslation 的累计像素偏移（用于 finalizeDrag 计算 modXOffset/modYOffset） */
+        public int totalDx;
+        public int totalDy;
     }
 }
