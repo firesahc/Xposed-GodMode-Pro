@@ -279,10 +279,9 @@ final class RulePersistManager {
 
     String getAppRuleFilePath(String packageName) throws IOException {
         File file = new File(getAppDataDir(packageName), packageName + RULE_FILE_SUFFIX);
-        if (file.exists() || file.createNewFile()) {
-            FileUtils.setPermissions(file, S_IRWXU | S_IRWXG | S_IRWXO, -1, -1);
+        if (file.exists()) {
             return file.getAbsolutePath();
         }
-        throw new FileNotFoundException();
+        throw new FileNotFoundException("规则文件不存在: " + file.getAbsolutePath());
     }
 }
