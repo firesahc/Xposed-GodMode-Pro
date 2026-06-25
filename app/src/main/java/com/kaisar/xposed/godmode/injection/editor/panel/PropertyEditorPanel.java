@@ -252,7 +252,7 @@ public class PropertyEditorPanel {
                 intent.setType("image/*");
                 activity.startActivityForResult(intent, REQUEST_CODE_PICK_IMAGE);
             } catch (Exception e) {
-                Toast.makeText(activity, "无法打开图片选择器", Toast.LENGTH_SHORT).show();
+                Toast.makeText(activity, GmResources.getString(R.string.toast_cannot_open_image_picker), Toast.LENGTH_SHORT).show();
             }
         });
     }
@@ -486,7 +486,7 @@ public class PropertyEditorPanel {
      */
     public void saveAll(Activity activity, View nodeSelectorPanel, View maskView, View modifyPanel) {
         if (mTempModifications.isEmpty() || mOriginalRule == null) {
-            Toast.makeText(activity, "没有需要保存的修改", Toast.LENGTH_SHORT).show();
+            Toast.makeText(activity, GmResources.getString(R.string.toast_no_modifications_to_save), Toast.LENGTH_SHORT).show();
             return;
         }
         String pkg = activity.getPackageName();
@@ -531,7 +531,7 @@ public class PropertyEditorPanel {
             }
         }
         if (rulesToSave.isEmpty()) {
-            Toast.makeText(activity, "没有需要保存的修改", Toast.LENGTH_SHORT).show();
+            Toast.makeText(activity, GmResources.getString(R.string.toast_no_modifications_to_save), Toast.LENGTH_SHORT).show();
             return;
         }
         if (nodeSelectorPanel != null) nodeSelectorPanel.setVisibility(View.INVISIBLE);
@@ -589,13 +589,14 @@ public class PropertyEditorPanel {
             }
             boolean finalAllOk = allOk;
             String finalFailed = failedRules.isEmpty() ? "" :
-                    "失败: " + String.join(", ", failedRules);
+                    GmResources.getString(R.string.toast_save_failed_rules_format, String.join(", ", failedRules));
             mainHandler.post(() -> {
                 if (nodeSelectorPanel != null) nodeSelectorPanel.setVisibility(View.VISIBLE);
                 if (modifyPanel != null) modifyPanel.setVisibility(View.VISIBLE);
                 if (maskView != null) maskView.setVisibility(View.VISIBLE);
                 Toast.makeText(activity,
-                        finalAllOk ? "所有修改已保存" : "保存失败: " + finalFailed,
+                        finalAllOk ? GmResources.getString(R.string.toast_modifications_saved)
+                                : GmResources.getString(R.string.toast_modifications_save_failed_format, finalFailed),
                         Toast.LENGTH_LONG).show();
             });
         });

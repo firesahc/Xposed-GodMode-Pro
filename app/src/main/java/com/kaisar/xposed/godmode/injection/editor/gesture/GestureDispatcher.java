@@ -5,6 +5,9 @@ import android.view.ViewParent;
 import android.view.WindowManager;
 import android.widget.Toast;
 
+import com.kaisar.xposed.godmode.R;
+import com.kaisar.xposed.godmode.injection.util.GmResources;
+
 /**
  * 手势事件分发器 — 触摸开始条件校验。
  * <p>
@@ -34,13 +37,13 @@ public final class GestureDispatcher {
             WindowParamsProvider getWindowParams, boolean[] draggingRef) {
         if (multiPointLock) {
             if (!isModifyMode) {
-                Toast.makeText(v.getContext(), "不支持多点操作", Toast.LENGTH_SHORT).show();
+                Toast.makeText(v.getContext(), GmResources.getString(R.string.toast_multi_touch_not_supported), Toast.LENGTH_SHORT).show();
             }
             return false;
         }
         if (getWindowParams.getWindowLayoutParams(v) == null) {
             if (!isModifyMode && hasBlockEvent != null && !hasBlockEvent[0]) {
-                Toast.makeText(v.getContext(), "该控件属于悬浮窗暂不支持编辑", Toast.LENGTH_SHORT).show();
+                Toast.makeText(v.getContext(), GmResources.getString(R.string.toast_float_window_not_editable), Toast.LENGTH_SHORT).show();
                 hasBlockEvent[0] = true;
             }
             return false;

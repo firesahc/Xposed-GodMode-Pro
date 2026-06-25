@@ -247,4 +247,13 @@
     <string name="pref_key_show_modify_mode" translatable="false">pref_show_modify_mode</string>
     <string name="pref_key_show_info_flow_mode" translatable="false">pref_show_info_flow_mode</string>
 
+    <!-- 注入进程内 Toast 提示（通过 GmResources 访问） -->
+    <string name="toast_multi_touch_not_supported">不支持多点操作</string>
+    <string name="toast_float_window_not_editable">该控件属于悬浮窗暂不支持编辑</string>
+    <string name="toast_cannot_open_image_picker">无法打开图片选择器</string>
+    <string name="toast_no_modifications_to_save">没有需要保存的修改</string>
+    <string name="toast_modifications_saved">所有修改已保存</string>
+    <string name="toast_save_failed_rules_format">失败: %s</string>
+    <string name="toast_modifications_save_failed_format">保存失败: %s</string>
+
 </resources>

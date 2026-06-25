@@ -211,5 +211,13 @@ In modify mode, <b>long-press anywhere</b> to drag the <b>selected element</b>:<
     <string name="pref_restore_rules">Restore Rules</string>
     <string name="snack_bar_msg_restore_rules_success">Restored %d rules</string>
     <string name="snack_bar_msg_backup_rule_success">Backed up %d rules</string>
-    <string name="snack_bar_msg_backup_all_result">Saved: %1$d success, %2$d failed</string>
+    <string name="snack_bar_msg_backup_all_result">Saved: %1$d success, %2$d failed</string>    <!-- Injected process Toast messages (accessed via GmResources) -->
+    <string name="toast_multi_touch_not_supported">Multi-touch not supported</string>
+    <string name="toast_float_window_not_editable">Floating window elements cannot be edited</string>
+    <string name="toast_cannot_open_image_picker">Cannot open image picker</string>
+    <string name="toast_no_modifications_to_save">No modifications to save</string>
+    <string name="toast_modifications_saved">All modifications saved</string>
+    <string name="toast_save_failed_rules_format">Failed: %s</string>
+    <string name="toast_modifications_save_failed_format">Save failed: %s</string>
+
 </resources>
