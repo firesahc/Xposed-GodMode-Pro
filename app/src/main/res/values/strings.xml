@@ -138,7 +138,8 @@
     <string name="modify_detail_image">已替换图片</string>
 
     <string name="hey_guy">嘿 伙计</string>
-    <string name="not_active_module">上帝模式Pro尚未激活，请到 LSPosed 管理器中重新激活</string>
+    <string name="not_active_module">上帝模式Pro未激活。</string>
+    <string name="not_active_module_with_reason">上帝模式Pro未激活。\n\n详细原因：%1$s</string>
     <string name="master_not_enabled">请先在设置中开启上帝模式Pro主开关</string>
     <string name="notification_permission_denied">通知权限被拒绝，通知栏开关将无法显示。可通过快捷磁贴控制编辑模式</string>
     <string name="welcome_title">嘿！伙计，真高兴又见到你！欢迎使用上帝模式Pro！</string>

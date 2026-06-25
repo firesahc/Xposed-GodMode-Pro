@@ -131,7 +131,8 @@ In modify mode, <b>long-press anywhere</b> to drag the <b>selected element</b>:<
     <string name="modify_detail_image">Replaced image</string>
 
     <string name="hey_guy">Hey guy</string>
-    <string name="not_active_module">GodMode Pro module is not activated. Please activate it in LSPosed Manager</string>
+    <string name="not_active_module">GodMode Pro module is not activated.</string>
+    <string name="not_active_module_with_reason">GodMode Pro module is not activated.\n\nReason: %1$s</string>
     <string name="master_not_enabled">Please enable the GodMode Pro master switch in Settings first</string>
     <string name="notification_permission_denied">Notification permission denied. You can still use the Quick Settings tile</string>
     <string name="welcome_title">Hey guys, Welcome!</string>

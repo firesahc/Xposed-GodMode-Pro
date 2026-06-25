@@ -244,9 +244,15 @@ public final class GeneralPreferenceFragment extends PreferenceFragmentCompat im
     }
 
     private void showEnableModuleDialog() {
+        RuleServiceClient client = RuleServiceClient.getDefault();
+        String message = getString(R.string.not_active_module);
+        String lastError = client.getLastError();
+        if (!TextUtils.isEmpty(lastError)) {
+            message = getString(R.string.not_active_module_with_reason, lastError);
+        }
         new AlertDialog.Builder(requireContext())
                 .setTitle(R.string.hey_guy)
-                .setMessage(R.string.not_active_module)
+                .setMessage(message)
                 .setPositiveButton(android.R.string.ok, null)
                 .show();
     }

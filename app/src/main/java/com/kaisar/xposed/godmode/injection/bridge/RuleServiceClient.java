@@ -19,10 +19,13 @@ public final class RuleServiceClient {
 
     private static final String TAG = "RuleServiceClient";
     private static final IGodModeManager FALLBACK = new IGodModeManager.Default();
+    private static final int CONNECT_RETRY_COUNT = 3;
+    private static final long[] CONNECT_RETRY_DELAYS_MS = {80L, 160L};
 
     private static volatile RuleServiceClient instance;
     private volatile IGodModeManager mGMM;
     private volatile IBinder mBinder;
+    private volatile String mLastError;
 
     private RuleServiceClient() {
     }
@@ -54,12 +57,12 @@ public final class RuleServiceClient {
             if (current != null && binder != null && binder.isBinderAlive()) {
                 return current;
             }
-            IBinder service = XServiceManager.getService("godmode");
+            IBinder service = connectWithRetry();
             if (service == null) {
                 mBinder = null;
                 mGMM = null;
-                Logger.e(TAG, "godmode service is null - XServiceManager proxy not installed"
-                        + " or RuleServiceServer not created");
+                mLastError = buildBridgeError();
+                Logger.e(TAG, mLastError);
                 return FALLBACK;
             }
             try {
@@ -68,6 +71,7 @@ public final class RuleServiceClient {
                         if (mBinder == service) {
                             mBinder = null;
                             mGMM = null;
+                            mLastError = "godmode 服务 Binder 已死亡，等待下次重连";
                         }
                     }
                     Logger.w(TAG, "godmode service binder died, will reconnect on next call");
@@ -75,14 +79,89 @@ public final class RuleServiceClient {
             } catch (RemoteException e) {
                 mBinder = null;
                 mGMM = null;
+                mLastError = "godmode 服务在注册死亡监听前已失效: " + e.getMessage();
                 Logger.w(TAG, "godmode service died before linkToDeath", e);
                 return FALLBACK;
             }
             mBinder = service;
             mGMM = IGodModeManager.Stub.asInterface(service);
+            mLastError = null;
             Logger.i(TAG, "connected to godmode service via clipboard delegate");
             return mGMM;
         }
+    }
+
+    private IBinder connectWithRetry() {
+        IBinder service = null;
+        for (int i = 0; i < CONNECT_RETRY_COUNT; i++) {
+            if (!XServiceManager.pingBridge()) {
+                mLastError = buildBridgeError();
+            } else {
+                service = XServiceManager.getService("godmode");
+                if (service != null) {
+                    return service;
+                }
+                mLastError = buildBridgeError();
+            }
+            if (i < CONNECT_RETRY_DELAYS_MS.length) {
+                sleepQuietly(CONNECT_RETRY_DELAYS_MS[i]);
+            }
+        }
+        return service;
+    }
+
+    private static void sleepQuietly(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private static String buildBridgeError() {
+        String serviceError = XServiceManager.getLastError();
+        XServiceManager.BridgeStatus status = XServiceManager.getRemoteBridgeStatus();
+        if (status != null) {
+            if (!status.bridgeInstalled) {
+                return "XServiceManager 桥接未安装，请确认模块已在 LSPosed 的 android 作用域启用并重启系统。";
+            }
+            if (!status.systemServer) {
+                return "XServiceManager 桥接没有运行在 system_server，当前注入进程异常。";
+            }
+            if (status.registeredServiceCount == 0) {
+                return "XServiceManager 桥接已安装，但 godmode 服务尚未注册。";
+            }
+            if (status.lastError != null && !status.lastError.trim().isEmpty()) {
+                return "XServiceManager 桥接异常: " + status.lastError;
+            }
+        }
+        String error = serviceError;
+        if (error == null || error.trim().isEmpty()) {
+            error = XServiceManager.getLastError();
+        }
+        if (error == null || error.trim().isEmpty()) {
+            return "XServiceManager 桥接不可用，可能是模块未在 android 作用域启用或 system_server 尚未完成注入。";
+        }
+        if (error.contains("clipboard is null")) {
+            return "系统 clipboard 服务不可访问，XServiceManager 无法建立桥接。";
+        }
+        if (error.contains("did not handle XServiceManager ping")
+                || error.contains("did not handle XServiceManager transaction")
+                || error.contains("did not handle XServiceManager status")) {
+            return "XServiceManager 私有事务未被 clipboard 桥接处理，请确认模块已启用并重启系统。";
+        }
+        if (error.contains("service godmode is not registered")) {
+            return "XServiceManager 桥接已连接，但 godmode 服务未注册。";
+        }
+        return "XServiceManager 桥接异常: " + error;
+    }
+
+    public String getLastError() {
+        String error = mLastError;
+        if (error == null || error.trim().isEmpty()) {
+            error = XServiceManager.getLastError();
+        }
+        return error;
     }
 
     private void markServiceDead() {
@@ -97,6 +176,7 @@ public final class RuleServiceClient {
         if (e instanceof DeadObjectException || binder == null || !binder.isBinderAlive()) {
             markServiceDead();
         }
+        mLastError = "RuleServiceClient#" + method + " 调用失败: " + e.getMessage();
         Logger.e(TAG, "RuleServiceClient#" + method + " failed: " + e.getMessage());
     }
 

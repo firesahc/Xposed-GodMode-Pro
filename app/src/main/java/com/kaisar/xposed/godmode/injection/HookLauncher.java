@@ -164,7 +164,11 @@ public final class HookLauncher implements IXposedHookLoadPackage, IXposedHookZy
             @Override public void e(String tag, String msg) { Logger.e(tag, msg); }
             @Override public void e(String tag, String msg, Throwable tr) { Logger.e(tag, msg, tr); }
         });
-        XServiceManager.initForSystemServer();
+        boolean bridgeInstalled = XServiceManager.initForSystemServer();
+        if (!bridgeInstalled) {
+            Logger.e(TAG, "[GodMode] XServiceManager bridge init failed: "
+                    + XServiceManager.getLastError());
+        }
         XServiceManager.registerService("godmode",
                 (XServiceManager.ServiceFetcher<Binder>) RuleServiceServer::new);
         XServiceManager.flushRegisteredServices();
