@@ -4,11 +4,11 @@ import com.kaisar.xposed.godmode.engine.matcher.MatchMode;
 import com.kaisar.xposed.godmode.engine.matcher.TargetLevel;
 
 /**
- * 匹配字段契约 — 限定 IMatcher 能访问的字段，从 {@link RuleFields} 中提取。
+ * 匹配字段契约 — 限定 Matcher 能访问的字段，从 {@link RuleFields} 中提取。
  * <p>
  * 实现类：{@link MatchSpec}（纯匹配）、{@link RuleFields}（全字段）。
  * <p>
- * 【编译期安全】IMatcher 的方法参数限制为此接口，编译期无法访问 mod / orig 等动作字段。
+ * 【编译期安全】Matcher 的方法参数限制为此接口，编译期无法访问 mod / orig 等动作字段。
  *
  * @see RuleFields
  * @see MatchSpec

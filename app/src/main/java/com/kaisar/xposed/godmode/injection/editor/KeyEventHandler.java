@@ -24,7 +24,7 @@ public final class KeyEventHandler {
     // 回调接口 — 与 EditorOrchestrator 通信
     // =========================================================================
 
-    public interface IKeyCallback {
+    public interface KeyCallback {
         NodeSelectorPanel getNodePanel();
         PropertyEditorPanel getPropertyEditor();
         PreviewHandler getPreviewHandler();
@@ -37,7 +37,7 @@ public final class KeyEventHandler {
         void onHideGmOverlays(int visibility);
     }
 
-    private final IKeyCallback mCallback;
+    private final KeyCallback mCallback;
 
     // =========================================================================
     // 信息流模式状态
@@ -49,7 +49,7 @@ public final class KeyEventHandler {
     // 构造器
     // =========================================================================
 
-    public KeyEventHandler(IKeyCallback callback) {
+    public KeyEventHandler(KeyCallback callback) {
         this.mCallback = callback;
     }
 

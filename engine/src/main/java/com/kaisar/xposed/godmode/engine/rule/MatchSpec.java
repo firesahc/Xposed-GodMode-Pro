@@ -8,7 +8,7 @@ import java.util.Arrays;
 /**
  * 匹配规格 — 定义视图匹配所需的所有字段。
  * <p>
- * 从 {@link RuleMatchSpec} 拆分的纯匹配部分，只包含匹配器（IMatcher）需要的字段。
+ * 从 {@link RuleMatchSpec} 拆分的纯匹配部分，只包含匹配器（Matcher）需要的字段。
  * 不包含任何修改规则或原始值字段。
  * <p>
  * 由 {@link RuleMatchSpec#getMatchSpec()} 生成，或通过 {@link Builder} 直接构造用于纯匹配场景。

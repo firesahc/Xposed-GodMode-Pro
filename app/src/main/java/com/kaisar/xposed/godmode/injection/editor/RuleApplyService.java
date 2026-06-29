@@ -15,7 +15,7 @@ import java.util.List;
  *
  * @see com.kaisar.xposed.godmode.injection.ViewController
  */
-public interface IRuleApplyService {
+public interface RuleApplyService {
 
     /**
      * 应用单条规则到指定 View。

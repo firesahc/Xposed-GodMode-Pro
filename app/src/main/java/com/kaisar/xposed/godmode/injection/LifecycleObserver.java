@@ -9,7 +9,7 @@ import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
 
 import com.kaisar.xposed.godmode.engine.matcher.CompositeMatcher;
-import com.kaisar.xposed.godmode.engine.matcher.IMatcher;
+import com.kaisar.xposed.godmode.engine.matcher.Matcher;
 import com.kaisar.xposed.godmode.engine.matcher.ViewTraversal;
 import com.kaisar.xposed.godmode.engine.event.RulesChangedEvent;
 import com.kaisar.xposed.godmode.engine.event.Subscribe;
@@ -103,7 +103,7 @@ public final class LifecycleObserver extends XC_MethodHook {
         if (vc != null) {
             vc.clearBlockedCache();
             // 清除 RecyclerView 收集缓存，释放对已销毁 DecorView 的引用
-            IMatcher matcher = vc.getMatcher();
+            Matcher matcher = vc.getMatcher();
             if (matcher instanceof CompositeMatcher) {
                 ((CompositeMatcher) matcher).invalidateRecyclerCache();
             }
@@ -502,7 +502,7 @@ public final class LifecycleObserver extends XC_MethodHook {
                 // 防止 Fragment 切换后新增的 RecyclerView 被过时缓存遗漏
                 ViewController vc = getViewControllerFor(activity);
                 if (vc != null) {
-                    IMatcher m = vc.getMatcher();
+                    Matcher m = vc.getMatcher();
                     if (m instanceof CompositeMatcher) {
                         ((CompositeMatcher) m).invalidateRecyclerCache();
                     }

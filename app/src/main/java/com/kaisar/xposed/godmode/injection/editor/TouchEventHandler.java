@@ -31,14 +31,14 @@ public final class TouchEventHandler {
     // 回调接口 — 与 EditorOrchestrator 通信
     // =========================================================================
 
-    public interface ITouchCallback {
+    public interface TouchCallback {
         boolean isKeySelecting();
         View getSelectedView();
         int getInteractionMode();
         void selectViewByTap(View v);
     }
 
-    private final ITouchCallback mCallback;
+    private final TouchCallback mCallback;
 
     // =========================================================================
     // 触摸状态字段
@@ -66,7 +66,7 @@ public final class TouchEventHandler {
     // 构造器
     // =========================================================================
 
-    public TouchEventHandler(ITouchCallback callback) {
+    public TouchEventHandler(TouchCallback callback) {
         this.mCallback = callback;
     }
 

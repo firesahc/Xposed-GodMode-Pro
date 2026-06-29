@@ -11,7 +11,7 @@ import com.kaisar.xposed.godmode.rule.RuleRecord;
  *
  * @see com.kaisar.xposed.godmode.injection.bridge.RuleServiceClient
  */
-public interface IRulePersistenceService {
+public interface RulePersistenceService {
 
     /**
      * 写入（新增）一条规则到系统服务。

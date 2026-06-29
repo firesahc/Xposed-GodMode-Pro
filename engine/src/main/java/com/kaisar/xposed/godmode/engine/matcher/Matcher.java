@@ -12,7 +12,7 @@ import java.util.Map;
  * <p>
  * 实现类：{@link CompositeMatcher}。
  */
-public interface IMatcher {
+public interface Matcher {
 
     /** 在视图树中查找单个最佳匹配视图 */
     View matchView(View root, MatchFields spec);

@@ -10,7 +10,7 @@ import java.util.Arrays;
  * <p>
  * 内部包含两个职责清晰的子规格：
  * <ul>
- *   <li>{@link #getMatchSpec()} — 纯匹配字段，供 {@link com.kaisar.xposed.godmode.engine.matcher.IMatcher} 使用</li>
+ *   <li>{@link #getMatchSpec()} — 纯匹配字段，供 {@link com.kaisar.xposed.godmode.engine.matcher.Matcher} 使用</li>
  *   <li>{@link #getActionSpec()} — 纯修改字段，供 {@link com.kaisar.xposed.godmode.engine.applier.RuleApplier} 使用</li>
  * </ul>
  * 新代码应优先使用 MatchSpec / ActionSpec，而非直接操作 RuleMatchSpec。
@@ -127,7 +127,7 @@ public final class RuleMatchSpec implements RuleFields, Cloneable {
     // =========================================================================
 
     /**
-     * 导出为纯匹配规格，供 IMatcher 使用。
+     * 导出为纯匹配规格，供 Matcher 使用。
      * 返回的 MatchSpec 是独立副本，修改不影响原 RuleMatchSpec。
      */
     public MatchSpec getMatchSpec() {

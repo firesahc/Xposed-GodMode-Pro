@@ -44,7 +44,7 @@ import java.util.List;
  * 和 {@link com.kaisar.xposed.godmode.injection.entry.TouchHook} 注入。
  */
 public final class EditorOrchestrator implements Property.OnPropertyChangeListener<Boolean>,
-        TouchEventHandler.ITouchCallback, KeyEventHandler.IKeyCallback {
+        TouchEventHandler.TouchCallback, KeyEventHandler.KeyCallback {
 
     // =========================================================================
     // 常量定义    // =========================================================================
@@ -374,9 +374,9 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     }
 
     // =========================================================================
-    // ITouchCallback / IKeyCallback 实现
+    // TouchCallback / KeyCallback 实现
     // 注：isKeySelecting()、getSelectedView()、getInteractionMode()、selectViewByTap()
-    //     均已在 EditorOrchestrator 中作为 public 方法存在，直接满足 ITouchCallback 接口。
+    //     均已在 EditorOrchestrator 中作为 public 方法存在，直接满足 TouchCallback 接口。
     // =========================================================================
 
     @Override

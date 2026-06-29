@@ -20,7 +20,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 复合匹配器 — IMatcher 的默认实现。
+ * 复合匹配器 — Matcher 的默认实现。
  * <p>
  * 使用 AND 布尔匹配（{@link #isStructuralMatch}），所有非空字段必须全部匹配。
  * 已移除评分体系（computeScore / 阈值 / MatchStrategy 注册表）。
@@ -35,7 +35,7 @@ import java.util.concurrent.ConcurrentHashMap;
  *   </ul>
  * </ul>
  */
-public final class CompositeMatcher implements IMatcher {
+public final class CompositeMatcher implements Matcher {
 
     public CompositeMatcher() {
     }
@@ -45,7 +45,7 @@ public final class CompositeMatcher implements IMatcher {
     private WeakReference<View> mCachedRoot;
     private List<ViewGroup> mCachedRecyclerViews;
 
-    // ---- IMatcher 实现 ----
+    // ---- Matcher 实现 ----
 
     @Override
     public View matchView(View root, MatchFields spec) {
