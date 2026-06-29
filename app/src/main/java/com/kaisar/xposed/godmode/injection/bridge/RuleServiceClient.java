@@ -322,7 +322,7 @@ public final class RuleServiceClient {
     /**
      * 通过 IPC 向 system_server 转发一条日志。
      * 此方法仅供 {@link com.kaisar.xposed.godmode.engine.util.Logger.Writer} 使用，
-     * 内部直接用 android.util.Log 处理异常，避免通过 Logger 导致无限递归。
+     * 内部直接用 Logger.w 处理异常（forwardLog 走 logcat 通道，不触发 Writer 回调，无递归风险）。
      */
     public void forwardLog(int level, String tag, String msg, long timestamp) {
         try {
@@ -333,9 +333,9 @@ public final class RuleServiceClient {
                     timestamp,
                     tag, msg);
         } catch (RemoteException e) {
-            android.util.Log.w(TAG, "forwardLog IPC failed: " + e.getMessage());
+            Logger.w(TAG, "forwardLog IPC failed: " + e.getMessage());
         } catch (Throwable t) {
-            android.util.Log.w(TAG, "forwardLog unexpected error", t);
+            Logger.w(TAG, "forwardLog unexpected error", t);
         }
     }
 }

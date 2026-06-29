@@ -8,7 +8,7 @@ import com.kaisar.xposed.godmode.engine.applier.ModifyApplier;
 import com.kaisar.xposed.godmode.engine.applier.RemoveApplier;
 import com.kaisar.xposed.godmode.engine.applier.RuleApplier;
 import com.kaisar.xposed.godmode.engine.matcher.CompositeMatcher;
-import com.kaisar.xposed.godmode.engine.matcher.IMatcher;
+import com.kaisar.xposed.godmode.engine.matcher.Matcher;
 import com.kaisar.xposed.godmode.engine.matcher.TargetLevel;
 import com.kaisar.xposed.godmode.engine.matcher.ViewTraversal;
 import com.kaisar.xposed.godmode.engine.rule.ActionSpec;
@@ -33,7 +33,7 @@ import java.util.Map;
  *   <li>ruleTag 非 null 时，使用 {@link ModifyApplier} 执行修改操作</li>
  * </ul>
  * <p>
- * 匹配使用 {@link CompositeMatcher}（{@link IMatcher} 接口）。
+ * 匹配使用 {@link CompositeMatcher}（{@link Matcher} 接口）。
  * <p>
  * <b>实例管理：</b>
  * <ul>
@@ -49,7 +49,7 @@ public final class ViewController {
 
     private RuleApplier mModifyApplier;
     private RuleApplier mRemoveApplier;
-    private IMatcher mMatcher;
+    private Matcher mMatcher;
 
     /** Activity 类名，Activity 级实例时非 null */
     private final String mActivityClassName;
@@ -124,7 +124,7 @@ public final class ViewController {
         return mRemoveApplier;
     }
 
-    public synchronized IMatcher getMatcher() {
+    public synchronized Matcher getMatcher() {
         if (mMatcher == null) {
             // CompositeMatcher 是无状态的策略容器，可安全复用
             mMatcher = new CompositeMatcher();
@@ -137,7 +137,7 @@ public final class ViewController {
     // =========================================================================
 
     /** 清除已屏蔽控件的缓存 */
-    public void clearBlockedCache() {
+    public synchronized void clearBlockedCache() {
         if (mRemoveApplier != null) mRemoveApplier.clearCache();
         if (mModifyApplier != null) mModifyApplier.clearCache();
     }

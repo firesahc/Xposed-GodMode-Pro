@@ -22,15 +22,13 @@ import com.kaisar.xposed.godmode.util.BackupUtils;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import com.kaisar.xposed.godmode.injection.util.TaskExecutor;
 
 public class SharedViewModel extends ViewModel {
 
     private static final String TAG = "SharedViewModel";
 
     private final Handler mMainHandler = new Handler(Looper.getMainLooper());
-    private final ExecutorService mExecutor = Executors.newSingleThreadExecutor();
     public final MutableLiveData<AppRules> appRules = new MutableLiveData<>();
     public final MutableLiveData<List<RuleRecord>> actRules = new MutableLiveData<>();
     public final MutableLiveData<String> selectedPackage = new MutableLiveData<>();
@@ -60,12 +58,11 @@ public class SharedViewModel extends ViewModel {
     protected void onCleared() {
         super.onCleared();
         RuleServiceClient.getDefault().removeObserver("*", mRuleObserver);
-        mExecutor.shutdownNow();
         mMainHandler.removeCallbacksAndMessages(null);
     }
 
     public void loadAppRules() {
-        mExecutor.execute(() -> appRules.postValue(RuleServiceClient.getDefault().getAllRules()));
+        TaskExecutor.executeIo(() -> appRules.postValue(RuleServiceClient.getDefault().getAllRules()));
     }
 
     public void updateSelectedPackage(String packageName) {
@@ -78,9 +75,7 @@ public class SharedViewModel extends ViewModel {
         if (rules != null && rules.containsKey(packageName)) {
             ActRules actRules = rules.get(packageName);
             if (actRules != null && !actRules.isEmpty()) {
-                for (List<RuleRecord> values : actRules.values()) {
-                    viewRules.addAll(values);
-                }
+                actRules.values().forEach(viewRules::addAll);
                 Collections.sort(viewRules, (o1, o2) -> (int) (o1.timestamp - o2.timestamp));
             }
         }
@@ -112,7 +107,7 @@ public class SharedViewModel extends ViewModel {
     }
 
     public void restoreRules(Uri uri, ResultCallback callback) {
-        mExecutor.execute(() -> {
+        TaskExecutor.executeIo(() -> {
             try {
                 Logger.i(TAG, "[ViewModel] restoreRules: start, uri=" + uri);
                 int count = BackupUtils.restoreRules(uri);
@@ -126,7 +121,7 @@ public class SharedViewModel extends ViewModel {
     }
 
     public void backupRules(Uri uri, String packageName, List<RuleRecord> viewRules, ResultCallback callback) {
-        mExecutor.execute(() -> {
+        TaskExecutor.executeIo(() -> {
             try {
                 Logger.i(TAG, "[ViewModel] backupRules: start, package=" + packageName + ", ruleCount=" + viewRules.size());
                 BackupUtils.backupRules(uri, packageName, viewRules);

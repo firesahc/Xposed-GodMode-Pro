@@ -2,7 +2,7 @@ package com.kaisar.xposed.godmode.rule;
 
 import android.os.Parcel;
 import android.os.Parcelable;
-import android.util.Log;
+import com.kaisar.xposed.godmode.engine.util.Logger;
 
 import androidx.annotation.Keep;
 
@@ -36,7 +36,7 @@ public final class ActRules extends ConcurrentHashMap<String, List<RuleRecord>> 
     @Override
     public List<RuleRecord> put(String key, List<RuleRecord> value) {
         if (key == null || value == null) {
-            Log.w(TAG, "Skipping null entry in put()");
+            Logger.w(TAG, "Skipping null entry in put()");
             return null;
         }
         return super.put(key, value);
@@ -56,7 +56,7 @@ public final class ActRules extends ConcurrentHashMap<String, List<RuleRecord>> 
             if (entry.getKey() != null && entry.getValue() != null) {
                 super.put(entry.getKey(), entry.getValue());
             } else {
-                Log.w(TAG, "Skipping null entry during Parcel deserialization");
+                Logger.w(TAG, "Skipping null entry during Parcel deserialization");
             }
         }
     }
