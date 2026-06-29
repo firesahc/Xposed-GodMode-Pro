@@ -45,6 +45,6 @@ dependencies {
     implementation libs.material
     implementation libs.glide
     implementation libs.rikka.insets
-    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
+    coreLibraryDesugaring libs.desugar
     annotationProcessor libs.glide.compiler
 }
