@@ -130,51 +130,6 @@ public final class RuleRecord implements RuleFields, Parcelable, Cloneable {
     public int origTopMargin;
 
     // =========================================================================
-    // RuleFields 接口实现 — 40 个 getter（委托到 public 字段）
-    // =========================================================================
-
-    @Override public String getRuleTag() { return ruleTag; }
-    @Override public String getLabel() { return label; }
-    @Override public String getPackageName() { return packageName; }
-    @Override public String getMatchVersionName() { return matchVersionName; }
-    @Override public int getMatchVersionCode() { return matchVersionCode; }
-    @Override public int getVersionCode() { return versionCode; }
-    @Override public String getImagePath() { return imagePath; }
-    @Override public String getAlias() { return alias; }
-    @Override public int getX() { return x; }
-    @Override public int getY() { return y; }
-    @Override public int getWidth() { return width; }
-    @Override public int getHeight() { return height; }
-    @Override public int[] getDepth() { return depth; }
-    @Override public String getActivityClass() { return activityClass; }
-    @Override public String getViewClass() { return viewClass; }
-    @Override public String getResourceName() { return resourceName; }
-    @Override public String[] getItemPath() { return itemPath; }
-    @Override public String getItemRootClass() { return itemRootClass; }
-    @Override public String getParentClass() { return parentClass; }
-    @Override public boolean isRepeatable() { return repeatable; }
-    @Override public String getText() { return text; }
-    @Override public String getDescription() { return description; }
-    @Override public MatchMode getMatchMode() { return matchMode; }
-    @Override public int getInfoFlowViewType() { return viewType; }
-    @Override public TargetLevel getTargetLevel() { return targetLevel; }
-    @Override public int getVisibility() { return visibility; }
-    @Override public long getTimestamp() { return timestamp; }
-    @Override public int getModWidth() { return modWidth; }
-    @Override public int getModHeight() { return modHeight; }
-    @Override public float getModAlpha() { return modAlpha; }
-    @Override public int getModXOffset() { return modXOffset; }
-    @Override public int getModYOffset() { return modYOffset; }
-    @Override public String getModText() { return modText; }
-    @Override public String getModImagePath() { return modImagePath; }
-    @Override public int getOrigWidth() { return origWidth; }
-    @Override public int getOrigHeight() { return origHeight; }
-    @Override public float getOrigAlpha() { return origAlpha; }
-    @Override public String getOrigText() { return origText; }
-    @Override public int getOrigLeftMargin() { return origLeftMargin; }
-    @Override public int getOrigTopMargin() { return origTopMargin; }
-
-    // =========================================================================
     // 构造方法
     // =========================================================================
 
@@ -252,6 +207,51 @@ public final class RuleRecord implements RuleFields, Parcelable, Cloneable {
         String levelName = in.readString();
         targetLevel = levelName != null ? TargetLevel.valueOf(levelName) : null;
     }
+
+    // =========================================================================
+    // RuleFields 接口实现 — 40 个 getter（委托到 public 字段）
+    // =========================================================================
+
+    @Override public String getRuleTag() { return ruleTag; }
+    @Override public String getLabel() { return label; }
+    @Override public String getPackageName() { return packageName; }
+    @Override public String getMatchVersionName() { return matchVersionName; }
+    @Override public int getMatchVersionCode() { return matchVersionCode; }
+    @Override public int getVersionCode() { return versionCode; }
+    @Override public String getImagePath() { return imagePath; }
+    @Override public String getAlias() { return alias; }
+    @Override public int getX() { return x; }
+    @Override public int getY() { return y; }
+    @Override public int getWidth() { return width; }
+    @Override public int getHeight() { return height; }
+    @Override public int[] getDepth() { return depth; }
+    @Override public String getActivityClass() { return activityClass; }
+    @Override public String getViewClass() { return viewClass; }
+    @Override public String getResourceName() { return resourceName; }
+    @Override public String[] getItemPath() { return itemPath; }
+    @Override public String getItemRootClass() { return itemRootClass; }
+    @Override public String getParentClass() { return parentClass; }
+    @Override public boolean isRepeatable() { return repeatable; }
+    @Override public String getText() { return text; }
+    @Override public String getDescription() { return description; }
+    @Override public MatchMode getMatchMode() { return matchMode; }
+    @Override public int getInfoFlowViewType() { return viewType; }
+    @Override public TargetLevel getTargetLevel() { return targetLevel; }
+    @Override public int getVisibility() { return visibility; }
+    @Override public long getTimestamp() { return timestamp; }
+    @Override public int getModWidth() { return modWidth; }
+    @Override public int getModHeight() { return modHeight; }
+    @Override public float getModAlpha() { return modAlpha; }
+    @Override public int getModXOffset() { return modXOffset; }
+    @Override public int getModYOffset() { return modYOffset; }
+    @Override public String getModText() { return modText; }
+    @Override public String getModImagePath() { return modImagePath; }
+    @Override public int getOrigWidth() { return origWidth; }
+    @Override public int getOrigHeight() { return origHeight; }
+    @Override public float getOrigAlpha() { return origAlpha; }
+    @Override public String getOrigText() { return origText; }
+    @Override public int getOrigLeftMargin() { return origLeftMargin; }
+    @Override public int getOrigTopMargin() { return origTopMargin; }
 
     // =========================================================================
     // Parcelable

@@ -12,6 +12,7 @@ import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 
+import java.io.IOException;
 import java.util.function.Consumer;
 
 /**
@@ -30,6 +31,39 @@ final class WorkflowOrchestrator implements Handler.Callback {
     static final int UPDATE_RULE = 0x000010;
     static final int CLEAN_OBSERVERS = 0x000020;
     static final int CLEAN_ORPHANS = 0x000040;
+
+    private static final long ORPHAN_CLEAN_INTERVAL = 120_000L;
+
+    // ===== 核心 Manager =====
+    private final RuleCacheManager mCacheManager;
+    private final RulePersistManager mPersistManager;
+    private final ObserverRegistry mObserverManager;
+
+    // ===== 实用工具 =====
+    private final Logger mLogger;
+    private final Handler mHandle;
+    private final Consumer<String> mToolbarItemsCallback;
+
+    // ===== 运行时状态 =====
+    private volatile boolean mDataLoaded;
+    private volatile boolean mOrphanCleanPending;
+    private final HandlerThread mWorkThread;
+
+    WorkflowOrchestrator(Gson gson, Logger logger, RuleCacheManager cacheManager,
+                         Consumer<String> toolbarItemsCallback) {
+        this.mLogger = logger;
+        this.mCacheManager = cacheManager;
+        this.mToolbarItemsCallback = toolbarItemsCallback;
+
+        mWorkThread = new HandlerThread("work-thread");
+        mWorkThread.start();
+        mHandle = new Handler(mWorkThread.getLooper(), this);
+
+        mPersistManager = new RulePersistManager(gson, Logger.getLogger("RulePersistManager"), mHandle, mCacheManager);
+        mObserverManager = new ObserverRegistry(Logger.getLogger("ObserverRegistry"), mHandle, CLEAN_OBSERVERS);
+
+        mHandle.sendEmptyMessage(LOAD_RULES);
+    }
 
     // ===== 消息码枚举 — 类型安全的操作标识 =====
 
@@ -87,38 +121,6 @@ final class WorkflowOrchestrator implements Handler.Callback {
             return new RuleMessage(MessageCode.UPDATE_RULE, packageName, null,
                     null, json, snapshotRules, null);
         }
-    }
-    private static final long ORPHAN_CLEAN_INTERVAL = 120_000L;
-
-    // ===== 核心 Manager =====
-    private final RuleCacheManager mCacheManager;
-    private final RulePersistManager mPersistManager;
-    private final ObserverRegistry mObserverManager;
-
-    // ===== 实用工具 =====
-    private final Logger mLogger;
-    private final Handler mHandle;
-    private final Consumer<String> mToolbarItemsCallback;
-
-    // ===== 运行时状态 =====
-    private volatile boolean mDataLoaded;
-    private volatile boolean mOrphanCleanPending;
-    private final HandlerThread mWorkThread;
-
-    WorkflowOrchestrator(Gson gson, Logger logger, RuleCacheManager cacheManager,
-                         Consumer<String> toolbarItemsCallback) {
-        this.mLogger = logger;
-        this.mCacheManager = cacheManager;
-        this.mToolbarItemsCallback = toolbarItemsCallback;
-
-        mWorkThread = new HandlerThread("work-thread");
-        mWorkThread.start();
-        mHandle = new Handler(mWorkThread.getLooper(), this);
-
-        mPersistManager = new RulePersistManager(gson, Logger.getLogger("RulePersistManager"), mHandle, mCacheManager);
-        mObserverManager = new ObserverRegistry(Logger.getLogger("ObserverRegistry"), mHandle, CLEAN_OBSERVERS);
-
-        mHandle.sendEmptyMessage(LOAD_RULES);
     }
 
     // ===== 数据加载状态 =====
@@ -309,7 +311,7 @@ final class WorkflowOrchestrator implements Handler.Callback {
             try {
                 newImagePath = mPersistManager.saveBitmap(m.snapshot,
                         mPersistManager.getAppDataDir(m.packageName));
-            } catch (Exception e) {
+            } catch (IOException e) {
                 mLogger.w("write rule: save bitmap failed — cache untouched", e);
                 return;
             }
@@ -399,7 +401,7 @@ final class WorkflowOrchestrator implements Handler.Callback {
             mToolbarItemsCallback.accept(items);
             mDataLoaded = true;
             mLogger.i("rule data loaded: " + mCacheManager.size() + " packages");
-        } catch (Exception e) {
+        } catch (IOException e) {
             mLogger.e("loadRuleData failed", e);
             mDataLoaded = true;
         }

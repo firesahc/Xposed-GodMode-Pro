@@ -16,7 +16,7 @@ public final class RemoveApplier implements RuleApplier {
     // 由 JVM 保证 View 对象唯一性，与 ModifyApplier.mAppliedViews 风格统一
     private final WeakHashMap<View, ViewProperty> mBlockedViewCache = new WeakHashMap<>();
 
-    /** 当前 Activity 类名，用于构造 {@link IApplierCache.CacheKey} 实现 Activity 级缓存隔离 */
+    /** 当前 Activity 类名，用于实现 Activity 级缓存隔离 */
     private final String mActivityClassName;
 
     /** 进程级单例构造（向后兼容，缓存未经 Activity 隔离） */

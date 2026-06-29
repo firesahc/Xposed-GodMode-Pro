@@ -1,6 +1,5 @@
 package com.kaisar.xposed.godmode.injection.editor.gesture;
 
-import android.animation.Animator;
 import android.app.Activity;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
@@ -12,19 +11,18 @@ import com.kaisar.xposed.godmode.engine.util.GmConstants;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.engine.util.Preconditions;
 import com.kaisar.xposed.godmode.injection.ViewController;
-import com.kaisar.xposed.godmode.injection.bridge.RuleServiceClient;
 import com.kaisar.xposed.godmode.rule.RuleRecordFactory;
+import com.kaisar.xposed.godmode.injection.editor.action.ParticleEffectHelper;
 import com.kaisar.xposed.godmode.injection.editor.overlay.CancelView;
 import com.kaisar.xposed.godmode.injection.editor.overlay.MaskView;
-import com.kaisar.xposed.godmode.injection.editor.overlay.ParticleView;
 import com.kaisar.xposed.godmode.injection.util.BitmapUtils;
-import com.kaisar.xposed.godmode.injection.util.TaskExecutor;
 import com.kaisar.xposed.godmode.injection.util.ViewUtils;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 
 /**
  * 移除手势处理 — 长按拖动移除视图：粒子动画 + 取消区域 + IPC 持久化。
- * 由 EventHandlerHook 提取的移除模式交互逻辑。
+ * <p>
+ * 粒子动画和 IPC 持久化流程委托给 {@link ParticleEffectHelper}。
  */
 public final class RemoveGestureHandler {
 
@@ -75,35 +73,12 @@ public final class RemoveGestureHandler {
             ViewController.getDefault().revokeRule(v, state.viewRule);
             CommonUtils.recycleNullableBitmap(state.snapshot);
         } else {
-            // 未拖入取消区域：执行粒子动画并保存规则到 IPC
+            // 未拖入取消区域：委托 ParticleEffectHelper 执行粒子动画 + IPC 持久化
             ViewGroup container = (ViewGroup) activity.getWindow().getDecorView();
-            ParticleView particleView = new ParticleView(activity);
-            particleView.setDuration(GmConstants.PARTICLE_ANIM_DURATION_MS);
-            particleView.attachToContainer(container);
-            particleView.setOnAnimationListener(new ParticleView.OnAnimationListener() {
-                @Override
-                public void onAnimationStart(View animView, Animator animation) {
-                    state.viewRule.visibility = View.GONE;
-                    ViewController.getDefault().applyRule(v, state.viewRule);
-                    BitmapUtils.drawRuleMask(state.snapshot, state.viewRule);
-                    state.maskView.detachFromContainer();
-                    TaskExecutor.executeIo(() -> {
-                        try {
-                            RuleServiceClient.getDefault().writeRule(
-                                    v.getContext().getPackageName(),
-                                    state.viewRule, state.snapshot);
-                        } catch (Exception e) {
-                            Logger.e(TAG, "[EventHandler] write rule fail", e);
-                        }
-                        CommonUtils.recycleNullableBitmap(state.snapshot);
-                    });
-                }
-                @Override
-                public void onAnimationEnd(View animView, Animator animation) {
-                    particleView.detachFromContainer();
-                }
-            });
-            particleView.boom(state.maskView);
+            ParticleEffectHelper.execute(activity, state.maskView, container,
+                    state.viewRule, state.snapshot,
+                    v.getContext().getPackageName(),
+                    state.maskView, /* onComplete */ null);
         }
     }
 
