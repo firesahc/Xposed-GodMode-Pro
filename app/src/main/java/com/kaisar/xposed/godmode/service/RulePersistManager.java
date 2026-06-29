@@ -23,8 +23,8 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -79,14 +79,8 @@ final class RulePersistManager {
                     ActRules rules = mGson.fromJson(json, ActRules.class);
                     Preconditions.checkNotNull(rules, "rules is null");
                     // compact rule — 清理空规则列表
-                    Iterator<Map.Entry<String, List<RuleRecord>>> iterator = rules.entrySet().iterator();
-                    while (iterator.hasNext()) {
-                        Map.Entry<String, List<RuleRecord>> listEntry = iterator.next();
-                        List<RuleRecord> value = listEntry.getValue();
-                        if (value == null || value.isEmpty()) {
-                            iterator.remove();
-                        }
-                    }
+                    rules.entrySet().removeIf(e ->
+                            e.getValue() == null || e.getValue().isEmpty());
                     if (rules.isEmpty()) {
                         FileUtils.delete(packageDir);
                         continue;
@@ -204,13 +198,9 @@ final class RulePersistManager {
                         (dir, name) -> name.endsWith(IMAGE_FILE_SUFFIX));
                 if (imageFiles == null || imageFiles.length == 0) continue;
                 mCacheManager.collectReferencedImages(packageDir, packageDir.getName(),
-                        (dir, referenced) -> {
-                            for (File f : imageFiles) {
-                                if (!referenced.contains(f.getAbsolutePath())) {
-                                    FileUtils.delete(f);
-                                }
-                            }
-                        });
+                        (dir, referenced) -> Arrays.stream(imageFiles)
+                                .filter(f -> !referenced.contains(f.getAbsolutePath()))
+                                .forEach(FileUtils::delete));
             }
         } catch (FileNotFoundException e) {
             mLogger.w("orphan cleanup: base dir not found", e);

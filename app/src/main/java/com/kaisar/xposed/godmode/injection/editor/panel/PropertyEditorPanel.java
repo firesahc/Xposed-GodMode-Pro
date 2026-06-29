@@ -1,6 +1,6 @@
 package com.kaisar.xposed.godmode.injection.editor.panel;
 
-import static com.kaisar.xposed.godmode.engine.util.CommonUtils.recycleNullableBitmap;
+import com.kaisar.xposed.godmode.engine.util.CommonUtils;
 
 import android.app.Activity;
 import android.content.Intent;
@@ -189,11 +189,10 @@ public class PropertyEditorPanel {
     /** Handle Activity onActivityResult for image picker callback. */
     public void cancel() {
         revertViewState();
-        for (Map.Entry<String, Bitmap> entry : mPendingModBitmaps.entrySet()) {
-            recycleNullableBitmap(entry.getValue());
-        }
+        mPendingModBitmaps.values().forEach(
+                CommonUtils::recycleNullableBitmap);
         mPendingModBitmaps.clear();
-        recycleNullableBitmap(mPendingImageBitmap);
+        CommonUtils.recycleNullableBitmap(mPendingImageBitmap);
         mPendingImageBitmap = null;
         dismiss();
     }
@@ -584,7 +583,7 @@ public class PropertyEditorPanel {
                     allOk = false;
                     failedRules.add(rule.activityClass + "#" + rule.viewClass);
                 } finally {
-                    recycleNullableBitmap(snapshot);
+                    CommonUtils.recycleNullableBitmap(snapshot);
                 }
             }
             boolean finalAllOk = allOk;
