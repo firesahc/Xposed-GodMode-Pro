@@ -78,7 +78,7 @@
                     android:background="@drawable/ripple_drawable_20dp"
                     android:gravity="center"
                     android:text="@string/mode_info_flow_off"
-                    android:textColor="#808080"
+                    android:textColor="@color/info_flow_btn_text"
                     android:textSize="11sp"
                     android:tag="@string/tag_gm_cmp" />
             </FrameLayout>

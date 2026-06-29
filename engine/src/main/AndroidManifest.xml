@@ -1,4 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest>
-    <!-- engine 模块 — 纯Java库，无Android组件声明 -->
+    <!-- engine 模块 — Android 库模块（依赖 android.view/android.widget 等框架 API），无 Activity/Service 等组件声明 -->
 </manifest>

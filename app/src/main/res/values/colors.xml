@@ -4,4 +4,5 @@
     <color name="colorPrimaryDark">#FFFFFF</color>
     <color name="colorAccent">#03A9F4</color>
     <color name="prefsAliasColor">#F44336</color>
+    <color name="info_flow_btn_text">#808080</color>
 </resources>
