@@ -20,7 +20,11 @@ import java.util.function.Consumer;
  * <p>
  * 由 RuleServiceServer 使用。
  * 通过 HandlerThread + Handler 委托给 RulePersistManager 和 ObserverRegistry。
+ *
+ * @deprecated 功能已合并到 {@link com.kaisar.xposed.godmode.control.RuleRepository}。
+ * 旧 RuleServiceServer 仍使用此类的旧实现。将在 Phase 6 清理时移除。
  */
+@Deprecated
 final class WorkflowOrchestrator implements Handler.Callback {
 
     // ===== 消息码 =====

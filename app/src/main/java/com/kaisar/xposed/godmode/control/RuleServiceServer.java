@@ -1,7 +1,9 @@
-package com.kaisar.xposed.godmode.service;
+package com.kaisar.xposed.godmode.control;
 
 import android.content.Context;
 import android.graphics.Bitmap;
+import android.os.Handler;
+import android.os.HandlerThread;
 import android.os.ParcelFileDescriptor;
 import android.os.RemoteException;
 
@@ -22,51 +24,73 @@ import java.io.FileNotFoundException;
  * GodMode 管理器服务 — AIDL 实现类（核心服务端点）。
  * <p>
  * 运行在 XServiceManager 注入的 SystemServer 进程中。
- * 内部持有 PermissionEnforcer、RuleCacheManager 等核心组件，
- * 通过 Handler 异步委托给各 Manager 处理规则持久化和观察者通知。
+ * 内部持有 {@link RuleRepository}、{@link ObserverRegistry}、{@link ModuleLifecycle} 等核心组件。
  * <p>
- * Client 调用 {@link com.kaisar.xposed.godmode.injection.bridge.RuleServiceClient#getDefault()} 获取实例。
- *
- * @deprecated 已迁移到 {@link com.kaisar.xposed.godmode.control.RuleServiceServer}。
- * HookLauncher 已改为引用 control/ 版本。将在 Phase 6 清理时移除。
+ * 从 {@code service/} 移入 control/ 包，使用 RuleRepository 替代 WorkflowOrchestrator + RuleCacheManager。
  */
-@Deprecated
 public final class RuleServiceServer extends IGodModeManager.Stub {
 
     // ===== 核心组件 =====
     private final PermissionEnforcer mPermissionEnforcer;
-    private final RuleCacheManager mCacheManager;
-    private final WorkflowOrchestrator mOrchestrator;
+    private final RuleRepository mRepository;
+    private final ObserverRegistry mObserverRegistry;
+    private final ModuleLifecycle mLifecycle;
 
     // ===== 实用工具 =====
     private final Logger mLogger;
-    private final Context mContext;
     private final Gson mGson = new GsonBuilder().setPrettyPrinting().create();
 
     // ===== 运行时状态 =====
     private volatile boolean mInEditMode;
     private volatile boolean mStarted;
 
-    // ===== 工具栏隐藏项（由 RuleServiceServer 管理持久化）=====
+    // ===== 工具栏隐藏项 =====
     private String mToolbarHiddenItems = "";
 
     public RuleServiceServer(Context context) {
         mLogger = Logger.getLogger("RuleServiceServer");
-        mContext = context;
         mPermissionEnforcer = new PermissionEnforcer(context);
-        mCacheManager = new RuleCacheManager(mGson, Logger.getLogger("RuleCacheManager"));
-        mOrchestrator = new WorkflowOrchestrator(mGson, Logger.getLogger("WorkflowOrchestrator"), mCacheManager,
-                items -> mToolbarHiddenItems = items);
+
+        // 创建 Handler 供 ObserverRegistry 使用
+        HandlerThread handlerThread = new HandlerThread("control-handler");
+        handlerThread.start();
+        Handler handler = new Handler(handlerThread.getLooper());
+
+        // 创建观察者注册表
+        mObserverRegistry = new ObserverRegistry(
+                Logger.getLogger("ObserverRegistry"), handler, 0x0020);
+
+        // 创建模块生命周期
+        mLifecycle = new ModuleLifecycle();
+        mLifecycle.transition(ModuleLifecycle.State.LOADING);
+
+        // 创建规则仓库
+        mRepository = new RuleRepository(
+                mGson,
+                Logger.getLogger("RuleRepository"),
+                mObserverRegistry,
+                com.kaisar.xposed.godmode.data.RuleSnapshotStore.getDefault(),
+                com.kaisar.xposed.godmode.data.SignalStore.getDefault()
+        );
+
         // 将 system_server 自身日志也汇入统一日志文件 godmodepro.log
         Logger.setWriter((level, tag, msg, timestamp) -> {
             GodModeLog.write(level, "system_server", tag, msg, timestamp);
         });
+
+        // 加载数据
+        mRepository.loadAll();
+        mLifecycle.markHealthy(ModuleLifecycle.Layer.CONTROL);
+
+        // 加载工具栏偏好
+        mToolbarHiddenItems = mRepository.loadToolbarHiddenItems();
+
         mStarted = true;
         mLogger.i("GMMService started, loading rules from /data/misc/godmode");
     }
 
     // ===================================================================
-    // AIDL 接口实现 — 委托给各 Manager
+    // AIDL 接口实现
     // ===================================================================
 
     @Override
@@ -83,7 +107,7 @@ public final class RuleServiceServer extends IGodModeManager.Stub {
         if (!mStarted) { mLogger.w("setEditMode ignored — service not started"); return; }
         mLogger.d("setEditMode: " + enable);
         mInEditMode = enable;
-        mOrchestrator.notifyEditModeChanged(enable);
+        mObserverRegistry.notifyObserverEditModeChanged(enable);
     }
 
     @Override
@@ -101,8 +125,8 @@ public final class RuleServiceServer extends IGodModeManager.Stub {
                 new String[]{packageName, BuildConfig.APPLICATION_ID},
                 "register observer fail permission denied");
         if (!mStarted) { mLogger.w("addObserver(" + packageName + ") ignored — service not started"); return; }
-        ActRules rules = mCacheManager.getRules(packageName);
-        mOrchestrator.addObserver(packageName, observer, mInEditMode, rules);
+        ActRules rules = mRepository.getRules(packageName);
+        mObserverRegistry.addObserver(packageName, observer, mInEditMode, rules);
     }
 
     @Override
@@ -112,10 +136,10 @@ public final class RuleServiceServer extends IGodModeManager.Stub {
                 new String[]{packageName, BuildConfig.APPLICATION_ID},
                 "unregister observer fail permission denied");
         if (!mStarted) { mLogger.w("removeObserver(" + packageName + ") ignored — service not started"); return; }
-        mOrchestrator.removeObserver(packageName, observer);
+        mObserverRegistry.removeObserver(packageName, observer);
     }
 
-    // ---- 规则写入 ----
+    // ---- 规则读取 ----
 
     @Override
     public AppRules getAllRules() throws RemoteException {
@@ -124,11 +148,11 @@ public final class RuleServiceServer extends IGodModeManager.Stub {
             mLogger.w("getAllRules: service not started");
             return new AppRules();
         }
-        if (!mOrchestrator.isDataLoaded()) {
+        if (!mRepository.isDataLoaded()) {
             mLogger.w("getAllRules: data not loaded yet");
             return new AppRules();
         }
-        return mCacheManager.getAllRules();
+        return mRepository.getAllRules();
     }
 
     @Override
@@ -140,11 +164,11 @@ public final class RuleServiceServer extends IGodModeManager.Stub {
             mLogger.w("getRules: service not started");
             return new ActRules();
         }
-        if (!mOrchestrator.isDataLoaded()) {
+        if (!mRepository.isDataLoaded()) {
             mLogger.w("getRules: data not loaded yet");
             return new ActRules();
         }
-        return mCacheManager.getRules(packageName);
+        return mRepository.getRules(packageName);
     }
 
     // ---- 规则更新 ----
@@ -156,14 +180,14 @@ public final class RuleServiceServer extends IGodModeManager.Stub {
                 new String[]{packageName, BuildConfig.APPLICATION_ID},
                 "write rule fail permission denied");
         if (!mStarted) { mLogger.w("writeRule(" + packageName + ") ignored — service not started"); return false; }
-        return mOrchestrator.writeRuleAsync(packageName, viewRule, snapshot);
+        return mRepository.writeRule(packageName, viewRule, snapshot);
     }
 
     @Override
     public boolean updateRule(String packageName, RuleRecord viewRule) throws RemoteException {
         mPermissionEnforcer.enforcePermission("update rule fail permission denied");
         if (!mStarted) { mLogger.w("updateRule(" + packageName + ") ignored — service not started"); return false; }
-        return mOrchestrator.updateRuleAsync(packageName, viewRule);
+        return mRepository.updateRule(packageName, viewRule);
     }
 
     // ---- 规则删除 ----
@@ -172,14 +196,14 @@ public final class RuleServiceServer extends IGodModeManager.Stub {
     public boolean deleteRule(String packageName, RuleRecord viewRule) throws RemoteException {
         mPermissionEnforcer.enforcePermission("delete rule fail permission denied");
         if (!mStarted) { mLogger.w("deleteRule(" + packageName + ") ignored — service not started"); return false; }
-        return mOrchestrator.deleteRuleAsync(packageName, viewRule);
+        return mRepository.deleteRule(packageName, viewRule);
     }
 
     @Override
     public boolean deleteRules(String packageName) throws RemoteException {
         mPermissionEnforcer.enforcePermission("delete rules fail permission denied");
         if (!mStarted) { mLogger.w("deleteRules(" + packageName + ") ignored — service not started"); return false; }
-        return mOrchestrator.deleteRulesAsync(packageName);
+        return mRepository.deleteRules(packageName);
     }
 
     // ---- 图片文件操作 ----
@@ -195,8 +219,7 @@ public final class RuleServiceServer extends IGodModeManager.Stub {
             return null;
         }
         try {
-            return mOrchestrator.saveBitmap(bitmap,
-                mOrchestrator.getAppDataDir(packageName));
+            return mRepository.saveBitmap(bitmap, mRepository.getAppDataDir(packageName));
         } catch (Exception e) {
             throw new RemoteException("Cannot access package data dir: " + e.getMessage());
         }
@@ -204,7 +227,7 @@ public final class RuleServiceServer extends IGodModeManager.Stub {
 
     @Override
     public ParcelFileDescriptor openImageFileDescriptor(String filePath) throws RemoteException {
-        if (!mOrchestrator.isValidImagePath(filePath))
+        if (!mRepository.isValidImagePath(filePath))
             throw new RemoteException("unauthorized access " + filePath);
         File parentFile = new File(filePath).getParentFile();
         String packageFromPath = parentFile != null ? parentFile.getName() : "";
@@ -226,8 +249,6 @@ public final class RuleServiceServer extends IGodModeManager.Stub {
     }
 
     // ---- 工具栏偏好 ----
-    // 注意：工具栏偏好不包含敏感信息，允许任意进程读写，
-    // 避免目标应用进程调用 getToolbarHiddenItems 时因权限校验失败导致自定义工具栏失效。
 
     @Override
     public String getToolbarHiddenItems() throws RemoteException {
@@ -237,7 +258,7 @@ public final class RuleServiceServer extends IGodModeManager.Stub {
     @Override
     public void setToolbarHiddenItems(String items) throws RemoteException {
         mToolbarHiddenItems = items != null ? items : "";
-        mOrchestrator.persistToolbarHiddenItems(mToolbarHiddenItems);
+        mRepository.persistToolbarHiddenItems(mToolbarHiddenItems);
     }
 
     // ---- 日志转发 ----
@@ -254,6 +275,6 @@ public final class RuleServiceServer extends IGodModeManager.Stub {
     /** 关闭服务，释放工作线程资源。 */
     public void shutdown() {
         mStarted = false;
-        mOrchestrator.shutdown();
+        mRepository.shutdown();
     }
 }

@@ -27,7 +27,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * <p>
  * 优化：持久化 OutputStream（只打开一次，不在每条日志上 open/close），
  * 大幅减少 IO 开销。
+ *
+ * @deprecated 已迁移到 {@link com.kaisar.xposed.godmode.control.GodModeLog}。
+ * 将在 Phase 6 清理时移除。
  */
+@Deprecated
 final class GodModeLog {
 
     private static final String TAG = "GodModeLog";

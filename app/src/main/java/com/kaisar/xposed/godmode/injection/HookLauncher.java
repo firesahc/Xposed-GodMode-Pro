@@ -23,7 +23,7 @@ import com.kaisar.xposed.godmode.injection.entry.DebugLayoutHook;
 import com.kaisar.xposed.godmode.injection.entry.TouchHook;
 import com.kaisar.xposed.godmode.injection.util.BlockListChecker;
 import com.kaisar.xposed.godmode.rule.ActRules;
-import com.kaisar.xposed.godmode.service.RuleServiceServer;
+import com.kaisar.xposed.godmode.control.RuleServiceServer;
 import com.kaisar.xservicemanager.XServiceManager;
 
 import java.lang.reflect.Method;

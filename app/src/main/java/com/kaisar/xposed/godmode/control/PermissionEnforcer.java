@@ -1,4 +1,4 @@
-package com.kaisar.xposed.godmode.service;
+package com.kaisar.xposed.godmode.control;
 
 import android.content.Context;
 import android.os.Binder;
@@ -12,12 +12,9 @@ import java.util.Arrays;
 
 /**
  * 权限验证器 — 通过 UID → 包名映射验证调用方身份。
- * 从 RuleServiceServer 提取的独立职责。
- *
- * @deprecated 已迁移到 {@link com.kaisar.xposed.godmode.control.PermissionEnforcer}。
- * 将在 Phase 6 清理时移除。
+ * <p>
+ * 从 {@code service/} 移入 control/ 包，职责不变。
  */
-@Deprecated
 final class PermissionEnforcer {
 
     private final Context mContext;

@@ -32,7 +32,11 @@ import java.util.Map;
 /**
  * 规则持久化管理器 — JSON 序列化 + Bitmap 图片 + 工具栏配置持久化。
  * 由 RuleServiceServer 使用。
+ *
+ * @deprecated 功能已合并到 {@link com.kaisar.xposed.godmode.control.RuleRepository.RuleStore}。
+ * 旧 RuleServiceServer 仍使用此类的旧实现。将在 Phase 6 清理时移除。
  */
+@Deprecated
 final class RulePersistManager {
 
     // /data/misc/godmode

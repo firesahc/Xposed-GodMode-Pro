@@ -17,7 +17,11 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 /**
  * 规则缓存管理器 — 基于 ReentrantReadWriteLock 的线程安全内存缓存。
  * 由 RuleServiceServer 使用。
+ *
+ * @deprecated 功能已合并到 {@link com.kaisar.xposed.godmode.control.RuleRepository.RuleCache}。
+ * 旧 RuleServiceServer 仍使用此类的旧实现。将在 Phase 6 清理时移除。
  */
+@Deprecated
 final class RuleCacheManager {
 
     private final AppRules mAppRulesCache = new AppRules();

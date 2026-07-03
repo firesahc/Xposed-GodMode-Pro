@@ -1,4 +1,4 @@
-package com.kaisar.xposed.godmode.service;
+package com.kaisar.xposed.godmode.control;
 
 import android.os.Handler;
 import android.os.IBinder;
@@ -16,13 +16,10 @@ import java.util.List;
 
 /**
  * 观察者管理 — RemoteCallbackList 注册 + 死观察者清理 + 事件通知。
- * 由 RuleServiceServer 使用。
- *
- * @deprecated 已迁移到 {@link com.kaisar.xposed.godmode.control.ObserverRegistry}。
- * 将在 Phase 6 清理时移除。
+ * <p>
+ * 从 {@code service/} 移入 control/ 包，职责不变。
  */
-@Deprecated
-final class ObserverRegistry {
+public final class ObserverRegistry {
 
     /** 死观察者自动清理间隔(ms) */
     static final long CLEAN_INTERVAL = 60_000L;
@@ -36,9 +33,9 @@ final class ObserverRegistry {
     /**
      * @param logger               日志记录器
      * @param handle               Handler 用于调度清理任务
-     * @param cleanObserversMsgCode Handler 消息代码（由 RuleServiceServer 定义）
+     * @param cleanObserversMsgCode Handler 消息代码
      */
-    ObserverRegistry(Logger logger, Handler handle, int cleanObserversMsgCode) {
+    public ObserverRegistry(Logger logger, Handler handle, int cleanObserversMsgCode) {
         this.mLogger = logger;
         this.mHandle = handle;
         this.mCleanObserversMsgCode = cleanObserversMsgCode;
@@ -49,7 +46,7 @@ final class ObserverRegistry {
     /**
      * 注册观察者，首次注册时立即通知当前状态。
      */
-    void addObserver(String packageName, IObserver observer, boolean editModeEnabled,
+    public void addObserver(String packageName, IObserver observer, boolean editModeEnabled,
             ActRules currentRules) {
         synchronized (mRemoteCallbackList) {
             synchronized (mRegisteredObserverMap) {
@@ -75,7 +72,7 @@ final class ObserverRegistry {
     }
 
     /** 注销观察者 */
-    void removeObserver(String packageName, IObserver observer) {
+    public void removeObserver(String packageName, IObserver observer) {
         synchronized (mRemoteCallbackList) {
             ObserverProxy proxy = null;
             synchronized (mRegisteredObserverMap) {
@@ -98,7 +95,7 @@ final class ObserverRegistry {
 
     // ---- 事件通知 ----
 
-    void notifyObserverRuleChanged(String packageName, ActRules actRules) {
+    public void notifyObserverRuleChanged(String packageName, ActRules actRules) {
         forEachLiveObserver((proxy) -> {
             if (TextUtils.equals(proxy.packageName, packageName)
                     || TextUtils.equals(proxy.packageName, "*")) {
@@ -107,7 +104,7 @@ final class ObserverRegistry {
         });
     }
 
-    void notifyObserverEditModeChanged(boolean enable) {
+    public void notifyObserverEditModeChanged(boolean enable) {
         forEachLiveObserver((proxy) -> proxy.onEditModeChanged(enable));
     }
 
@@ -120,7 +117,7 @@ final class ObserverRegistry {
         }
     }
 
-    void cleanDeadObservers() {
+    public void cleanDeadObservers() {
         synchronized (mRemoteCallbackList) {
             int N = mRemoteCallbackList.beginBroadcast();
             List<ObserverProxy> dead = new ArrayList<>();
