@@ -11,15 +11,10 @@ import android.view.ViewTreeObserver;
 import com.kaisar.xposed.godmode.engine.event.ActivityLifecycleEvent;
 import com.kaisar.xposed.godmode.engine.matcher.CompositeMatcher;
 import com.kaisar.xposed.godmode.engine.matcher.Matcher;
-import com.kaisar.xposed.godmode.engine.matcher.ViewTraversal;
 import com.kaisar.xposed.godmode.engine.event.RulesChangedEvent;
 import com.kaisar.xposed.godmode.engine.event.Subscribe;
-import com.kaisar.xposed.godmode.engine.rule.MatchSpec;
-import com.kaisar.xposed.godmode.engine.rule.MatchFields;
-import com.kaisar.xposed.godmode.engine.rule.RuleMapper;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.engine.util.Preconditions;
-import com.kaisar.xposed.godmode.injection.util.ViewUtils;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 
@@ -32,7 +27,9 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 import de.robv.android.xposed.XC_MethodHook;
-import de.robv.android.xposed.XposedHelpers;
+
+import com.kaisar.xposed.godmode.runtime.RecyclerAdapterHook;
+import com.kaisar.xposed.godmode.runtime.RuleManager;
 
 /**
  * 监听 Activity 生命周期事件，管理 Activity 视图的规则应用/撤销。
@@ -49,7 +46,11 @@ import de.robv.android.xposed.XposedHelpers;
  *   <li><b>防抖重应用</b> — {@code notifyDataSetChanged} 或规则变更后，
  *       50ms 延迟确保 RecyclerView 完成布局再执行全树扫描</li>
  * </ol>
+ *
+ * @deprecated 正在迁移到 {@code runtime/} 包。规则状态 → {@link RuleManager}，
+ * RecyclerView 钩子 → {@link RecyclerAdapterHook}。Phase 6 将移除此遗留类。
  */
+@Deprecated
 public final class LifecycleObserver extends XC_MethodHook {
 
     private static final String TAG = "LifecycleObserver";
@@ -59,10 +60,8 @@ public final class LifecycleObserver extends XC_MethodHook {
 
     private final WeakHashMap<Activity, OnLayoutChangeListener> mActivities = new WeakHashMap<>();
     private final WeakHashMap<Activity, ViewController> mViewControllers = new WeakHashMap<>();
-    private final ActRules mActRules = new ActRules();
     private final Handler mDebounceHandler = new Handler(Looper.getMainLooper());
     private final Map<Activity, Runnable> mPendingReapply = new WeakHashMap<>();
-    private boolean mRecyclerViewHooksInstalled;
 
     // =========================================================================
     // XC_MethodHook — Activity 生命周期
@@ -187,10 +186,12 @@ public final class LifecycleObserver extends XC_MethodHook {
             Logger.w(TAG, "onRulesChanged received null rules");
             return;
         }
-        if (newRules.equals(mActRules)) return;
+
+        ActRules currentRules = RuleManager.get().getRules();
+        if (newRules.equals(currentRules)) return;
 
         // Step 1: 撤销被删除/修改的旧规则（必须在 clearBlockedCache 之前）
-        ActRules toRevoke = computeRuleDiff(mActRules, newRules);
+        ActRules toRevoke = computeRuleDiff(currentRules, newRules);
         if (!toRevoke.isEmpty()) {
             revokeRulesForActivities(toRevoke);
         }
@@ -199,8 +200,7 @@ public final class LifecycleObserver extends XC_MethodHook {
         clearAllViewControllersCache();
 
         // Step 3: 替换规则集并应用新规则
-        mActRules.clear();
-        mActRules.putAll(newRules);
+        RuleManager.get().replaceRules(newRules);
         applyRulesForActivities(newRules);
 
         // Step 4: 防抖重应用（仅对受影响的 Activity）
@@ -339,132 +339,24 @@ public final class LifecycleObserver extends XC_MethodHook {
     }
 
     // =========================================================================
-    // RecyclerView Hook 管理
+    // RecyclerView Hook — 委托到 RecyclerAdapterHook
     // =========================================================================
 
     private void installRecyclerViewHooks(Activity activity) {
-        if (mRecyclerViewHooksInstalled) return;
-        try {
-            Class<?> adapterClass = XposedHelpers.findClass(
-                    "androidx.recyclerview.widget.RecyclerView$Adapter",
-                    activity.getClassLoader());
-
-            // Hook 1: notifyDataSetChanged → 清除 Applier 缓存 + 防抖重应用
-            XposedHelpers.findAndHookMethod(adapterClass, "notifyDataSetChanged",
-                    new XC_MethodHook() {
-                        @Override
-                        protected void afterHookedMethod(MethodHookParam param) {
-                            if (mActRules.isEmpty()) return;
-                            clearAllViewControllersCache();
-                            scheduleReapplyForActivities(mActRules);
-                        }
-                    });
-
-            // Hook 2: bindViewHolder → 精确应用 repeatable 规则，消除闪烁
-            Class<?> viewHolderClass = XposedHelpers.findClass(
-                    "androidx.recyclerview.widget.RecyclerView$ViewHolder",
-                    activity.getClassLoader());
-            XposedHelpers.findAndHookMethod(adapterClass, "bindViewHolder",
-                    viewHolderClass, int.class, new XC_MethodHook() {
-                        @Override
-                        protected void afterHookedMethod(MethodHookParam param) {
-                            if (mActRules.isEmpty()) return;
-                            Object holder = param.args[0];
-                            if (holder == null) return;
-                            View itemView = (View) XposedHelpers.getObjectField(holder, "itemView");
-                            applyRepeatableRulesToBoundItem(itemView);
-                        }
-                    });
-
-            // Hook 3: onViewRecycled → 递归撤销 itemView 子树中所有已应用的规则
-            // 解决 RecyclerView 回收复用时 RemoveApplier 缓存误命中的根因：
-            // View 回收时先撤销，后续 bindViewHolder 重新应用时缓存已清空。
-            XposedHelpers.findAndHookMethod(adapterClass, "onViewRecycled",
-                    viewHolderClass, new XC_MethodHook() {
-                        @Override
-                        protected void beforeHookedMethod(MethodHookParam param) {
-                            Object holder = param.args[0];
-                            if (holder == null) return;
-                            View itemView = (View) XposedHelpers.getObjectField(holder, "itemView");
-                            if (itemView == null) return;
-                            Activity activity = ViewUtils.getAttachedActivityFromView(itemView);
-                            if (activity == null) return;
-                            ViewController vc = mViewControllers.get(activity);
-                            if (vc != null) {
-                                vc.revokeAllRules(itemView);
-                            }
-                        }
-                    });
-
-            mRecyclerViewHooksInstalled = true;
-            Logger.i(TAG, "[Lifecycle] RecyclerView adapter hooks installed");
-        } catch (Throwable t) {
-            Logger.d(TAG, "[Lifecycle] RecyclerView hook skipped: " + t.getMessage());
-        }
-    }
-
-    // =========================================================================
-    // bindViewHolder 精确规则应用（快速路径）
-    // =========================================================================
-
-    private void applyRepeatableRulesToBoundItem(View itemRoot) {
-        if (itemRoot == null || itemRoot.getVisibility() != View.VISIBLE) return;
-        Activity activity = ViewUtils.getAttachedActivityFromView(itemRoot);
-        if (activity == null || activity.isFinishing()) return;
-        List<RuleRecord> rules = mActRules.get(activity.getComponentName().getClassName());
-        if (rules == null || rules.isEmpty()) return;
-
-        OnLayoutChangeListener listener = mActivities.get(activity);
-
-        for (RuleRecord rule : rules) {
-            if (!rule.isRepeatable()) continue;
-            try {
-                MatchSpec spec = RuleMapper.toEngine(rule).getMatchSpec();
-                if (!isApplicableToItem(spec, itemRoot)) continue;
-
-                // CARD 和 ELEMENT 模式走统一的导航+验证管线，
-                // 消除 730b660 引入的 CARD 分支不对称行为（盲传 itemRoot 无验证）。
-                View target = navigateAndValidate(itemRoot, spec);
-                if (target != null) {
-                    getViewControllerFor(activity).applyRule(target, rule);
-                    if (listener != null) listener.onRuleApplied();
-                }
-            } catch (Throwable t) {
-                Logger.w(TAG, "[Lifecycle] apply bound item rule failed", t);
+        RecyclerAdapterHook.install(activity, new RecyclerAdapterHook.Delegate() {
+            @Override
+            public void clearAllViewControllersCache() {
+                LifecycleObserver.this.clearAllViewControllersCache();
             }
-        }
-    }
 
-    /**
-     * 检查规则规格是否适用于当前 itemRoot。
-     */
-    private static boolean isApplicableToItem(MatchFields spec, View itemRoot) {
-        return spec.getItemPath() != null && spec.getItemPath().length > 0
-                && spec.getItemRootClass() != null
-                && itemRoot.getClass().getName().equals(spec.getItemRootClass());
-    }
-
-    /**
-     * 通过 itemPath 导航到目标 View，并进行结构验证。
-     * <p>
-     * CARD 和 ELEMENT 模式使用完全相同的管线：
-     * <ol>
-     *   <li>精确索引 + 类名导航</li>
-     *   <li>失败 → 纯类名链回退</li>
-     *   <li>成功 → isStructuralMatch 验证</li>
-     * </ol>
-     *
-     * @return 验证通过的目标 View，导航失败或验证失败返回 null
-     */
-    private static View navigateAndValidate(View itemRoot, MatchFields spec) {
-        View target = ViewTraversal.findViewByItemPath(itemRoot, spec.getItemPath(), 0);
-        if (target == null) {
-            target = ViewTraversal.findViewByClassChain(itemRoot, spec.getItemPath(), 0);
-        }
-        if (target != null && CompositeMatcher.isStructuralMatch(target, spec, false)) {
-            return target;
-        }
-        return null;
+            @Override
+            public void scheduleReapplyForActivities() {
+                if (RuleManager.isInitialized()) {
+                    LifecycleObserver.this.scheduleReapplyForActivities(
+                            RuleManager.get().getRules());
+                }
+            }
+        });
     }
 
     // =========================================================================
@@ -525,7 +417,9 @@ public final class LifecycleObserver extends XC_MethodHook {
                         ((CompositeMatcher) m).invalidateRecyclerCache();
                     }
                 }
-                List<RuleRecord> rules = mActRules.get(activity.getComponentName().getClassName());
+                List<RuleRecord> rules = RuleManager.isInitialized()
+                        ? RuleManager.get().getRules().get(activity.getComponentName().getClassName())
+                        : null;
                 if (rules != null && !rules.isEmpty()) {
                     getViewControllerFor(activity).applyRuleBatch(activity, rules,
                             () -> mApplying = false);

@@ -41,6 +41,12 @@ import java.util.Map;
  *   <li>{@link #getDefault()} — 进程级单例（向后兼容），缓存跨 Activity 共享</li>
  * </ul>
  */
+/**
+ * @deprecated 此类正在迁移到 {@code runtime/ViewController.java}。
+ * 请使用 {@link com.kaisar.xposed.godmode.runtime.ViewController} 或直接使用
+ * {@code runtime.ViewController}。Phase 6 将移除此旧位置的类。
+ */
+@Deprecated
 public final class ViewController {
 
     private static final String TAG = "ViewController";

@@ -3,6 +3,7 @@ package com.kaisar.xposed.godmode.inject;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.injection.bridge.RuleServiceClient;
 import com.kaisar.xposed.godmode.injection.bridge.ServiceObserver;
+import com.kaisar.xposed.godmode.runtime.RuleManager;
 
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
 
@@ -27,7 +28,7 @@ public final class AppInjector {
         HookRegistry.registerAll(lpp, ModuleBootstrap.getSwitchProp());
 
         // [Phase 4] 初始化 RuleManager（Binder 获取规则 + 文件快照降级）
-        // RuleManager.init(packageName);
+        RuleManager.init(packageName);
 
         // 注册 IPC 观察者，监听规则变更
         RuleServiceClient.getDefault().addObserver(packageName, new ServiceObserver());
