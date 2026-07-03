@@ -173,8 +173,9 @@ public class PropertyEditorPanel {
         mModifyingViewDepth = null;
         mModifyingViewActClass = null;
         mSnapshot = null;
-        mOriginalRule = null;
-        mTempModifications.clear();
+        // mOriginalRule 和 mTempModifications 不移除：confirm 后保留累积修改，
+        // 供 saveAll() 持久化；cancel 路径通过 revertViewState() 已清理当前视图。
+        // 参见 saveAll() 末尾的 mTempModifications.clear()、cancel() 中的 revertViewState()。
         mSeekLayoutPending = false;
         mPendingSeekWidth = -1;
         mPendingSeekHeight = -1;
