@@ -8,6 +8,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
 
+import com.kaisar.xposed.godmode.engine.event.ActivityLifecycleEvent;
 import com.kaisar.xposed.godmode.engine.matcher.CompositeMatcher;
 import com.kaisar.xposed.godmode.engine.matcher.Matcher;
 import com.kaisar.xposed.godmode.engine.matcher.ViewTraversal;
@@ -36,7 +37,8 @@ import de.robv.android.xposed.XposedHelpers;
 /**
  * 监听 Activity 生命周期事件，管理 Activity 视图的规则应用/撤销。
  * <p>
- * 通过 EventBus 接收 {@link RulesChangedEvent} 实现规则动态更新。
+ * 通过 EventBus 接收 {@link RulesChangedEvent} 实现规则动态更新，
+ * 接收 {@link ActivityLifecycleEvent} 追踪 Activity 生命周期。
  * <p>
  * 规则应用有三条互补路径：
  * <ol>
@@ -203,6 +205,22 @@ public final class LifecycleObserver extends XC_MethodHook {
 
         // Step 4: 防抖重应用（仅对受影响的 Activity）
         scheduleReapplyForActivities(newRules);
+    }
+
+    // =========================================================================
+    // Activity 生命周期事件订阅（Phase 3：由 LifecycleHooks 通过 EventBus 转发）
+    // =========================================================================
+
+    @Subscribe
+    public void onActivityLifecycle(ActivityLifecycleEvent event) {
+        switch (event.getType()) {
+            case RESUME:
+                onActivityResume(event.getActivity());
+                break;
+            case DESTROY:
+                onActivityDestroy(event.getActivity());
+                break;
+        }
     }
 
     // =========================================================================

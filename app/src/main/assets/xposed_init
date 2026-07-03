@@ -1,1 +1,1 @@
-com.kaisar.xposed.godmode.injection.HookLauncher
+com.kaisar.xposed.godmode.inject.ModuleBootstrap
