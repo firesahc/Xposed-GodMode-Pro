@@ -5,7 +5,7 @@ import android.os.Build;
 /**
  * 集中式平台能力探测 — 所有版本/厂商判断集中于此，禁止散落各处。
  * <p>
- * 替代 LifecycleObserver、DebugLayoutHook、ViewCompat 等类中散落的
+ * 替代运行时、注入 Hook 和兼容工具中散落的
  * {@code Build.VERSION.SDK_INT} 判断和厂商检测逻辑。
  * 集中后可以一次修改覆盖所有使用点。
  * <p>

@@ -11,7 +11,7 @@ import java.util.Objects;
 import java.util.function.BiPredicate;
 
 /**
- * 规则差集 — 将 LifecycleObserver.computeRuleDiff() 的方法逻辑提升为可复用的纯函数。
+ * 规则差集 — 将运行时规则对比逻辑提升为可复用的纯函数。
  * <p>
  * 计算两个规则集合之间的差集，返回需要撤销的旧规则和需要应用的新规则。
  * 用于 {@code runtime/RuleManager} 在规则变更时驱动 ViewController 的撤销/应用流程。

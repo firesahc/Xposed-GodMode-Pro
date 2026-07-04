@@ -3,10 +3,9 @@ package com.kaisar.xposed.godmode.engine.event;
 import android.app.Activity;
 
 /**
- * Activity 生命周期事件 — 由 LifecycleHooks 发布，由 LifecycleObserver / RuleManager 消费。
+ * Activity 生命周期事件 — 由 LifecycleHooks 发布，由 runtime 层消费。
  * <p>
- * Phase 3 中 LifecycleObserver 订阅此事件替代原 XC_MethodHook 角色。
- * Phase 4 中 RuleManager 将接管此事件的消费。
+ * 当前消费者为 RuleLifecycleManager，负责规则应用和 Activity 级缓存维护。
  */
 public final class ActivityLifecycleEvent {
 

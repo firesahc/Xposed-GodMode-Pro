@@ -26,7 +26,7 @@ public final class Logger {
 
     private static volatile Writer sWriter;
 
-    /** 设置日志 Writer，供 HookLauncher（应用进程）和 RuleServiceServer（system_server）调用 */
+    /** 设置日志 Writer，供应用进程注入入口和 RuleServiceServer（system_server）调用 */
     public static void setWriter(Writer writer) {
         sWriter = writer;
     }

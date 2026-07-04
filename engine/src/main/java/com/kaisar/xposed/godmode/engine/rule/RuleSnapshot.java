@@ -40,6 +40,7 @@ public final class RuleSnapshot {
 
     /** 当前快照格式版本。schema 不兼容变更时 +1，兼容变更无需修改。 */
     public static final int CURRENT_VERSION = 1;
+    private static final String DEFAULT_PUBLISHER = "unknown";
 
     // ===== JSON 键名 =====
     private static final String KEY_SCHEMA_VERSION = "schemaVersion";
@@ -147,21 +148,29 @@ public final class RuleSnapshot {
      * @return 新快照实例
      */
     public static RuleSnapshot create(String packageName, Map<String, ?> rules) {
-        return new Builder()
-                .generation(System.currentTimeMillis())
-                .createdAt(System.currentTimeMillis())
-                .publisher(detectPublisher())
-                .packageName(packageName)
-                .payload(rules)
-                .build();
+        return create(packageName, rules, System.currentTimeMillis(), DEFAULT_PUBLISHER);
     }
 
     /**
-     * 检测当前发布者标识。
+     * 创建指定包的快照。
+     *
+     * @param packageName 包名
+     * @param rules       规则集合
+     * @param generation  单调递增 generation
+     * @param publisher   发布者标识
+     * @return 新快照实例
      */
-    private static String detectPublisher() {
-        String pid = Integer.toString(android.os.Process.myPid());
-        return "system_server:" + pid;
+    public static RuleSnapshot create(String packageName, Map<String, ?> rules,
+                                      long generation, String publisher) {
+        long now = System.currentTimeMillis();
+        return new Builder()
+                .generation(generation)
+                .createdAt(now)
+                .publisher(publisher != null && !publisher.isEmpty()
+                        ? publisher : DEFAULT_PUBLISHER)
+                .packageName(packageName)
+                .payload(rules)
+                .build();
     }
 
     // ===== 校验 =====
