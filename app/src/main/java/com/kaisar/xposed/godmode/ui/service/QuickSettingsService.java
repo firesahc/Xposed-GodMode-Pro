@@ -1,4 +1,4 @@
-package com.kaisar.xposed.godmode.service;
+package com.kaisar.xposed.godmode.ui.service;
 
 import android.content.SharedPreferences;
 import android.graphics.drawable.Icon;
@@ -9,8 +9,8 @@ import android.widget.Toast;
 
 import androidx.preference.PreferenceManager;
 
-import com.kaisar.xposed.godmode.EditModeController;
 import com.kaisar.xposed.godmode.R;
+import com.kaisar.xposed.godmode.ui.EditModeController;
 
 public final class QuickSettingsService extends TileService implements SharedPreferences.OnSharedPreferenceChangeListener {
 

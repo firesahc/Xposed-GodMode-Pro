@@ -1,4 +1,4 @@
-package com.kaisar.xposed.godmode.fragment;
+package com.kaisar.xposed.godmode.ui.fragment;
 
 import android.content.ActivityNotFoundException;
 import android.content.pm.PackageManager;
@@ -37,7 +37,7 @@ import com.bumptech.glide.Glide;
 import com.google.android.material.snackbar.Snackbar;
 import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.engine.util.Logger;
-import com.kaisar.xposed.godmode.model.SharedViewModel;
+import com.kaisar.xposed.godmode.ui.model.SharedViewModel;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 import com.kaisar.xposed.godmode.util.AppInfoHelper;
 

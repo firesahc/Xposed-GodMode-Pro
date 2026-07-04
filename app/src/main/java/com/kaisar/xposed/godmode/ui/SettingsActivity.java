@@ -1,4 +1,4 @@
-package com.kaisar.xposed.godmode;
+package com.kaisar.xposed.godmode.ui;
 
 
 import android.Manifest;
@@ -20,6 +20,8 @@ import androidx.navigation.NavController;
 import androidx.navigation.Navigation;
 import androidx.navigation.ui.AppBarConfiguration;
 import androidx.navigation.ui.NavigationUI;
+
+import com.kaisar.xposed.godmode.R;
 
 public class SettingsActivity extends AppCompatActivity {
 

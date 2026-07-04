@@ -6,7 +6,7 @@
 
     <fragment
             android:id="@+id/generalPreferenceFragment"
-            android:name="com.kaisar.xposed.godmode.fragment.GeneralPreferenceFragment"
+            android:name="com.kaisar.xposed.godmode.ui.fragment.GeneralPreferenceFragment"
             android:label="@string/app_name">
         <action
                 android:id="@+id/action_generalPreferenceFragment_to_ruleRecordListFragment"
@@ -39,19 +39,19 @@
     </fragment>
     <fragment
             android:id="@+id/guideFragment"
-            android:name="com.kaisar.xposed.godmode.fragment.GuideFragment"
+            android:name="com.kaisar.xposed.godmode.ui.fragment.GuideFragment"
             android:label="@string/guide_title" />
     <fragment
             android:id="@+id/aboutFragment"
-            android:name="com.kaisar.xposed.godmode.fragment.AboutFragment"
+            android:name="com.kaisar.xposed.godmode.ui.fragment.AboutFragment"
             android:label="@string/about_title" />
     <fragment
             android:id="@+id/settingsFragment"
-            android:name="com.kaisar.xposed.godmode.fragment.SettingsFragment"
+            android:name="com.kaisar.xposed.godmode.ui.fragment.SettingsFragment"
             android:label="@string/toolbar_settings_title" />
     <fragment
             android:id="@+id/ruleRecordListFragment"
-            android:name="com.kaisar.xposed.godmode.fragment.RuleRecordListFragment"
+            android:name="com.kaisar.xposed.godmode.ui.fragment.RuleRecordListFragment"
             android:label="@string/title_app_rule">
         <action
                 android:id="@+id/action_ruleRecordListFragment_to_ruleRecordDetailsContainerFragment"
@@ -63,7 +63,7 @@
     </fragment>
     <fragment
             android:id="@+id/viewRuleDetailsContainerFragment"
-            android:name="com.kaisar.xposed.godmode.fragment.RuleRecordDetailsContainerFragment"
+            android:name="com.kaisar.xposed.godmode.ui.fragment.RuleRecordDetailsContainerFragment"
             android:label="@string/title_rule_details">
         <argument
                 android:name="curIndex"

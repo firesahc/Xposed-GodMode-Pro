@@ -1,4 +1,4 @@
-package com.kaisar.xposed.godmode.model;
+package com.kaisar.xposed.godmode.ui.model;
 
 import android.content.ComponentName;
 import android.content.Context;

@@ -1,4 +1,4 @@
-package com.kaisar.xposed.godmode;
+package com.kaisar.xposed.godmode.ui;
 
 import android.content.Context;
 import android.content.Intent;
@@ -6,9 +6,10 @@ import android.content.SharedPreferences;
 
 import androidx.preference.PreferenceManager;
 
+import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.ipc.RuleServiceClient;
-import com.kaisar.xposed.godmode.service.NotificationService;
+import com.kaisar.xposed.godmode.ui.service.NotificationService;
 
 public final class EditModeController {
 

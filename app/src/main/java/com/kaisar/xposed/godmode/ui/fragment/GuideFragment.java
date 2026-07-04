@@ -1,4 +1,4 @@
-package com.kaisar.xposed.godmode.fragment;
+package com.kaisar.xposed.godmode.ui.fragment;
 
 import android.os.Bundle;
 import android.text.Html;

@@ -1,4 +1,4 @@
-package com.kaisar.xposed.godmode.fragment;
+package com.kaisar.xposed.godmode.ui.fragment;
 
 import android.content.Context;
 import android.content.Intent;
@@ -21,7 +21,7 @@ import com.google.android.material.snackbar.Snackbar;
 import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.ipc.RuleServiceClient;
-import com.kaisar.xposed.godmode.model.SharedViewModel;
+import com.kaisar.xposed.godmode.ui.model.SharedViewModel;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.AppRules;
 import com.kaisar.xposed.godmode.rule.RuleRecord;

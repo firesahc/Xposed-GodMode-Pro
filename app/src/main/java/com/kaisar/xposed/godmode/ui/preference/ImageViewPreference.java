@@ -1,4 +1,4 @@
-package com.kaisar.xposed.godmode.preference;
+package com.kaisar.xposed.godmode.ui.preference;
 
 import android.content.Context;
 import android.graphics.Bitmap;

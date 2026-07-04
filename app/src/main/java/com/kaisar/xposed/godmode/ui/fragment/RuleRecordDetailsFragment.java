@@ -1,4 +1,4 @@
-package com.kaisar.xposed.godmode.fragment;
+package com.kaisar.xposed.godmode.ui.fragment;
 
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
@@ -26,8 +26,8 @@ import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.engine.util.Preconditions;
 import com.kaisar.xposed.godmode.ipc.RuleServiceClient;
 import com.kaisar.xposed.godmode.util.TaskExecutor;
-import com.kaisar.xposed.godmode.model.SharedViewModel;
-import com.kaisar.xposed.godmode.preference.ImageViewPreference;
+import com.kaisar.xposed.godmode.ui.preference.ImageViewPreference;
+import com.kaisar.xposed.godmode.ui.model.SharedViewModel;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 
 

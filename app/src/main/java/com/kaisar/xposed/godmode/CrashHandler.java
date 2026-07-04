@@ -8,6 +8,7 @@ import android.content.Intent;
 import androidx.annotation.NonNull;
 
 import com.kaisar.xposed.godmode.engine.util.Logger;
+import com.kaisar.xposed.godmode.ui.SettingsActivity;
 
 import java.io.File;
 import java.io.FileInputStream;

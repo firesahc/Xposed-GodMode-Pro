@@ -1,4 +1,4 @@
-package com.kaisar.xposed.godmode.service;
+package com.kaisar.xposed.godmode.ui.service;
 
 import android.app.Notification;
 import android.app.NotificationChannel;
@@ -19,10 +19,10 @@ import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 import androidx.preference.PreferenceManager;
 
-import com.kaisar.xposed.godmode.EditModeController;
 import com.kaisar.xposed.godmode.R;
-import com.kaisar.xposed.godmode.SettingsActivity;
 import com.kaisar.xposed.godmode.ipc.RuleServiceClient;
+import com.kaisar.xposed.godmode.ui.EditModeController;
+import com.kaisar.xposed.godmode.ui.SettingsActivity;
 
 public final class NotificationService extends Service implements SharedPreferences.OnSharedPreferenceChangeListener {
 

@@ -1,6 +1,6 @@
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <com.kaisar.xposed.godmode.preference.ProgressPreference android:key="@string/pref_key_progress_indicator" />
+    <com.kaisar.xposed.godmode.ui.preference.ProgressPreference android:key="@string/pref_key_progress_indicator" />
 
     <PreferenceCategory android:title="@string/pref_header_general">
         <SwitchPreferenceCompat
