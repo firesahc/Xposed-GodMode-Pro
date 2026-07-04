@@ -3,7 +3,7 @@ package com.kaisar.xposed.godmode.injection.editor.toolbar;
 import android.text.TextUtils;
 
 import com.kaisar.xposed.godmode.engine.util.Logger;
-import com.kaisar.xposed.godmode.injection.bridge.RuleServiceClient;
+import com.kaisar.xposed.godmode.ipc.RuleServiceClient;
 
 import java.util.HashSet;
 import java.util.Set;

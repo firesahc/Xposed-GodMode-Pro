@@ -4,7 +4,7 @@ import android.graphics.Rect;
 import android.view.View;
 
 import com.kaisar.xposed.godmode.engine.util.Logger;
-import com.kaisar.xposed.godmode.injection.ViewController;
+import com.kaisar.xposed.godmode.runtime.ViewController;
 import com.kaisar.xposed.godmode.rule.RuleRecordFactory;
 import com.kaisar.xposed.godmode.injection.editor.overlay.MaskView;
 import com.kaisar.xposed.godmode.injection.util.ViewUtils;

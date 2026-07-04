@@ -2,7 +2,7 @@ package com.kaisar.xposed.godmode.editor;
 
 import android.graphics.Bitmap;
 
-import com.kaisar.xposed.godmode.injection.bridge.RuleServiceClient;
+import com.kaisar.xposed.godmode.ipc.RuleServiceClient;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 
 /**

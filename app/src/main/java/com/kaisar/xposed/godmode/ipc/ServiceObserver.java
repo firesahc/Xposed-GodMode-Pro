@@ -1,4 +1,4 @@
-package com.kaisar.xposed.godmode.injection.bridge;
+package com.kaisar.xposed.godmode.ipc;
 
 import android.os.Handler;
 import android.os.Looper;
@@ -9,12 +9,14 @@ import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.inject.ModuleBootstrap;
 import com.kaisar.xposed.godmode.rule.ActRules;
 
-
 /**
- * Created by jrsen on 17-10-18.
+ * Binder 观察者 — 将 system_server 的 IPC 推送转为主线程事件。
+ * <p>
+ * 实现 {@link IObserver.Stub} 以接收 Binder 回调，
+ * 通过 Handler 切换到主线程后委托给 {@link ModuleBootstrap} 分发。
+ * AppInjector 在注入目标应用时创建并注册此观察者。
  */
-
-public final class ServiceObserver extends IObserver.Stub implements Handler.Callback {
+public class ServiceObserver extends IObserver.Stub implements Handler.Callback {
 
     private static final String TAG = "ServiceObserver";
 
@@ -47,4 +49,3 @@ public final class ServiceObserver extends IObserver.Stub implements Handler.Cal
     }
 
 }
-

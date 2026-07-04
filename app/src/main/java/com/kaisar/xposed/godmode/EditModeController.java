@@ -7,7 +7,7 @@ import android.content.SharedPreferences;
 import androidx.preference.PreferenceManager;
 
 import com.kaisar.xposed.godmode.engine.util.Logger;
-import com.kaisar.xposed.godmode.injection.bridge.RuleServiceClient;
+import com.kaisar.xposed.godmode.ipc.RuleServiceClient;
 import com.kaisar.xposed.godmode.service.NotificationService;
 
 public final class EditModeController {

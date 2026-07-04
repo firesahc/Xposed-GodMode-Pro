@@ -7,7 +7,7 @@ import android.view.ViewGroup;
 
 import com.kaisar.xposed.godmode.editor.IRuleEditor;
 import com.kaisar.xposed.godmode.engine.util.Logger;
-import com.kaisar.xposed.godmode.injection.ViewController;
+import com.kaisar.xposed.godmode.runtime.ViewController;
 import com.kaisar.xposed.godmode.rule.RuleRecordFactory;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 

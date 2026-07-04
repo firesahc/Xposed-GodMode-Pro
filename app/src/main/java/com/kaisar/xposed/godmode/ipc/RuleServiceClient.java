@@ -1,4 +1,4 @@
-package com.kaisar.xposed.godmode.injection.bridge;
+package com.kaisar.xposed.godmode.ipc;
 
 import android.graphics.Bitmap;
 import android.os.DeadObjectException;
@@ -15,6 +15,14 @@ import com.kaisar.xposed.godmode.rule.AppRules;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 import com.kaisar.xservicemanager.XServiceManager;
 
+/**
+ * AIDL 客户端门面 — 通过 XServiceManager 桥接与 system_server 中的 RuleServiceServer 通信。
+ * <p>
+ * 提供 Binder 连接管理（断连重试、死亡监听）、所有 IPC 方法代理、连通性诊断。
+ * 整个应用中唯一直接与 Binder 打交道的客户端类。
+ * <p>
+ * 使用 {@link #getDefault()} 获取进程级单例。
+ */
 public final class RuleServiceClient {
 
     private static final String TAG = "RuleServiceClient";
@@ -327,8 +335,8 @@ public final class RuleServiceClient {
     public void forwardLog(int level, String tag, String msg, long timestamp) {
         try {
             ensureService().log(level,
-        ModuleBootstrap.getLoadPackageParam() != null
-                ? ModuleBootstrap.getLoadPackageParam().packageName
+                    ModuleBootstrap.getLoadPackageParam() != null
+                            ? ModuleBootstrap.getLoadPackageParam().packageName
                             : "unknown",
                     timestamp,
                     tag, msg);

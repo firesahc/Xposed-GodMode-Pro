@@ -22,7 +22,7 @@ import androidx.preference.PreferenceManager;
 import com.kaisar.xposed.godmode.EditModeController;
 import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.SettingsActivity;
-import com.kaisar.xposed.godmode.injection.bridge.RuleServiceClient;
+import com.kaisar.xposed.godmode.ipc.RuleServiceClient;
 
 public final class NotificationService extends Service implements SharedPreferences.OnSharedPreferenceChangeListener {
 
