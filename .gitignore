@@ -9,6 +9,7 @@
 .omo
 /Xposed-GodMode-Pro.wiki/
 /AGENTS.md
+/.agents/
 
 # Android build outputs
 *.apk
