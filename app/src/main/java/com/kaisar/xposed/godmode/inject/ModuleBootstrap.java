@@ -14,10 +14,10 @@ import com.kaisar.xposed.godmode.engine.Property;
 import com.kaisar.xposed.godmode.engine.event.EventBus;
 import com.kaisar.xposed.godmode.engine.event.RulesChangedEvent;
 import com.kaisar.xposed.godmode.engine.util.Logger;
-import com.kaisar.xposed.godmode.injection.ModuleResources;
 import com.kaisar.xposed.godmode.editor.RuleEditorClient;
-import com.kaisar.xposed.godmode.injection.editor.EditorOrchestrator;
-import com.kaisar.xposed.godmode.injection.util.BlockListChecker;
+import com.kaisar.xposed.godmode.editor.EditorOrchestrator;
+import com.kaisar.xposed.godmode.util.BlockListChecker;
+import com.kaisar.xposed.godmode.util.ModuleResources;
 import com.kaisar.xposed.godmode.rule.ActRules;
 
 import java.lang.reflect.Method;

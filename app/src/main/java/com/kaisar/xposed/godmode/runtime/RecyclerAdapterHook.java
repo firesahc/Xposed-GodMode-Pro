@@ -10,7 +10,7 @@ import com.kaisar.xposed.godmode.engine.rule.MatchFields;
 import com.kaisar.xposed.godmode.engine.rule.MatchSpec;
 import com.kaisar.xposed.godmode.engine.rule.RuleMapper;
 import com.kaisar.xposed.godmode.engine.util.Logger;
-import com.kaisar.xposed.godmode.injection.util.ViewUtils;
+import com.kaisar.xposed.godmode.util.ViewUtils;
 import com.kaisar.xposed.godmode.runtime.ViewController;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.RuleRecord;

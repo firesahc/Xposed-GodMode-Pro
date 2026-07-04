@@ -6,7 +6,7 @@ import android.view.MotionEvent;
 import android.view.View;
 
 import com.kaisar.xposed.godmode.inject.ModuleBootstrap;
-import com.kaisar.xposed.godmode.injection.editor.EditorOrchestrator;
+import com.kaisar.xposed.godmode.editor.EditorOrchestrator;
 
 import de.robv.android.xposed.XC_MethodHook;
 

@@ -16,7 +16,7 @@ import com.kaisar.xposed.godmode.engine.matcher.TargetLevel;
 import com.kaisar.xposed.godmode.engine.matcher.ViewTraversal;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.inject.ModuleBootstrap;
-import com.kaisar.xposed.godmode.injection.util.ViewUtils;
+import com.kaisar.xposed.godmode.util.ViewUtils;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 
 import java.util.Objects;

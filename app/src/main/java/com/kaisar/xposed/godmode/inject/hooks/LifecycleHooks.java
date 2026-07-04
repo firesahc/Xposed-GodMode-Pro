@@ -7,8 +7,8 @@ import com.kaisar.xposed.godmode.engine.Property;
 import com.kaisar.xposed.godmode.engine.event.ActivityLifecycleEvent;
 import com.kaisar.xposed.godmode.engine.event.EventBus;
 import com.kaisar.xposed.godmode.inject.ModuleBootstrap;
-import com.kaisar.xposed.godmode.injection.ModuleResources;
-import com.kaisar.xposed.godmode.injection.editor.EditorOrchestrator;
+import com.kaisar.xposed.godmode.util.ModuleResources;
+import com.kaisar.xposed.godmode.editor.EditorOrchestrator;
 
 import de.robv.android.xposed.XC_MethodHook;
 
