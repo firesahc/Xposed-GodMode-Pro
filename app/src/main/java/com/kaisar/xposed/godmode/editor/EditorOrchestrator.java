@@ -41,8 +41,7 @@ import java.util.List;
  * <p>
  * 内部管理多个子组件：节点选择面板、属性编辑器、预览处理器，以及移除/修改手势处理器。
  * 同时维护触摸事件分发、长按检测、多点锁定等手势交互逻辑。
- * 按键事件通过 {@link com.kaisar.xposed.godmode.injection.entry.ActivityKeyHook}
- * 和 {@link com.kaisar.xposed.godmode.injection.entry.TouchHook} 注入。
+ * 按键和触摸事件通过 inject/hooks 中的交互 Hook 转发到这里。
  */
 public final class EditorOrchestrator implements Property.OnPropertyChangeListener<Boolean>,
         TouchEventHandler.TouchCallback, KeyEventHandler.KeyCallback {
@@ -180,7 +179,8 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
 
 
     // =========================================================================
-    // Activity 管理 — 由 HookLauncher 注入 onResume 回调设置当前 Activity    // =========================================================================
+    // Activity 管理 — 由 LifecycleHooks 的 onResume 回调设置当前 Activity
+    // =========================================================================
 
     public void setActivity(final Activity a) {
         Activity current = mCurrentActivityRef.get();

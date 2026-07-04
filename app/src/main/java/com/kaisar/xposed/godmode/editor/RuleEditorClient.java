@@ -36,4 +36,9 @@ public final class RuleEditorClient implements IRuleEditor {
     public String saveImageFile(String packageName, Bitmap bitmap) {
         return RuleServiceClient.getDefault().saveImageFile(packageName, bitmap);
     }
+
+    @Override
+    public String getToolbarHiddenItems() {
+        return RuleServiceClient.getDefault().getToolbarHiddenItems();
+    }
 }

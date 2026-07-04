@@ -3,6 +3,7 @@ package com.kaisar.xposed.godmode.editor.toolbar;
 import android.view.View;
 
 import com.kaisar.xposed.godmode.R;
+import com.kaisar.xposed.godmode.editor.RuleEditorClient;
 
 import java.util.Set;
 
@@ -18,7 +19,8 @@ public final class ToolbarVisibilityController {
     public static void apply(View panel) {
         if (panel == null) return;
 
-        Set<String> hiddenItems = ToolbarPrefsManager.loadHiddenItems();
+        Set<String> hiddenItems = ToolbarPrefsManager.parseHiddenItems(
+                RuleEditorClient.getInstance().getToolbarHiddenItems());
 
         if (hiddenItems.contains("pref_show_remove_mode")) {
             hideView(panel, R.id.remove_mode_toggle);

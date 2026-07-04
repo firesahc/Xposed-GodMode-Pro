@@ -40,4 +40,9 @@ public interface IRuleEditor {
      * @return 保存后的文件路径，失败返回 null
      */
     String saveImageFile(String packageName, Bitmap bitmap);
+
+    /**
+     * 读取编辑器工具栏隐藏项配置。
+     */
+    String getToolbarHiddenItems();
 }
