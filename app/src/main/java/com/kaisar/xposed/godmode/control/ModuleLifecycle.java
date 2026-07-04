@@ -40,8 +40,15 @@ public final class ModuleLifecycle {
 
     private volatile State mState = State.INIT;
     private final EnumMap<Layer, Health> mHealth = new EnumMap<>(Layer.class);
+    private final Layer[] mRequiredLayers;
 
     public ModuleLifecycle() {
+        this(Layer.values());
+    }
+
+    public ModuleLifecycle(Layer... requiredLayers) {
+        mRequiredLayers = requiredLayers == null || requiredLayers.length == 0
+                ? Layer.values() : requiredLayers.clone();
         for (Layer layer : Layer.values()) {
             mHealth.put(layer, Health.UNKNOWN);
         }
@@ -123,7 +130,8 @@ public final class ModuleLifecycle {
         boolean anyDegraded = false;
         boolean allHealthy = true;
 
-        for (Health h : mHealth.values()) {
+        for (Layer layer : mRequiredLayers) {
+            Health h = getHealth(layer);
             if (h == Health.ERROR) anyError = true;
             if (h == Health.DEGRADED) anyDegraded = true;
             if (h != Health.HEALTHY) allHealthy = false;

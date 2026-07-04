@@ -13,7 +13,7 @@ import java.lang.reflect.Method;
 
 /**
  * 模块资源管理 — 提供 GodMode 模块资源注入目标应用 AssetManager 的功能。
- * 由 HookLauncher 在初始化时调用。
+ * 由注入层在 Activity 创建阶段初始化。
  */
 public final class ModuleResources {
 

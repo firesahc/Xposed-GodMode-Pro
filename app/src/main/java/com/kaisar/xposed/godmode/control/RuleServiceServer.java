@@ -26,7 +26,7 @@ import java.io.FileNotFoundException;
  * 运行在 XServiceManager 注入的 SystemServer 进程中。
  * 内部持有 {@link RuleRepository}、{@link ObserverRegistry}、{@link ModuleLifecycle} 等核心组件。
  * <p>
- * 从 {@code service/} 移入 control/ 包，使用 RuleRepository 替代 WorkflowOrchestrator + RuleCacheManager。
+ * 从 {@code service/} 移入 control/ 包，使用 RuleRepository 统一承接规则控制面职责。
  */
 public final class RuleServiceServer extends IGodModeManager.Stub {
 
@@ -61,7 +61,9 @@ public final class RuleServiceServer extends IGodModeManager.Stub {
                 Logger.getLogger("ObserverRegistry"), handler, 0x0020);
 
         // 创建模块生命周期
-        mLifecycle = new ModuleLifecycle();
+        mLifecycle = new ModuleLifecycle(
+                ModuleLifecycle.Layer.CONTROL,
+                ModuleLifecycle.Layer.DATA);
         mLifecycle.transition(ModuleLifecycle.State.LOADING);
 
         // 创建规则仓库
@@ -78,9 +80,13 @@ public final class RuleServiceServer extends IGodModeManager.Stub {
             GodModeLog.write(level, "system_server", tag, msg, timestamp);
         });
 
-        // 加载数据
-        mRepository.loadAll();
-        mLifecycle.markHealthy(ModuleLifecycle.Layer.CONTROL);
+        // 加载数据；完成后再标记控制面健康
+        mRepository.loadAll(
+                () -> {
+                    mLifecycle.markHealthy(ModuleLifecycle.Layer.DATA);
+                    mLifecycle.markHealthy(ModuleLifecycle.Layer.CONTROL);
+                },
+                () -> mLifecycle.markError(ModuleLifecycle.Layer.DATA, "load rules failed"));
 
         // 加载工具栏偏好
         mToolbarHiddenItems = mRepository.loadToolbarHiddenItems();

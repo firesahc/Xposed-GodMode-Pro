@@ -1,5 +1,7 @@
 package com.kaisar.xposed.godmode.control;
 
+import android.os.Process;
+
 import com.kaisar.xposed.godmode.data.DataBusConstants;
 import com.kaisar.xposed.godmode.data.RuleSnapshotStore;
 import com.kaisar.xposed.godmode.data.SignalStore;
@@ -70,17 +72,8 @@ final class SnapshotPublisher {
         final long gen = generation;
         mFileIoExecutor.execute(() -> {
             try {
-                RuleSnapshot snapshot = RuleSnapshot.create(packageName, rules);
-                // 使用传入的 generation（注意：RuleSnapshot.create 内部用 currentTimeMillis，
-                // 需要覆盖 generation 以保持一致性）
-                snapshot = new RuleSnapshot.Builder()
-                        .schemaVersion(snapshot.schemaVersion)
-                        .generation(gen)
-                        .createdAt(snapshot.createdAt)
-                        .publisher(snapshot.publisher)
-                        .packageName(snapshot.packageName)
-                        .payload(rules)
-                        .build();
+                RuleSnapshot snapshot = RuleSnapshot.create(
+                        packageName, rules, gen, publisherId());
 
                 boolean written = mSnapshotStore.writeSnapshot(packageName, snapshot);
                 if (written) {
@@ -106,5 +99,9 @@ final class SnapshotPublisher {
      */
     void shutdown() {
         mFileIoExecutor.shutdown();
+    }
+
+    private static String publisherId() {
+        return "system_server:" + Process.myPid();
     }
 }

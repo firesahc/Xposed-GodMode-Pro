@@ -3,6 +3,7 @@ package com.kaisar.xposed.godmode.runtime;
 import android.app.Activity;
 import android.view.View;
 
+import com.kaisar.xposed.godmode.engine.core.PlatformCapabilities;
 import com.kaisar.xposed.godmode.engine.matcher.CompositeMatcher;
 import com.kaisar.xposed.godmode.engine.matcher.Matcher;
 import com.kaisar.xposed.godmode.engine.matcher.ViewTraversal;
@@ -30,7 +31,7 @@ import de.robv.android.xposed.XposedHelpers;
  *   <li><b>onViewRecycled</b> — item 回收时撤销所有已应用的规则，避免缓存误命中</li>
  * </ol>
  * <p>
- * 通过 {@link LifecycleObserverCompat} 接口回调，调用方提供缓存清理和重应用调度能力。
+ * 通过 {@link Delegate} 接口回调，调用方提供缓存清理和重应用调度能力。
  */
 public final class RecyclerAdapterHook {
 
@@ -56,11 +57,12 @@ public final class RecyclerAdapterHook {
      * 安全可重入：仅首次调用生效，同一进程后续调用直接返回。
      *
      * @param activity 用于获取 ClassLoader 的 Activity 实例
-     * @param delegate 缓存清理和重应用调度回调（通常由 LifecycleObserver 实现）
+     * @param delegate 缓存清理和重应用调度回调（通常由 RuleLifecycleManager 实现）
      */
     public static void install(Activity activity, Delegate delegate) {
         if (sHooksInstalled) return;
         if (activity == null || delegate == null) return;
+        if (!PlatformCapabilities.supportsRecyclerViewHook()) return;
 
         try {
             ClassLoader cl = activity.getClassLoader();
@@ -197,7 +199,7 @@ public final class RecyclerAdapterHook {
     // =========================================================================
 
     /**
-     * LifecycleObserver 实现的回调接口，提供 RecyclerView 钩子所需的
+     * RuleLifecycleManager 实现的回调接口，提供 RecyclerView 钩子所需的
      * 缓存清理和重应用调度能力。
      */
     public interface Delegate {

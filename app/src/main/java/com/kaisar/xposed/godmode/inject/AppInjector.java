@@ -20,7 +20,7 @@ public final class AppInjector {
     public void inject(XC_LoadPackage.LoadPackageParam lpp, String packageName) {
         // 设置日志 Writer：通过 IPC 转发到 system_server → GodModeLog → godmodepro.log
         Logger.setWriter((level, tag, msg, timestamp) -> {
-            RuleServiceClient.getDefault().forwardLog(level, tag, msg, timestamp);
+            RuleServiceClient.getDefault().forwardLog(packageName, level, tag, msg, timestamp);
         });
         Logger.d(TAG, "[GodMode] inject into app: " + packageName);
 
@@ -31,6 +31,17 @@ public final class AppInjector {
         RuleManager.init(packageName);
 
         // 注册 IPC 观察者，监听规则变更
-        RuleServiceClient.getDefault().addObserver(packageName, new ServiceObserver());
+        RuleServiceClient.getDefault().addObserver(packageName, new ServiceObserver(
+                new ServiceObserver.Callback() {
+                    @Override
+                    public void onEditModeChanged(boolean enable) {
+                        ModuleBootstrap.notifyEditModeChanged(enable);
+                    }
+
+                    @Override
+                    public void onViewRulesChanged(com.kaisar.xposed.godmode.rule.ActRules rules) {
+                        ModuleBootstrap.notifyViewRulesChanged(rules);
+                    }
+                }));
     }
 }

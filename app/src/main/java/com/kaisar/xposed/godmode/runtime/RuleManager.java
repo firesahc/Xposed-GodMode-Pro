@@ -3,19 +3,14 @@ package com.kaisar.xposed.godmode.runtime;
 import android.os.FileObserver;
 import android.os.Handler;
 import android.os.Looper;
-import android.text.TextUtils;
 
 import com.kaisar.xposed.godmode.data.DataBusConstants;
 import com.kaisar.xposed.godmode.data.RuleSnapshotStore;
-import com.kaisar.xposed.godmode.engine.rule.RuleSnapshot;
+import com.kaisar.xposed.godmode.engine.event.EventBus;
+import com.kaisar.xposed.godmode.engine.event.RulesChangedEvent;
 import com.kaisar.xposed.godmode.engine.util.Logger;
-import com.kaisar.xposed.godmode.inject.ModuleBootstrap;
 import com.kaisar.xposed.godmode.ipc.RuleServiceClient;
 import com.kaisar.xposed.godmode.rule.ActRules;
-import com.kaisar.xposed.godmode.rule.RuleRecord;
-
-import java.util.List;
-import java.util.Map;
 
 /**
  * 规则运行管理器 — 目标 App 进程内的规则状态中枢。
@@ -44,10 +39,12 @@ public final class RuleManager {
 
     private final ActRules mActRules = new ActRules();
     private final Logger mLogger = Logger.getLogger(TAG);
+    private final EventBus mEventBus = EventBus.getDefault();
 
     private String mPackageName;
     private volatile boolean mInitialized;
     private Source mLastSource = Source.PROCESS;
+    private Runnable mBinderDeathListener;
 
     /** 主线程 Handler — 用于将 EventBus post 切换到主线程（View 操作必须） */
     private final Handler mMainHandler = new Handler(Looper.getMainLooper());
@@ -67,7 +64,8 @@ public final class RuleManager {
      * 三层降级策略：
      * <ol>
      *   <li>尝试通过 Binder 从 system_server 获取规则</li>
-     *   <li>Binder 失败或返回空规则 → 文件快照降级</li>
+     *   <li>Binder 不可用 → 文件快照降级</li>
+     *   <li>Binder 存活且返回空规则 → 合法的无规则状态，不读取旧快照</li>
      *   <li>快照不存在或损坏 → 保留空规则，记录日志</li>
      * </ol>
      * <p>
@@ -84,17 +82,20 @@ public final class RuleManager {
         sInstance = new RuleManager();
         sInstance.mPackageName = packageName;
 
+        boolean loadedFromBinder = false;
+        RuleServiceClient ipcClient = RuleServiceClient.getDefault();
+
         // Step 1: 尝试通过 Binder 获取规则
         try {
-            ActRules binderRules = RuleServiceClient.getDefault().getRules(packageName);
-            if (binderRules != null && !binderRules.isEmpty()) {
+            ActRules binderRules = ipcClient.getRules(packageName);
+            if (ipcClient.isConnected() && binderRules != null) {
                 sInstance.replaceRules(binderRules);
                 sInstance.mLastSource = Source.BINDER;
+                loadedFromBinder = true;
                 sInstance.mLogger.i("rules loaded from Binder for " + packageName
                         + " (" + binderRules.size() + " activities)");
             } else {
-                // Binder 返回空规则 — 合法的无规则状态，继续尝试快照
-                sInstance.mLogger.i("Binder returned empty rules for " + packageName
+                sInstance.mLogger.i("Binder unavailable for " + packageName
                         + " — falling back to file snapshot");
             }
         } catch (Exception e) {
@@ -102,13 +103,18 @@ public final class RuleManager {
                     + ", falling back to file snapshot");
         }
 
-        // Step 2: Binder 无规则 → 文件快照降级
-        if (sInstance.mActRules.isEmpty()) {
+        // Step 2: 仅 Binder 不可用时读取文件快照。空 Binder 规则是合法状态。
+        if (!loadedFromBinder) {
             sInstance.refreshFromSnapshot();
         }
 
         // Step 3: 注册 FileObserver 监控信号文件
         sInstance.installSignalObserver(packageName);
+
+        // Step 4: Binder 死亡时主动走文件快照事件链路
+        sInstance.mBinderDeathListener = () ->
+                sInstance.mMainHandler.post(sInstance::relaySnapshotToEventBus);
+        ipcClient.addBinderDeathListener(sInstance.mBinderDeathListener);
 
         sInstance.mInitialized = true;
         sInstance.mLogger.i("RuleManager initialized for " + packageName
@@ -153,22 +159,12 @@ public final class RuleManager {
      *
      * @return 快照中的规则集，或 {@code null}（快照不存在/损坏）
      */
-    @SuppressWarnings("unchecked")
     private ActRules readSnapshotAsActRules() {
         try {
-            RuleSnapshot snapshot = RuleSnapshotStore.getDefault().readLatest(mPackageName);
-            if (snapshot == null || snapshot.payload == null) {
+            ActRules rules = RuleSnapshotStore.getDefault().readLatestRules(mPackageName);
+            if (rules == null) {
                 mLogger.w("no file snapshot available for " + mPackageName);
                 return null;
-            }
-            ActRules rules = new ActRules();
-            for (Map.Entry<String, ?> entry : snapshot.payload.entrySet()) {
-                String key = entry.getKey();
-                Object value = entry.getValue();
-                if (key != null && value != null) {
-                    List<RuleRecord> ruleList = (List<RuleRecord>) value;
-                    rules.put(key, ruleList);
-                }
             }
             return rules;
         } catch (Exception e) {
@@ -201,7 +197,7 @@ public final class RuleManager {
         // 会读取当前缓存作为 oldRules，计算差集后通过 replaceRules() 更新缓存）
         // FileObserver 回调在后台线程，但规则撤销/应用必须在主线程执行 View 操作
         final ActRules rulesToPost = newRules;
-        mMainHandler.post(() -> ModuleBootstrap.notifyViewRulesChanged(rulesToPost));
+        mMainHandler.post(() -> mEventBus.post(new RulesChangedEvent(mPackageName, rulesToPost)));
     }
 
     // =========================================================================
@@ -229,7 +225,9 @@ public final class RuleManager {
     private void installSignalObserver(String packageName) {
         try {
             String signalPath = DataBusConstants.SIGNAL_DIR;
-            mSignalObserver = new FileObserver(signalPath, FileObserver.CLOSE_WRITE) {
+            int mask = FileObserver.CREATE | FileObserver.CLOSE_WRITE
+                    | FileObserver.MODIFY | FileObserver.ATTRIB;
+            mSignalObserver = new FileObserver(signalPath, mask) {
                 @Override
                 public void onEvent(int event, String path) {
                     if (path != null && path.startsWith(
@@ -280,6 +278,10 @@ public final class RuleManager {
                 mLogger.w("Failed to stop FileObserver", e);
             }
             mSignalObserver = null;
+        }
+        if (mBinderDeathListener != null) {
+            RuleServiceClient.getDefault().removeBinderDeathListener(mBinderDeathListener);
+            mBinderDeathListener = null;
         }
         mInitialized = false;
         mLogger.d("RuleManager shut down");

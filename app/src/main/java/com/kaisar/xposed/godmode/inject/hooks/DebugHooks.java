@@ -8,6 +8,7 @@ import android.view.View;
 import android.view.ViewGroup;
 
 import com.kaisar.xposed.godmode.engine.Property;
+import com.kaisar.xposed.godmode.engine.core.PlatformCapabilities;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 
 import java.util.Optional;
@@ -36,7 +37,9 @@ public final class DebugHooks {
     public static void install(Property<Boolean> switchProp) {
         boolean modernOk = false, suppressOk = false;
         try {
-            modernOk = installModernHooksSafe(switchProp);
+            if (PlatformCapabilities.requiresDebugLayoutWorkaround()) {
+                modernOk = installModernHooksSafe(switchProp);
+            }
         } catch (Throwable e) {
             Logger.e(TAG, "[DebugLayout] Hook debug layout properties error (non-fatal)", e);
         }

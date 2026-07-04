@@ -9,11 +9,12 @@ import android.os.RemoteException;
 import com.kaisar.xposed.godmode.IGodModeManager;
 import com.kaisar.xposed.godmode.IObserver;
 import com.kaisar.xposed.godmode.engine.util.Logger;
-import com.kaisar.xposed.godmode.inject.ModuleBootstrap;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.AppRules;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 import com.kaisar.xservicemanager.XServiceManager;
+
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * AIDL 客户端门面 — 通过 XServiceManager 桥接与 system_server 中的 RuleServiceServer 通信。
@@ -34,6 +35,7 @@ public final class RuleServiceClient {
     private volatile IGodModeManager mGMM;
     private volatile IBinder mBinder;
     private volatile String mLastError;
+    private final CopyOnWriteArrayList<Runnable> mBinderDeathListeners = new CopyOnWriteArrayList<>();
 
     private RuleServiceClient() {
     }
@@ -83,12 +85,14 @@ public final class RuleServiceClient {
                         }
                     }
                     Logger.w(TAG, "godmode service binder died, will reconnect on next call");
+                    notifyBinderDead();
                 }, 0);
             } catch (RemoteException e) {
                 mBinder = null;
                 mGMM = null;
                 mLastError = "godmode 服务在注册死亡监听前已失效: " + e.getMessage();
                 Logger.w(TAG, "godmode service died before linkToDeath", e);
+                notifyBinderDead();
                 return FALLBACK;
             }
             mBinder = service;
@@ -172,11 +176,39 @@ public final class RuleServiceClient {
         return error;
     }
 
+    public boolean isConnected() {
+        IBinder binder = mBinder;
+        return mGMM != null && binder != null && binder.isBinderAlive();
+    }
+
+    public void addBinderDeathListener(Runnable listener) {
+        if (listener != null && !mBinderDeathListeners.contains(listener)) {
+            mBinderDeathListeners.add(listener);
+        }
+    }
+
+    public void removeBinderDeathListener(Runnable listener) {
+        if (listener != null) {
+            mBinderDeathListeners.remove(listener);
+        }
+    }
+
+    private void notifyBinderDead() {
+        for (Runnable listener : mBinderDeathListeners) {
+            try {
+                listener.run();
+            } catch (Throwable t) {
+                Logger.w(TAG, "binder death listener failed", t);
+            }
+        }
+    }
+
     private void markServiceDead() {
         synchronized (this) {
             mBinder = null;
             mGMM = null;
         }
+        notifyBinderDead();
     }
 
     private void logError(String method, RemoteException e) {
@@ -247,10 +279,10 @@ public final class RuleServiceClient {
             return ensureService().getRules(packageName);
         } catch (RemoteException e) {
             logError("getRules", e);
-            return new ActRules();
+            return null;
         } catch (RuntimeException e) {
             logError("getRules", new RemoteException(e.getMessage()));
-            return new ActRules();
+            return null;
         }
     }
 
@@ -333,13 +365,13 @@ public final class RuleServiceClient {
      * 内部直接用 Logger.w 处理异常（forwardLog 走 logcat 通道，不触发 Writer 回调，无递归风险）。
      */
     public void forwardLog(int level, String tag, String msg, long timestamp) {
+        forwardLog("unknown", level, tag, msg, timestamp);
+    }
+
+    public void forwardLog(String packageName, int level, String tag, String msg, long timestamp) {
         try {
-            ensureService().log(level,
-                    ModuleBootstrap.getLoadPackageParam() != null
-                            ? ModuleBootstrap.getLoadPackageParam().packageName
-                            : "unknown",
-                    timestamp,
-                    tag, msg);
+            ensureService().log(level, packageName != null ? packageName : "unknown",
+                    timestamp, tag, msg);
         } catch (RemoteException e) {
             Logger.w(TAG, "forwardLog IPC failed: " + e.getMessage());
         } catch (Throwable t) {

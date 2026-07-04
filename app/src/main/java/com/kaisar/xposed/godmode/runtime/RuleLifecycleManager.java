@@ -31,7 +31,7 @@ import java.util.function.Consumer;
 /**
  * 规则生命周期管理器 — 接收 EventBus 事件，协调 Activity 生命周期与规则应用。
  * <p>
- * 替代已删除的 {@code LifecycleObserver}，接管三项核心职责：
+ * 接管运行时三项核心职责：
  * <ol>
  *   <li>订阅 {@link ActivityLifecycleEvent} — 在 Activity RESUME 时注册布局监听并应用规则，
  *       DESTROY 时清理资源</li>
@@ -49,8 +49,7 @@ import java.util.function.Consumer;
  *       50ms 延迟确保 RecyclerView 完成布局再执行全树扫描</li>
  * </ol>
  * <p>
- * 使用 {@link #getInstance()} 获取单例，通过 {@code ModuleBootstrap.getEventBus().register(...)}
- * 注册到 EventBus。
+ * 使用 {@link #getInstance()} 获取单例，由注入层注册到 EventBus。
  */
 public final class RuleLifecycleManager implements RecyclerAdapterHook.Delegate {
 

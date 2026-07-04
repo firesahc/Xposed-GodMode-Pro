@@ -23,8 +23,8 @@ import de.robv.android.xposed.XC_MethodHook;
  *       通过 EventBus 发布 {@link ActivityLifecycleEvent}</li>
  * </ul>
  * <p>
- * Phase 3 从 {@link com.kaisar.xposed.godmode.injection.LifecycleObserver} 提取 XC_MethodHook 角色，
- * 规则应用委托给 LifecycleObserver（Phase 4 → RuleManager）。
+ * 注入层只负责把原始 Activity 回调转成事件；规则应用由 runtime 层的
+ * RuleLifecycleManager 消费事件并完成。
  */
 public final class LifecycleHooks extends XC_MethodHook {
 

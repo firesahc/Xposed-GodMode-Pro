@@ -35,8 +35,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 /**
  * 规则仓库 — 缓存 + 持久化 + 发布的统一入口。
  * <p>
- * 替代 {@code RuleCacheManager} + {@code RulePersistManager} +
- * {@code WorkflowOrchestrator} 的 CRUD 部分。
+ * 统一承接规则缓存、持久化调度和控制面 CRUD 职责。
  * <p>
  * 内部结构：
  * <ul>
@@ -79,11 +78,11 @@ public final class RuleRepository {
         this.mGson = gson;
         this.mLogger = logger;
         this.mCache = new RuleCache(gson, logger);
-        this.mStore = new RuleStore(gson, logger, mCache);
 
         mWorkThread = new HandlerThread("rule-repository");
         mWorkThread.start();
         mHandle = new Handler(mWorkThread.getLooper(), this::handleMessage);
+        this.mStore = new RuleStore(gson, logger, mCache, mHandle);
 
         this.mPublisher = new SnapshotPublisher(observerRegistry, snapshotStore, signalStore);
     }
@@ -120,7 +119,7 @@ public final class RuleRepository {
         try {
             Object writeMsg;
             if (snapshot != null) {
-                writeMsg = new WriteMessage(packageName, viewRule, snapshot, null, null, null);
+                writeMsg = new WriteMessage(packageName, viewRule, snapshot, null, null, null, 0L);
             } else {
                 RuleCache.CacheResult cr = mCache.apply(packageName, viewRule, true);
                 if (cr.oldImagePath != null) {
@@ -130,7 +129,8 @@ public final class RuleRepository {
                         mLogger.w("write rule (json path): delete old image failed", e);
                     }
                 }
-                writeMsg = new WriteMessage(packageName, viewRule, null, cr.json, cr.snapshotRules, null);
+                writeMsg = new WriteMessage(packageName, viewRule, null, cr.json, cr.snapshotRules,
+                        null, cr.generation);
             }
             mHandle.obtainMessage(MSG_WRITE_RULE, writeMsg).sendToTarget();
             return true;
@@ -147,7 +147,8 @@ public final class RuleRepository {
         try {
             RuleCache.CacheResult cr = mCache.apply(packageName, viewRule, false);
             mHandle.obtainMessage(MSG_WRITE_RULE,
-                    new WriteMessage(packageName, null, null, cr.json, cr.snapshotRules, null))
+                    new WriteMessage(packageName, null, null, cr.json, cr.snapshotRules,
+                            null, cr.generation))
                     .sendToTarget();
             return true;
         } catch (Exception e) {
@@ -164,7 +165,8 @@ public final class RuleRepository {
             RuleCache.DeleteResult dr = mCache.delete(packageName, viewRule);
             if (dr == null) return false;
             mHandle.obtainMessage(MSG_DELETE_RULE,
-                    new DeleteMessage(packageName, dr.json, dr.snapshotRules, dr.imagePath))
+                    new DeleteMessage(packageName, dr.json, dr.snapshotRules, dr.imagePath,
+                            dr.generation))
                     .sendToTarget();
             return true;
         } catch (Exception e) {
@@ -191,8 +193,13 @@ public final class RuleRepository {
      * 加载所有已持久化的规则到内存。
      */
     public void loadAll() {
-        mHandle.sendEmptyMessage(MSG_WRITE_RULE); // placeholder, actual: custom message
-        // 直接在工作线程中执行加载
+        loadAll(null, null);
+    }
+
+    /**
+     * 加载所有已持久化的规则到内存，并在工作线程中报告结果。
+     */
+    public void loadAll(Runnable onSuccess, Runnable onFailure) {
         mHandle.post(() -> {
             try {
                 mStore.loadAllRules();
@@ -202,9 +209,11 @@ public final class RuleRepository {
                 int totalRules = countTotalRules();
                 mLogger.i("loaded " + totalPackages + " packages with "
                         + totalRules + " total rules, state=READY");
+                if (onSuccess != null) onSuccess.run();
             } catch (Exception e) {
                 mLogger.e("loadAll failed", e);
                 mDataLoaded = true;
+                if (onFailure != null) onFailure.run();
             }
         });
     }
@@ -216,6 +225,7 @@ public final class RuleRepository {
 
     /** 关闭，释放资源。 */
     public void shutdown() {
+        mStore.flushPendingWrites();
         mHandle.removeCallbacksAndMessages(null);
         mWorkThread.quitSafely();
         mPublisher.shutdown();
@@ -306,7 +316,7 @@ public final class RuleRepository {
         } else {
             // ── JSON 分支：缓存已更新，只持久化 + 发布 ──
             try {
-                mPublisher.publish(m.packageName, m.snapshotRules, System.currentTimeMillis());
+                mPublisher.publish(m.packageName, m.snapshotRules, m.generation);
                 mStore.persistAsync(m.packageName, m.json);
                 scheduleOrphanCleanup();
             } catch (Exception e) {
@@ -317,7 +327,7 @@ public final class RuleRepository {
 
     private void handleDelete(DeleteMessage m) {
         try {
-            mPublisher.publish(m.packageName, m.snapshotRules, System.currentTimeMillis());
+            mPublisher.publish(m.packageName, m.snapshotRules, m.generation);
             mStore.persistAsync(m.packageName, m.json);
             if (m.imagePath != null && !m.imagePath.isEmpty()) {
                 FileUtils.delete(m.imagePath);
@@ -331,7 +341,7 @@ public final class RuleRepository {
     private void handleDeleteAll(String packageName) {
         try {
             FileUtils.delete(mStore.getAppDataDir(packageName));
-            mPublisher.publish(packageName, new ActRules(), System.currentTimeMillis());
+            mPublisher.publish(packageName, new ActRules(), mCache.nextGeneration());
         } catch (Exception e) {
             mLogger.w("delete all rules failed for " + packageName, e);
         }
@@ -372,8 +382,14 @@ public final class RuleRepository {
             this.mLogger = logger;
         }
 
-        long nextGeneration() {
-            return ++mGeneration;
+        synchronized long nextGeneration() {
+            long now = System.currentTimeMillis();
+            if (now > mGeneration) {
+                mGeneration = now;
+            } else {
+                mGeneration++;
+            }
+            return mGeneration;
         }
 
         AppRules getAllRules() {
@@ -591,19 +607,13 @@ public final class RuleRepository {
         private final Handler mHandle;
         private final Map<String, String> mPendingWrites = new HashMap<>();
 
-        RuleStore(Gson gson, Logger logger, RuleCache cache) {
+        RuleStore(Gson gson, Logger logger, RuleCache cache, Handler handler) {
             this.mGson = gson;
             this.mLogger = logger;
             this.mCache = cache;
-            // Use the shared Handler from RuleRepository for debounce writes
-            this.mHandle = null; // Will be set by repository
+            this.mHandle = handler;
         }
 
-        void setHandler(Handler handler) {
-            // This approach won't work well since we need the mHandle reference at construction
-        }
-
-        // 暂用简单实现：Handler 通过 RuleRepository 的 handleMessage 转发
         void loadAllRules() throws IOException {
             File dataDir = new File(getBaseDir());
             File[] packageDirs = dataDir.listFiles(File::isDirectory);
@@ -638,6 +648,16 @@ public final class RuleRepository {
         }
 
         void persistAsync(String packageName, String json) {
+            synchronized (mPendingWrites) {
+                mPendingWrites.put(packageName, json);
+            }
+            mHandle.removeMessages(MSG_DEBOUNCE_WRITE, packageName);
+            mHandle.sendMessageDelayed(
+                    mHandle.obtainMessage(MSG_DEBOUNCE_WRITE, packageName),
+                    DEBOUNCE_DELAY_MS);
+        }
+
+        private void persistNow(String packageName, String json) {
             try {
                 File appDataDir = new File(getBaseDir(), packageName);
                 if (!appDataDir.exists() && !appDataDir.mkdirs()) {
@@ -668,7 +688,18 @@ public final class RuleRepository {
                 if (json == null) return;
                 mPendingWrites.remove(packageName);
             }
-            persistAsync(packageName, json);
+            persistNow(packageName, json);
+        }
+
+        void flushPendingWrites() {
+            Map<String, String> pending;
+            synchronized (mPendingWrites) {
+                pending = new HashMap<>(mPendingWrites);
+                mPendingWrites.clear();
+            }
+            for (Map.Entry<String, String> entry : pending.entrySet()) {
+                persistNow(entry.getKey(), entry.getValue());
+            }
         }
 
         String saveBitmap(Bitmap bitmap, String dir) {
@@ -790,15 +821,17 @@ public final class RuleRepository {
         final String json;
         final ActRules snapshotRules;
         final String imagePath;
+        final long generation;
 
         WriteMessage(String packageName, RuleRecord viewRule, Bitmap snapshot,
-                     String json, ActRules snapshotRules, String imagePath) {
+                     String json, ActRules snapshotRules, String imagePath, long generation) {
             this.packageName = packageName;
             this.viewRule = viewRule;
             this.snapshot = snapshot;
             this.json = json;
             this.snapshotRules = snapshotRules;
             this.imagePath = imagePath;
+            this.generation = generation;
         }
     }
 
@@ -807,12 +840,15 @@ public final class RuleRepository {
         final String json;
         final ActRules snapshotRules;
         final String imagePath;
+        final long generation;
 
-        DeleteMessage(String packageName, String json, ActRules snapshotRules, String imagePath) {
+        DeleteMessage(String packageName, String json, ActRules snapshotRules,
+                      String imagePath, long generation) {
             this.packageName = packageName;
             this.json = json;
             this.snapshotRules = snapshotRules;
             this.imagePath = imagePath;
+            this.generation = generation;
         }
     }
 }
