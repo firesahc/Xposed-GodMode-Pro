@@ -16,6 +16,7 @@ import android.widget.Toast;
 import androidx.appcompat.widget.TooltipCompat;
 
 import com.kaisar.xposed.godmode.R;
+import com.kaisar.xposed.godmode.editor.IRuleEditor;
 import com.kaisar.xposed.godmode.engine.EditorInteractionMode;
 import com.kaisar.xposed.godmode.engine.Property;
 import com.kaisar.xposed.godmode.engine.matcher.ViewTraversal;
@@ -67,8 +68,8 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     // 节点选择面板与属性编辑器    // =========================================================================
 
     private final NodeSelectorPanel mNodePanel = new NodeSelectorPanel();
-    final PropertyEditorPanel mPropertyEditor = new PropertyEditorPanel();
-    private final SeekBarHandler mSeekBarHandler = new SeekBarHandler(mNodePanel, mPropertyEditor);
+    final PropertyEditorPanel mPropertyEditor;
+    private final SeekBarHandler mSeekBarHandler;
     private WeakReference<Activity> mCurrentActivityRef = new WeakReference<>(null);
 
     // =========================================================================
@@ -116,10 +117,14 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     // =========================================================================
     // 触摸 / 按键 子组件    // =========================================================================
 
-    private final TouchEventHandler mTouchEventHandler = new TouchEventHandler(this);
+    private final TouchEventHandler mTouchEventHandler;
     private final KeyEventHandler mKeyEventHandler = new KeyEventHandler(this);
 
     // =========================================================================
+    // 编辑器规则持久化接口    // =========================================================================
+
+    private final IRuleEditor mRuleEditor;
+
     // 开关属性引用    // =========================================================================
 
     private final Property<Boolean> mSwitchProp;
@@ -127,8 +132,12 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     // =========================================================================
     // 构造器    // =========================================================================
 
-    public EditorOrchestrator(Property<Boolean> switchProp) {
+    public EditorOrchestrator(Property<Boolean> switchProp, IRuleEditor ruleEditor) {
         this.mSwitchProp = switchProp;
+        this.mRuleEditor = ruleEditor;
+        this.mPropertyEditor = new PropertyEditorPanel(ruleEditor);
+        this.mTouchEventHandler = new TouchEventHandler(this, ruleEditor);
+        this.mSeekBarHandler = new SeekBarHandler(mNodePanel, mPropertyEditor);
     }
 
     // =========================================================================
@@ -294,7 +303,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
                                     GmResources.getString(R.string.block_fail, message),
                                     Toast.LENGTH_SHORT).show();
                         }
-                    });
+                    }, mRuleEditor);
         } catch (Exception e) {
             Logger.e(TAG, "[KeyEventHook] block fail", e);
             Toast.makeText(activity, GmResources.getString(R.string.block_fail, e.getMessage()),

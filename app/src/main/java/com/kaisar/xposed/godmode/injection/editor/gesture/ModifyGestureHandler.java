@@ -6,7 +6,7 @@ import android.view.View;
 import android.view.ViewGroup;
 
 import com.kaisar.xposed.godmode.engine.util.CommonUtils;
-import com.kaisar.xposed.godmode.injection.bridge.RuleServiceClient;
+import com.kaisar.xposed.godmode.editor.IRuleEditor;
 import com.kaisar.xposed.godmode.injection.util.BitmapUtils;
 import com.kaisar.xposed.godmode.injection.util.TaskExecutor;
 import com.kaisar.xposed.godmode.injection.util.ViewUtils;
@@ -78,7 +78,7 @@ public final class ModifyGestureHandler {
      * 将最终拖拽位置持久化为修改规则。
      * 快照捕获（View.draw）在主线程执行，IPC 写入通过 {@link TaskExecutor#executeIo} 异步执行。
      */
-    public static void finalizeDrag(ModifyState state, String packageName) {
+    public static void finalizeDrag(ModifyState state, String packageName, IRuleEditor ruleEditor) {
         if (state == null || state.dragTarget == null) return;
 
         // 重置 translation——偏移量已记录在 totalDx/totalDy
@@ -100,7 +100,7 @@ public final class ModifyGestureHandler {
             // IO 线程：仅 IPC 写入（参照 PropertyEditorPanel.saveAll 的 TaskExecutor.executeIo 模式）
             final RuleRecord finalRule = rule;
             TaskExecutor.executeIo(() -> {
-                RuleServiceClient.getDefault().writeRule(packageName, finalRule, snapshot);
+                ruleEditor.writeRule(packageName, finalRule, snapshot);
                 CommonUtils.recycleNullableBitmap(snapshot);
             });
         }

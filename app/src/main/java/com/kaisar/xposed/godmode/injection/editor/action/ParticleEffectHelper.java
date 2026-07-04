@@ -11,7 +11,7 @@ import android.view.ViewGroup;
 import com.kaisar.xposed.godmode.engine.util.GmConstants;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.injection.ViewController;
-import com.kaisar.xposed.godmode.injection.bridge.RuleServiceClient;
+import com.kaisar.xposed.godmode.editor.IRuleEditor;
 import com.kaisar.xposed.godmode.injection.editor.overlay.MaskView;
 import com.kaisar.xposed.godmode.injection.editor.overlay.ParticleView;
 import com.kaisar.xposed.godmode.injection.util.BitmapUtils;
@@ -50,6 +50,7 @@ public final class ParticleEffectHelper {
             final Bitmap snapshot,
             final String packageName,
             final MaskView maskView,
+            final IRuleEditor ruleEditor,
             final Runnable onComplete) {
         Logger.d(TAG, "execute: starting particle animation for " + packageName);
 
@@ -83,7 +84,7 @@ public final class ParticleEffectHelper {
                 // 异步 IO 线程执行 IPC 写入
                 TaskExecutor.executeIo(() -> {
                     try {
-                        RuleServiceClient.getDefault().writeRule(packageName, viewRule, snapshot);
+                        ruleEditor.writeRule(packageName, viewRule, snapshot);
                     } catch (Exception e) {
                         Logger.e(TAG, "writeRule fail: " + packageName, e);
                     }

@@ -9,6 +9,7 @@ import android.view.ViewConfiguration;
 import android.view.ViewParent;
 import android.view.WindowManager;
 
+import com.kaisar.xposed.godmode.editor.IRuleEditor;
 import com.kaisar.xposed.godmode.engine.EditorInteractionMode;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.injection.editor.gesture.GestureDispatcher;
@@ -39,6 +40,7 @@ public final class TouchEventHandler {
     }
 
     private final TouchCallback mCallback;
+    private final IRuleEditor mRuleEditor;
 
     // =========================================================================
     // 触摸状态字段
@@ -66,8 +68,9 @@ public final class TouchEventHandler {
     // 构造器
     // =========================================================================
 
-    public TouchEventHandler(TouchCallback callback) {
+    public TouchEventHandler(TouchCallback callback, IRuleEditor ruleEditor) {
         this.mCallback = callback;
+        this.mRuleEditor = ruleEditor;
     }
 
     // =========================================================================
@@ -178,7 +181,7 @@ public final class TouchEventHandler {
 
         } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
             if (mLongClick && mRemoveState != null) {
-                RemoveGestureHandler.finishDrag(v, mRemoveState);
+                RemoveGestureHandler.finishDrag(v, mRemoveState, mRuleEditor);
                 RemoveGestureHandler.clearState(mRemoveState);
                 mRemoveState = null;
             } else if (action == MotionEvent.ACTION_UP && mCallback.isKeySelecting()) {
@@ -211,7 +214,7 @@ public final class TouchEventHandler {
         } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
             if (mLongClick && mModifyState != null) {
                 ModifyGestureHandler.finalizeDrag(mModifyState,
-                        v.getContext().getPackageName());
+                        v.getContext().getPackageName(), mRuleEditor);
                 mModifyState = null;
             } else if (action == MotionEvent.ACTION_UP && !mLongClick) {
                 mCallback.selectViewByTap(v);

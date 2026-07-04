@@ -12,6 +12,7 @@ import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.engine.util.Preconditions;
 import com.kaisar.xposed.godmode.injection.ViewController;
 import com.kaisar.xposed.godmode.rule.RuleRecordFactory;
+import com.kaisar.xposed.godmode.editor.IRuleEditor;
 import com.kaisar.xposed.godmode.injection.editor.action.ParticleEffectHelper;
 import com.kaisar.xposed.godmode.injection.editor.overlay.CancelView;
 import com.kaisar.xposed.godmode.injection.editor.overlay.MaskView;
@@ -60,7 +61,7 @@ public final class RemoveGestureHandler {
     }
 
     /** 完成移除拖拽：根据是否拖入取消区域决定撤销操作或执行粒子动画 + IPC 持久化 */
-    public static void finishDrag(View v, RemoveState state) {
+    public static void finishDrag(View v, RemoveState state, IRuleEditor ruleEditor) {
         Activity activity = ViewUtils.getAttachedActivityFromView(v);
         if (activity == null) return;
 
@@ -78,7 +79,7 @@ public final class RemoveGestureHandler {
             ParticleEffectHelper.execute(activity, state.maskView, container,
                     state.viewRule, state.snapshot,
                     v.getContext().getPackageName(),
-                    state.maskView, /* onComplete */ null);
+                    state.maskView, ruleEditor, /* onComplete */ null);
         }
     }
 

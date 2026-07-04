@@ -25,7 +25,7 @@ import com.kaisar.xposed.godmode.engine.rule.ActionSpec;
 import com.kaisar.xposed.godmode.engine.rule.RuleMapper;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.injection.ModuleResources;
-import com.kaisar.xposed.godmode.injection.bridge.RuleServiceClient;
+import com.kaisar.xposed.godmode.editor.IRuleEditor;
 import com.kaisar.xposed.godmode.rule.RuleRecordFactory;
 import com.kaisar.xposed.godmode.rule.ViewSnapshot;
 import com.kaisar.xposed.godmode.injection.util.BitmapUtils;
@@ -130,6 +130,11 @@ public class PropertyEditorPanel {
     private String mModifyingViewActClass;
 
     private boolean mActivityResultHooked;
+    private final IRuleEditor mRuleEditor;
+
+    public PropertyEditorPanel(IRuleEditor ruleEditor) {
+        this.mRuleEditor = ruleEditor;
+    }
 
     /**
      * Show the property editor panel for the target view.
@@ -519,7 +524,7 @@ public class PropertyEditorPanel {
                 String viewKey = sb.toString();
                 Bitmap bmp = mPendingModBitmaps.get(viewKey);
                 if (bmp != null && !bmp.isRecycled()) {
-                    String savedPath = RuleServiceClient.getDefault().saveImageFile(pkg, bmp);
+                    String savedPath = mRuleEditor.saveImageFile(pkg, bmp);
                     rule.modImagePath = savedPath != null ? savedPath : null;
                 } else {
                     rule.modImagePath = null;
@@ -574,7 +579,7 @@ public class PropertyEditorPanel {
             for (RuleRecord rule : rulesToSave) {
                 Bitmap snapshot = snapshots.get(rule);
                 try {
-                    if (!RuleServiceClient.getDefault().writeRule(pkg, rule, snapshot)) {
+                    if (!mRuleEditor.writeRule(pkg, rule, snapshot)) {
                         allOk = false;
                         failedRules.add(rule.activityClass + "#" + rule.viewClass);
                     }

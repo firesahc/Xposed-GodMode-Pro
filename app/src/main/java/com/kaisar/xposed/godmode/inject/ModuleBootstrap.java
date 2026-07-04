@@ -15,6 +15,7 @@ import com.kaisar.xposed.godmode.engine.event.EventBus;
 import com.kaisar.xposed.godmode.engine.event.RulesChangedEvent;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.injection.ModuleResources;
+import com.kaisar.xposed.godmode.editor.RuleEditorClient;
 import com.kaisar.xposed.godmode.injection.editor.EditorOrchestrator;
 import com.kaisar.xposed.godmode.injection.util.BlockListChecker;
 import com.kaisar.xposed.godmode.rule.ActRules;
@@ -43,7 +44,7 @@ public final class ModuleBootstrap implements IXposedHookLoadPackage, IXposedHoo
     // ===== 静态开关和编辑器 =====
     private final static Property<Boolean> switchProp = new Property<>(false);
     private static final EventBus sEventBus = EventBus.getDefault();
-    private static final EditorOrchestrator sEditorOrchestrator = new EditorOrchestrator(switchProp);
+    private static final EditorOrchestrator sEditorOrchestrator = new EditorOrchestrator(switchProp, RuleEditorClient.getInstance());
 
     // ===== 运行时状态 =====
     private static volatile XC_LoadPackage.LoadPackageParam sLoadPackageParam;
