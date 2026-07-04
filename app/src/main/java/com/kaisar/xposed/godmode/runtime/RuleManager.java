@@ -1,16 +1,20 @@
 package com.kaisar.xposed.godmode.runtime;
 
 import android.os.FileObserver;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.TextUtils;
 
 import com.kaisar.xposed.godmode.data.DataBusConstants;
 import com.kaisar.xposed.godmode.data.RuleSnapshotStore;
-import com.kaisar.xposed.godmode.engine.rule.RuleDiff;
 import com.kaisar.xposed.godmode.engine.rule.RuleSnapshot;
 import com.kaisar.xposed.godmode.engine.util.Logger;
+import com.kaisar.xposed.godmode.inject.ModuleBootstrap;
 import com.kaisar.xposed.godmode.ipc.RuleServiceClient;
 import com.kaisar.xposed.godmode.rule.ActRules;
+import com.kaisar.xposed.godmode.rule.RuleRecord;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -21,7 +25,9 @@ import java.util.Map;
  *   <li>维护当前规则内存缓存（{@link ActRules}）</li>
  *   <li>三层初始化降级：Binder 即时 → 文件快照 → 空规则</li>
  *   <li>通过 FileObserver 监控信号文件，接收 system_server 的规则更新通知</li>
- *   <li>通过 {@link RulesChangedEvent} 通知 LifecycleObserver 执行实际撤销/应用</li>
+ *   <li>信号文件触发时将快照内容通过 {@link RulesChangedEvent}
+ *       发布到 EventBus，由 {@link com.kaisar.xposed.godmode.runtime.RuleLifecycleManager}
+ *       消费并执行实际撤销/应用</li>
  * </ul>
  * <p>
  * 使用 {@link #init(String)} 初始化单例，{@link #get()} 获取实例。
@@ -43,6 +49,9 @@ public final class RuleManager {
     private volatile boolean mInitialized;
     private Source mLastSource = Source.PROCESS;
 
+    /** 主线程 Handler — 用于将 EventBus post 切换到主线程（View 操作必须） */
+    private final Handler mMainHandler = new Handler(Looper.getMainLooper());
+
     /** 信号文件观察者（Binder 断连时的降级触发通道） */
     private FileObserver mSignalObserver;
 
@@ -63,7 +72,8 @@ public final class RuleManager {
      * </ol>
      * <p>
      * 此方法仅设置规则缓存，不触发实际 UI 操作。
-     * LifecycleObserver 在 Activity resume 时通过 {@link #getRules()} 获取规则并应用。
+     * {@link RuleLifecycleManager} 在 Activity resume 时通过 {@link #getRules()} 获取规则并应用。
+     * 后续信号文件通知也会通过 {@link #relaySnapshotToEventBus()} 触发重新应用。
      */
     public static synchronized void init(String packageName) {
         if (sInstance != null) {
@@ -122,48 +132,76 @@ public final class RuleManager {
     // =========================================================================
 
     /**
-     * 从文件快照刷新规则。
+     * 从文件快照刷新规则（用于初始化路径）。
      * <p>
-     * 通过 {@link RuleSnapshotStore} 读取磁盘上的最新快照。
-     * 如果快照存在且与当前缓存不同，通过 EventBus 发布
-     * {@link RulesChangedEvent} 触发 LifecycleObserver 执行后续流程。
-     * <p>
-     * 此方法安全可重入（幂等）：快照未变化则不发布事件。
+     * 通过 {@link RuleSnapshotStore} 读取磁盘上的最新快照并更新到缓存。
+     * 该方法仅在 {@link #init(String)} 中调用，只更新缓存不触发 UI 操作。
+     * 后续的信号文件变更通过 {@link #relaySnapshotToEventBus()} 触发完整重新应用。
      */
     private void refreshFromSnapshot() {
+        ActRules rules = readSnapshotAsActRules();
+        if (rules != null) {
+            replaceRules(rules);
+            mLastSource = Source.FILE_SNAPSHOT;
+            mLogger.i("rules refreshed from file snapshot for " + mPackageName
+                    + " (" + mActRules.size() + " activities)");
+        }
+    }
+
+    /**
+     * 读取文件快照并转为 {@link ActRules}。
+     *
+     * @return 快照中的规则集，或 {@code null}（快照不存在/损坏）
+     */
+    @SuppressWarnings("unchecked")
+    private ActRules readSnapshotAsActRules() {
         try {
             RuleSnapshot snapshot = RuleSnapshotStore.getDefault().readLatest(mPackageName);
             if (snapshot == null || snapshot.payload == null) {
                 mLogger.w("no file snapshot available for " + mPackageName);
-                return;
+                return null;
             }
-
-            // 检查是否真的发生变化（避免无效事件）
-            if (!RuleDiff.hasChanged(mActRules, snapshot)) {
-                mLogger.d("snapshot unchanged for " + mPackageName + " — skipping");
-                return;
-            }
-
-            // 更新内部缓存
-            // snapshot.payload 是 Map<String, ?>，需转为 ActRules
-            mActRules.clear();
+            ActRules rules = new ActRules();
             for (Map.Entry<String, ?> entry : snapshot.payload.entrySet()) {
                 String key = entry.getKey();
                 Object value = entry.getValue();
                 if (key != null && value != null) {
-                    @SuppressWarnings("unchecked")
-                    java.util.List<com.kaisar.xposed.godmode.rule.RuleRecord> rules =
-                            (java.util.List<com.kaisar.xposed.godmode.rule.RuleRecord>) value;
-                    mActRules.put(key, rules);
+                    List<RuleRecord> ruleList = (List<RuleRecord>) value;
+                    rules.put(key, ruleList);
                 }
             }
-
-            mLastSource = Source.FILE_SNAPSHOT;
-            mLogger.i("rules refreshed from file snapshot for " + mPackageName
-                    + " (" + mActRules.size() + " activities)");
+            return rules;
         } catch (Exception e) {
-            mLogger.w("refreshFromSnapshot failed for " + mPackageName, e);
+            mLogger.w("readSnapshotAsActRules failed for " + mPackageName, e);
+            return null;
         }
+    }
+
+    /**
+     * 将文件快照内容通过 EventBus 发布为 {@link RulesChangedEvent}。
+     * <p>
+     * 在信号文件触发时调用，由 {@link RuleLifecycleManager} 消费事件，
+     * 执行完整的规则差集计算、撤销和应用流程。
+     * 直接更新缓存而不发布事件会导致规则变更永远不会应用到 View。
+     * <p>
+     * 注意：不在此处做缓存对比过滤 — 让 {@link RuleLifecycleManager#onRulesChanged}
+     * 通过 {@code equals()}/{@code contentEquals()} 双检测来自行决定是否需要实际应用。
+     */
+    private void relaySnapshotToEventBus() {
+        if (!mInitialized) {
+            mLogger.d("relaySnapshotToEventBus: RuleManager not initialized, deferring");
+            return;
+        }
+        ActRules newRules = readSnapshotAsActRules();
+        if (newRules == null) return;
+
+        mLogger.d("relaying snapshot to EventBus for " + mPackageName
+                + " (" + newRules.size() + " activities)");
+        // 发布事件到主线程（不更新缓存 — RuleLifecycleManager.onRulesChanged()
+        // 会读取当前缓存作为 oldRules，计算差集后通过 replaceRules() 更新缓存）
+        // FileObserver 回调在后台线程，但规则撤销/应用必须在主线程执行 View 操作
+        final ActRules rulesToPost = newRules;
+        mMainHandler.post(() -> ModuleBootstrap.notifyViewRulesChanged(rulesToPost));
     }
 
     // =========================================================================
@@ -174,9 +212,8 @@ public final class RuleManager {
      * 替换当前规则集。
      * <p>
      * 仅更新内存缓存，不触发 UI 操作。
-     * 外部规则变更路径（如 FileObserver 触发）直接通过
-     * {@link #refreshFromSnapshot()} 同步内部状态，LifecycleObserver
-     * 在其 {@code onRulesChanged} 方法中读取更新后的规则进行应用。
+     * 规则变更的 UI 应用由 {@link RuleLifecycleManager#onRulesChanged}
+     * 通过 EventBus 订阅 {@code RulesChangedEvent} 驱动。
      */
     public synchronized void replaceRules(ActRules newRules) {
         mActRules.clear();
@@ -197,8 +234,10 @@ public final class RuleManager {
                 public void onEvent(int event, String path) {
                     if (path != null && path.startsWith(
                             DataBusConstants.RULE_CHANGED_PREFIX + packageName)) {
-                        mLogger.d("signal file changed, refreshing rules from snapshot");
-                        refreshFromSnapshot();
+                        mLogger.d("signal file changed, relaying to EventBus");
+                        // 使用转发到 EventBus 而非直接更新缓存：
+                        // RuleLifecycleManager 会完成差集计算、撤销旧规则、应用新规则的完整流程
+                        relaySnapshotToEventBus();
                     }
                 }
             };
