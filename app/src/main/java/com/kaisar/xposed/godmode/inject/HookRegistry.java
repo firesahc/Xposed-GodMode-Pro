@@ -11,7 +11,6 @@ import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.inject.hooks.DebugHooks;
 import com.kaisar.xposed.godmode.inject.hooks.InteractionHooks;
 import com.kaisar.xposed.godmode.inject.hooks.LifecycleHooks;
-import com.kaisar.xposed.godmode.injection.LifecycleObserver;
 
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
 import de.robv.android.xposed.XposedHelpers;
@@ -55,9 +54,6 @@ public final class HookRegistry {
         ModuleBootstrap.getEventBus().register(lifecycleHooks);
         XposedHelpers.findAndHookMethod(Activity.class, "onPostResume", lifecycleHooks);
         XposedHelpers.findAndHookMethod(Activity.class, "onDestroy", lifecycleHooks);
-
-        // LifecycleObserver 通过 EventBus 订阅生命周期事件，继续执行规则管理
-        ModuleBootstrap.getEventBus().register(new LifecycleObserver());
 
         // 4) 调试布局模式 Hook
         DebugHooks.install(switchProp);
