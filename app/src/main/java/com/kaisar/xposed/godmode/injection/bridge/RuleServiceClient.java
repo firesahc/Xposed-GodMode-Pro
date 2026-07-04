@@ -9,7 +9,7 @@ import android.os.RemoteException;
 import com.kaisar.xposed.godmode.IGodModeManager;
 import com.kaisar.xposed.godmode.IObserver;
 import com.kaisar.xposed.godmode.engine.util.Logger;
-import com.kaisar.xposed.godmode.injection.HookLauncher;
+import com.kaisar.xposed.godmode.inject.ModuleBootstrap;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.AppRules;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
@@ -327,8 +327,8 @@ public final class RuleServiceClient {
     public void forwardLog(int level, String tag, String msg, long timestamp) {
         try {
             ensureService().log(level,
-                    HookLauncher.getLoadPackageParam() != null
-                            ? HookLauncher.getLoadPackageParam().packageName
+        ModuleBootstrap.getLoadPackageParam() != null
+                ? ModuleBootstrap.getLoadPackageParam().packageName
                             : "unknown",
                     timestamp,
                     tag, msg);

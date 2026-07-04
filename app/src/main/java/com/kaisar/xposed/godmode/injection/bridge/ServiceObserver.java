@@ -6,7 +6,7 @@ import android.os.Message;
 
 import com.kaisar.xposed.godmode.IObserver;
 import com.kaisar.xposed.godmode.engine.util.Logger;
-import com.kaisar.xposed.godmode.injection.HookLauncher;
+import com.kaisar.xposed.godmode.inject.ModuleBootstrap;
 import com.kaisar.xposed.godmode.rule.ActRules;
 
 
@@ -39,9 +39,9 @@ public final class ServiceObserver extends IObserver.Stub implements Handler.Cal
             return true;
         }
         if (msg.what == ACTION_EDIT_MODE_CHANGED) {
-            HookLauncher.notifyEditModeChanged((Boolean) msg.obj);
+            ModuleBootstrap.notifyEditModeChanged((Boolean) msg.obj);
         } else if (msg.what == ACTION_VIEW_RULES_CHANGED) {
-            HookLauncher.notifyViewRulesChanged((ActRules) msg.obj);
+            ModuleBootstrap.notifyViewRulesChanged((ActRules) msg.obj);
         }
         return true;
     }

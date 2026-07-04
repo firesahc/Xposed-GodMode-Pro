@@ -15,7 +15,7 @@ import com.kaisar.xposed.godmode.BuildConfig;
 import com.kaisar.xposed.godmode.engine.matcher.TargetLevel;
 import com.kaisar.xposed.godmode.engine.matcher.ViewTraversal;
 import com.kaisar.xposed.godmode.engine.util.Logger;
-import com.kaisar.xposed.godmode.injection.HookLauncher;
+import com.kaisar.xposed.godmode.inject.ModuleBootstrap;
 import com.kaisar.xposed.godmode.injection.util.ViewUtils;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 
@@ -75,7 +75,7 @@ public final class RuleRecordFactory {
                 x, y, width, height, viewHierarchyDepth,
                 activityClassName, viewClassName, resourceName, text, description,
                 View.INVISIBLE, System.currentTimeMillis());
-        populateRepeatableInfo(v, rule, HookLauncher.getEditorOrchestrator().isInfoFlowMode());
+        populateRepeatableInfo(v, rule, ModuleBootstrap.getEditorOrchestrator().isInfoFlowMode());
         return rule;
     }
 
