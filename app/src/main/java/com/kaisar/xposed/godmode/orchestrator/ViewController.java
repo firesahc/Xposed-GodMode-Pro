@@ -1,4 +1,4 @@
-package com.kaisar.xposed.godmode.runtime;
+package com.kaisar.xposed.godmode.orchestrator;
 
 import android.app.Activity;
 import android.view.View;

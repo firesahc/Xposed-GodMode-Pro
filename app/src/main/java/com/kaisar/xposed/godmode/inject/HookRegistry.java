@@ -11,7 +11,7 @@ import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.inject.hooks.DebugHooks;
 import com.kaisar.xposed.godmode.inject.hooks.InteractionHooks;
 import com.kaisar.xposed.godmode.inject.hooks.LifecycleHooks;
-import com.kaisar.xposed.godmode.runtime.RuleLifecycleManager;
+import com.kaisar.xposed.godmode.orchestrator.RuleLifecycleManager;
 
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
 import de.robv.android.xposed.XposedHelpers;

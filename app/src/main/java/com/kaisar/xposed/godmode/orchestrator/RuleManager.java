@@ -1,4 +1,4 @@
-package com.kaisar.xposed.godmode.runtime;
+package com.kaisar.xposed.godmode.orchestrator;
 
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.ipc.RuleServiceClient;

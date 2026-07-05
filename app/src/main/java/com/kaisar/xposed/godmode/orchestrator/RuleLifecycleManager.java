@@ -1,4 +1,4 @@
-package com.kaisar.xposed.godmode.runtime;
+package com.kaisar.xposed.godmode.orchestrator;
 
 import android.app.Activity;
 import android.os.Handler;
@@ -16,7 +16,7 @@ import com.kaisar.xposed.godmode.engine.matcher.CompositeMatcher;
 import com.kaisar.xposed.godmode.engine.matcher.Matcher;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.engine.util.Preconditions;
-import com.kaisar.xposed.godmode.runtime.ViewController;
+import com.kaisar.xposed.godmode.orchestrator.ViewController;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 

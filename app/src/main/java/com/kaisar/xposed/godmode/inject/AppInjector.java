@@ -3,7 +3,7 @@ package com.kaisar.xposed.godmode.inject;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.ipc.RuleServiceClient;
 import com.kaisar.xposed.godmode.ipc.ServiceObserver;
-import com.kaisar.xposed.godmode.runtime.RuleManager;
+import com.kaisar.xposed.godmode.orchestrator.RuleManager;
 
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
 

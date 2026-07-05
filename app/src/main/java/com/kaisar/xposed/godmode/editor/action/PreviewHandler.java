@@ -5,7 +5,7 @@ import android.view.View;
 
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.inject.ModuleBootstrap;
-import com.kaisar.xposed.godmode.runtime.ViewController;
+import com.kaisar.xposed.godmode.orchestrator.ViewController;
 import com.kaisar.xposed.godmode.rule.RuleRecordFactory;
 import com.kaisar.xposed.godmode.editor.overlay.MaskView;
 import com.kaisar.xposed.godmode.util.ViewUtils;
