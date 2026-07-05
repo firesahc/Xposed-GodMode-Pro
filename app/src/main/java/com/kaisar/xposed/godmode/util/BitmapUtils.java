@@ -7,7 +7,7 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.view.View;
 
-
+import com.kaisar.xposed.godmode.engine.util.Logger;
 
 /**
  * 位图操作工具 — 视图截图、规则遮罩绘制、调试边框绘制。
@@ -18,18 +18,32 @@ public final class BitmapUtils {
 
     private BitmapUtils() {}
 
+    private static final String TAG = "BitmapUtils";
+
     /**
      * 截取视图的当前显示内容为 Bitmap。
+     * <p>
+     * 若视图层级中含有已回收的 BitmapDrawable（来自前次修改操作遗留），
+     * 捕获 {@link RuntimeException} 并返回空白位图兜底，避免编辑流程中断。
      *
      * @param view 目标视图
-     * @return 视图截图，若 view 无效则返回 null
+     * @return 视图截图，若 view 无效则返回 null；兜底时返回等尺寸透明位图
      */
     public static Bitmap snapshotView(View view) {
         if (view == null || view.getWidth() <= 0 || view.getHeight() <= 0) return null;
         Bitmap b = Bitmap.createBitmap(view.getWidth(), view.getHeight(), Bitmap.Config.ARGB_8888);
         Canvas c = new Canvas(b);
         c.translate(-view.getScrollX(), -view.getScrollY());
-        view.draw(c);
+        try {
+            view.draw(c);
+        } catch (RuntimeException e) {
+            // View 层级中存在已回收的 BitmapDrawable（如 ImageView 从前次修改保有的位图已被回收）。
+            // 兜底：擦除为完全透明，防止 Binder IPC 传递已回收位图引发二次崩溃。
+            Logger.w(TAG, "snapshotView: view.draw() failed due to recycled bitmap in hierarchy, "
+                    + "falling back to blank snapshot"
+                    + " view=" + view.getClass().getName(), e);
+            b.eraseColor(Color.TRANSPARENT);
+        }
         return b;
     }
 

@@ -544,7 +544,9 @@ public class PropertyEditorPanel {
         if (modifyPanel != null) modifyPanel.setVisibility(View.INVISIBLE);
         if (maskView != null) maskView.setVisibility(View.INVISIBLE);
 
-        final HashMap<RuleRecord, Bitmap> snapshots = new HashMap<>();
+        // 使用 List<Bitmap> 与 rulesToSave 并行索引，替代 HashMap<RuleRecord, Bitmap>。
+        // 避免 mOriginalRule 被多条规则共享导致 snapshot key 碰撞（仅最后一条有效）引发已回收位图再写入。
+        final ArrayList<Bitmap> snapshotList = new ArrayList<>(rulesToSave.size());
         for (RuleRecord rule : rulesToSave) {
             try {
                 View view;
@@ -562,10 +564,13 @@ public class PropertyEditorPanel {
                 if (view != null) {
                     Bitmap snapshot = BitmapUtils.snapshotView(ViewUtils.findTopParentViewByChildView(view));
                     BitmapUtils.drawRectMask(snapshot, rule.x, rule.y, rule.width, rule.height);
-                    snapshots.put(rule, snapshot);
+                    snapshotList.add(snapshot);
+                } else {
+                    snapshotList.add(null);
                 }
             } catch (Exception e) {
                 Logger.w(TAG, "[ModifyPanel] saveAll: snapshot failed for rule", e);
+                snapshotList.add(null);
             }
         }
         // 回收临时缓存的位图（mPendingModBitmaps），它们已通过 writeRule 写入文件，
@@ -577,9 +582,18 @@ public class PropertyEditorPanel {
         TaskExecutor.executeIo(() -> {
             boolean allOk = true;
             List<String> failedRules = new ArrayList<>();
-            for (RuleRecord rule : rulesToSave) {
-                Bitmap snapshot = snapshots.get(rule);
+            for (int i = 0; i < rulesToSave.size(); i++) {
+                RuleRecord rule = rulesToSave.get(i);
+                Bitmap snapshot = snapshotList.get(i);
                 try {
+                    // 兜底检查：若 bitmap 已被回收（极高概率来自 RenderThread/GC 竞争），跳过写入
+                    if (snapshot != null && snapshot.isRecycled()) {
+                        Logger.w(TAG, "[ModifyPanel] saveAll: snapshot already recycled, skipping writeRule for "
+                                + rule.activityClass + "#" + rule.viewClass);
+                        allOk = false;
+                        failedRules.add(rule.activityClass + "#" + rule.viewClass);
+                        continue;
+                    }
                     if (!mRuleEditor.writeRule(pkg, rule, snapshot)) {
                         allOk = false;
                         failedRules.add(rule.activityClass + "#" + rule.viewClass);
