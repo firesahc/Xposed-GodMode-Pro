@@ -24,6 +24,7 @@ import com.kaisar.xposed.godmode.engine.matcher.ViewTraversal;
 import com.kaisar.xposed.godmode.engine.rule.ActionSpec;
 import com.kaisar.xposed.godmode.engine.rule.RuleMapper;
 import com.kaisar.xposed.godmode.engine.util.Logger;
+import com.kaisar.xposed.godmode.inject.ModuleBootstrap;
 import com.kaisar.xposed.godmode.util.ModuleResources;
 import com.kaisar.xposed.godmode.editor.IRuleEditor;
 import com.kaisar.xposed.godmode.rule.RuleRecordFactory;
@@ -455,7 +456,7 @@ public class PropertyEditorPanel {
         if (spec == null) {
             // 第一次修改：创建 mOriginalRule（结构字段）和 ActionSpec（修改字段）
             if (mOriginalRule == null) {
-                mOriginalRule = RuleRecordFactory.makeModifyRule(view, mSnapshot);
+                mOriginalRule = RuleRecordFactory.makeModifyRule(view, mSnapshot, ModuleBootstrap.getEditorOrchestrator().isInfoFlowMode());
             }
             spec = mOriginalRule.asActionSpec();
             mTempModifications.put(viewKey, spec);
@@ -654,7 +655,7 @@ public class PropertyEditorPanel {
                                     ActionSpec spec = mTempModifications.get(viewKey);
                                     if (spec == null) {
                                         if (mOriginalRule == null) {
-                                            mOriginalRule = RuleRecordFactory.makeModifyRule(targetView, mSnapshot);
+                                            mOriginalRule = RuleRecordFactory.makeModifyRule(targetView, mSnapshot, ModuleBootstrap.getEditorOrchestrator().isInfoFlowMode());
                                         }
                                         spec = mOriginalRule.asActionSpec();
                                         mTempModifications.put(viewKey, spec);

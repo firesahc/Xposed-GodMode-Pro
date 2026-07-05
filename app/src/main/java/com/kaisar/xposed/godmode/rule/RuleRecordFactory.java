@@ -15,7 +15,7 @@ import com.kaisar.xposed.godmode.BuildConfig;
 import com.kaisar.xposed.godmode.engine.matcher.TargetLevel;
 import com.kaisar.xposed.godmode.engine.matcher.ViewTraversal;
 import com.kaisar.xposed.godmode.engine.util.Logger;
-import com.kaisar.xposed.godmode.inject.ModuleBootstrap;
+
 import com.kaisar.xposed.godmode.util.ViewUtils;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 
@@ -36,10 +36,11 @@ public final class RuleRecordFactory {
      * 从视图创建屏蔽规则（通用）。
      *
      * @param v 目标视图
+     * @param isInfoFlowMode 是否为信息流模式（由调用方通过 EditorOrchestrator.isInfoFlowMode() 传入）
      * @return 构造完成的 RuleRecord
      * @throws PackageManager.NameNotFoundException 无法获取包信息时抛出
      */
-    static RuleRecord makeRule(View v) throws PackageManager.NameNotFoundException {
+    static RuleRecord makeRule(View v, boolean isInfoFlowMode) throws PackageManager.NameNotFoundException {
         Activity activity = ViewUtils.getAttachedActivityFromView(v);
         Objects.requireNonNull(activity, "Can't found attached activity");
         int[] out = new int[2];
@@ -75,7 +76,7 @@ public final class RuleRecordFactory {
                 x, y, width, height, viewHierarchyDepth,
                 activityClassName, viewClassName, resourceName, text, description,
                 View.INVISIBLE, System.currentTimeMillis());
-        populateRepeatableInfo(v, rule, ModuleBootstrap.getEditorOrchestrator().isInfoFlowMode());
+        populateRepeatableInfo(v, rule, isInfoFlowMode);
         return rule;
     }
 
@@ -83,11 +84,12 @@ public final class RuleRecordFactory {
      * 创建移除规则（ruleTag 留空以兼容旧 JSON 格式）。
      *
      * @param v 目标视图
+     * @param isInfoFlowMode 是否为信息流模式（由调用方通过 EditorOrchestrator.isInfoFlowMode() 传入）
      * @return 构造完成的 RuleRecord
      * @throws PackageManager.NameNotFoundException 无法获取包信息时抛出
      */
-    public static RuleRecord makeRemoveRule(View v) throws PackageManager.NameNotFoundException {
-        return makeRule(v);
+    public static RuleRecord makeRemoveRule(View v, boolean isInfoFlowMode) throws PackageManager.NameNotFoundException {
+        return makeRule(v, isInfoFlowMode);
     }
 
     /**
@@ -102,9 +104,9 @@ public final class RuleRecordFactory {
      * @param snapshot 视图未修改时预先捕获的原始状态快照
      * @return 构造完成的 RuleRecord（ruleTag="modify"），所有原始数据正确
      */
-    public static RuleRecord makeModifyRule(View view, ViewSnapshot snapshot) {
+    public static RuleRecord makeModifyRule(View view, ViewSnapshot snapshot, boolean isInfoFlowMode) {
         try {
-            RuleRecord rule = makeRule(view);
+            RuleRecord rule = makeRule(view, isInfoFlowMode);
             rule.ruleTag = "modify";
 
             // 匹配字段：来自快照（原始值），非视图当前（可能被修改）值

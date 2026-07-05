@@ -4,6 +4,7 @@ import android.graphics.Rect;
 import android.view.View;
 
 import com.kaisar.xposed.godmode.engine.util.Logger;
+import com.kaisar.xposed.godmode.inject.ModuleBootstrap;
 import com.kaisar.xposed.godmode.runtime.ViewController;
 import com.kaisar.xposed.godmode.rule.RuleRecordFactory;
 import com.kaisar.xposed.godmode.editor.overlay.MaskView;
@@ -42,7 +43,7 @@ public final class PreviewHandler {
     public void startPreview(View view, MaskView maskView, Runnable onStateChanged) {
         if (view == null) return;
         try {
-            mPreviewRule = RuleRecordFactory.makeRemoveRule(view);
+            mPreviewRule = RuleRecordFactory.makeRemoveRule(view, ModuleBootstrap.getEditorOrchestrator().isInfoFlowMode());
             mPreviewRule.visibility = View.GONE;
             ViewController.getDefault().applyRule(view, mPreviewRule);
             mPreviewView = view;

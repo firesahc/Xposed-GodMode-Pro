@@ -7,6 +7,7 @@ import android.view.ViewGroup;
 
 import com.kaisar.xposed.godmode.engine.util.CommonUtils;
 import com.kaisar.xposed.godmode.editor.IRuleEditor;
+import com.kaisar.xposed.godmode.inject.ModuleBootstrap;
 import com.kaisar.xposed.godmode.util.BitmapUtils;
 import com.kaisar.xposed.godmode.util.TaskExecutor;
 import com.kaisar.xposed.godmode.util.ViewUtils;
@@ -90,7 +91,7 @@ public final class ModifyGestureHandler {
 
         if (deltaX != 0 || deltaY != 0) {
             // 主线程：创建规则 + 截图（View.draw 必须在主线程）
-            RuleRecord rule = RuleRecordFactory.makeModifyRule(state.dragTarget, state.snapshot);
+            RuleRecord rule = RuleRecordFactory.makeModifyRule(state.dragTarget, state.snapshot, ModuleBootstrap.getEditorOrchestrator().isInfoFlowMode());
             rule.modXOffset = deltaX;
             rule.modYOffset = deltaY;
             Bitmap snapshot = BitmapUtils.snapshotView(

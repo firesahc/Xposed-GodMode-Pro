@@ -7,6 +7,7 @@ import android.view.ViewGroup;
 
 import com.kaisar.xposed.godmode.editor.IRuleEditor;
 import com.kaisar.xposed.godmode.engine.util.Logger;
+import com.kaisar.xposed.godmode.inject.ModuleBootstrap;
 import com.kaisar.xposed.godmode.runtime.ViewController;
 import com.kaisar.xposed.godmode.rule.RuleRecordFactory;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
@@ -46,7 +47,7 @@ public final class BlockHandler {
             final IRuleEditor ruleEditor) {
         Logger.i(TAG, "execute: blocking " + view + " in " + activity.getPackageName());
         try {
-            final RuleRecord viewRule = RuleRecordFactory.makeRemoveRule(view);
+            final RuleRecord viewRule = RuleRecordFactory.makeRemoveRule(view, ModuleBootstrap.getEditorOrchestrator().isInfoFlowMode());
             ParticleEffectHelper.execute(activity, view, container, viewRule, snapshot,
                     activity.getPackageName(), /* maskView */ null,
                     ruleEditor, /* onComplete */ () -> {
