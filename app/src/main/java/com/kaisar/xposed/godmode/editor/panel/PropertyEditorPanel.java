@@ -560,7 +560,7 @@ public class PropertyEditorPanel {
                 }
                 if (view != null) {
                     Bitmap snapshot = BitmapUtils.snapshotView(ViewUtils.findTopParentViewByChildView(view));
-                    BitmapUtils.drawRuleMask(snapshot, rule);
+                    BitmapUtils.drawRectMask(snapshot, rule.x, rule.y, rule.width, rule.height);
                     snapshots.put(rule, snapshot);
                 }
             } catch (Exception e) {

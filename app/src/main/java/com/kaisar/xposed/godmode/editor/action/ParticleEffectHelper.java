@@ -64,7 +64,7 @@ public final class ParticleEffectHelper {
                     viewRule.visibility = View.GONE;
                     ViewController.getDefault().applyRule(targetView, viewRule);
                     if (snapshot != null) {
-                        BitmapUtils.drawRuleMask(snapshot, viewRule);
+                        BitmapUtils.drawRectMask(snapshot, viewRule.x, viewRule.y, viewRule.width, viewRule.height);
                     }
                 } catch (Exception e) {
                     Logger.e(TAG, "applyRule/drawRuleMask on animation start fail", e);

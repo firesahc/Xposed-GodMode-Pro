@@ -7,7 +7,7 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.view.View;
 
-import com.kaisar.xposed.godmode.rule.RuleRecord;
+
 
 /**
  * 位图操作工具 — 视图截图、规则遮罩绘制、调试边框绘制。
@@ -34,18 +34,21 @@ public final class BitmapUtils {
     }
 
     /**
-     * 在截图上绘制红色半透明遮罩标记规则命中区域。
+     * 在截图上绘制红色半透明遮罩标记区域。
      *
      * @param bitmap 截图
-     * @param rule   视图规则（提供 x/y/width/height）
+     * @param x      区域左上角 x
+     * @param y      区域左上角 y
+     * @param w      区域宽度
+     * @param h      区域高度
      */
-    public static void drawRuleMask(Bitmap bitmap, RuleRecord rule) {
-        if (bitmap == null || rule == null) return;
+    public static void drawRectMask(Bitmap bitmap, int x, int y, int w, int h) {
+        if (bitmap == null) return;
         Paint markPaint = new Paint();
         markPaint.setColor(Color.RED);
         markPaint.setAlpha(100);
         Canvas canvas = new Canvas(bitmap);
-        canvas.drawRect(rule.x, rule.y, rule.x + rule.width, rule.y + rule.height, markPaint);
+        canvas.drawRect(x, y, x + w, y + h, markPaint);
     }
 
     /**

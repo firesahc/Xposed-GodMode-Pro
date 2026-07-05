@@ -95,7 +95,7 @@ public final class ModifyGestureHandler {
             rule.modYOffset = deltaY;
             Bitmap snapshot = BitmapUtils.snapshotView(
                     ViewUtils.findTopParentViewByChildView(state.dragTarget));
-            BitmapUtils.drawRuleMask(snapshot, rule);
+            BitmapUtils.drawRectMask(snapshot, rule.x, rule.y, rule.width, rule.height);
 
             // IO 线程：仅 IPC 写入（参照 PropertyEditorPanel.saveAll 的 TaskExecutor.executeIo 模式）
             final RuleRecord finalRule = rule;
