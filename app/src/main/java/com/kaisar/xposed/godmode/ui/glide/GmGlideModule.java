@@ -1,4 +1,4 @@
-package com.kaisar.xposed.godmode.util;
+package com.kaisar.xposed.godmode.ui.glide;
 
 import static com.kaisar.xposed.godmode.engine.util.CommonUtils.recycleNullableBitmap;
 
