@@ -15,8 +15,8 @@ import java.util.Map;
 /**
  * 版本化规则快照 — 包装规则集合加上元数据，使快照可追溯、可校验。
  * <p>
- * 用于 {@code data/RuleSnapshotStore} 的原子文件写入/读取，
- * 以及 {@code runtime/RuleManager} 在 Binder 断连时的降级读取。
+ * 此类型当前保留作为规则集合的通用包装结构，
+ * 文件快照链路（data/ 包）已移除，不再作为 Binder 降级数据源。
  * <p>
  * 不可变对象 — 通过 {@link Builder} 构建。
  * <p>
@@ -70,7 +70,7 @@ public final class RuleSnapshot {
      * <p>
      * 实际类型为 {@code Map<String, List<Map<String, Object>>>}，
      * 但出于引擎层类型安全声明为 {@code Map<String, ?>}。
-     * 消费方（data/RuleSnapshotStore、runtime/RuleManager）在读取时自行转型。
+     * 消费方在读取时自行转型。
      */
     public final Map<String, ?> payload;
 

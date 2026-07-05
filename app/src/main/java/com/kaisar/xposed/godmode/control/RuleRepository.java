@@ -44,6 +44,9 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * </ul>
  * <p>
  * 写操作异步执行（HandlerThread），读操作同步返回。
+ * <p>
+ * 规则发布走 Binder 即时推送（{@link ObserverRegistry#notifyObserverRuleChanged}），
+ * 不再依赖文件快照链路。
  */
 public final class RuleRepository {
 
@@ -60,7 +63,7 @@ public final class RuleRepository {
 
     private final RuleCache mCache;
     private final RuleStore mStore;
-    private final SnapshotPublisher mPublisher;
+    private final ObserverRegistry mObserverRegistry;
     private final Gson mGson;
     private final Logger mLogger;
 
@@ -72,19 +75,16 @@ public final class RuleRepository {
     // ===== 构造 =====
 
     public RuleRepository(Gson gson, Logger logger,
-                          ObserverRegistry observerRegistry,
-                          com.kaisar.xposed.godmode.data.RuleSnapshotStore snapshotStore,
-                          com.kaisar.xposed.godmode.data.SignalStore signalStore) {
+                          ObserverRegistry observerRegistry) {
         this.mGson = gson;
         this.mLogger = logger;
+        this.mObserverRegistry = observerRegistry;
         this.mCache = new RuleCache(gson, logger);
 
         mWorkThread = new HandlerThread("rule-repository");
         mWorkThread.start();
         mHandle = new Handler(mWorkThread.getLooper(), this::handleMessage);
         this.mStore = new RuleStore(gson, logger, mCache, mHandle);
-
-        this.mPublisher = new SnapshotPublisher(observerRegistry, snapshotStore, signalStore);
     }
 
     // ===== 读操作 =====
@@ -228,7 +228,6 @@ public final class RuleRepository {
         mStore.flushPendingWrites();
         mHandle.removeCallbacksAndMessages(null);
         mWorkThread.quitSafely();
-        mPublisher.shutdown();
     }
 
     // ===== 图片/文件工具 =====
@@ -301,8 +300,8 @@ public final class RuleRepository {
             try {
                 m.viewRule.imagePath = newImagePath;
                 RuleCache.CacheResult cr = mCache.apply(m.packageName, m.viewRule, false);
-                // 双通道发布
-                mPublisher.publish(m.packageName, cr.snapshotRules, cr.generation);
+                // Binder 即时推送
+                mObserverRegistry.notifyObserverRuleChanged(m.packageName, cr.snapshotRules);
                 // 持久化
                 mStore.persistAsync(m.packageName, cr.json);
                 // 清理旧图
@@ -316,7 +315,7 @@ public final class RuleRepository {
         } else {
             // ── JSON 分支：缓存已更新，只持久化 + 发布 ──
             try {
-                mPublisher.publish(m.packageName, m.snapshotRules, m.generation);
+                mObserverRegistry.notifyObserverRuleChanged(m.packageName, m.snapshotRules);
                 mStore.persistAsync(m.packageName, m.json);
                 scheduleOrphanCleanup();
             } catch (Exception e) {
@@ -327,7 +326,7 @@ public final class RuleRepository {
 
     private void handleDelete(DeleteMessage m) {
         try {
-            mPublisher.publish(m.packageName, m.snapshotRules, m.generation);
+            mObserverRegistry.notifyObserverRuleChanged(m.packageName, m.snapshotRules);
             mStore.persistAsync(m.packageName, m.json);
             if (m.imagePath != null && !m.imagePath.isEmpty()) {
                 FileUtils.delete(m.imagePath);
@@ -341,7 +340,7 @@ public final class RuleRepository {
     private void handleDeleteAll(String packageName) {
         try {
             FileUtils.delete(mStore.getAppDataDir(packageName));
-            mPublisher.publish(packageName, new ActRules(), mCache.nextGeneration());
+            mObserverRegistry.notifyObserverRuleChanged(packageName, new ActRules());
         } catch (Exception e) {
             mLogger.w("delete all rules failed for " + packageName, e);
         }

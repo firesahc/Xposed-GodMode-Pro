@@ -100,21 +100,6 @@ public final class RuleDiff {
         return computeInternal(oldRules, newRules, identityBridge, contentBridge);
     }
 
-    /**
-     * 检查快照是否与当前缓存有差异。
-     * <p>
-     * 用于 {@code runtime/RuleManager.refreshFromSnapshot()} 判断是否需要触发规则变更。
-     *
-     * @param currentCache 当前规则缓存（可为 null）
-     * @param snapshot     文件快照
-     * @return true 如果快照的 generation 更新或 payload 不同
-     */
-    public static boolean hasChanged(Map<String, ?> currentCache, RuleSnapshot snapshot) {
-        if (currentCache == null) return true;
-        if (snapshot == null || snapshot.payload == null) return false;
-        return !currentCache.equals(snapshot.payload);
-    }
-
     // ===== 内部实现 =====
 
     /**

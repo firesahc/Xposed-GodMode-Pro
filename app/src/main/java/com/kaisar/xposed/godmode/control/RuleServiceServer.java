@@ -25,8 +25,6 @@ import java.io.FileNotFoundException;
  * <p>
  * 运行在 XServiceManager 注入的 SystemServer 进程中。
  * 内部持有 {@link RuleRepository}、{@link ObserverRegistry}、{@link ModuleLifecycle} 等核心组件。
- * <p>
- * 从 {@code service/} 移入 control/ 包，使用 RuleRepository 统一承接规则控制面职责。
  */
 public final class RuleServiceServer extends IGodModeManager.Stub {
 
@@ -62,17 +60,14 @@ public final class RuleServiceServer extends IGodModeManager.Stub {
 
         // 创建模块生命周期
         mLifecycle = new ModuleLifecycle(
-                ModuleLifecycle.Layer.CONTROL,
-                ModuleLifecycle.Layer.DATA);
+                ModuleLifecycle.Layer.CONTROL);
         mLifecycle.transition(ModuleLifecycle.State.LOADING);
 
         // 创建规则仓库
         mRepository = new RuleRepository(
                 mGson,
                 Logger.getLogger("RuleRepository"),
-                mObserverRegistry,
-                com.kaisar.xposed.godmode.data.RuleSnapshotStore.getDefault(),
-                com.kaisar.xposed.godmode.data.SignalStore.getDefault()
+                mObserverRegistry
         );
 
         // 将 system_server 自身日志也汇入统一日志文件 godmodepro.log
@@ -82,17 +77,14 @@ public final class RuleServiceServer extends IGodModeManager.Stub {
 
         // 加载数据；完成后再标记控制面健康
         mRepository.loadAll(
-                () -> {
-                    mLifecycle.markHealthy(ModuleLifecycle.Layer.DATA);
-                    mLifecycle.markHealthy(ModuleLifecycle.Layer.CONTROL);
-                },
-                () -> mLifecycle.markError(ModuleLifecycle.Layer.DATA, "load rules failed"));
+                () -> mLifecycle.markHealthy(ModuleLifecycle.Layer.CONTROL),
+                () -> mLifecycle.markError(ModuleLifecycle.Layer.CONTROL, "load rules failed"));
 
         // 加载工具栏偏好
         mToolbarHiddenItems = mRepository.loadToolbarHiddenItems();
 
         mStarted = true;
-        mLogger.i("GMMService started, loading rules from /data/misc/godmode");
+        mLogger.i("GMMService started, loading rules from persistent storage");
     }
 
     // ===================================================================
