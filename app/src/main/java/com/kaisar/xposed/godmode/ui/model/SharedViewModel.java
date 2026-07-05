@@ -17,7 +17,7 @@ import com.kaisar.xposed.godmode.ipc.RuleServiceClient;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.AppRules;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
-import com.kaisar.xposed.godmode.util.BackupUtils;
+import com.kaisar.xposed.godmode.control.RuleBackupManager;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -110,10 +110,10 @@ public class SharedViewModel extends ViewModel {
         TaskExecutor.executeIo(() -> {
             try {
                 Logger.i(TAG, "[ViewModel] restoreRules: start, uri=" + uri);
-                int count = BackupUtils.restoreRules(uri);
+                int count = RuleBackupManager.restoreRules(uri);
                 Logger.i(TAG, "[ViewModel] restoreRules: success, count=" + count);
                 mMainHandler.post(() -> callback.onSuccess(count));
-            } catch (BackupUtils.RestoreException e) {
+            } catch (RuleBackupManager.RestoreException e) {
                 Logger.w(TAG, "[ViewModel] restoreRules: failed", e);
                 mMainHandler.post(() -> callback.onFailure(e));
             }
@@ -124,10 +124,10 @@ public class SharedViewModel extends ViewModel {
         TaskExecutor.executeIo(() -> {
             try {
                 Logger.i(TAG, "[ViewModel] backupRules: start, package=" + packageName + ", ruleCount=" + viewRules.size());
-                BackupUtils.backupRules(uri, packageName, viewRules);
+                RuleBackupManager.backupRules(uri, packageName, viewRules);
                 Logger.i(TAG, "[ViewModel] backupRules: success, package=" + packageName);
                 mMainHandler.post(() -> callback.onSuccess(viewRules.size()));
-            } catch (BackupUtils.BackupException e) {
+            } catch (RuleBackupManager.BackupException e) {
                 Logger.w(TAG, "[ViewModel] backupRules: failed, package=" + packageName, e);
                 mMainHandler.post(() -> callback.onFailure(e));
             }

@@ -1,5 +1,4 @@
-
-package com.kaisar.xposed.godmode.util;
+package com.kaisar.xposed.godmode.control;
 
 import static com.kaisar.xposed.godmode.engine.util.CommonUtils.recycleNullableBitmap;
 
@@ -32,15 +31,19 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Rule backup util
+ * 规则备份/恢复管理器 — 将规则及其关联图片导出为 ZIP 压缩包，或从 ZIP 导入恢复。
+ * <p>
+ * 从 {@code util/BackupUtils} 迁入 control/ 层，职责不变。
+ * 依赖 {@link RuleServiceClient} 跨进程读写规则和图片，
+ * 依赖 {@link RuleRecord} 序列化/反序列化规则数据。
  */
-public final class BackupUtils {
+public final class RuleBackupManager {
 
-    private static final String TAG = "BackupUtils";
+    private static final String TAG = "RuleBackupManager";
     private static final int VERSION = 1;
     private static final String MANIFEST_FILE = "manifest.json";
 
-    private BackupUtils() {
+    private RuleBackupManager() {
     }
 
     public static class BackupException extends Exception {
