@@ -34,6 +34,8 @@ import java.util.List;
 
 public final class RuleRecordDetailsContainerFragment extends Fragment {
 
+    private static final String STATE_CUR_INDEX = "current_rule_index";
+
     private int mCurIndex;
 
     private ViewPager2 mViewPager;
@@ -46,7 +48,9 @@ public final class RuleRecordDetailsContainerFragment extends Fragment {
         super.onCreate(savedInstanceState);
         setHasOptionsMenu(true);
         RuleRecordDetailsContainerFragmentArgs args = RuleRecordDetailsContainerFragmentArgs.fromBundle(requireArguments());
-        mCurIndex = args.getCurIndex();
+        mCurIndex = savedInstanceState != null
+                ? savedInstanceState.getInt(STATE_CUR_INDEX, args.getCurIndex())
+                : args.getCurIndex();
         mSharedViewModel = new ViewModelProvider(requireActivity()).get(SharedViewModel.class);
         mBackupLauncher = registerForActivityResult(new ActivityResultContracts.CreateDocument(), this::onBackupFileSelected);
     }
@@ -91,8 +95,25 @@ public final class RuleRecordDetailsContainerFragment extends Fragment {
         mViewPager.setAdapter(detailFragmentStateAdapter);
         mViewPager.registerOnPageChangeCallback(mCallback);
         int safeIndex = Math.min(mCurIndex, Math.max(0, detailFragmentStateAdapter.getItemCount() - 1));
+        mCurIndex = safeIndex;
         mViewPager.setCurrentItem(safeIndex, false);
         return mViewPager;
+    }
+
+    @Override
+    public void onSaveInstanceState(@NonNull Bundle outState) {
+        outState.putInt(STATE_CUR_INDEX, mCurIndex);
+        super.onSaveInstanceState(outState);
+    }
+
+    @Override
+    public void onDestroyView() {
+        if (mViewPager != null) {
+            mViewPager.unregisterOnPageChangeCallback(mCallback);
+            mViewPager.setAdapter(null);
+            mViewPager = null;
+        }
+        super.onDestroyView();
     }
 
     @Override
@@ -177,16 +198,14 @@ public final class RuleRecordDetailsContainerFragment extends Fragment {
 
         public void setData(List<RuleRecord> data) {
             mData.clear();
-            mData.addAll(data);
+            if (data != null) mData.addAll(data);
         }
 
         @NonNull
         @Override
         public Fragment createFragment(int position) {
             RuleRecord viewRule = mData.get(position);
-            RuleRecordDetailsFragment fragment = new RuleRecordDetailsFragment();
-            fragment.setRuleRecord(viewRule);
-            return fragment;
+            return RuleRecordDetailsFragment.newInstance(viewRule);
         }
 
         @Override

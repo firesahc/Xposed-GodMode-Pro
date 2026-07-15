@@ -47,6 +47,7 @@ import java.util.Objects;
 public final class RuleRecordDetailsFragment extends PreferenceFragmentCompat implements Preference.OnPreferenceChangeListener {
 
     private static final String TAG = "RuleRecordDetailsFragment";
+    private static final String ARG_RULE_RECORD = "rule_record";
 
     private RuleRecord mRuleRecord;
 
@@ -58,16 +59,23 @@ public final class RuleRecordDetailsFragment extends PreferenceFragmentCompat im
     private long mImageLoadGeneration;
     private boolean mNeedsImageReload;
 
-    public void setRuleRecord(RuleRecord viewRule) {
-        mRuleRecord = viewRule;
+    static RuleRecordDetailsFragment newInstance(@NonNull RuleRecord ruleRecord) {
+        RuleRecordDetailsFragment fragment = new RuleRecordDetailsFragment();
+        Bundle arguments = new Bundle();
+        arguments.putParcelable(ARG_RULE_RECORD, ruleRecord);
+        fragment.setArguments(arguments);
+        return fragment;
     }
-    
+
     @Override
+    @SuppressWarnings("deprecation")
     public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
+        mRuleRecord = requireArguments().getParcelable(ARG_RULE_RECORD);
+        Objects.requireNonNull(mRuleRecord, "ruleRecord should not be null.");
         addPreferencesFromResource(R.xml.pref_rule_details);
 
         mSharedViewModel = new ViewModelProvider(requireActivity()).get(SharedViewModel.class);
-        String packageName = mSharedViewModel.selectedPackage.getValue();
+        String packageName = mRuleRecord.packageName;
         Objects.requireNonNull(packageName, "packageName should not be null.");
         Drawable icon = ResourcesCompat.getDrawable(getResources(), R.mipmap.ic_god, requireContext().getTheme());
         String label = packageName;

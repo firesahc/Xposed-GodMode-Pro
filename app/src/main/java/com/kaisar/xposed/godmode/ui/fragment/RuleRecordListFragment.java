@@ -34,6 +34,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.bumptech.glide.Glide;
+import com.bumptech.glide.RequestManager;
 import com.google.android.material.snackbar.Snackbar;
 import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.engine.util.Logger;
@@ -66,6 +67,7 @@ public final class RuleRecordListFragment extends Fragment {
     private Drawable mIcon;
     private String mPackageName;
     private RecyclerView mRecyclerView;
+    private RequestManager mImageRequests;
     private SharedViewModel mSharedViewModel;
     private ActivityResultLauncher<String> mBackupLauncher;
     private List<RuleRecord> mAllRules = new ArrayList<>();
@@ -95,6 +97,8 @@ public final class RuleRecordListFragment extends Fragment {
 
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
+        super.onViewCreated(view, savedInstanceState);
+        mImageRequests = Glide.with(this);
         RecyclerView recyclerView = (RecyclerView) view;
         ListAdapter adapter = (ListAdapter) recyclerView.getAdapter();
         if (adapter == null) {
@@ -196,6 +200,7 @@ public final class RuleRecordListFragment extends Fragment {
             mRecyclerView.setAdapter(null);
             mRecyclerView = null;
         }
+        mImageRequests = null;
         super.onDestroyView();
     }
 
@@ -267,13 +272,18 @@ public final class RuleRecordListFragment extends Fragment {
         }
 
         private void bindItem(ViewHolder holder, RuleRecord rule) {
-            Glide.with(holder.imageView).clear(holder.imageView);
+            RequestManager imageRequests = mImageRequests;
+            if (imageRequests != null) {
+                imageRequests.clear(holder.imageView);
+            }
             holder.imageView.setImageDrawable(mIcon);
             if (rule.isRemoveRule()) {
-                Glide.with(RuleRecordListFragment.this).load(rule)
-                        .placeholder(mIcon).error(mIcon)
-                        .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.NONE)
-                        .into(holder.imageView);
+                if (imageRequests != null) {
+                    imageRequests.load(rule)
+                            .placeholder(mIcon).error(mIcon)
+                            .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.NONE)
+                            .into(holder.imageView);
+                }
                 bindTitle(holder, rule.activityClass, R.string.rule_type_remove);
                 SpannableStringBuilder summaryBuilder = new SpannableStringBuilder();
                 if (!TextUtils.isEmpty(rule.alias)) {
@@ -285,8 +295,8 @@ public final class RuleRecordListFragment extends Fragment {
                 holder.summaryView.setText(summaryBuilder);
                 if (rule.isRepeatable()) appendRepeatableBadge(holder);
             } else {
-                if (!TextUtils.isEmpty(rule.imagePath)) {
-                    Glide.with(RuleRecordListFragment.this).load(rule)
+                if (!TextUtils.isEmpty(rule.imagePath) && imageRequests != null) {
+                    imageRequests.load(rule)
                             .placeholder(mIcon).error(mIcon)
                             .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.NONE)
                             .into(holder.imageView);
@@ -343,7 +353,10 @@ public final class RuleRecordListFragment extends Fragment {
 
         @Override
         public void onViewRecycled(@NonNull ViewHolder holder) {
-            Glide.with(holder.imageView).clear(holder.imageView);
+            RequestManager imageRequests = mImageRequests;
+            if (imageRequests != null) {
+                imageRequests.clear(holder.imageView);
+            }
             holder.imageView.setImageDrawable(mIcon);
             super.onViewRecycled(holder);
         }
