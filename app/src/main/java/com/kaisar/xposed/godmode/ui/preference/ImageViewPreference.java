@@ -68,4 +68,13 @@ public final class ImageViewPreference extends androidx.preference.Preference {
         notifyChanged();
     }
 
+    public void clearBitmapReference() {
+        mBitmap = null;
+        mPlaceholderHeight = -1;
+    }
+
+    public boolean hasBitmapReference() {
+        return mBitmap != null;
+    }
+
 }

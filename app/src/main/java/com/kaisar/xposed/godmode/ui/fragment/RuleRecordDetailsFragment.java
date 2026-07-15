@@ -11,6 +11,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.ParcelFileDescriptor;
 import android.text.TextUtils;
+import android.view.View;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -31,6 +32,7 @@ import com.kaisar.xposed.godmode.ui.model.SharedViewModel;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 
 
+import java.lang.ref.WeakReference;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -53,6 +55,8 @@ public final class RuleRecordDetailsFragment extends PreferenceFragmentCompat im
     private DropDownPreference mVisiblePreference;
     private ImageViewPreference mImagePreference;
     private Handler mHandler;
+    private long mImageLoadGeneration;
+    private boolean mNeedsImageReload;
 
     public void setRuleRecord(RuleRecord viewRule) {
         mRuleRecord = viewRule;
@@ -226,23 +230,41 @@ public final class RuleRecordDetailsFragment extends PreferenceFragmentCompat im
     }
 
     private void loadRuleImage() {
+        mNeedsImageReload = false;
         if (mHandler == null) {
             mHandler = new Handler(Looper.getMainLooper());
         }
+        final Handler handler = mHandler;
+        final long generation = ++mImageLoadGeneration;
+        final RuleRecord ruleRecord = mRuleRecord;
+        final WeakReference<RuleRecordDetailsFragment> fragmentRef =
+                new WeakReference<>(this);
+        int screenWidth = getResources().getDisplayMetrics().widthPixels;
+        int marginPx = (int) (20 * getResources().getDisplayMetrics().density);
+        final int availableWidth = screenWidth - marginPx;
         TaskExecutor.executeImageLoad(() -> {
-            if (!isAdded()) return;
-            Bitmap bitmap = loadRuleImageBitmap(mRuleRecord);
+            Bitmap bitmap = loadRuleImageBitmap(ruleRecord);
             if (bitmap == null) return;
-            int screenWidth = getResources().getDisplayMetrics().widthPixels;
-            int marginPx = (int) (20 * getResources().getDisplayMetrics().density);
-            int availableWidth = screenWidth - marginPx;
             int fixedHeight = (int) ((float) availableWidth * bitmap.getHeight() / bitmap.getWidth());
-            mHandler.post(() -> {
-                if (isAdded()) {
-                    mImagePreference.displayBitmap(bitmap, Math.max(fixedHeight, 1));
+            Runnable delivery = () -> {
+                RuleRecordDetailsFragment fragment = fragmentRef.get();
+                if (fragment == null || generation != fragment.mImageLoadGeneration
+                        || fragment.mImagePreference == null) {
+                    recycleUndeliveredBitmap(bitmap);
+                    return;
                 }
-            });
+                fragment.mImagePreference.displayBitmap(bitmap, Math.max(fixedHeight, 1));
+            };
+            if (!handler.post(delivery)) {
+                recycleUndeliveredBitmap(bitmap);
+            }
         });
+    }
+
+    private static void recycleUndeliveredBitmap(@NonNull Bitmap bitmap) {
+        if (!bitmap.isRecycled()) {
+            bitmap.recycle();
+        }
     }
 
     @Nullable
@@ -260,6 +282,35 @@ public final class RuleRecordDetailsFragment extends PreferenceFragmentCompat im
             Logger.w(TAG, "[RuleRecordDetails] " + e.getMessage());
             return null;
         }
+    }
+
+    @Override
+    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
+        super.onViewCreated(view, savedInstanceState);
+        if (mNeedsImageReload && mImagePreference != null
+                && !TextUtils.isEmpty(mRuleRecord.imagePath)) {
+            reserveImagePlaceholder();
+            loadRuleImage();
+        }
+    }
+
+    @Override
+    public void onDestroyView() {
+        ++mImageLoadGeneration;
+        mNeedsImageReload = mImagePreference != null
+                && !mImagePreference.hasBitmapReference()
+                && !TextUtils.isEmpty(mRuleRecord.imagePath);
+        super.onDestroyView();
+    }
+
+    @Override
+    public void onDestroy() {
+        ++mImageLoadGeneration;
+        if (mImagePreference != null) {
+            mImagePreference.clearBitmapReference();
+        }
+        mHandler = null;
+        super.onDestroy();
     }
 
     @Override
