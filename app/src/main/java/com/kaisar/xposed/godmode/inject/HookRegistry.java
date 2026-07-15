@@ -34,8 +34,8 @@ public final class HookRegistry {
      * <p>
      * 注册顺序保持与重构前一致：onResume → onCreate → hooks → observer
      */
-    public static void registerAll(XC_LoadPackage.LoadPackageParam lpp,
-                                   Property<Boolean> switchProp) {
+    public static synchronized void registerAll(XC_LoadPackage.LoadPackageParam lpp,
+                                                Property<Boolean> switchProp) {
         if (sHooksRegistered) {
             Logger.d(TAG, "hooks already registered, skipping");
             return;

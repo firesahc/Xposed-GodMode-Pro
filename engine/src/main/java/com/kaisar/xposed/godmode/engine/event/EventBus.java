@@ -49,7 +49,12 @@ public final class EventBus {
             Class<?> eventType = params[0];
             method.setAccessible(true);
             SubscriberRef ref = new SubscriberRef(subscriber, method);
-            mSubscribers.computeIfAbsent(eventType, k -> new CopyOnWriteArrayList<>()).add(ref);
+            CopyOnWriteArrayList<SubscriberRef> refs =
+                    mSubscribers.computeIfAbsent(eventType, k -> new CopyOnWriteArrayList<>());
+            refs.removeIf(existing -> existing.get() == null);
+            if (!containsSubscriber(refs, subscriber, method)) {
+                refs.add(ref);
+            }
         }
     }
 
@@ -105,5 +110,17 @@ public final class EventBus {
             super(referent);
             this.method = method;
         }
+    }
+
+    private static boolean containsSubscriber(List<SubscriberRef> refs,
+                                              Object subscriber,
+                                              Method method) {
+        for (SubscriberRef ref : refs) {
+            Object existing = ref.get();
+            if (existing == subscriber && ref.method.equals(method)) {
+                return true;
+            }
+        }
+        return false;
     }
 }

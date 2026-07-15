@@ -148,6 +148,9 @@ public final class RuleLifecycleManager implements RecyclerAdapterHook.Delegate 
         // 移除 OnGlobalLayoutListener
         OnLayoutChangeListener listener = mActivities.remove(activity);
         removeLayoutListener(activity, listener);
+        if (listener != null) {
+            listener.dispose();
+        }
 
         // 清理 Activity 级 ViewController 及其 Applier 缓存
         ViewController vc = mViewControllers.remove(activity);
@@ -351,7 +354,7 @@ public final class RuleLifecycleManager implements RecyclerAdapterHook.Delegate 
                     mPendingReapply.remove(activity);
                 }
                 OnLayoutChangeListener listener = mActivities.get(activity);
-                if (listener != null) {
+                if (listener != null && !listener.isDisposed()) {
                     listener.applyRuleIfMatchCondition();
                 }
             };
@@ -434,6 +437,7 @@ public final class RuleLifecycleManager implements RecyclerAdapterHook.Delegate 
 
         /** 同步守卫：同一调用链内防止重入 */
         private volatile boolean mApplying;
+        private volatile boolean mDisposed;
 
         /**
          * 异步守卫：规则应用修改 View 属性后触发 requestLayout → onGlobalLayout，
@@ -449,6 +453,7 @@ public final class RuleLifecycleManager implements RecyclerAdapterHook.Delegate 
 
         @Override
         public void onGlobalLayout() {
+            if (mDisposed) return;
             if (mApplying) return;
             if (mSelfTriggeredLayout) {
                 mSelfTriggeredLayout = false;
@@ -459,16 +464,22 @@ public final class RuleLifecycleManager implements RecyclerAdapterHook.Delegate 
 
         /** 任何规则应用路径（bindViewHolder / applyRuleBatch）调用后标记。 */
         void onRuleApplied() {
+            if (mDisposed) return;
             mSelfTriggeredLayout = true;
         }
 
         /** 条件满足时执行全树扫描 + 批量规则应用。 */
         void applyRuleIfMatchCondition() {
-            if (mApplying) return;
+            if (mDisposed || mApplying) return;
             mApplying = true;
             mSelfTriggeredLayout = true;
             try {
                 Activity activity = Preconditions.checkNotNull(activityReference.get());
+                if (mDisposed || activity.isFinishing()
+                        || mActivities.get(activity) != this) {
+                    resetGuards();
+                    return;
+                }
                 // 每次规则匹配周期前清空 RecyclerView 收集缓存，
                 // 防止 Fragment 切换后新增的 RecyclerView 被过时缓存遗漏
                 ViewController vc = getViewControllerFor(activity);
@@ -497,6 +508,16 @@ public final class RuleLifecycleManager implements RecyclerAdapterHook.Delegate 
         private void resetGuards() {
             mApplying = false;
             mSelfTriggeredLayout = false;
+        }
+
+        boolean isDisposed() {
+            return mDisposed;
+        }
+
+        void dispose() {
+            mDisposed = true;
+            activityReference.clear();
+            resetGuards();
         }
     }
 }
