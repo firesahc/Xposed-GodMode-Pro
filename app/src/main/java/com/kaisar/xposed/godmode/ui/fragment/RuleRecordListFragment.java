@@ -267,8 +267,13 @@ public final class RuleRecordListFragment extends Fragment {
         }
 
         private void bindItem(ViewHolder holder, RuleRecord rule) {
+            Glide.with(holder.imageView).clear(holder.imageView);
+            holder.imageView.setImageDrawable(mIcon);
             if (rule.isRemoveRule()) {
-                Glide.with(RuleRecordListFragment.this).load(rule).error(mIcon).diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.NONE).into(holder.imageView);
+                Glide.with(RuleRecordListFragment.this).load(rule)
+                        .placeholder(mIcon).error(mIcon)
+                        .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.NONE)
+                        .into(holder.imageView);
                 bindTitle(holder, rule.activityClass, R.string.rule_type_remove);
                 SpannableStringBuilder summaryBuilder = new SpannableStringBuilder();
                 if (!TextUtils.isEmpty(rule.alias)) {
@@ -281,9 +286,10 @@ public final class RuleRecordListFragment extends Fragment {
                 if (rule.isRepeatable()) appendRepeatableBadge(holder);
             } else {
                 if (!TextUtils.isEmpty(rule.imagePath)) {
-                    Glide.with(RuleRecordListFragment.this).load(rule).error(mIcon).diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.NONE).into(holder.imageView);
-                } else {
-                    holder.imageView.setImageDrawable(mIcon);
+                    Glide.with(RuleRecordListFragment.this).load(rule)
+                            .placeholder(mIcon).error(mIcon)
+                            .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.NONE)
+                            .into(holder.imageView);
                 }
                 bindTitle(holder, rule.activityClass, R.string.rule_type_modify);
                 SpannableStringBuilder summaryBuilder = new SpannableStringBuilder();
@@ -333,6 +339,13 @@ public final class RuleRecordListFragment extends Fragment {
                 holder.titleView.setText("[" + ruleType + "] " + getString(R.string.field_activity, activityName));
                 holder.titleView.setSingleLine();
             }
+        }
+
+        @Override
+        public void onViewRecycled(@NonNull ViewHolder holder) {
+            Glide.with(holder.imageView).clear(holder.imageView);
+            holder.imageView.setImageDrawable(mIcon);
+            super.onViewRecycled(holder);
         }
 
         @Override
