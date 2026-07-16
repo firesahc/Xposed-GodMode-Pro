@@ -259,7 +259,7 @@ public final class SettingsFragment extends PreferenceFragmentCompat implements
             Uri docUri = DocumentsContract.createDocument(
                     requireContext().getContentResolver(),
                     parentUri,
-                    "application/gzip",
+                    "application/zip",
                     filename
             );
             if (docUri == null) {

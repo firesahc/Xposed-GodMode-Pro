@@ -109,7 +109,7 @@ In modify mode, <b>long-press anywhere</b> to drag the <b>selected element</b>:<
 &#8226; Details page menu → backup single rule<br>
 &#8226; Filtered list backup → exports current category only<br>
 &#8226; &quot;All&quot; view export → all rules<br>
-&#8226; Settings menu → select .gz backup file to restore<br>
+&#8226; Settings menu → select .zip backup file to restore<br>
 <br><i>Backups include screenshots and images; rules take effect immediately after restore</i><br><br>
 
 <b>8. Notes</b><br>

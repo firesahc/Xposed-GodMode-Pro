@@ -20,7 +20,7 @@ public final class AppInfoHelper {
         PackageManager pm = context.getPackageManager();
         ApplicationInfo appInfo = pm.getApplicationInfo(packageName, 0);
         String label = appInfo.loadLabel(pm).toString();
-        return String.format(Locale.getDefault(), "%s_%s.gz", label, sdf.format(LocalDateTime.now()));
+        return String.format(Locale.getDefault(), "%s_%s.zip", label, sdf.format(LocalDateTime.now()));
     }
 
 }
