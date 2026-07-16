@@ -32,12 +32,8 @@ public final class RuleDiff {
     public final Map<String, List<?>> toApply;
 
     private RuleDiff(Map<String, List<?>> toRevoke, Map<String, List<?>> toApply) {
-        this.toRevoke = toRevoke != null
-                ? Collections.unmodifiableMap(new HashMap<>(toRevoke))
-                : Collections.emptyMap();
-        this.toApply = toApply != null
-                ? Collections.unmodifiableMap(new HashMap<>(toApply))
-                : Collections.emptyMap();
+        this.toRevoke = immutableRuleMap(toRevoke);
+        this.toApply = immutableRuleMap(toApply);
     }
 
     /**
@@ -256,6 +252,20 @@ public final class RuleDiff {
             if (list != null) count += list.size();
         }
         return count;
+    }
+
+    private static Map<String, List<?>> immutableRuleMap(Map<String, List<?>> source) {
+        if (source == null || source.isEmpty()) return Collections.emptyMap();
+        Map<String, List<?>> copy = new HashMap<>();
+        for (Map.Entry<String, List<?>> entry : source.entrySet()) {
+            List<?> value = entry.getValue();
+            if (value == null || value.isEmpty()) {
+                copy.put(entry.getKey(), Collections.emptyList());
+            } else {
+                copy.put(entry.getKey(), Collections.unmodifiableList(new ArrayList<>(value)));
+            }
+        }
+        return Collections.unmodifiableMap(copy);
     }
 
     // ===== 工具方法 =====

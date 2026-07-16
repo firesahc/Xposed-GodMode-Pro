@@ -74,11 +74,11 @@ public final class MatchSpec implements MatchFields {
 
     // ===== Getter =====
 
-    public int[] getDepth() { return depth; }
+    public int[] getDepth() { return depth != null ? depth.clone() : null; }
     public String getActivityClass() { return activityClass; }
     public String getViewClass() { return viewClass; }
     public String getResourceName() { return resourceName; }
-    public String[] getItemPath() { return itemPath; }
+    public String[] getItemPath() { return itemPath != null ? itemPath.clone() : null; }
     public String getItemRootClass() { return itemRootClass; }
     public String getParentClass() { return parentClass; }
     public boolean isRepeatable() { return repeatable; }
