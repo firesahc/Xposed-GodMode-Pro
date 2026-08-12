@@ -29,6 +29,7 @@ import java.io.OutputStream;
 import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * 规则备份/恢复管理器 — 将规则及其关联图片导出为 ZIP 压缩包，或从 ZIP 导入恢复。
@@ -42,6 +43,9 @@ public final class RuleBackupManager {
     private static final String TAG = "RuleBackupManager";
     private static final int VERSION = 1;
     private static final String MANIFEST_FILE = "manifest.json";
+    private static final int MAX_BACKUP_RULES = 512;
+    private static final int MAX_BACKUP_ENTRIES = 1 + 2 * MAX_BACKUP_RULES;
+    private static final long MAX_BACKUP_UNCOMPRESSED_BYTES = 256L * 1024L * 1024L;
 
     private RuleBackupManager() {
     }
@@ -60,12 +64,11 @@ public final class RuleBackupManager {
         Logger.i(TAG, "[Backup] backupRules: start, package=" + packageName + ", ruleCount=" + viewRules.size());
         ArrayList<String> backupFilePathList = new ArrayList<>();
         ArrayList<RuleRecord> backupRuleRecordList = new ArrayList<>(viewRules.size());
-        File backupDir = new File(GodModeApplication.getApplication().getCacheDir(), "backup");
-        if (!backupDir.exists() || FileUtils.delete(backupDir.getPath())) {
-            boolean ok = backupDir.mkdirs();
-            if (!ok) throw new BackupException("Create backup directory failed.");
+        File backupDir = createOperationDirectory(
+                GodModeApplication.getApplication().getCacheDir(), "backup");
+        try {
+            prepareFreshDirectory(backupDir);
             Logger.d(TAG, "[Backup] backupRules: temp dir created, package=" + packageName);
-            try {
                 for (RuleRecord viewRule : viewRules) {
                     RuleRecord viewRuleCopy = viewRule.clone();
                     try (ParcelFileDescriptor parcelFileDescriptor = RuleServiceClient.getDefault().openImageFileDescriptor(viewRule.imagePath)) {
@@ -121,24 +124,23 @@ public final class RuleBackupManager {
                     ZipUtils.compress(out, backupFilePathList.toArray(new String[0]));
                 }
                 Logger.i(TAG, "[Backup] backupRules: success, package=" + packageName + ", rules=" + backupRuleRecordList.size());
-            } catch (IOException e) {
-                Logger.e(TAG, "[Backup] backupRules: failed, package=" + packageName, e);
-                throw new BackupException(e);
-            } finally {
-                FileUtils.delete(backupDir.getPath());
-            }
+        } catch (IOException e) {
+            Logger.e(TAG, "[Backup] backupRules: failed, package=" + packageName, e);
+            throw new BackupException(e);
+        } finally {
+            cleanupTempDirectory("backupRules", backupDir);
         }
     }
 
     public static int restoreRules(Uri fromUri) throws RestoreException {
         Logger.i(TAG, "[Backup] restoreRules: start, uri=" + fromUri);
-        File restoreDir = new File(GodModeApplication.getApplication().getCacheDir(), "restore");
-        if (!restoreDir.exists() || FileUtils.delete(restoreDir.getPath())) {
-            boolean ok = restoreDir.mkdirs();
-            if (!ok) throw new RestoreException("Create restore directory failed.");
-            try {
+        File restoreDir = createOperationDirectory(
+                GodModeApplication.getApplication().getCacheDir(), "restore");
+        try {
+            prepareFreshDirectory(restoreDir);
                 try (InputStream in = GodModeApplication.getApplication().getContentResolver().openInputStream(fromUri)) {
-                    ZipUtils.uncompress(in, restoreDir.getPath());
+                    ZipUtils.uncompress(in, restoreDir.getPath(),
+                            MAX_BACKUP_UNCOMPRESSED_BYTES, MAX_BACKUP_ENTRIES);
                 }
                 File manifestFile = new File(restoreDir, MANIFEST_FILE);
                 if (!manifestFile.exists()) throw new RestoreException("Miss manifest.json file.");
@@ -185,16 +187,41 @@ public final class RuleBackupManager {
                 }
                 Logger.i(TAG, "[Backup] restoreRules: success, ruleCount=" + jsonArray.size());
                 return jsonArray.size();
-            } catch (IOException e) {
-                Logger.e(TAG, "[Backup] restoreRules: failed", e);
-                throw new RestoreException(e);
-            } catch (Exception e) {
-                Logger.e(TAG, "[Backup] restoreRules: failed, malformed data", e);
-                throw new RestoreException(e);
-            } finally {
-                FileUtils.delete(restoreDir.getPath());
-            }
+        } catch (IOException e) {
+            Logger.e(TAG, "[Backup] restoreRules: failed", e);
+            throw new RestoreException(e);
+        } catch (Exception e) {
+            Logger.e(TAG, "[Backup] restoreRules: failed, malformed data", e);
+            throw new RestoreException(e);
+        } finally {
+            cleanupTempDirectory("restoreRules", restoreDir);
         }
-        return 0;
+    }
+
+    static void prepareFreshDirectory(File dir) throws IOException {
+        try {
+            if (dir.exists() && !FileUtils.delete(dir.getPath())) {
+                throw new IOException("Delete temp directory failed: " + dir);
+            }
+            if (!dir.mkdirs()) {
+                throw new IOException("Create temp directory failed: " + dir);
+            }
+        } catch (SecurityException e) {
+            throw new IOException("Prepare temp directory failed: " + dir, e);
+        }
+    }
+
+    static File createOperationDirectory(File cacheDir, String operation) {
+        return new File(new File(cacheDir, operation), UUID.randomUUID().toString());
+    }
+
+    private static void cleanupTempDirectory(String operation, File dir) {
+        try {
+            if (dir.exists() && !FileUtils.delete(dir.getPath())) {
+                Logger.w(TAG, operation + ": cleanup temp directory failed: " + dir);
+            }
+        } catch (RuntimeException e) {
+            Logger.w(TAG, operation + ": cleanup temp directory failed: " + dir, e);
+        }
     }
 }
