@@ -2,6 +2,8 @@ package com.kaisar.xposed.godmode.engine.core;
 
 import android.os.Build;
 
+import java.util.Locale;
+
 /**
  * 集中式平台能力探测 — 所有版本/厂商判断集中于此，禁止散落各处。
  * <p>
@@ -42,7 +44,8 @@ public final class PlatformCapabilities {
     // ===== 厂商检测 =====
 
     private static final String MANUFACTURER =
-            Build.MANUFACTURER != null ? Build.MANUFACTURER.toLowerCase() : "";
+            Build.MANUFACTURER != null
+                    ? Build.MANUFACTURER.toLowerCase(Locale.ROOT) : "";
 
     public static boolean isXiaomi() {
         return MANUFACTURER.contains("xiaomi");
