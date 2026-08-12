@@ -17,6 +17,8 @@ import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 
 import java.util.List;
+import java.util.Map;
+import java.util.WeakHashMap;
 
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedHelpers;
@@ -39,6 +41,9 @@ public final class RecyclerAdapterHook {
 
     /** 确保每个进程只安装一次钩子 */
     private static boolean sHooksInstalled;
+
+    /** 最近一次成功应用 repeatable 规则的 item owner，弱键避免持有回收 View。 */
+    private static final Map<View, ViewController> sItemOwners = new WeakHashMap<>();
 
     private RecyclerAdapterHook() {
         // 工具类不可实例化
@@ -93,7 +98,10 @@ public final class RecyclerAdapterHook {
                             Object holder = param.args[0];
                             if (holder == null) return;
                             View itemView = (View) XposedHelpers.getObjectField(holder, "itemView");
-                            applyRepeatableRulesToBoundItem(itemView, delegate);
+                            revokeOwnedItem(itemView);
+                            ViewController owner = applyRepeatableRulesToBoundItem(
+                                    itemView, delegate);
+                            if (owner != null) rememberOwner(itemView, owner);
                         }
                     });
 
@@ -106,6 +114,7 @@ public final class RecyclerAdapterHook {
                             if (holder == null) return;
                             View itemView = (View) XposedHelpers.getObjectField(holder, "itemView");
                             if (itemView == null) return;
+                            if (revokeOwnedItem(itemView)) return;
                             Activity activity = ViewUtils.getAttachedActivityFromView(itemView);
                             if (activity == null) return;
                             delegate.getViewController(activity).revokeAllRules(itemView);
@@ -129,18 +138,20 @@ public final class RecyclerAdapterHook {
      * 这是消除组件闪现的关键路径：在 RecyclerView 完成 item 布局之前，
      * 优先于 onGlobalLayout 全树扫描，精确匹配目标规则并应用。
      */
-    private static void applyRepeatableRulesToBoundItem(
+    private static ViewController applyRepeatableRulesToBoundItem(
             View itemRoot, Delegate delegate) {
         if (itemRoot == null || delegate == null
-                || itemRoot.getVisibility() != View.VISIBLE) return;
+                || itemRoot.getVisibility() != View.VISIBLE) return null;
         Activity activity = ViewUtils.getAttachedActivityFromView(itemRoot);
-        if (activity == null || activity.isFinishing()) return;
+        if (activity == null || activity.isFinishing()) return null;
 
         ActRules rules = RuleManager.get().getRules();
         List<RuleRecord> activityRules = rules.get(
                 activity.getComponentName().getClassName());
-        if (activityRules == null || activityRules.isEmpty()) return;
+        if (activityRules == null || activityRules.isEmpty()) return null;
 
+        ViewController controller = delegate.getViewController(activity);
+        boolean applied = false;
         for (RuleRecord rule : activityRules) {
             if (!rule.isRepeatable()) continue;
             try {
@@ -150,13 +161,31 @@ public final class RecyclerAdapterHook {
                 // CARD 和 ELEMENT 模式走统一的导航+验证管线
                 View target = navigateAndValidate(itemRoot, spec);
                 if (target != null) {
-                    ViewController controller = delegate.getViewController(activity);
-                    controller.applyRule(target, rule);
+                    applied |= controller.applyRule(target, rule);
                 }
             } catch (Throwable t) {
                 Logger.w(TAG, "apply bound item rule failed", t);
             }
         }
+        return applied ? controller : null;
+    }
+
+    private static void rememberOwner(View itemView, ViewController owner) {
+        if (itemView == null || owner == null) return;
+        synchronized (sItemOwners) {
+            sItemOwners.put(itemView, owner);
+        }
+    }
+
+    private static boolean revokeOwnedItem(View itemView) {
+        if (itemView == null) return false;
+        ViewController owner;
+        synchronized (sItemOwners) {
+            owner = sItemOwners.remove(itemView);
+        }
+        if (owner == null) return false;
+        owner.revokeAllRules(itemView);
+        return true;
     }
 
     /**

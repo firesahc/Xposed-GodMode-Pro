@@ -202,18 +202,12 @@ public final class RuleLifecycleManager implements RecyclerAdapterHook.Delegate 
         }
 
         ActRules currentRules = RuleManager.get().getRules();
-        if (newRules.equals(currentRules)) return;
-
-        // 使用 engine/RuleDiff.compute() 计算带内容变更检测的差集
-        // identityEqual: RuleRecord.equals() 仅匹配定位身份字段
-        // contentEqual: runtime comparator 只覆盖影响匹配和应用的字段
-        RuleDiff diff = RuleDiff.compute(
-                (Map) currentRules,
-                (Map) newRules,
-                (a, b) -> ((RuleRecord) a).equals(b),
-                (a, b) -> RuleManager.runtimeContentEquals(
-                        (RuleRecord) a, (RuleRecord) b)
-        );
+        RuleDiff diff = computeRuntimeDiff(currentRules, newRules);
+        if (diff.isEmpty()) {
+            // 展示元数据可能变化；更新快照，但不重建运行时效果。
+            RuleManager.get().replaceRules(newRules);
+            return;
+        }
 
         // Step 1: 撤销被删除/修改的旧规则，撤销依赖 applier baseline。
         if (!diff.toRevoke.isEmpty()) {
@@ -231,6 +225,16 @@ public final class RuleLifecycleManager implements RecyclerAdapterHook.Delegate 
 
         // Step 4: 防抖重应用（仅对受影响的 Activity）
         scheduleReapplyForActivities(newRules);
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    static RuleDiff computeRuntimeDiff(ActRules currentRules, ActRules newRules) {
+        return RuleDiff.compute(
+                (Map) currentRules,
+                (Map) newRules,
+                (a, b) -> ((RuleRecord) a).equals(b),
+                (a, b) -> RuleManager.runtimeContentEquals(
+                        (RuleRecord) a, (RuleRecord) b));
     }
 
     // ===================================================================

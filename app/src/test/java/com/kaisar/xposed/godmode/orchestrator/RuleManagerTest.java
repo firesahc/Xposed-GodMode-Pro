@@ -3,10 +3,12 @@ package com.kaisar.xposed.godmode.orchestrator;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotSame;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
 import com.kaisar.xposed.godmode.engine.matcher.MatchMode;
 import com.kaisar.xposed.godmode.engine.matcher.TargetLevel;
+import com.kaisar.xposed.godmode.engine.rule.RuleDiff;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 
@@ -119,6 +121,34 @@ public final class RuleManagerTest {
         assertRuntimeChange(rule -> rule.modImagePath = "other.png");
     }
 
+    @Test
+    public void runtimeDiffDoesNotSkipContentChangesWithSameIdentity() {
+        RuleRecord oldRule = rule();
+        RuleRecord newRule = oldRule.clone();
+        newRule.modText = "new runtime text";
+        ActRules oldRules = rulesOf(oldRule);
+        ActRules newRules = rulesOf(newRule);
+
+        // RuleRecord.equals is intentionally identity-only; the runtime diff must
+        // still revoke the old effect and apply the new one.
+        assertTrue(oldRules.equals(newRules));
+        RuleDiff diff = RuleLifecycleManager.computeRuntimeDiff(oldRules, newRules);
+
+        assertSame(oldRule, diff.toRevoke.get(oldRule.activityClass).get(0));
+        assertSame(newRule, diff.toApply.get(newRule.activityClass).get(0));
+    }
+
+    @Test
+    public void runtimeDiffIgnoresPresentationOnlyChanges() {
+        RuleRecord oldRule = rule();
+        RuleRecord newRule = oldRule.clone();
+        newRule.label = "new label";
+        newRule.alias = "new alias";
+
+        assertTrue(RuleLifecycleManager.computeRuntimeDiff(
+                rulesOf(oldRule), rulesOf(newRule)).isEmpty());
+    }
+
     private static void assertRuntimeChange(Change change) {
         RuleRecord left = rule();
         RuleRecord right = left.clone();
@@ -153,6 +183,13 @@ public final class RuleManagerTest {
         rule.origLeftMargin = 6;
         rule.origTopMargin = 7;
         return rule;
+    }
+
+    private static ActRules rulesOf(RuleRecord rule) {
+        ActRules rules = new ActRules();
+        rules.put(rule.activityClass,
+                new ArrayList<>(Collections.singletonList(rule)));
+        return rules;
     }
 
     private static RuleManager newManager() throws Exception {
