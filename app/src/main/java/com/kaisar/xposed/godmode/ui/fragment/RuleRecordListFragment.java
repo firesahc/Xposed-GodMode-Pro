@@ -47,6 +47,13 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 
+/**
+ * 规则记录列表 Fragment — 显示指定应用的屏蔽/修改规则列表。
+ * <p>
+ * 支持按规则类型（全部/屏蔽/修改）筛选、批量删除、备份规则到文件。
+ * 通过 {@link SharedViewModel} 与宿主 Activity 共享规则数据。
+ * 使用 DiffUtil 实现 RecyclerView 高效增量更新。
+ */
 public final class RuleRecordListFragment extends Fragment {
 
     private static final String TAG = "RuleRecordListFragment";
@@ -154,22 +161,22 @@ public final class RuleRecordListFragment extends Fragment {
         List<RuleRecord> rulesToBackup = mPendingBackupRules != null ? mPendingBackupRules : mAllRules;
         mPendingBackupRules = null;
         if (rulesToBackup.isEmpty()) {
-            Logger.w(TAG, "[RuleRecordList] backupRules: no rules to backup for " + mPackageName);
-            Snackbar.make(requireView(), R.string.snack_bar_msg_backup_rule_fail, Snackbar.LENGTH_SHORT).show();
+            Logger.w(TAG, "backupRules: no rules to backup for " + mPackageName);
+            showSnackbar(R.string.snack_bar_msg_backup_rule_fail);
             return;
         }
-        Logger.i(TAG, "[RuleRecordList] backupRules: start, package=" + mPackageName + ", ruleCount=" + rulesToBackup.size());
+        Logger.i(TAG, "backupRules: start, package=" + mPackageName + ", ruleCount=" + rulesToBackup.size());
         mSharedViewModel.backupRules(uri, mPackageName, rulesToBackup, new SharedViewModel.ResultCallback() {
             @Override
             public void onSuccess(int count) {
-                Logger.i(TAG, "[RuleRecordList] backupRules: success, package=" + mPackageName + ", ruleCount=" + count);
-                Snackbar.make(requireView(), getString(R.string.snack_bar_msg_backup_rule_success, count), Snackbar.LENGTH_SHORT).show();
+                Logger.i(TAG, "backupRules: success, package=" + mPackageName + ", ruleCount=" + count);
+                showSnackbar(R.string.snack_bar_msg_backup_rule_success, count);
             }
 
             @Override
             public void onFailure(Exception e) {
-                Logger.w(TAG, "[RuleRecordList] backupRules: failed, package=" + mPackageName, e);
-                Snackbar.make(requireView(), R.string.snack_bar_msg_backup_rule_fail, Snackbar.LENGTH_SHORT).show();
+                Logger.w(TAG, "backupRules: failed, package=" + mPackageName, e);
+                showSnackbar(R.string.snack_bar_msg_backup_rule_fail);
             }
         });
     }
@@ -184,8 +191,18 @@ public final class RuleRecordListFragment extends Fragment {
     }
 
     @Override
+    public void onDestroyView() {
+        if (mRecyclerView != null) {
+            mRecyclerView.setAdapter(null);
+            mRecyclerView = null;
+        }
+        super.onDestroyView();
+    }
+
+    @Override
     public void onResume() {
         super.onResume();
+        if (mRecyclerView == null) return;
         ListAdapter adapter = (ListAdapter) mRecyclerView.getAdapter();
         if (adapter != null) {
             updateTitle(adapter.getItemCount());
@@ -374,19 +391,19 @@ public final class RuleRecordListFragment extends Fragment {
             try {
                 List<RuleRecord> filtered = buildFilteredItems();
                 if (filtered.isEmpty()) {
-                    Snackbar.make(requireView(), R.string.snack_bar_msg_backup_rule_fail, Snackbar.LENGTH_SHORT).show();
+                    showSnackbar(R.string.snack_bar_msg_backup_rule_fail);
                     return true;
                 }
                 mPendingBackupRules = new ArrayList<>(filtered);
                 mBackupLauncher.launch(AppInfoHelper.generateBackupFilename(requireContext(), mPackageName));
                 return true;
             } catch (ActivityNotFoundException | PackageManager.NameNotFoundException e) {
-                Logger.w(TAG, "[RuleRecordList] backupRules: launch failed for " + mPackageName, e);
-                Snackbar.make(requireView(), R.string.snack_bar_msg_backup_rule_fail, Snackbar.LENGTH_SHORT).show();
+                Logger.w(TAG, "backupRules: launch failed for " + mPackageName, e);
+                showSnackbar(R.string.snack_bar_msg_backup_rule_fail);
                 return false;
             }
         }
-        // Handle filter icon click 閳?compare by title string since it's a programmatic MenuItem
+        // Handle filter icon click — compare by title string since it's a programmatic MenuItem
         if (item.getTitle() != null && item.getTitle().equals(getString(R.string.filter_dialog_title))) {
             showFilterDialog();
             return true;
@@ -396,12 +413,12 @@ public final class RuleRecordListFragment extends Fragment {
 
     private void deleteAllRules() {
         if (mAllRules.isEmpty()) {
-            Snackbar.make(requireView(), R.string.snack_bar_msg_revert_rule_fail, Snackbar.LENGTH_SHORT).show();
+            showSnackbar(R.string.snack_bar_msg_revert_rule_fail);
             return;
         }
         showDeleteConfirmDialog(mAllRules.size(), () -> {
             if (!mSharedViewModel.deleteAppRules(mPackageName)) {
-                Snackbar.make(requireView(), R.string.snack_bar_msg_revert_rule_fail, Snackbar.LENGTH_SHORT).show();
+                showSnackbar(R.string.snack_bar_msg_revert_rule_fail);
             }
         });
     }
@@ -409,7 +426,7 @@ public final class RuleRecordListFragment extends Fragment {
     private void deleteFilteredRules() {
         List<RuleRecord> filtered = buildFilteredItems();
         if (filtered.isEmpty()) {
-            Snackbar.make(requireView(), R.string.snack_bar_msg_revert_rule_fail, Snackbar.LENGTH_SHORT).show();
+            showSnackbar(R.string.snack_bar_msg_revert_rule_fail);
             return;
         }
         showDeleteConfirmDialog(filtered.size(), () -> {
@@ -420,12 +437,12 @@ public final class RuleRecordListFragment extends Fragment {
                 try {
                     if (!mSharedViewModel.deleteRule(rule)) {
                         failed++;
-                        Logger.w(TAG, "[RuleRecordList] deleteFilteredRules: delete failed: " + rule);
+                        Logger.w(TAG, "deleteFilteredRules: delete failed: " + rule);
                     }
                 } catch (Exception e) {
                     failed++;
-                    Logger.w(TAG, "[RuleRecordList] deleteFilteredRules: delete failed: " + rule);
-                    Logger.e(TAG, "[RuleRecordList] deleteFilteredRules: delete exception", e);
+                    Logger.w(TAG, "deleteFilteredRules: delete failed: " + rule);
+                    Logger.e(TAG, "deleteFilteredRules: delete exception", e);
                 }
             }
             mIsBatchOperation = false;
@@ -434,7 +451,7 @@ public final class RuleRecordListFragment extends Fragment {
                     updateFilteredList();
                 } else if (failed == filtered.size()) {
                     updateFilteredList();
-                    Snackbar.make(requireView(), R.string.snack_bar_msg_revert_rule_fail, Snackbar.LENGTH_SHORT).show();
+                    showSnackbar(R.string.snack_bar_msg_revert_rule_fail);
                 } else {
                     // 部分删除失败，重新加载规则列表
                     mSharedViewModel.loadAppRules();
@@ -468,5 +485,13 @@ public final class RuleRecordListFragment extends Fragment {
                 .setPositiveButton(android.R.string.ok, (dialog, which) -> onConfirm.run())
                 .setNegativeButton(android.R.string.cancel, null)
                 .show();
+    }
+
+    private void showSnackbar(int messageResId, Object... formatArgs) {
+        View view = getView();
+        if (!isAdded() || view == null) return;
+        String message = formatArgs.length == 0
+                ? getString(messageResId) : getString(messageResId, formatArgs);
+        Snackbar.make(view, message, Snackbar.LENGTH_SHORT).show();
     }
 }

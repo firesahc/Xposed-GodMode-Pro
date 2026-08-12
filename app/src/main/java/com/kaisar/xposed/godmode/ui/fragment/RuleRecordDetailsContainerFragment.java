@@ -65,11 +65,11 @@ public final class RuleRecordDetailsContainerFragment extends Fragment {
 
                 @Override
                 public void onFailure(Exception e) {
-                    Snackbar.make(requireView(), R.string.snack_bar_msg_backup_rule_fail, Snackbar.LENGTH_SHORT).show();
+                    showSnackbar(R.string.snack_bar_msg_backup_rule_fail);
                 }
             });
         } else {
-            Snackbar.make(requireView(), R.string.snack_bar_msg_backup_rule_fail, Snackbar.LENGTH_SHORT).show();
+            showSnackbar(R.string.snack_bar_msg_backup_rule_fail);
         }
     }
 
@@ -149,12 +149,18 @@ public final class RuleRecordDetailsContainerFragment extends Fragment {
                     mBackupLauncher.launch(AppInfoHelper.generateBackupFilename(requireContext(), packageName));
                     return true;
                 } catch (ActivityNotFoundException | PackageManager.NameNotFoundException e) {
-                    Snackbar.make(requireView(), R.string.snack_bar_msg_backup_rule_fail, Snackbar.LENGTH_SHORT).show();
+                    showSnackbar(R.string.snack_bar_msg_backup_rule_fail);
                     return false;
                 }
             }
         }
         return true;
+    }
+
+    private void showSnackbar(int messageResId) {
+        View view = getView();
+        if (!isAdded() || view == null) return;
+        Snackbar.make(view, messageResId, Snackbar.LENGTH_SHORT).show();
     }
 
     static final class DetailFragmentStateAdapter extends FragmentStateAdapter {

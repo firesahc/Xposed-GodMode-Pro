@@ -76,7 +76,7 @@ public class SharedViewModel extends ViewModel {
             ActRules actRules = rules.get(packageName);
             if (actRules != null && !actRules.isEmpty()) {
                 actRules.values().forEach(viewRules::addAll);
-                Collections.sort(viewRules, (o1, o2) -> (int) (o1.timestamp - o2.timestamp));
+                Collections.sort(viewRules, (o1, o2) -> Long.compare(o1.timestamp, o2.timestamp));
             }
         }
         actRules.setValue(viewRules);
