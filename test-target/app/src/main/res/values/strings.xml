@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="nested_row">Nested row %1$d / generation %2$d</string>
+    <string name="feed_row">Row %1$d / type %2$d / generation %3$d</string>
+    <string name="carousel_item">Carousel %1$d:%2$d</string>
+</resources>
