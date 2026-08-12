@@ -43,9 +43,9 @@ try {
     $forbidden = rg -n --glob "!**/build/**" $forbiddenPattern `
         app/src/main engine/src/main settings.gradle 2>$null
     if ($LASTEXITCODE -eq 0) {
-        $failures.Add("7.0-only production symbols found:`n$forbidden")
+        $failures.Add("Excluded production symbols found:`n$forbidden")
     } elseif ($LASTEXITCODE -ne 1) {
-        $failures.Add("Unable to scan for 7.0-only production symbols")
+        $failures.Add("Unable to scan for excluded production symbols")
     }
 
     if ($failures.Count -gt 0) {
@@ -53,12 +53,12 @@ try {
         exit 1
     }
 
-    Write-Host "6.8 stabilization contract check passed."
+    Write-Host "Stabilization contract check passed."
     Write-Host "Baseline: $Baseline"
     Write-Host "AIDL and RuleRecord Parcelable sources: unchanged"
     Write-Host "Modules: app, engine, libxservicemanager"
     Write-Host "libxservicemanager: $currentSubmodule"
-    Write-Host "7.0-only production symbols: absent"
+    Write-Host "Excluded production symbols: absent"
 } finally {
     Pop-Location
 }
