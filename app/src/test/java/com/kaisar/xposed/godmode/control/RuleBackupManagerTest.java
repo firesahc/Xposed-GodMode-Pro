@@ -83,4 +83,22 @@ public final class RuleBackupManagerTest {
         assertEquals(second, entries.find("/second/preview.webp"));
     }
 
+    @Test
+    public void restoredImageMustRemainInsideOperationDirectory() throws Exception {
+        File restoreDir = temporaryFolder.newFolder("restore");
+        File image = new File(restoreDir, "preview.webp");
+        assertTrue(image.createNewFile());
+        File outside = temporaryFolder.newFile("outside.webp");
+
+        assertEquals(image.getCanonicalFile(),
+                RuleBackupManager.resolveRestoredFile(restoreDir, "preview.webp"));
+        assertEquals(null,
+                RuleBackupManager.resolveRestoredFile(restoreDir, "../outside.webp"));
+        assertEquals(null,
+                RuleBackupManager.resolveRestoredFile(restoreDir,
+                        outside.getAbsolutePath()));
+        assertEquals(null,
+                RuleBackupManager.resolveRestoredFile(restoreDir, "missing.webp"));
+    }
+
 }

@@ -148,8 +148,9 @@ public final class RuleBackupManager {
                     // 先保存主图，获取持久化路径
                     Bitmap bitmap = null;
                     if (!TextUtils.isEmpty(viewRule.imagePath)) {
-                        String imagePath = new File(restoreDir, viewRule.imagePath).getPath();
-                        bitmap = BitmapFactory.decodeFile(imagePath);
+                        File imageFile = resolveRestoredFile(restoreDir, viewRule.imagePath);
+                        bitmap = imageFile != null
+                                ? BitmapFactory.decodeFile(imageFile.getPath()) : null;
                         if (bitmap != null) {
                             String savedPath = RuleServiceClient.getDefault().saveImageFile(viewRule.packageName, bitmap);
                             if (savedPath != null) {
@@ -160,8 +161,9 @@ public final class RuleBackupManager {
 
                     // 有修改图时一并保存，组装完整规则
                     if (viewRule.isModifyRule() && !TextUtils.isEmpty(viewRule.modImagePath)) {
-                        String modPath = new File(restoreDir, viewRule.modImagePath).getPath();
-                        Bitmap modBitmap = BitmapFactory.decodeFile(modPath);
+                        File modFile = resolveRestoredFile(restoreDir, viewRule.modImagePath);
+                        Bitmap modBitmap = modFile != null
+                                ? BitmapFactory.decodeFile(modFile.getPath()) : null;
                         if (modBitmap != null) {
                             String savedModPath = RuleServiceClient.getDefault().saveImageFile(viewRule.packageName, modBitmap);
                             if (savedModPath != null) {
@@ -256,6 +258,21 @@ public final class RuleBackupManager {
                 if (usedNames.add(candidate)) return candidate;
             }
         }
+    }
+
+    static File resolveRestoredFile(File restoreDir, String entryName)
+            throws IOException {
+        if (entryName == null || entryName.isEmpty()) return null;
+        File base = restoreDir.getCanonicalFile();
+        File entry = new File(entryName);
+        if (entry.isAbsolute()) return null;
+        File file = new File(base, entryName).getCanonicalFile();
+        String basePath = base.getPath();
+        String filePath = file.getPath();
+        if (!filePath.startsWith(basePath + File.separator) || !file.isFile()) {
+            return null;
+        }
+        return file;
     }
 
     private static void cleanupTempDirectory(String operation, File dir) {
