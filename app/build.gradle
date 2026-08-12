@@ -37,6 +37,7 @@ dependencies {
     implementation libs.androidx.constraintlayout
     implementation libs.bundles.navigation
     implementation libs.androidx.appcompat
+    implementation libs.androidx.core
     implementation libs.androidx.viewpager2
     implementation libs.androidx.fragment
     implementation libs.androidx.preference
@@ -44,7 +45,9 @@ dependencies {
     implementation libs.gson
     implementation libs.material
     implementation libs.glide
-    implementation libs.rikka.insets
     coreLibraryDesugaring libs.desugar
     annotationProcessor libs.glide.compiler
+    testImplementation libs.junit
+    androidTestImplementation libs.androidx.test.runner
+    androidTestImplementation libs.androidx.test.junit
 }

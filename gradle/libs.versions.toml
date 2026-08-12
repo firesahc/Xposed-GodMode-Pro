@@ -9,9 +9,12 @@ fragment = "1.6.2"
 gson = "2.14.0"
 material = "1.11.0"
 glide = "4.16.0"
-rikka-insets = "1.2.0"
 annotation = "1.10.0"
+core = "1.9.0"
 preference = "1.2.1"
+junit = "4.13.2"
+androidxTestRunner = "1.5.2"
+androidxTestJunit = "1.1.5"
 
 [libraries]
 # AndroidX
@@ -22,7 +25,11 @@ androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version
 androidx-viewpager2 = { group = "androidx.viewpager2", name = "viewpager2", version.ref = "viewpager2" }
 androidx-fragment = { group = "androidx.fragment", name = "fragment", version.ref = "fragment" }
 androidx-annotation = { group = "androidx.annotation", name = "annotation", version.ref = "annotation" }
+androidx-core = { group = "androidx.core", name = "core", version.ref = "core" }
 androidx-preference = { group = "androidx.preference", name = "preference", version.ref = "preference" }
+junit = { group = "junit", name = "junit", version.ref = "junit" }
+androidx-test-runner = { group = "androidx.test", name = "runner", version.ref = "androidxTestRunner" }
+androidx-test-junit = { group = "androidx.test.ext", name = "junit", version.ref = "androidxTestJunit" }
 
 # Google
 material = { group = "com.google.android.material", name = "material", version.ref = "material" }
@@ -34,9 +41,6 @@ desugar = { group = "com.android.tools", name = "desugar_jdk_libs", version.ref 
 # Glide
 glide = { group = "com.github.bumptech.glide", name = "glide", version.ref = "glide" }
 glide-compiler = { group = "com.github.bumptech.glide", name = "compiler", version.ref = "glide" }
-
-# Rikka
-rikka-insets = { group = "dev.rikka.rikkax.insets", name = "insets", version.ref = "rikka-insets" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

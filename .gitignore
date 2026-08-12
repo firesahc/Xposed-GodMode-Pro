@@ -10,6 +10,8 @@
 /Xposed-GodMode-Pro.wiki/
 /AGENTS.md
 /.agents/
+/.learnings/
+/.codex/
 
 # Android build outputs
 *.apk
