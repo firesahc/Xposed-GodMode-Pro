@@ -182,7 +182,7 @@ public final class RuleLifecycleManager implements RecyclerAdapterHook.Delegate 
      * 四步流程：
      * <ol>
      *   <li>计算差集 — 旧规则中不在新规则内的部分需要撤销</li>
-     *   <li>撤销旧规则 — 必须在 clearBlockedCache 之前，revoke 依赖缓存中的 ViewProperty</li>
+     *   <li>撤销旧规则 — 必须在失效匹配缓存之前，revoke 依赖 applier baseline</li>
      *   <li>替换 + 应用新规则</li>
      *   <li>防抖重应用 — 50ms 延迟确保布局稳定</li>
      * </ol>
@@ -206,21 +206,22 @@ public final class RuleLifecycleManager implements RecyclerAdapterHook.Delegate 
 
         // 使用 engine/RuleDiff.compute() 计算带内容变更检测的差集
         // identityEqual: RuleRecord.equals() 仅匹配定位身份字段
-        // contentEqual:  RuleRecord.contentEquals() 覆盖所有 UI 字段
+        // contentEqual: runtime comparator 只覆盖影响匹配和应用的字段
         RuleDiff diff = RuleDiff.compute(
                 (Map) currentRules,
                 (Map) newRules,
                 (a, b) -> ((RuleRecord) a).equals(b),
-                (a, b) -> ((RuleRecord) a).contentEquals((RuleRecord) b)
+                (a, b) -> RuleManager.runtimeContentEquals(
+                        (RuleRecord) a, (RuleRecord) b)
         );
 
-        // Step 1: 撤销被删除/修改的旧规则（必须在 clearBlockedCache 之前）
+        // Step 1: 撤销被删除/修改的旧规则，撤销依赖 applier baseline。
         if (!diff.toRevoke.isEmpty()) {
             revokeRulesForActivities(mapToActRules(diff.toRevoke));
         }
 
-        // Step 2: 清除所有 Activity 级 ViewController 的 Applier 缓存
-        clearAllViewControllersCache();
+        // Step 2: 仅失效匹配位置缓存，不能清除撤销所需的 baseline。
+        invalidateMatcherCaches();
 
         // Step 3: 替换规则集并应用新规则
         RuleManager.get().replaceRules(newRules);
@@ -237,14 +238,13 @@ public final class RuleLifecycleManager implements RecyclerAdapterHook.Delegate 
     // ===================================================================
 
     @Override
-    public void clearAllViewControllersCache() {
+    public void invalidateMatcherCaches() {
         for (ViewController vc : mViewControllers.values()) {
             if (vc != null) {
-                vc.clearBlockedCache();
+                vc.invalidateMatcherCache();
             }
         }
-        // 同时清空进程级单例缓存（向后兼容）
-        ViewController.getDefault().clearBlockedCache();
+        ViewController.getDefault().invalidateMatcherCache();
     }
 
     @Override
@@ -263,7 +263,8 @@ public final class RuleLifecycleManager implements RecyclerAdapterHook.Delegate 
      * <p>
      * 优先返回 Activity 级实例（缓存隔离），不存在时回退到进程级单例（向后兼容）。
      */
-    private ViewController getViewControllerFor(Activity activity) {
+    @Override
+    public ViewController getViewController(Activity activity) {
         ViewController vc = mViewControllers.get(activity);
         return vc != null ? vc : ViewController.getDefault();
     }
@@ -284,10 +285,10 @@ public final class RuleLifecycleManager implements RecyclerAdapterHook.Delegate 
                 }
             }
             if (!revRemove.isEmpty()) {
-                getViewControllerFor(activity).revokeRuleBatch(activity, revRemove);
+                getViewController(activity).revokeRuleBatch(activity, revRemove);
             }
             if (!revModify.isEmpty()) {
-                getViewControllerFor(activity).revokeRuleBatch(activity, revModify);
+                getViewController(activity).revokeRuleBatch(activity, revModify);
             }
         });
     }
@@ -295,7 +296,7 @@ public final class RuleLifecycleManager implements RecyclerAdapterHook.Delegate 
     private void applyRulesForActivities(ActRules rules) {
         forEachMatchingActivity(rules, (activity, ruleList) -> {
             if (!ruleList.isEmpty()) {
-                getViewControllerFor(activity).applyRuleBatch(activity, ruleList);
+                getViewController(activity).applyRuleBatch(activity, ruleList);
             }
         });
     }
@@ -482,7 +483,7 @@ public final class RuleLifecycleManager implements RecyclerAdapterHook.Delegate 
                 }
                 // 每次规则匹配周期前清空 RecyclerView 收集缓存，
                 // 防止 Fragment 切换后新增的 RecyclerView 被过时缓存遗漏
-                ViewController vc = getViewControllerFor(activity);
+                ViewController vc = getViewController(activity);
                 if (vc != null) {
                     Matcher m = vc.getMatcher();
                     if (m instanceof CompositeMatcher) {
@@ -494,7 +495,7 @@ public final class RuleLifecycleManager implements RecyclerAdapterHook.Delegate 
                                 activity.getComponentName().getClassName())
                         : null;
                 if (rules != null && !rules.isEmpty()) {
-                    getViewControllerFor(activity).applyRuleBatch(activity, rules,
+                    getViewController(activity).applyRuleBatch(activity, rules,
                             () -> mApplying = false);
                 } else {
                     resetGuards();

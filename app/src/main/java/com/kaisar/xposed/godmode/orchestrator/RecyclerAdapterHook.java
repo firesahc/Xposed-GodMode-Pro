@@ -69,14 +69,14 @@ public final class RecyclerAdapterHook {
             Class<?> adapterClass = XposedHelpers.findClass(
                     "androidx.recyclerview.widget.RecyclerView$Adapter", cl);
 
-            // Hook 1: notifyDataSetChanged → 清除 Applier 缓存 + 防抖重应用
+            // Hook 1: notifyDataSetChanged → 失效匹配缓存 + 防抖重应用
             XposedHelpers.findAndHookMethod(adapterClass, "notifyDataSetChanged",
                     new XC_MethodHook() {
                         @Override
                         protected void afterHookedMethod(MethodHookParam param) {
                             if (!RuleManager.isInitialized() || !RuleManager.get().hasRules()) return;
                             if (delegate != null) {
-                                delegate.clearAllViewControllersCache();
+                                delegate.invalidateMatcherCaches();
                                 delegate.scheduleReapplyForActivities();
                             }
                         }
@@ -93,7 +93,7 @@ public final class RecyclerAdapterHook {
                             Object holder = param.args[0];
                             if (holder == null) return;
                             View itemView = (View) XposedHelpers.getObjectField(holder, "itemView");
-                            applyRepeatableRulesToBoundItem(itemView);
+                            applyRepeatableRulesToBoundItem(itemView, delegate);
                         }
                     });
 
@@ -108,7 +108,7 @@ public final class RecyclerAdapterHook {
                             if (itemView == null) return;
                             Activity activity = ViewUtils.getAttachedActivityFromView(itemView);
                             if (activity == null) return;
-                            ViewController.getDefault().revokeAllRules(itemView);
+                            delegate.getViewController(activity).revokeAllRules(itemView);
                         }
                     });
 
@@ -129,8 +129,10 @@ public final class RecyclerAdapterHook {
      * 这是消除组件闪现的关键路径：在 RecyclerView 完成 item 布局之前，
      * 优先于 onGlobalLayout 全树扫描，精确匹配目标规则并应用。
      */
-    private static void applyRepeatableRulesToBoundItem(View itemRoot) {
-        if (itemRoot == null || itemRoot.getVisibility() != View.VISIBLE) return;
+    private static void applyRepeatableRulesToBoundItem(
+            View itemRoot, Delegate delegate) {
+        if (itemRoot == null || delegate == null
+                || itemRoot.getVisibility() != View.VISIBLE) return;
         Activity activity = ViewUtils.getAttachedActivityFromView(itemRoot);
         if (activity == null || activity.isFinishing()) return;
 
@@ -148,7 +150,8 @@ public final class RecyclerAdapterHook {
                 // CARD 和 ELEMENT 模式走统一的导航+验证管线
                 View target = navigateAndValidate(itemRoot, spec);
                 if (target != null) {
-                    ViewController.getDefault().applyRule(target, rule);
+                    ViewController controller = delegate.getViewController(activity);
+                    controller.applyRule(target, rule);
                 }
             } catch (Throwable t) {
                 Logger.w(TAG, "apply bound item rule failed", t);
@@ -203,8 +206,11 @@ public final class RecyclerAdapterHook {
      * 缓存清理和重应用调度能力。
      */
     public interface Delegate {
-        /** 清空所有 Activity 级 ViewController 的 Applier 缓存 */
-        void clearAllViewControllersCache();
+        /** 失效所有 Activity 的匹配定位缓存，保留 applier baseline。 */
+        void invalidateMatcherCaches();
+
+        /** 返回 item 所属 Activity 的状态所有者。 */
+        ViewController getViewController(Activity activity);
 
         /** 对所有存活 Activity 调度防抖重应用 */
         void scheduleReapplyForActivities();

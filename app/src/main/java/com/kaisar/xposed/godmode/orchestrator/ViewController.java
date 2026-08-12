@@ -133,6 +133,13 @@ public final class ViewController {
         return mMatcher;
     }
 
+    /** Invalidates only view-location caches; applied-state baselines remain owned. */
+    public synchronized void invalidateMatcherCache() {
+        if (mMatcher instanceof CompositeMatcher) {
+            ((CompositeMatcher) mMatcher).invalidateRecyclerCache();
+        }
+    }
+
     // =========================================================================
     // 公开 API
     // =========================================================================

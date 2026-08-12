@@ -37,4 +37,6 @@ dependencies {
     implementation libs.androidx.annotation
     coreLibraryDesugaring libs.desugar
     testImplementation libs.junit
+    androidTestImplementation libs.androidx.test.runner
+    androidTestImplementation libs.androidx.test.junit
 }
