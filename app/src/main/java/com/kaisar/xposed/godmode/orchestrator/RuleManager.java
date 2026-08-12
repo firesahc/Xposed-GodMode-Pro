@@ -3,6 +3,11 @@ package com.kaisar.xposed.godmode.orchestrator;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.ipc.RuleServiceClient;
 import com.kaisar.xposed.godmode.rule.ActRules;
+import com.kaisar.xposed.godmode.rule.RuleRecord;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 
 /**
  * 规则运行管理器 — 目标 App 进程内的规则状态中枢。
@@ -104,10 +109,9 @@ public final class RuleManager {
      * 通过 EventBus 订阅 {@code RulesChangedEvent} 驱动。
      */
     public synchronized void replaceRules(ActRules newRules) {
+        ActRules ownedCopy = copyRules(newRules);
         mActRules.clear();
-        if (newRules != null) {
-            mActRules.putAll(newRules);
-        }
+        mActRules.putAll(ownedCopy);
     }
 
     // =========================================================================
@@ -116,8 +120,30 @@ public final class RuleManager {
 
     /** 获取当前规则（防御性副本） */
     public synchronized ActRules getRules() {
-        ActRules copy = new ActRules();
-        copy.putAll(mActRules);
+        return copyRules(mActRules);
+    }
+
+    /** Runtime equality excludes presentation-only metadata such as label and alias. */
+    static boolean runtimeContentEquals(RuleRecord left, RuleRecord right) {
+        return RuntimeRuleComparator.contentEquals(left, right);
+    }
+
+    /** Copies the complete mutable graph owned by an {@link ActRules} value. */
+    static ActRules copyRules(ActRules source) {
+        ActRules copy = new ActRules(source != null ? source.size() : 0);
+        if (source == null) return copy;
+
+        for (Map.Entry<String, List<RuleRecord>> entry : source.entrySet()) {
+            String activity = entry.getKey();
+            List<RuleRecord> rules = entry.getValue();
+            if (activity == null || rules == null) continue;
+
+            List<RuleRecord> ruleCopies = new ArrayList<>(rules.size());
+            for (RuleRecord rule : rules) {
+                ruleCopies.add(rule != null ? rule.clone() : null);
+            }
+            copy.put(activity, ruleCopies);
+        }
         return copy;
     }
 
