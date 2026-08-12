@@ -26,9 +26,12 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.nio.channels.FileChannel;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -64,6 +67,7 @@ public final class RuleBackupManager {
         Logger.i(TAG, "[Backup] backupRules: start, package=" + packageName + ", ruleCount=" + viewRules.size());
         ArrayList<String> backupFilePathList = new ArrayList<>();
         ArrayList<RuleRecord> backupRuleRecordList = new ArrayList<>(viewRules.size());
+        ImageEntryRegistry imageEntries = new ImageEntryRegistry();
         File backupDir = createOperationDirectory(
                 GodModeApplication.getApplication().getCacheDir(), "backup");
         try {
@@ -71,41 +75,28 @@ public final class RuleBackupManager {
             Logger.d(TAG, "[Backup] backupRules: temp dir created, package=" + packageName);
                 for (RuleRecord viewRule : viewRules) {
                     RuleRecord viewRuleCopy = viewRule.clone();
-                    try (ParcelFileDescriptor parcelFileDescriptor = RuleServiceClient.getDefault().openImageFileDescriptor(viewRule.imagePath)) {
-                        if (parcelFileDescriptor != null) {
-                            try (FileChannel inChannel = new FileInputStream(parcelFileDescriptor.getFileDescriptor()).getChannel()) {
-                                File file = new File(backupDir, new File(viewRule.imagePath).getName());
-                                try (FileChannel outChannel = new FileOutputStream(file).getChannel()) {
-                                    inChannel.transferTo(0, inChannel.size(), outChannel);
-                                    viewRuleCopy.imagePath = file.getName();
-                                    backupFilePathList.add(file.getPath());
-                                }
-                            }
-                        } else {
-                            viewRuleCopy.imagePath = "";
-                        }
+                    try {
+                        String entryName = copyImageToBackup(backupDir,
+                                viewRule.imagePath, "", imageEntries,
+                                backupFilePathList);
+                        viewRuleCopy.imagePath = entryName != null ? entryName : "";
                     } catch (IOException e) {
                         viewRuleCopy.imagePath = "";
                         Logger.w(TAG, "[Backup] backupRules: skip image for " + viewRule.viewClass + ", failed to copy", e);
                     }
-                    if (viewRule.isModifyRule() && !TextUtils.isEmpty(viewRule.modImagePath)
-                            && !viewRule.modImagePath.equals(viewRule.imagePath)) {
-                        try (ParcelFileDescriptor modPfd = RuleServiceClient.getDefault().openImageFileDescriptor(viewRule.modImagePath)) {
-                            if (modPfd != null) {
-                                try (FileChannel inChannel = new FileInputStream(modPfd.getFileDescriptor()).getChannel()) {
-                                    File file = new File(backupDir, "mod_" + new File(viewRule.modImagePath).getName());
-                                    try (FileChannel outChannel = new FileOutputStream(file).getChannel()) {
-                                        inChannel.transferTo(0, inChannel.size(), outChannel);
-                                        viewRuleCopy.modImagePath = file.getName();
-                                        backupFilePathList.add(file.getPath());
-                                    }
-                                }
-                            } else {
+                    if (viewRule.isModifyRule() && !TextUtils.isEmpty(viewRule.modImagePath)) {
+                        if (viewRule.modImagePath.equals(viewRule.imagePath)) {
+                            viewRuleCopy.modImagePath = viewRuleCopy.imagePath;
+                        } else {
+                            try {
+                                String entryName = copyImageToBackup(backupDir,
+                                        viewRule.modImagePath, "mod_", imageEntries,
+                                        backupFilePathList);
+                                viewRuleCopy.modImagePath = entryName != null ? entryName : "";
+                            } catch (IOException e) {
                                 viewRuleCopy.modImagePath = "";
+                                Logger.w(TAG, "[Backup] backupRules: skip mod image for " + viewRule.viewClass + ", failed to copy", e);
                             }
-                        } catch (IOException e) {
-                            viewRuleCopy.modImagePath = "";
-                            Logger.w(TAG, "[Backup] backupRules: skip mod image for " + viewRule.viewClass + ", failed to copy", e);
                         }
                     }
                     backupRuleRecordList.add(viewRuleCopy);
@@ -213,6 +204,58 @@ public final class RuleBackupManager {
 
     static File createOperationDirectory(File cacheDir, String operation) {
         return new File(new File(cacheDir, operation), UUID.randomUUID().toString());
+    }
+
+    private static String copyImageToBackup(
+            File backupDir, String imagePath, String preferredPrefix,
+            ImageEntryRegistry imageEntries,
+            List<String> backupFilePathList) throws IOException {
+        if (TextUtils.isEmpty(imagePath)) return null;
+        String existingEntry = imageEntries.find(imagePath);
+        if (existingEntry != null) return existingEntry;
+        try (ParcelFileDescriptor pfd = RuleServiceClient.getDefault()
+                .openImageFileDescriptor(imagePath)) {
+            if (pfd == null) return null;
+            String sourceName = new File(imagePath).getName();
+            if (sourceName.isEmpty()) sourceName = "image.webp";
+            String entryName = imageEntries.reserve(preferredPrefix + sourceName);
+            File file = new File(backupDir, entryName);
+            try (InputStream in = new FileInputStream(pfd.getFileDescriptor());
+                 OutputStream out = new FileOutputStream(file)) {
+                if (!FileUtils.copy(in, out)) {
+                    throw new IOException("Failed to copy image: " + imagePath);
+                }
+            }
+            backupFilePathList.add(file.getPath());
+            imageEntries.record(imagePath, entryName);
+            return entryName;
+        }
+    }
+
+    static final class ImageEntryRegistry {
+        private final Map<String, String> entryByPath = new HashMap<>();
+        private final Set<String> usedNames = new HashSet<>();
+
+        String find(String sourcePath) {
+            return entryByPath.get(sourcePath);
+        }
+
+        void record(String sourcePath, String entryName) {
+            entryByPath.put(sourcePath, entryName);
+        }
+
+        String reserve(String preferredName) {
+            String safeName = preferredName == null || preferredName.isEmpty()
+                    ? "image.webp" : preferredName;
+            if (usedNames.add(safeName)) return safeName;
+            int dot = safeName.lastIndexOf('.');
+            String baseName = dot > 0 ? safeName.substring(0, dot) : safeName;
+            String extension = dot > 0 ? safeName.substring(dot) : "";
+            for (int index = 1; ; index++) {
+                String candidate = baseName + "_" + index + extension;
+                if (usedNames.add(candidate)) return candidate;
+            }
+        }
     }
 
     private static void cleanupTempDirectory(String operation, File dir) {

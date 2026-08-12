@@ -65,4 +65,22 @@ public final class RuleBackupManagerTest {
         }
     }
 
+    @Test
+    public void imageEntryRegistryDeduplicatesSourcesAndPreservesExtensions() {
+        RuleBackupManager.ImageEntryRegistry entries =
+                new RuleBackupManager.ImageEntryRegistry();
+
+        String first = entries.reserve("preview.webp");
+        entries.record("/first/preview.webp", first);
+        String second = entries.reserve("preview.webp");
+        entries.record("/second/preview.webp", second);
+        String third = entries.reserve("preview.webp");
+
+        assertEquals("preview.webp", first);
+        assertEquals("preview_1.webp", second);
+        assertEquals("preview_2.webp", third);
+        assertEquals(first, entries.find("/first/preview.webp"));
+        assertEquals(second, entries.find("/second/preview.webp"));
+    }
+
 }
