@@ -1,14 +1,16 @@
 *.iml
 .gradle
+/notes/
+/data/
 /local.properties
 .DS_Store
-/build
 /captures
 .externalNativeBuild
 .idea
-.omo
 /Xposed-GodMode-Pro.wiki/
+
 /AGENTS.md
+/.omo
 /.agents/
 /.learnings/
 /.codex/
@@ -20,9 +22,7 @@
 *.dex
 
 # Module build directories
-engine/build/
-app/build/
-libxservicemanager/build/
+build/
 
 # IDE
 *.swp
