@@ -19,7 +19,6 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.kaisar.xposed.godmode.R;
-import com.kaisar.xposed.godmode.engine.matcher.ViewTraversal;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.inject.ModuleBootstrap;
 import com.kaisar.xposed.godmode.util.ModuleResources;
@@ -36,6 +35,7 @@ import com.kaisar.xposed.godmode.rule.RuleRecord;
 
 import java.io.InputStream;
 import java.util.Objects;
+import java.lang.ref.WeakReference;
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedHelpers;
 
@@ -64,6 +64,7 @@ public class PropertyEditorPanel {
     private ImageView mPendingImageView;
     private Bitmap mOriginalImageBitmap;
     private Bitmap mPendingImageBitmap;
+    private Bitmap mInFlightImageBitmap;
     private boolean mSaving;
     private long mGeneration;
     private SessionListener mSessionListener;
@@ -109,8 +110,6 @@ public class PropertyEditorPanel {
     private ViewGroup.MarginLayoutParams mSavedLayoutParams;
     private int mSavedWidth = -1;
     private int mSavedHeight = -1;
-    private int mSavedPixelWidth;
-    private int mSavedPixelHeight;
     private float mSavedAlpha;
     private CharSequence mSavedText;
 
@@ -123,6 +122,8 @@ public class PropertyEditorPanel {
     private String mModifyingViewActClass;
 
     private boolean mActivityResultHooked;
+    private WeakReference<Activity> mEditingActivity = new WeakReference<>(null);
+    private long mImageRequestGeneration = -1L;
     private final IRuleEditor mRuleEditor;
 
     public PropertyEditorPanel(IRuleEditor ruleEditor) {
@@ -149,6 +150,7 @@ public class PropertyEditorPanel {
             mSaving = false;
             mPreviewing = false;
             mGeneration++;
+            mEditingActivity = new WeakReference<>(activity);
 
             ModuleResources.injectInto(activity.getResources());
             LayoutInflater inflater = LayoutInflater.from(activity);
@@ -184,6 +186,7 @@ public class PropertyEditorPanel {
         mPanelView = null;
         mTargetView = null;
         mPendingImageView = null;
+        mEditingActivity = new WeakReference<>(null);
         mOriginalImageBitmap = null;
         mModifyingViewDepth = null;
         mModifyingViewActClass = null;
@@ -195,7 +198,9 @@ public class PropertyEditorPanel {
         mSeekLayoutPending = false;
         mPendingSeekWidth = -1;
         mPendingSeekHeight = -1;
-        CommonUtils.recycleNullableBitmap(mPendingImageBitmap);
+        if (mPendingImageBitmap != mInFlightImageBitmap) {
+            CommonUtils.recycleNullableBitmap(mPendingImageBitmap);
+        }
         mPendingImageBitmap = null;
         notifySession();
             panel.animate().alpha(0).setDuration(ANIM_DURATION_MEDIUM).withEndAction(() -> {
@@ -269,6 +274,7 @@ public class PropertyEditorPanel {
         hookActivityResult(activity);
         panel.findViewById(R.id.mod_image_pick).setOnClickListener(v -> {
             try {
+                mImageRequestGeneration = mGeneration;
                 Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
                 intent.addCategory(Intent.CATEGORY_OPENABLE);
                 intent.setType("image/*");
@@ -364,8 +370,6 @@ public class PropertyEditorPanel {
         mSavedLayoutParams = null;
         mSavedWidth = -1;
         mSavedHeight = -1;
-        mSavedPixelWidth = view.getWidth();
-        mSavedPixelHeight = view.getHeight();
         mSavedAlpha = view.getAlpha();
         mSavedText = null;
         mOriginalImageBitmap = null;
@@ -484,6 +488,8 @@ public class PropertyEditorPanel {
         }
         final long generation = mGeneration;
         final String pkg = activity.getPackageName();
+        final Bitmap pendingImage = mPendingImageBitmap;
+        mInFlightImageBitmap = pendingImage;
         mSaving = true;
         setPanelControlsEnabled(false);
         notifySession();
@@ -498,8 +504,8 @@ public class PropertyEditorPanel {
         TaskExecutor.executeIo(() -> {
             boolean imageReady = true;
             try {
-                if (mPendingImageBitmap != null && !mPendingImageBitmap.isRecycled()) {
-                    String path = mRuleEditor.saveImageFile(pkg, mPendingImageBitmap);
+                if (pendingImage != null && !pendingImage.isRecycled()) {
+                    String path = mRuleEditor.saveImageFile(pkg, pendingImage);
                     if (path == null) imageReady = false; else rule.modImagePath = path;
                 }
             } catch (Exception e) { imageReady = false; Logger.e(TAG, "[ModifyPanel] image save failed", e); }
@@ -507,9 +513,12 @@ public class PropertyEditorPanel {
             mainHandler.post(() -> {
                 if (generation != mGeneration || mTargetView == null || !verifyViewIdentity(mTargetView)) {
                     CommonUtils.recycleNullableBitmap(finalSnapshot);
+                    releaseInFlightImage(pendingImage);
+                    abortSaveIfActive();
                     return;
                 }
                 if (!finalImageReady) {
+                    mInFlightImageBitmap = null;
                     finishSaveFailure(activity, "image save failed");
                     CommonUtils.recycleNullableBitmap(finalSnapshot);
                     return;
@@ -519,6 +528,7 @@ public class PropertyEditorPanel {
                 ViewController controller = RuleLifecycleManager.getInstance().getViewController(activity);
                 if (!controller.applyRule(target, rule)) {
                     applyDraftToView(target, rule);
+                    mInFlightImageBitmap = null;
                     finishSaveFailure(activity, "runtime apply failed");
                     CommonUtils.recycleNullableBitmap(finalSnapshot);
                     return;
@@ -530,14 +540,21 @@ public class PropertyEditorPanel {
                     final boolean finalAccepted = accepted;
                     mainHandler.post(() -> {
                         CommonUtils.recycleNullableBitmap(finalSnapshot);
-                        if (generation != mGeneration || mTargetView == null) return;
+                        if (generation != mGeneration || mTargetView != target
+                                || !verifyViewIdentity(target)) {
+                            releaseInFlightImage(pendingImage);
+                            abortSaveIfActive();
+                            return;
+                        }
                         mSaving = false;
+                        releaseInFlightImage(pendingImage);
                         if (finalAccepted) {
                             Toast.makeText(activity, GmResources.getString(R.string.toast_modifications_saved), Toast.LENGTH_SHORT).show();
                             dismiss();
                         } else {
                             controller.revokeRule(target, rule);
                             applyDraftToView(target, rule);
+                            mInFlightImageBitmap = null;
                             finishSaveFailure(activity, "request rejected");
                         }
                     });
@@ -571,6 +588,21 @@ public class PropertyEditorPanel {
         notifySession();
         Toast.makeText(activity, GmResources.getString(
                 R.string.toast_modifications_save_failed_format, reason), Toast.LENGTH_SHORT).show();
+    }
+
+    private void releaseInFlightImage(Bitmap image) {
+        if (mInFlightImageBitmap == image) {
+            CommonUtils.recycleNullableBitmap(image);
+            mInFlightImageBitmap = null;
+        }
+    }
+
+    private void abortSaveIfActive() {
+        if (mPanelView != null) {
+            mSaving = false;
+            setPanelControlsEnabled(true);
+            notifySession();
+        }
     }
 
     private void setPanelControlsEnabled(boolean enabled) {
@@ -611,23 +643,19 @@ public class PropertyEditorPanel {
                                     Bitmap bitmap = BitmapFactory.decodeStream(is);
                                     if (bitmap == null) return;
 
-                                    View targetView = null;
-                                    if (mModifyingViewDepth != null && mModifyingViewActClass != null
-                                            && mModifyingViewActClass.equals(currentActivity.getComponentName().getClassName())
-                                            && currentActivity.getWindow() != null) {
-                                        targetView = ViewTraversal.findViewByDepth(
-                                                currentActivity.getWindow().getDecorView(), mModifyingViewDepth);
-                                        if (targetView instanceof ImageView) {
-                                            mPendingImageView = (ImageView) targetView;
-                                            mTargetView = targetView;
-                                            saveViewState(targetView);
-                                        } else {
-                                            targetView = null;
-                                        }
+                                    Activity editingActivity = mEditingActivity.get();
+                                    if (mPanelView == null || mSaving || editingActivity == null
+                                            || currentActivity != editingActivity
+                                            || mImageRequestGeneration != mGeneration) {
+                                        CommonUtils.recycleNullableBitmap(bitmap);
+                                        return;
                                     }
-                                    if (targetView == null) {
-                                        targetView = mPendingImageView;
-                                        if (targetView == null || !targetView.isAttachedToWindow()) return;
+                                    View targetView = mPendingImageView;
+                                    if (!(targetView instanceof ImageView)
+                                            || targetView != mTargetView
+                                            || !verifyViewIdentity(targetView)) {
+                                        CommonUtils.recycleNullableBitmap(bitmap);
+                                        return;
                                     }
 
                                     CommonUtils.recycleNullableBitmap(mPendingImageBitmap);
@@ -649,10 +677,6 @@ public class PropertyEditorPanel {
 
     public View getPanelView() { return mPanelView; }
     public View getTargetView() { return mTargetView; }
-    public ImageView getPendingImageView() { return mPendingImageView; }
-    public void setPendingImageView(ImageView v) { mPendingImageView = v; }
-    public Bitmap getOriginalImageBitmap() { return mOriginalImageBitmap; }
-    public void setOriginalImageBitmap(Bitmap b) { mOriginalImageBitmap = b; }
     public boolean isSaving() { return mSaving; }
     public boolean isPreviewing() { return mPreviewing; }
     public void togglePreview() {
