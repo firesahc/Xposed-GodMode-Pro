@@ -2,22 +2,27 @@ package com.kaisar.xposed.godmode.engine.applier;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
-import android.content.Intent;
+import android.app.Activity;
+import android.app.Instrumentation;
 import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.os.ParcelFileDescriptor;
+import android.os.SystemClock;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.TextView;
 
-import androidx.test.core.app.ActivityScenario;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
+import androidx.test.platform.app.InstrumentationRegistry;
+import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry;
+import androidx.test.runner.lifecycle.Stage;
 
 import com.kaisar.xposed.godmode.engine.rule.ActionSpec;
 
@@ -27,16 +32,17 @@ import org.junit.runner.RunWith;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.util.ArrayDeque;
+import java.util.Collection;
 import java.util.Queue;
 import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicReference;
 
 @RunWith(AndroidJUnit4.class)
 public final class ModifyApplierInstrumentedTest {
 
     @Test
-    public void applyAndRevokeRestoreCapturedBaseline() {
-        try (ActivityScenario<ModifyApplierTestActivity> scenario = launch()) {
-            scenario.onActivity(activity -> {
+    public void applyAndRevokeRestoreCapturedBaseline() throws Exception {
+        withActivity(activity -> {
                 TextView view = attachText(activity, "host");
                 FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) view.getLayoutParams();
                 params.leftMargin = 7;
@@ -62,14 +68,12 @@ public final class ModifyApplierInstrumentedTest {
                 assertEquals(9, ((FrameLayout.LayoutParams) view.getLayoutParams()).topMargin);
                 assertEquals(0.65f, view.getAlpha(), 0f);
                 assertEquals("host", view.getText().toString());
-            });
-        }
+        });
     }
 
     @Test
-    public void revokePreservesPropertiesChangedByHost() {
-        try (ActivityScenario<ModifyApplierTestActivity> scenario = launch()) {
-            scenario.onActivity(activity -> {
+    public void revokePreservesPropertiesChangedByHost() throws Exception {
+        withActivity(activity -> {
                 TextView view = attachText(activity, "host");
                 ModifyApplier applier = directApplier();
                 ActionSpec action = modifyAction();
@@ -84,14 +88,12 @@ public final class ModifyApplierInstrumentedTest {
                 assertEquals(0.8f, view.getAlpha(), 0f);
                 assertEquals(260, view.getLayoutParams().width);
                 assertEquals(50, view.getLayoutParams().height);
-            });
-        }
+        });
     }
 
     @Test
-    public void repeatedApplyRetainsFirstBaseline() {
-        try (ActivityScenario<ModifyApplierTestActivity> scenario = launch()) {
-            scenario.onActivity(activity -> {
+    public void repeatedApplyRetainsFirstBaseline() throws Exception {
+        withActivity(activity -> {
                 TextView view = attachText(activity, "host");
                 ModifyApplier applier = directApplier();
                 ActionSpec action = modifyAction();
@@ -106,14 +108,12 @@ public final class ModifyApplierInstrumentedTest {
                 assertTrue(applier.revoke(view, action));
                 assertEquals("host", view.getText().toString());
                 assertEquals(1f, view.getAlpha(), 0f);
-            });
-        }
+        });
     }
 
     @Test
-    public void recycleRestoresBaselineBeforeNewBinding() {
-        try (ActivityScenario<ModifyApplierTestActivity> scenario = launch()) {
-            scenario.onActivity(activity -> {
+    public void recycleRestoresBaselineBeforeNewBinding() throws Exception {
+        withActivity(activity -> {
                 TextView view = attachText(activity, "row-a");
                 ModifyApplier applier = directApplier();
                 assertTrue(applier.apply(view, modifyAction()));
@@ -124,16 +124,14 @@ public final class ModifyApplierInstrumentedTest {
                 view.setText("row-b");
                 assertFalse(applier.revokeForView(view));
                 assertEquals("row-b", view.getText().toString());
-            });
-        }
+        });
     }
 
     @Test
     public void lateImageCannotOverwriteNewerRequest() throws Exception {
-        try (ActivityScenario<ModifyApplierTestActivity> scenario = launch()) {
-            File first = bitmapFile(scenario, Color.RED, "first.png");
-            File second = bitmapFile(scenario, Color.BLUE, "second.png");
-            scenario.onActivity(activity -> {
+        withActivity(activity -> {
+                File first = bitmapFile(activity, Color.RED, "first.png");
+                File second = bitmapFile(activity, Color.BLUE, "second.png");
                 ImageView view = new ImageView(activity);
                 Drawable baseline = new ColorDrawable(Color.GREEN);
                 view.setImageDrawable(baseline);
@@ -160,15 +158,13 @@ public final class ModifyApplierInstrumentedTest {
                 assertEquals(Color.BLUE, pixel(view));
                 assertTrue(applier.revoke(view, imageAction(second.getAbsolutePath())));
                 assertSame(baseline, view.getDrawable());
-            });
-        }
+        });
     }
 
     @Test
     public void clearingActivityStateDropsLateImageWithoutViewWrite() throws Exception {
-        try (ActivityScenario<ModifyApplierTestActivity> scenario = launch()) {
-            File image = bitmapFile(scenario, Color.RED, "destroy.png");
-            scenario.onActivity(activity -> {
+        withActivity(activity -> {
+                File image = bitmapFile(activity, Color.RED, "destroy.png");
                 ImageView view = new ImageView(activity);
                 Drawable baseline = new ColorDrawable(Color.GREEN);
                 view.setImageDrawable(baseline);
@@ -186,15 +182,44 @@ public final class ModifyApplierInstrumentedTest {
                 executor.remove().run();
                 assertTrue(dispatches.isEmpty());
                 assertSame(baseline, view.getDrawable());
-            });
-        }
+        });
     }
 
-    private static ActivityScenario<ModifyApplierTestActivity> launch() {
-        Intent intent = new Intent(
-                androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()
-                        .getTargetContext(), ModifyApplierTestActivity.class);
-        return ActivityScenario.launch(intent);
+    private static void withActivity(ActivityAssertion assertion) throws Exception {
+        ModifyApplierTestActivity activity = awaitActivity(10_000L);
+        assertNotNull("Test host Activity was not started", activity);
+        Instrumentation instrumentation = InstrumentationRegistry.getInstrumentation();
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        instrumentation.runOnMainSync(() -> {
+            try {
+                assertion.run(activity);
+            } catch (Throwable throwable) {
+                failure.set(throwable);
+            }
+        });
+        Throwable throwable = failure.get();
+        if (throwable instanceof Exception) throw (Exception) throwable;
+        if (throwable instanceof Error) throw (Error) throwable;
+    }
+
+    private static ModifyApplierTestActivity awaitActivity(long timeoutMillis) {
+        long deadline = SystemClock.uptimeMillis() + timeoutMillis;
+        while (SystemClock.uptimeMillis() < deadline) {
+            AtomicReference<ModifyApplierTestActivity> found = new AtomicReference<>();
+            InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+                Collection<Activity> resumed = ActivityLifecycleMonitorRegistry.getInstance()
+                        .getActivitiesInStage(Stage.RESUMED);
+                for (Activity activity : resumed) {
+                    if (activity instanceof ModifyApplierTestActivity) {
+                        found.set((ModifyApplierTestActivity) activity);
+                        break;
+                    }
+                }
+            });
+            if (found.get() != null) return found.get();
+            SystemClock.sleep(50L);
+        }
+        return null;
     }
 
     private static ModifyApplier directApplier() {
@@ -230,23 +255,18 @@ public final class ModifyApplierInstrumentedTest {
         return new ActionSpec.Builder().ruleTag("modify").modImagePath(path).build();
     }
 
-    private static File bitmapFile(ActivityScenario<ModifyApplierTestActivity> scenario,
-            int color, String name) {
-        final File[] output = new File[1];
-        scenario.onActivity(activity -> {
-            File file = new File(activity.getCacheDir(), name);
-            Bitmap bitmap = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888);
-            bitmap.eraseColor(color);
-            try (FileOutputStream stream = new FileOutputStream(file)) {
-                bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream);
-            } catch (Exception error) {
-                throw new AssertionError(error);
-            } finally {
-                bitmap.recycle();
-            }
-            output[0] = file;
-        });
-        return output[0];
+    private static File bitmapFile(ModifyApplierTestActivity activity, int color, String name) {
+        File file = new File(activity.getCacheDir(), name);
+        Bitmap bitmap = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888);
+        bitmap.eraseColor(color);
+        try (FileOutputStream stream = new FileOutputStream(file)) {
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream);
+        } catch (Exception error) {
+            throw new AssertionError(error);
+        } finally {
+            bitmap.recycle();
+        }
+        return file;
     }
 
     private static int pixel(ImageView view) {
@@ -270,5 +290,9 @@ public final class ModifyApplierInstrumentedTest {
         Runnable remove() {
             return tasks.remove();
         }
+    }
+
+    private interface ActivityAssertion {
+        void run(ModifyApplierTestActivity activity) throws Exception;
     }
 }
