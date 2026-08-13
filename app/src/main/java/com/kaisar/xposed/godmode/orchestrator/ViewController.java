@@ -20,7 +20,9 @@ import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.ipc.RuleServiceClient;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -51,6 +53,8 @@ public final class ViewController {
     private RuleApplier mModifyApplier;
     private RuleApplier mRemoveApplier;
     private Matcher mMatcher;
+    private final Map<RuleRecord, List<WeakReference<View>>> mAppliedRuleTargets =
+            new HashMap<>();
 
     /** Activity 类名，Activity 级实例时非 null */
     private final String mActivityClassName;
@@ -148,6 +152,7 @@ public final class ViewController {
     public synchronized void clearBlockedCache() {
         if (mRemoveApplier != null) mRemoveApplier.clearCache();
         if (mModifyApplier != null) mModifyApplier.clearCache();
+        mAppliedRuleTargets.clear();
     }
 
     /** 将 app 模块的 RuleRecord 转换为 engine 模块的 RuleMatchSpec */
@@ -271,11 +276,11 @@ public final class ViewController {
 
         v = resolveCardTarget(v, viewRule);
 
-        if (viewRule.isModifyRule()) {
-            return getModifyApplier().apply(v, spec);
-        } else {
-            return getRemoveApplier().apply(v, spec);
-        }
+        boolean applied = viewRule.isModifyRule()
+                ? getModifyApplier().apply(v, spec)
+                : getRemoveApplier().apply(v, spec);
+        if (applied) rememberAppliedTarget(viewRule, v);
+        return applied;
     }
 
     /** 批量撤销规则 */
@@ -286,6 +291,7 @@ public final class ViewController {
         for (RuleRecord rule : rules) {
             try {
                 RuleMatchSpec engineRule = toEngineRule(rule);
+                if (revokeRememberedTargets(rule)) continue;
                 if (rule.isRepeatable()) {
                     List<View> views = getMatcher().matchAllViews(decorView, engineRule.getMatchSpec());
                     if (views != null) {
@@ -308,6 +314,26 @@ public final class ViewController {
         }
     }
 
+    private synchronized void rememberAppliedTarget(RuleRecord rule, View view) {
+        RuleRecord key = rule.clone();
+        List<WeakReference<View>> targets = mAppliedRuleTargets.computeIfAbsent(
+                key, unused -> new ArrayList<>());
+        for (WeakReference<View> target : targets) {
+            if (target.get() == view) return;
+        }
+        targets.add(new WeakReference<>(view));
+    }
+
+    private synchronized boolean revokeRememberedTargets(RuleRecord rule) {
+        List<WeakReference<View>> targets = mAppliedRuleTargets.remove(rule);
+        if (targets == null) return false;
+        for (WeakReference<View> target : targets) {
+            View view = target.get();
+            if (view != null) revokeRule(view, rule);
+        }
+        return true;
+    }
+
     /** 撤销单条规则 */
     public void revokeRule(View v, RuleRecord viewRule) {
         if (v == null || viewRule == null) return;
@@ -324,6 +350,14 @@ public final class ViewController {
                         + " for view=" + v + " rule=" + viewRule);
             }
         }
+        forgetAppliedTarget(viewRule, v);
+    }
+
+    private synchronized void forgetAppliedTarget(RuleRecord rule, View view) {
+        List<WeakReference<View>> targets = mAppliedRuleTargets.get(rule);
+        if (targets == null) return;
+        targets.removeIf(target -> target.get() == null || target.get() == view);
+        if (targets.isEmpty()) mAppliedRuleTargets.remove(rule);
     }
 
     /**
