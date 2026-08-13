@@ -219,11 +219,11 @@
             android:tag="@string/tag_gm_cmp" />
 
         <Button
-            android:id="@+id/mod_confirm"
+            android:id="@+id/mod_save"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="@string/modify_confirm"
+            android:text="@string/modify_save"
             android:textSize="12sp"
             android:tag="@string/tag_gm_cmp" />
     </LinearLayout>

@@ -71,10 +71,7 @@
 
 <b>5. Remove Mode</b><br>
 <br><b>Preview</b> — Temporarily hide the element, tap again to restore<br>
-<br><b>Block</b> (three ways):<br>
-① Select element → tap <b>Block</b> button on panel<br>
-② <b>Long-press</b> element ~0.5s → green overlay + cancel zone at top → release outside cancel zone → particle burst animation<br>
-③ Long-press then drag to <b>top green cancel zone</b> → operation cancelled<br>
+<br><b>Block</b> — Select an element, then tap <b>Block</b> on the toolbar<br>
 <br><i>Rules and screenshots saved automatically</i><br><br>
 
 <b>6. Modify Mode</b><br>
@@ -86,14 +83,8 @@
 &ensp;&#8226; <b>Position</b> &ensp;&ensp; Arrow keys, 10px per step<br>
 &ensp;&#8226; <b>Text</b> &ensp;&ensp;&ensp;&ensp;&ensp; Edit TextView content<br>
 &ensp;&#8226; <b>Image</b> &ensp;&ensp;&ensp; Pick from gallery for ImageView<br>
-③ Tap <b>Confirm</b> to preview, <b>Cancel</b> to revert<br>
-④ After all changes, tap <b>Save</b> button on the panel to persist<br>
-<br><b>◆ Drag to Reposition</b><br>
-In modify mode, <b>long-press anywhere</b> to drag the <b>selected element</b>:<br>
-&#8226; 16dp grid snap — aligns to grid<br>
-&#8226; 12dp edge snap — snaps to sibling edges<br>
-&#8226; Position auto-saved as a modify rule on release<br>
-<br><i>Multiple elements can be modified before saving once</i><br><br>
+③ Tap <b>Preview</b> on the toolbar to hide or restore the property panel<br>
+④ Tap <b>Save</b> in the property panel to persist this target, or <b>Cancel</b> to revert<br><br>
 
 <b>7. Rule Management</b><br>
 <br><b>View &amp; Details</b><br>
@@ -166,7 +157,8 @@ In modify mode, <b>long-press anywhere</b> to drag the <b>selected element</b>:<
     <string name="accessibility_preview_exit">Exit preview</string>
     <string name="accessibility_exchange">Toggle position</string>
     <string name="accessibility_modify">Modify properties</string>
-    <string name="accessibility_save_modify">Save modifications</string>
+    <string name="accessibility_modify_preview">Hide edit panel and preview</string>
+    <string name="accessibility_modify_preview_exit">Exit preview and show edit panel</string>
     <string name="accessibility_up">Previous</string>
     <string name="accessibility_down">Next</string>
     <string name="mode_remove">Remove Mode</string>
@@ -179,7 +171,7 @@ In modify mode, <b>long-press anywhere</b> to drag the <b>selected element</b>:<
     <string name="modify_text">Text</string>
     <string name="modify_image_pick">Pick Image</string>
     <string name="modify_cancel">Cancel</string>
-    <string name="modify_confirm">Confirm</string>
+    <string name="modify_save">Save</string>
     <string name="block_fail">Failed to block: %1$s</string>
 
     <string name="about_version">Version</string>

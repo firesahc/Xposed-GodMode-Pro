@@ -182,13 +182,13 @@
                     android:tag="@string/tag_gm_cmp" />
 
                 <ImageButton
-                    android:id="@+id/save_modify"
+                    android:id="@+id/modify_preview"
                     android:layout_width="48dp"
                     android:layout_height="48dp"
                     android:layout_gravity="center"
                     android:background="@drawable/ripple_drawable_20dp"
-                    android:contentDescription="@string/accessibility_save_modify"
-                    android:src="@android:drawable/ic_menu_save"
+                    android:contentDescription="@string/accessibility_modify_preview"
+                    android:src="@android:drawable/ic_menu_view"
                     android:tag="@string/tag_gm_cmp" />
 
             </LinearLayout>

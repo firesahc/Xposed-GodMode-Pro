@@ -19,8 +19,7 @@ import com.kaisar.xposed.godmode.util.TaskExecutor;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 
 /**
- * 粒子动画辅助工具 — 统一 BlockHandler 和 RemoveGestureHandler 中共用的
- * 粒子破碎动画 + IPC 持久化流程。
+ * 粒子动画辅助工具 — 执行工具栏移除操作的粒子动画和 IPC 持久化流程。
  * <p>
  * 流程：创建 ParticleView → 启动动画 → onAnimationStart 中应用规则 +
  * 截图遮罩 + 分离遮罩 → onAnimationEnd 中异步 IPC 写入 + Bitmap 回收。

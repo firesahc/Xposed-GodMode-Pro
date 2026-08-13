@@ -39,8 +39,7 @@ import java.util.List;
  * 编辑器编排器 — 管理编辑模式的核心类，连接按键拦截器（KeyInterceptor）和触摸拦截器（TouchInterceptor）。
  * 负责调度视图选择、屏蔽、预览、修改等交互操作，通过 Hook 系统与目标应用交互。
  * <p>
- * 内部管理多个子组件：节点选择面板、属性编辑器、预览处理器，以及移除/修改手势处理器。
- * 同时维护触摸事件分发、长按检测、多点锁定等手势交互逻辑。
+ * 内部管理节点选择面板、属性编辑器、预览处理器和触摸选择处理器。
  * 按键和触摸事件通过 inject/hooks 中的交互 Hook 转发到这里。
  */
 public final class EditorOrchestrator implements Property.OnPropertyChangeListener<Boolean>,
@@ -92,9 +91,8 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
                 }
 
                 @Override
-                public void onSaveModifyRequested(Activity activity) {
-                    mPropertyEditor.saveAll(activity, mNodePanel.getPanelView(),
-                            mNodePanel.getMaskView(), mPropertyEditor.getPanelView());
+                public void onModifyPreviewRequested(Activity activity) {
+                    mPropertyEditor.togglePreview();
                 }
 
                 @Override
@@ -134,9 +132,26 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     public EditorOrchestrator(Property<Boolean> switchProp, IRuleEditor ruleEditor) {
         this.mSwitchProp = switchProp;
         this.mRuleEditor = ruleEditor;
-        this.mPropertyEditor = new PropertyEditorPanel(ruleEditor);
-        this.mTouchEventHandler = new TouchEventHandler(this, ruleEditor);
+        this.mPropertyEditor = new PropertyEditorPanel(ruleEditor,
+                (active, previewing, previewToggleEnabled) -> {
+                    mNodePanel.setModifySessionLocked(active);
+                    mNodePanel.setModifyPreviewing(previewing);
+                    mNodePanel.setModifyPreviewEnabled(previewToggleEnabled);
+                    MaskView mask = mNodePanel.getMaskView();
+                    if (mask == null) return;
+                    View target = getModifyTargetView();
+                    if (previewing || target == null || !target.isAttachedToWindow()) {
+                        mask.updateOverlayBounds(new Rect());
+                    } else {
+                        mask.updateOverlayBounds(ViewUtils.getLocationInWindow(target));
+                    }
+                });
+        this.mTouchEventHandler = new TouchEventHandler(this);
         this.mSeekBarHandler = new SeekBarHandler(mNodePanel, mPropertyEditor);
+    }
+
+    private View getModifyTargetView() {
+        return mPropertyEditor.getTargetView();
     }
 
     // =========================================================================
@@ -154,9 +169,6 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
         return mKeyEventHandler.isInfoFlowMode();
     }
 
-    public boolean isDragging() {
-        return mTouchEventHandler.isDragging();
-    }
 
     // =========================================================================
     // 音量键事件处理（ActivityKeyHook 相关）    // =========================================================================
@@ -166,6 +178,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
      * 由 ActivityKeyHook 通过按键事件触发调用。
      */
     public void onVolumeKeyToggle(Activity activity) {
+        if (mPropertyEditor.isShowing()) return;
         mKeyEventHandler.onVolumeKeyToggle(activity);
     }
 
@@ -185,6 +198,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     public void setActivity(final Activity a) {
         Activity current = mCurrentActivityRef.get();
         if (current != null && current != a && mNodePanel.isKeySelecting()) {
+            mPropertyEditor.abandon();
             dismissNodeSelectPanel();
         }
         mCurrentActivityRef = new WeakReference<>(a);
@@ -262,9 +276,11 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
 
     private void dismissNodeSelectPanel() {
         Logger.i(TAG, "[KeyEventHook] dismissNodeSelectPanel");
+        if (mPropertyEditor.isSaving()) return;
         mPropertyEditor.cancel();
         mPreviewHandler.restorePreview(null, null, null);
         mInteractionMode = EditorInteractionMode.INITIAL;
+        mNodePanel.setModifySessionLocked(false);
         mNodePanel.dismiss();
     }
 
@@ -378,7 +394,6 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
         mIsInEditMode = enable;
         if (!enable) {
             mInteractionMode = EditorInteractionMode.INITIAL;
-            mTouchEventHandler.resetState();
         }
     }
 

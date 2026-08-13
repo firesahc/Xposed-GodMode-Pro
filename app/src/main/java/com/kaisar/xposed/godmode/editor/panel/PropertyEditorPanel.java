@@ -19,16 +19,15 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.kaisar.xposed.godmode.R;
-import com.kaisar.xposed.godmode.engine.matcher.CompositeMatcher;
 import com.kaisar.xposed.godmode.engine.matcher.ViewTraversal;
-import com.kaisar.xposed.godmode.engine.rule.ActionSpec;
-import com.kaisar.xposed.godmode.engine.rule.RuleMapper;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.inject.ModuleBootstrap;
 import com.kaisar.xposed.godmode.util.ModuleResources;
 import com.kaisar.xposed.godmode.editor.IRuleEditor;
 import com.kaisar.xposed.godmode.rule.RuleRecordFactory;
 import com.kaisar.xposed.godmode.rule.ViewSnapshot;
+import com.kaisar.xposed.godmode.orchestrator.RuleLifecycleManager;
+import com.kaisar.xposed.godmode.orchestrator.ViewController;
 import com.kaisar.xposed.godmode.util.BitmapUtils;
 import com.kaisar.xposed.godmode.util.GmResources;
 import com.kaisar.xposed.godmode.util.TaskExecutor;
@@ -36,11 +35,7 @@ import com.kaisar.xposed.godmode.util.ViewUtils;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 
 import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
+import java.util.Objects;
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedHelpers;
 
@@ -52,10 +47,7 @@ import de.robv.android.xposed.XposedHelpers;
  * <ul>
  *   <li>UI built from R.layout.panel_modify with sliders, text fields, and preview</li>
  *   <li>Supports image replacement via gallery/file picker (Activity result)</li>
- *   <li>Tracks pending modifications in {@link #mTempModifications} as {@link ActionSpec}
- *       for batch save/cancel — cancel discards ActionSpec with no side effects</li>
- *   <li>{@link #mOriginalRule} stores structure fields (depth/viewClass/resourceName)
- *       captured once, merged with ActionSpec on save</li>
+ *   <li>Captures one target baseline and writes one RuleRecord per save</li>
  *   <li>Hooks Activity.onActivityResult to handle image picker result</li>
  * </ul>
  */
@@ -72,7 +64,10 @@ public class PropertyEditorPanel {
     private ImageView mPendingImageView;
     private Bitmap mOriginalImageBitmap;
     private Bitmap mPendingImageBitmap;
-    private HashMap<String, Bitmap> mPendingModBitmaps = new HashMap<>();
+    private boolean mSaving;
+    private long mGeneration;
+    private SessionListener mSessionListener;
+    private boolean mPreviewing;
 
     // SeekBar 拖动帧级合并：避免每次 onProgressChanged 触发 setLayoutParams → requestLayout
     private int mPendingSeekWidth = -1;
@@ -102,14 +97,11 @@ public class PropertyEditorPanel {
         }
     };
 
-    // Pending modifications keyed by view key — batch saved or cancelled together.
-    // Changed from RuleRecord to ActionSpec: only stores modify fields,
-    // cancel discards with no side effects.
-    final HashMap<String, ActionSpec> mTempModifications = new HashMap<>();
-
-    // Original rule with structure fields (depth/viewClass/activityClass/itemPath etc.)
-    // — captured once when editing begins, merged with mTempModifications on save.
     private RuleRecord mOriginalRule;
+
+    public interface SessionListener {
+        void onSessionStateChanged(boolean active, boolean previewing, boolean previewToggleEnabled);
+    }
 
     // Saved original view state before modification — used for revert / cancel
 
@@ -134,7 +126,12 @@ public class PropertyEditorPanel {
     private final IRuleEditor mRuleEditor;
 
     public PropertyEditorPanel(IRuleEditor ruleEditor) {
+        this(ruleEditor, null);
+    }
+
+    public PropertyEditorPanel(IRuleEditor ruleEditor, SessionListener sessionListener) {
         this.mRuleEditor = ruleEditor;
+        this.mSessionListener = sessionListener;
     }
 
     /**
@@ -147,6 +144,11 @@ public class PropertyEditorPanel {
             saveViewState(targetView);
             // 在视图被编辑前捕获原始状态快照
             mSnapshot = ViewSnapshot.capture(targetView);
+            mOriginalRule = RuleRecordFactory.makeModifyRule(targetView, mSnapshot,
+                    ModuleBootstrap.getEditorOrchestrator().isInfoFlowMode());
+            mSaving = false;
+            mPreviewing = false;
+            mGeneration++;
 
             ModuleResources.injectInto(activity.getResources());
             LayoutInflater inflater = LayoutInflater.from(activity);
@@ -160,10 +162,17 @@ public class PropertyEditorPanel {
             setupConfirmCancel(mPanelView, targetView);
 
             container.addView(mPanelView);
+            notifySession();
             mPanelView.setAlpha(0);
             mPanelView.animate().alpha(1).setDuration(ANIM_DURATION_SHORT).start();
         } catch (Exception e) {
             Logger.e(TAG, "[ModifyPanel] showModifyPanel fail", e);
+            mPanelView = null;
+            mTargetView = null;
+            mOriginalRule = null;
+            mSnapshot = null;
+            mGeneration++;
+            notifySession();
             dismiss();
         }
     }
@@ -179,14 +188,16 @@ public class PropertyEditorPanel {
         mModifyingViewDepth = null;
         mModifyingViewActClass = null;
         mSnapshot = null;
-        // mOriginalRule 和 mTempModifications 不移除：confirm 后保留累积修改，
-        // 供 saveAll() 持久化；cancel 路径通过 revertViewState() 已清理当前视图。
-        // 参见 saveAll() 末尾的 mTempModifications.clear()、cancel() 中的 revertViewState()。
+        mOriginalRule = null;
+        mSaving = false;
+        mPreviewing = false;
+        mGeneration++;
         mSeekLayoutPending = false;
         mPendingSeekWidth = -1;
         mPendingSeekHeight = -1;
-        // Recycle pending mod bitmaps on dismiss (mPendingModBitmaps stores loaded replacement images).
-        // For cancel() / saveAll() see the confirm/cancel button handlers.
+        CommonUtils.recycleNullableBitmap(mPendingImageBitmap);
+        mPendingImageBitmap = null;
+        notifySession();
             panel.animate().alpha(0).setDuration(ANIM_DURATION_MEDIUM).withEndAction(() -> {
             ViewGroup parent = (ViewGroup) panel.getParent();
             if (parent != null) parent.removeView(panel);
@@ -195,12 +206,17 @@ public class PropertyEditorPanel {
 
     /** Handle Activity onActivityResult for image picker callback. */
     public void cancel() {
+        if (mSaving) return;
         revertViewState();
-        mPendingModBitmaps.values().forEach(
-                CommonUtils::recycleNullableBitmap);
-        mPendingModBitmaps.clear();
         CommonUtils.recycleNullableBitmap(mPendingImageBitmap);
         mPendingImageBitmap = null;
+        dismiss();
+    }
+
+    /** Release a panel owned by an Activity that is leaving the editor. */
+    public void abandon() {
+        mGeneration++;
+        mSaving = false;
         dismiss();
     }
 
@@ -296,11 +312,7 @@ public class PropertyEditorPanel {
         EditText textInput = panel.findViewById(R.id.mod_text_input);
 
         panel.findViewById(R.id.mod_cancel).setOnClickListener(v -> cancel());
-        panel.findViewById(R.id.mod_confirm).setOnClickListener(v -> {
-            applyModification(mTargetView != null ? mTargetView : selectedView,
-                    widthSeek, heightSeek, alphaSeek, textInput);
-            dismiss();
-        });
+        panel.findViewById(R.id.mod_save).setOnClickListener(v -> saveCurrent());
     }
 
     // ---- SeekBar 绑定逻辑 ----
@@ -423,8 +435,6 @@ public class PropertyEditorPanel {
             }
         }
 
-        String viewKey = ViewUtils.getViewKey(mTargetView);
-        mTempModifications.remove(viewKey);
     }
 
     /** 验证目标视图是否仍然是修改时选中的那个视图（通过层级深度和 Activity 身份校验）*/
@@ -438,188 +448,145 @@ public class PropertyEditorPanel {
         return java.util.Arrays.equals(mModifyingViewDepth, currentDepth);
     }
 
-    // ---- Confirm / Cancel buttons ----
+    private RuleRecord buildCurrentRule(View view) {
+        if (mOriginalRule == null) return null;
+        RuleRecord rule = mOriginalRule.clone();
+        ViewGroup.LayoutParams lp = view.getLayoutParams();
+        int w = lp != null && lp.width > 0 ? lp.width : view.getWidth();
+        int h = lp != null && lp.height > 0 ? lp.height : view.getHeight();
+        float alpha = view.getAlpha();
+        if (rule.origWidth > 0 && w != rule.origWidth) rule.modWidth = w;
+        if (rule.origHeight > 0 && h != rule.origHeight) rule.modHeight = h;
+        if (Math.abs(rule.origAlpha - alpha) > 0.01f) rule.modAlpha = alpha;
+        if (view instanceof TextView
+                && !Objects.equals(rule.origText, ((TextView) view).getText().toString())) {
+            rule.modText = ((TextView) view).getText().toString();
+        }
+        if (view instanceof ImageView && mPendingImageBitmap != null) rule.modImagePath = "pending";
+        ViewGroup.LayoutParams current = view.getLayoutParams();
+        if (current instanceof ViewGroup.MarginLayoutParams && mSavedLayoutParams != null) {
+            ViewGroup.MarginLayoutParams margins = (ViewGroup.MarginLayoutParams) current;
+            rule.modXOffset = margins.leftMargin - mSavedLayoutParams.leftMargin;
+            rule.modYOffset = margins.topMargin - mSavedLayoutParams.topMargin;
+        }
+        return rule;
+    }
 
-    /** 应用 UI 控件的修改值到 ActionSpec（创建或更新）。
-     * <p>
-     * 仅存储修改字段（mod*），结构字段始终从 {@link #mOriginalRule} 获取。
-     * 取消时丢弃 ActionSpec 即可，无副作用。
-     * 修改值（mod*）来自 UI 控件当前状态。 */
-    private void applyModification(View view, SeekBar widthSeek, SeekBar heightSeek,
-                                    SeekBar alphaSeek, EditText textInput) {
-        int w = widthSeek.getProgress();
-        int h = heightSeek.getProgress();
-        float a = alphaSeek.getProgress() / 255f;
+    public void saveCurrent() {
+        if (mSaving || mTargetView == null) return;
+        Activity activity = ViewUtils.getAttachedActivityFromView(mTargetView);
+        if (activity == null || !verifyViewIdentity(mTargetView)) return;
+        mApplySeekLayoutRunnable.run();
+        final RuleRecord rule = buildCurrentRule(mTargetView);
+        if (rule == null || !rule.hasModifications()) {
+            Toast.makeText(activity, GmResources.getString(R.string.toast_no_modifications_to_save), Toast.LENGTH_SHORT).show();
+            return;
+        }
+        final long generation = mGeneration;
+        final String pkg = activity.getPackageName();
+        mSaving = true;
+        setPanelControlsEnabled(false);
+        notifySession();
 
-        String viewKey = ViewUtils.getViewKey(view);
-        ActionSpec spec = mTempModifications.get(viewKey);
-        if (spec == null) {
-            // 第一次修改：创建 mOriginalRule（结构字段）和 ActionSpec（修改字段）
-            if (mOriginalRule == null) {
-                mOriginalRule = RuleRecordFactory.makeModifyRule(view, mSnapshot, ModuleBootstrap.getEditorOrchestrator().isInfoFlowMode());
+        Bitmap snapshot = null;
+        try {
+            snapshot = BitmapUtils.snapshotView(ViewUtils.findTopParentViewByChildView(mTargetView));
+            BitmapUtils.drawRectMask(snapshot, rule.x, rule.y, rule.width, rule.height);
+        } catch (Exception e) { Logger.w(TAG, "[ModifyPanel] snapshot failed", e); }
+        final Bitmap finalSnapshot = snapshot;
+        android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+        TaskExecutor.executeIo(() -> {
+            boolean imageReady = true;
+            try {
+                if (mPendingImageBitmap != null && !mPendingImageBitmap.isRecycled()) {
+                    String path = mRuleEditor.saveImageFile(pkg, mPendingImageBitmap);
+                    if (path == null) imageReady = false; else rule.modImagePath = path;
+                }
+            } catch (Exception e) { imageReady = false; Logger.e(TAG, "[ModifyPanel] image save failed", e); }
+            final boolean finalImageReady = imageReady;
+            mainHandler.post(() -> {
+                if (generation != mGeneration || mTargetView == null || !verifyViewIdentity(mTargetView)) {
+                    CommonUtils.recycleNullableBitmap(finalSnapshot);
+                    return;
+                }
+                if (!finalImageReady) {
+                    finishSaveFailure(activity, "image save failed");
+                    CommonUtils.recycleNullableBitmap(finalSnapshot);
+                    return;
+                }
+                View target = mTargetView;
+                revertViewState();
+                ViewController controller = RuleLifecycleManager.getInstance().getViewController(activity);
+                if (!controller.applyRule(target, rule)) {
+                    applyDraftToView(target, rule);
+                    finishSaveFailure(activity, "runtime apply failed");
+                    CommonUtils.recycleNullableBitmap(finalSnapshot);
+                    return;
+                }
+                TaskExecutor.executeIo(() -> {
+                    boolean accepted;
+                    try { accepted = mRuleEditor.writeRule(pkg, rule, finalSnapshot); }
+                    catch (Exception e) { accepted = false; Logger.e(TAG, "[ModifyPanel] writeRule failed", e); }
+                    final boolean finalAccepted = accepted;
+                    mainHandler.post(() -> {
+                        CommonUtils.recycleNullableBitmap(finalSnapshot);
+                        if (generation != mGeneration || mTargetView == null) return;
+                        mSaving = false;
+                        if (finalAccepted) {
+                            Toast.makeText(activity, GmResources.getString(R.string.toast_modifications_saved), Toast.LENGTH_SHORT).show();
+                            dismiss();
+                        } else {
+                            controller.revokeRule(target, rule);
+                            applyDraftToView(target, rule);
+                            finishSaveFailure(activity, "request rejected");
+                        }
+                    });
+                });
+            });
+        });
+    }
+
+    private void applyDraftToView(View target, RuleRecord rule) {
+        ViewGroup.LayoutParams lp = target.getLayoutParams();
+        if (lp != null) {
+            if (rule.isWidthModified()) lp.width = rule.modWidth;
+            if (rule.isHeightModified()) lp.height = rule.modHeight;
+            if (lp instanceof ViewGroup.MarginLayoutParams && mSavedLayoutParams != null) {
+                ViewGroup.MarginLayoutParams margins = (ViewGroup.MarginLayoutParams) lp;
+                margins.leftMargin = mSavedLayoutParams.leftMargin + rule.modXOffset;
+                margins.topMargin = mSavedLayoutParams.topMargin + rule.modYOffset;
             }
-            spec = mOriginalRule.asActionSpec();
-            mTempModifications.put(viewKey, spec);
+            target.setLayoutParams(lp);
         }
-
-        if (mOriginalRule.origWidth > 0 && w != mOriginalRule.origWidth) {
-            spec.modWidth = w;
-        }
-        if (mOriginalRule.origHeight > 0 && h != mOriginalRule.origHeight) {
-            spec.modHeight = h;
-        }
-        if (Math.abs(mOriginalRule.origAlpha - a) > 0.01f) {
-            spec.modAlpha = a;
-        }
-
-        if (view instanceof TextView && textInput != null && textInput.getVisibility() == View.VISIBLE) {
-            String newText = textInput.getText().toString();
-            if (!newText.equals(mOriginalRule.origText)) {
-                spec.modText = newText;
-            }
-        }
-
-        if (!spec.isWidthModified() && !spec.isHeightModified() && !spec.isAlphaModified()
-                && !spec.isTextModified() && !spec.isImageModified()
-                && !spec.isPositionModified()) {
-            mTempModifications.remove(viewKey);
+        if (rule.isAlphaModified()) target.setAlpha(rule.modAlpha);
+        if (target instanceof TextView && rule.isTextModified()) ((TextView) target).setText(rule.modText);
+        if (target instanceof ImageView && mPendingImageBitmap != null && !mPendingImageBitmap.isRecycled()) {
+            ((ImageView) target).setImageBitmap(mPendingImageBitmap);
         }
     }
 
-    /**
-     * 保存所有修改到规则文件，同时生成截图快照，
-     * 清理临时修改缓存，完成后通过回调通知结果。
-     */
-    public void saveAll(Activity activity, View nodeSelectorPanel, View maskView, View modifyPanel) {
-        if (mTempModifications.isEmpty() || mOriginalRule == null) {
-            Toast.makeText(activity, GmResources.getString(R.string.toast_no_modifications_to_save), Toast.LENGTH_SHORT).show();
-            return;
-        }
-        String pkg = activity.getPackageName();
+    private void finishSaveFailure(Activity activity, String reason) {
+        mSaving = false;
+        setPanelControlsEnabled(true);
+        notifySession();
+        Toast.makeText(activity, GmResources.getString(
+                R.string.toast_modifications_save_failed_format, reason), Toast.LENGTH_SHORT).show();
+    }
 
-        // 合并 ActionSpec 修改字段到 RuleRecord 结构 → 完整 RuleRecord 列表
-        final List<RuleRecord> rulesToSave = new ArrayList<>();
-        for (Map.Entry<String, ActionSpec> entry : mTempModifications.entrySet()) {
-            RuleRecord rule = mOriginalRule.clone();
-            ActionSpec spec = entry.getValue();
-            // 将 ActionSpec 的修改字段拷贝到 RuleRecord
-            rule.modWidth = spec.modWidth;
-            rule.modHeight = spec.modHeight;
-            rule.modAlpha = spec.modAlpha;
-            rule.modXOffset = spec.modXOffset;
-            rule.modYOffset = spec.modYOffset;
-            rule.modText = spec.modText;
-            rule.modImagePath = spec.modImagePath;
-            rule.origWidth = spec.origWidth;
-            rule.origHeight = spec.origHeight;
-            rule.origAlpha = spec.origAlpha;
-            rule.origText = spec.origText;
-            rule.origLeftMargin = spec.origLeftMargin;
-            rule.origTopMargin = spec.origTopMargin;
-
-            if ("pending".equals(rule.modImagePath)) {
-                StringBuilder sb = new StringBuilder(rule.activityClass);
-                if (rule.depth != null) {
-                    for (int d : rule.depth) sb.append('_').append(d);
-                }
-                String viewKey = sb.toString();
-                Bitmap bmp = mPendingModBitmaps.get(viewKey);
-                if (bmp != null && !bmp.isRecycled()) {
-                    String savedPath = mRuleEditor.saveImageFile(pkg, bmp);
-                    rule.modImagePath = savedPath != null ? savedPath : null;
-                } else {
-                    rule.modImagePath = null;
-                }
-            }
-
-            if (rule.hasModifications()) {
-                rulesToSave.add(rule);
-            }
+    private void setPanelControlsEnabled(boolean enabled) {
+        if (mPanelView == null) return;
+        mPanelView.setEnabled(enabled);
+        if (mPanelView instanceof ViewGroup) {
+            setChildrenEnabled((ViewGroup) mPanelView, enabled);
         }
-        if (rulesToSave.isEmpty()) {
-            Toast.makeText(activity, GmResources.getString(R.string.toast_no_modifications_to_save), Toast.LENGTH_SHORT).show();
-            return;
-        }
-        if (nodeSelectorPanel != null) nodeSelectorPanel.setVisibility(View.INVISIBLE);
-        if (modifyPanel != null) modifyPanel.setVisibility(View.INVISIBLE);
-        if (maskView != null) maskView.setVisibility(View.INVISIBLE);
+    }
 
-        // 使用 List<Bitmap> 与 rulesToSave 并行索引，替代 HashMap<RuleRecord, Bitmap>。
-        // 避免 mOriginalRule 被多条规则共享导致 snapshot key 碰撞（仅最后一条有效）引发已回收位图再写入。
-        final ArrayList<Bitmap> snapshotList = new ArrayList<>(rulesToSave.size());
-        for (RuleRecord rule : rulesToSave) {
-            try {
-                View view;
-                if (rule.repeatable) {
-                    com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec engineRule =
-                            RuleMapper.toEngine(rule);
-                    List<View> matchedViews = new CompositeMatcher().matchAllViews(
-                            activity.getWindow().getDecorView(), engineRule.getMatchSpec());
-                    view = (matchedViews != null && !matchedViews.isEmpty()) ? matchedViews.get(0) : null;
-                } else {
-                    view = activity != null && activity.getWindow() != null && rule.depth != null
-                            ? ViewTraversal.findViewByDepth(activity.getWindow().getDecorView(), rule.depth)
-                            : null;
-                }
-                if (view != null) {
-                    Bitmap snapshot = BitmapUtils.snapshotView(ViewUtils.findTopParentViewByChildView(view));
-                    BitmapUtils.drawRectMask(snapshot, rule.x, rule.y, rule.width, rule.height);
-                    snapshotList.add(snapshot);
-                } else {
-                    snapshotList.add(null);
-                }
-            } catch (Exception e) {
-                Logger.w(TAG, "[ModifyPanel] saveAll: snapshot failed for rule", e);
-                snapshotList.add(null);
-            }
+    private void setChildrenEnabled(ViewGroup parent, boolean enabled) {
+        for (int i = 0; i < parent.getChildCount(); i++) {
+            View child = parent.getChildAt(i);
+            child.setEnabled(enabled);
+            if (child instanceof ViewGroup) setChildrenEnabled((ViewGroup) child, enabled);
         }
-        // 回收临时缓存的位图（mPendingModBitmaps），它们已通过 writeRule 写入文件，
-        // 稍后 applyModificationToView 会替换 ImageView 的 src 为文件路径。
-        // 清理内存中的临时修改和位图，等待 GC 回收。
-        mPendingModBitmaps.clear();
-        mTempModifications.clear();
-        android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
-        TaskExecutor.executeIo(() -> {
-            boolean allOk = true;
-            List<String> failedRules = new ArrayList<>();
-            for (int i = 0; i < rulesToSave.size(); i++) {
-                RuleRecord rule = rulesToSave.get(i);
-                Bitmap snapshot = snapshotList.get(i);
-                try {
-                    // 兜底检查：若 bitmap 已被回收（极高概率来自 RenderThread/GC 竞争），跳过写入
-                    if (snapshot != null && snapshot.isRecycled()) {
-                        Logger.w(TAG, "[ModifyPanel] saveAll: snapshot already recycled, skipping writeRule for "
-                                + rule.activityClass + "#" + rule.viewClass);
-                        allOk = false;
-                        failedRules.add(rule.activityClass + "#" + rule.viewClass);
-                        continue;
-                    }
-                    if (!mRuleEditor.writeRule(pkg, rule, snapshot)) {
-                        allOk = false;
-                        failedRules.add(rule.activityClass + "#" + rule.viewClass);
-                    }
-                } catch (Exception e) {
-                    Logger.e(TAG, "[ModifyPanel] saveAll: writeRule failed for "
-                            + rule.activityClass + "#" + rule.viewClass, e);
-                    allOk = false;
-                    failedRules.add(rule.activityClass + "#" + rule.viewClass);
-                } finally {
-                    CommonUtils.recycleNullableBitmap(snapshot);
-                }
-            }
-            boolean finalAllOk = allOk;
-            String finalFailed = failedRules.isEmpty() ? "" :
-                    GmResources.getString(R.string.toast_save_failed_rules_format, String.join(", ", failedRules));
-            mainHandler.post(() -> {
-                if (nodeSelectorPanel != null) nodeSelectorPanel.setVisibility(View.VISIBLE);
-                if (modifyPanel != null) modifyPanel.setVisibility(View.VISIBLE);
-                if (maskView != null) maskView.setVisibility(View.VISIBLE);
-                Toast.makeText(activity,
-                        finalAllOk ? GmResources.getString(R.string.toast_modifications_saved)
-                                : GmResources.getString(R.string.toast_modifications_save_failed_format, finalFailed),
-                        Toast.LENGTH_LONG).show();
-            });
-        });
     }
 
     // ---- Xposed Hook 图片替换（拦截图片选择器返回结果进行位图替换）----
@@ -663,19 +630,9 @@ public class PropertyEditorPanel {
                                         if (targetView == null || !targetView.isAttachedToWindow()) return;
                                     }
 
+                                    CommonUtils.recycleNullableBitmap(mPendingImageBitmap);
                                     mPendingImageBitmap = bitmap;
                                     ((ImageView) targetView).setImageBitmap(bitmap);
-                                    String viewKey = ViewUtils.getViewKey(targetView);
-                                    ActionSpec spec = mTempModifications.get(viewKey);
-                                    if (spec == null) {
-                                        if (mOriginalRule == null) {
-                                            mOriginalRule = RuleRecordFactory.makeModifyRule(targetView, mSnapshot, ModuleBootstrap.getEditorOrchestrator().isInfoFlowMode());
-                                        }
-                                        spec = mOriginalRule.asActionSpec();
-                                        mTempModifications.put(viewKey, spec);
-                                    }
-                                    spec.modImagePath = "pending";
-                                    mPendingModBitmaps.put(viewKey, bitmap);
                                 }
                             } catch (Exception e) {
                                 Logger.e(TAG, "[ModifyPanel] handle image pick fail", e);
@@ -696,6 +653,19 @@ public class PropertyEditorPanel {
     public void setPendingImageView(ImageView v) { mPendingImageView = v; }
     public Bitmap getOriginalImageBitmap() { return mOriginalImageBitmap; }
     public void setOriginalImageBitmap(Bitmap b) { mOriginalImageBitmap = b; }
-    public Map<String, Bitmap> getPendingModBitmaps() { return mPendingModBitmaps; }
+    public boolean isSaving() { return mSaving; }
+    public boolean isPreviewing() { return mPreviewing; }
+    public void togglePreview() {
+        if (mPanelView == null || mSaving) return;
+        mPreviewing = !mPreviewing;
+        mPanelView.setVisibility(mPreviewing ? View.GONE : View.VISIBLE);
+        notifySession();
+    }
+
+    private void notifySession() {
+        if (mSessionListener != null) {
+            mSessionListener.onSessionStateChanged(mPanelView != null, mPreviewing, mPanelView != null && !mSaving);
+        }
+    }
     public boolean isShowing() { return mPanelView != null; }
 }

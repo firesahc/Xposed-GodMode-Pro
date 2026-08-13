@@ -7,7 +7,7 @@ import android.widget.TextView;
 /**
  * 视图在编辑前的原始状态快照。
  * <p>
- * 在 PropertyEditorPanel.show() 或 ModifyGestureHandler.startDrag() 等
+ * 在 PropertyEditorPanel.show()
  * 视图被修改前捕获，确保 {@link RuleRecordFactory#makeModifyRule(View, ViewSnapshot)}
  * 创建修改规则时使用的始终是原始数据，而非被编辑器实时修改后的值。
  * <p>
@@ -56,7 +56,6 @@ public class ViewSnapshot {
      * 通常的调用时机：
      * <ul>
      *   <li>PropertyEditorPanel.show() 打开属性编辑面板时</li>
-     *   <li>ModifyGestureHandler.startDrag() 开始拖拽手势时</li>
      * </ul>
      *
      * @param view 目标视图（未修改状态）

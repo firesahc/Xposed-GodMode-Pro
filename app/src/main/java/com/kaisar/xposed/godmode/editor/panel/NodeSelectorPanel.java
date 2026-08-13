@@ -44,7 +44,7 @@ public class NodeSelectorPanel {
         void onBlockRequested(Activity activity, ViewGroup container);
         void onPreviewRequested(Activity activity);
         void onModifyRequested(View selectedView, Activity activity, ViewGroup container);
-        void onSaveModifyRequested(Activity activity);
+        void onModifyPreviewRequested(Activity activity);
         void onModeChanged(int mode);
         void onInfoFlowRequested();
     }
@@ -56,6 +56,8 @@ public class NodeSelectorPanel {
     private MaskView mMaskView;
     private boolean mHasUserSelection;
     private boolean mKeySelecting;
+    private boolean mModifySessionLocked;
+    private boolean mModifyPreviewing;
 
     /**
      * 显示节点选择面板。
@@ -106,6 +108,8 @@ public class NodeSelectorPanel {
     /** 关闭面板，带动画 */
     public void dismiss() {
         mKeySelecting = false;
+        mModifySessionLocked = false;
+        mModifyPreviewing = false;
         if (mMaskView != null) { mMaskView.detachFromContainer(); mMaskView = null; }
         if (mPanelView != null) {
             View panel = mPanelView;
@@ -137,32 +141,44 @@ public class NodeSelectorPanel {
         // 移除按钮
         View btnBlock = mPanelView.findViewById(R.id.block);
         TooltipCompat.setTooltipText(btnBlock, GmResources.getText(R.string.accessibility_block));
-        btnBlock.setOnClickListener(v -> callbacks.onBlockRequested(activity, container));
+        btnBlock.setOnClickListener(v -> {
+            if (!mModifySessionLocked && mHasUserSelection && getSelectedView() != null) {
+                callbacks.onBlockRequested(activity, container);
+            }
+        });
 
         // 预览按钮
         View btnPreview = mPanelView.findViewById(R.id.preview);
         TooltipCompat.setTooltipText(btnPreview, GmResources.getText(R.string.accessibility_preview));
-        btnPreview.setOnClickListener(v -> callbacks.onPreviewRequested(activity));
+        btnPreview.setOnClickListener(v -> {
+            if (!mModifySessionLocked && mHasUserSelection && getSelectedView() != null) {
+                callbacks.onPreviewRequested(activity);
+            }
+        });
 
         // 修改按钮 — 打开属性编辑面板
         View btnModify = mPanelView.findViewById(R.id.modify);
         btnModify.setOnClickListener(v -> {
-            if (!mHasUserSelection) return;
+            if (mModifySessionLocked || !mHasUserSelection) return;
             View selectedView = getSelectedView();
             if (selectedView != null) {
                 callbacks.onModifyRequested(selectedView, activity, container);
             }
         });
 
-        // 保存修改按钮
-        View btnSaveModify = mPanelView.findViewById(R.id.save_modify);
-        btnSaveModify.setOnClickListener(v -> callbacks.onSaveModifyRequested(activity));
+        // 修改预览按钮
+        View btnModifyPreview = mPanelView.findViewById(R.id.modify_preview);
+        btnModifyPreview.setEnabled(false);
+        btnModifyPreview.setOnClickListener(v -> {
+            if (mModifySessionLocked) callbacks.onModifyPreviewRequested(activity);
+        });
 
         // 模式切换
         View removeModeBtn = mPanelView.findViewById(R.id.remove_mode_btn);
         View modifyModeBtn = mPanelView.findViewById(R.id.modify_mode_btn);
 
         removeModeBtn.setOnClickListener(v -> {
+            if (mModifySessionLocked) return;
             boolean wasVisible = removeMenu.getVisibility() == View.VISIBLE;
             removeMenu.setVisibility(wasVisible ? View.GONE : View.VISIBLE);
             modifyMenu.setVisibility(View.GONE);
@@ -171,6 +187,7 @@ public class NodeSelectorPanel {
         });
 
         modifyModeBtn.setOnClickListener(v -> {
+            if (mModifySessionLocked) return;
             boolean wasVisible = modifyMenu.getVisibility() == View.VISIBLE;
             modifyMenu.setVisibility(wasVisible ? View.GONE : View.VISIBLE);
             removeMenu.setVisibility(View.GONE);
@@ -235,12 +252,59 @@ public class NodeSelectorPanel {
     public int getCurrentIndex() { return mCurrentIndex; }
     public boolean isShowing() { return mPanelView != null; }
 
+    /** Lock target navigation and non-edit actions while a property edit is active. */
+    public void setModifySessionLocked(boolean locked) {
+        mModifySessionLocked = locked;
+        if (!locked) mModifyPreviewing = false;
+        if (mPanelView == null) return;
+        setEnabled(R.id.block, !locked);
+        setEnabled(R.id.preview, !locked);
+        setEnabled(R.id.modify, !locked);
+        setEnabled(R.id.remove_mode_btn, !locked);
+        setEnabled(R.id.modify_mode_btn, !locked);
+        setEnabled(R.id.Up, !locked);
+        setEnabled(R.id.Down, !locked);
+        setEnabled(R.id.modify_preview, locked);
+        mSeekBar.setEnabled(!locked);
+        setEnabled(R.id.info_flow_mode_btn, !locked);
+    }
+
+    public boolean isModifySessionLocked() { return mModifySessionLocked; }
+
+    /** Update the toolbar state for the edit-panel preview toggle. */
+    public void setModifyPreviewing(boolean previewing) {
+        mModifyPreviewing = previewing;
+        if (mPanelView == null) return;
+        View button = mPanelView.findViewById(R.id.modify_preview);
+        if (button instanceof ImageButton) {
+            ((ImageButton) button).setImageResource(previewing
+                    ? android.R.drawable.ic_menu_close_clear_cancel
+                    : android.R.drawable.ic_menu_view);
+        }
+        try {
+            TooltipCompat.setTooltipText(button, GmResources.getText(previewing
+                    ? R.string.accessibility_modify_preview_exit
+                    : R.string.accessibility_modify_preview));
+        } catch (Exception ignored) {
+            // Resource fallback is best-effort and must not break the editor toolbar.
+        }
+    }
+
+    public boolean isModifyPreviewing() { return mModifyPreviewing; }
+
+    public void setModifyPreviewEnabled(boolean enabled) {
+        if (mPanelView == null) return;
+        View preview = mPanelView.findViewById(R.id.modify_preview);
+        if (preview != null) preview.setEnabled(enabled && mModifySessionLocked);
+    }
+
     public List<WeakReference<View>> getViewNodes() { return mViewNodes; }
 
     // ---- 导航 ----
 
     /** 按 delta 步进导航（+1 或 -1），更新 SeekBar，不做越界。 */
     public void navigate(int delta) {
+        if (mModifySessionLocked) return;
         if (mViewNodes == null || mSeekBar == null) return;
         int next = mCurrentIndex + delta;
         if (next < 0 || next >= mViewNodes.size()) return;
@@ -253,6 +317,7 @@ public class NodeSelectorPanel {
 
     /** 移除后更新节点列表和 SeekBar。 */
     public void updateAfterRemove(int removedIndex) {
+        if (mModifySessionLocked) return;
         if (mViewNodes == null || mSeekBar == null) return;
         if (removedIndex >= 0 && removedIndex < mViewNodes.size()) {
             mViewNodes.remove(removedIndex);
@@ -262,6 +327,11 @@ public class NodeSelectorPanel {
         if (mCurrentIndex >= 0) {
             mSeekBar.setProgress(mCurrentIndex);
         }
+    }
+
+    private void setEnabled(int id, boolean enabled) {
+        View view = mPanelView.findViewById(id);
+        if (view != null) view.setEnabled(enabled);
     }
 
     // =========================================================================
@@ -304,7 +374,7 @@ public class NodeSelectorPanel {
                         R.id.exchange, R.id.info_flow_mode_btn,
                         R.id.remove_mode_btn, R.id.modify_mode_btn,
                         R.id.block, R.id.preview,
-                        R.id.modify, R.id.save_modify,
+                        R.id.modify, R.id.modify_preview,
                         R.id.Up, R.id.Down
                 };
                 for (int id : rippleViewIds) {
@@ -344,9 +414,9 @@ public class NodeSelectorPanel {
                 View modifyBtn = panelView.findViewById(R.id.modify);
                 if (modifyBtn != null) TooltipCompat.setTooltipText(modifyBtn,
                         GmResources.getText(R.string.accessibility_modify));
-                View saveBtn = panelView.findViewById(R.id.save_modify);
-                if (saveBtn != null) TooltipCompat.setTooltipText(saveBtn,
-                        GmResources.getText(R.string.accessibility_save_modify));
+                View modifyPreviewBtn = panelView.findViewById(R.id.modify_preview);
+                if (modifyPreviewBtn != null) TooltipCompat.setTooltipText(modifyPreviewBtn,
+                        GmResources.getText(R.string.accessibility_modify_preview));
             } catch (Exception e) {
                 Logger.d(TAG, "toolbar resource fallback failed: " + e.getMessage(), e);
             }

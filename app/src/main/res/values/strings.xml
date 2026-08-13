@@ -93,14 +93,8 @@
 &ensp;&#8226; <b>位置微调</b> &ensp; 方向箭头每步 10px<br>
 &ensp;&#8226; <b>文本</b> &ensp;&ensp;&ensp;&ensp; 修改 TextView 文字内容<br>
 &ensp;&#8226; <b>图片</b> &ensp;&ensp;&ensp;&ensp; 从图库替换 ImageView 图片<br>
-③ 点「确定」预览效果，点「取消」回滚<br>
-④ 确认后务必点击面板「保存」持久化规则<br>
-<br><b>◆ 拖拽移动</b><br>
-修改模式下<b>长按界面任意位置</b>，拖拽<b>当前选中元素</b>：<br>
-&#8226; 16dp 网格吸附 — 自动对齐网格<br>
-&#8226; 12dp 边缘吸附 — 靠近兄弟元素自动吸附<br>
-&#8226; 松手后位置自动保存为修改规则<br>
-<br><i>支持修改多个元素后一次性保存</i><br><br>
+③ 点击工具栏「预览」隐藏或恢复属性面板<br>
+④ 点击属性面板「保存」持久化当前目标，点击「取消」回滚<br><br>
 
 <b>七、规则管理</b><br>
 <br><b>查看与详情</b><br>
@@ -174,7 +168,8 @@
     <string name="accessibility_preview_exit">退出预览</string>
     <string name="accessibility_exchange">切换位置</string>
     <string name="accessibility_modify">修改属性</string>
-    <string name="accessibility_save_modify">保存修改</string>
+    <string name="accessibility_modify_preview">隐藏修改面板并预览</string>
+    <string name="accessibility_modify_preview_exit">退出预览并显示修改面板</string>
     <string name="accessibility_up">上一个</string>
     <string name="accessibility_down">下一个</string>
     <string name="mode_remove">移除模式</string>
@@ -187,7 +182,7 @@
     <string name="modify_text">文本内容</string>
     <string name="modify_image_pick">选择图片</string>
     <string name="modify_cancel">取消</string>
-    <string name="modify_confirm">确定</string>
+    <string name="modify_save">保存</string>
     <string name="block_fail">屏蔽失败: %1$s</string>
     <string name="tag_gm_cmp" translatable="false">gm_cmp</string>
 

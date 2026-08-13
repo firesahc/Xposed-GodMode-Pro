@@ -75,7 +75,7 @@ public final class InteractionHooks {
 
         @Override
         protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-            if (!ModuleBootstrap.isSwitchEnabled() || mOrchestrator.isDragging()) return;
+            if (!ModuleBootstrap.isSwitchEnabled()) return;
             Activity activity = (Activity) param.thisObject;
             KeyEvent event = (KeyEvent) param.args[0];
             int action = event.getAction();
