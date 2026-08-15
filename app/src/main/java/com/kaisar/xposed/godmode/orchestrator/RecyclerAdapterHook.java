@@ -5,17 +5,16 @@ import android.view.View;
 
 import com.kaisar.xposed.godmode.engine.core.PlatformCapabilities;
 import com.kaisar.xposed.godmode.engine.matcher.CompositeMatcher;
-import com.kaisar.xposed.godmode.engine.matcher.Matcher;
 import com.kaisar.xposed.godmode.engine.matcher.ViewTraversal;
 import com.kaisar.xposed.godmode.engine.rule.MatchFields;
 import com.kaisar.xposed.godmode.engine.rule.MatchSpec;
 import com.kaisar.xposed.godmode.engine.rule.RuleMapper;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.util.ViewUtils;
-import com.kaisar.xposed.godmode.orchestrator.ViewController;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 
+import java.lang.ref.WeakReference;
 import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
@@ -42,8 +41,9 @@ public final class RecyclerAdapterHook {
     /** 确保每个进程只安装一次钩子 */
     private static boolean sHooksInstalled;
 
-    /** 最近一次成功应用 repeatable 规则的 item owner，弱键避免持有回收 View。 */
-    private static final Map<View, ViewController> sItemOwners = new WeakHashMap<>();
+    /** 当前 ViewHolder 绑定 token；弱键避免持有已回收 holder。 */
+    private static final Map<Object, BindingToken> sBindings = new WeakHashMap<>();
+    private static long sBindingEpoch;
 
     private RecyclerAdapterHook() {
         // 工具类不可实例化
@@ -93,15 +93,32 @@ public final class RecyclerAdapterHook {
             XposedHelpers.findAndHookMethod(adapterClass, "bindViewHolder",
                     viewHolderClass, int.class, new XC_MethodHook() {
                         @Override
+                        protected void beforeHookedMethod(MethodHookParam param) {
+                            Object holder = param.args[0];
+                            View itemView = getItemView(holder);
+                            if (holder == null || itemView == null) return;
+                            Object adapter = param.thisObject;
+                            int position = (Integer) param.args[1];
+                            BindingToken previous = currentBinding(holder);
+                            if (previous != null) cancelRetry(previous);
+                            BindingToken token = new BindingToken(
+                                    adapter, holder, itemView,
+                                    resolveViewType(adapter, position), nextBindingEpoch());
+                            synchronized (sBindings) {
+                                sBindings.put(holder, token);
+                            }
+                        }
+
+                        @Override
                         protected void afterHookedMethod(MethodHookParam param) {
                             if (!RuleManager.isInitialized() || !RuleManager.get().hasRules()) return;
                             Object holder = param.args[0];
-                            if (holder == null) return;
-                            View itemView = (View) XposedHelpers.getObjectField(holder, "itemView");
-                            revokeOwnedItem(itemView);
-                            ViewController owner = applyRepeatableRulesToBoundItem(
-                                    itemView, delegate);
-                            if (owner != null) rememberOwner(itemView, owner);
+                            View itemView = getItemView(holder);
+                            BindingToken token = currentBinding(holder);
+                            if (token == null || !token.matches(adapterFor(param), holder, itemView)) {
+                                return;
+                            }
+                            applyToken(token, delegate);
                         }
                     });
 
@@ -111,10 +128,20 @@ public final class RecyclerAdapterHook {
                         @Override
                         protected void beforeHookedMethod(MethodHookParam param) {
                             Object holder = param.args[0];
-                            if (holder == null) return;
-                            View itemView = (View) XposedHelpers.getObjectField(holder, "itemView");
+                            View itemView = getItemView(holder);
                             if (itemView == null) return;
-                            if (revokeOwnedItem(itemView)) return;
+                            BindingToken token = currentBinding(holder);
+                            if (token == null || !token.matches(adapterFor(param), holder, itemView)) {
+                                // A stale recycle from another adapter must not touch the
+                                // current binding or its baseline.
+                                return;
+                            }
+                            removeBinding(holder, token);
+                            cancelRetry(token);
+                            if (token.controller != null) {
+                                token.controller.revokeAllRules(itemView);
+                                return;
+                            }
                             Activity activity = ViewUtils.getAttachedActivityFromView(itemView);
                             if (activity == null) return;
                             delegate.getViewController(activity).revokeAllRules(itemView);
@@ -170,22 +197,121 @@ public final class RecyclerAdapterHook {
         return applied ? controller : null;
     }
 
-    private static void rememberOwner(View itemView, ViewController owner) {
-        if (itemView == null || owner == null) return;
-        synchronized (sItemOwners) {
-            sItemOwners.put(itemView, owner);
+    private static void applyToken(BindingToken token, Delegate delegate) {
+        View itemView = token.itemRoot.get();
+        if (itemView == null || !isCurrent(token)) return;
+        ViewController owner = applyRepeatableRulesToBoundItem(itemView, delegate);
+        if (owner != null) {
+            token.controller = owner;
+            return;
+        }
+        if (!itemView.isAttachedToWindow() && !token.retryScheduled) {
+            token.retryScheduled = true;
+            View.OnAttachStateChangeListener listener = new View.OnAttachStateChangeListener() {
+                @Override
+                public void onViewAttachedToWindow(View view) {
+                    view.removeOnAttachStateChangeListener(this);
+                    token.attachListener = null;
+                    token.retryScheduled = false;
+                    if (isCurrent(token)) applyToken(token, delegate);
+                }
+
+                @Override
+                public void onViewDetachedFromWindow(View view) {
+                    // Keep the listener installed. A detached holder may be attached
+                    // again before the next bind; the token still owns that retry.
+                }
+            };
+            token.attachListener = listener;
+            itemView.addOnAttachStateChangeListener(listener);
         }
     }
 
-    private static boolean revokeOwnedItem(View itemView) {
-        if (itemView == null) return false;
-        ViewController owner;
-        synchronized (sItemOwners) {
-            owner = sItemOwners.remove(itemView);
+    private static void cancelRetry(BindingToken token) {
+        if (token == null) return;
+        View itemView = token.itemRoot.get();
+        View.OnAttachStateChangeListener listener = token.attachListener;
+        if (itemView != null && listener != null) {
+            itemView.removeOnAttachStateChangeListener(listener);
         }
-        if (owner == null) return false;
-        owner.revokeAllRules(itemView);
-        return true;
+        token.attachListener = null;
+        token.retryScheduled = false;
+    }
+
+    private static BindingToken currentBinding(Object holder) {
+        if (holder == null) return null;
+        synchronized (sBindings) {
+            return sBindings.get(holder);
+        }
+    }
+
+    private static void removeBinding(Object holder, BindingToken token) {
+        synchronized (sBindings) {
+            if (sBindings.get(holder) == token) sBindings.remove(holder);
+        }
+    }
+
+    private static boolean isCurrent(BindingToken token) {
+        if (token == null) return false;
+        Object holder = token.holder.get();
+        synchronized (sBindings) {
+            return holder != null && sBindings.get(holder) == token;
+        }
+    }
+
+    private static Object adapterFor(XC_MethodHook.MethodHookParam param) {
+        return param.thisObject;
+    }
+
+    private static View getItemView(Object holder) {
+        if (holder == null) return null;
+        try {
+            Object value = XposedHelpers.getObjectField(holder, "itemView");
+            return value instanceof View ? (View) value : null;
+        } catch (Throwable t) {
+            Logger.w(TAG, "unable to read ViewHolder.itemView", t);
+            return null;
+        }
+    }
+
+    private static int resolveViewType(Object adapter, int position) {
+        if (adapter == null || position < 0) return -1;
+        try {
+            Object value = XposedHelpers.callMethod(adapter, "getItemViewType", position);
+            return value instanceof Integer ? (Integer) value : -1;
+        } catch (Throwable ignored) {
+            return -1;
+        }
+    }
+
+    private static synchronized long nextBindingEpoch() {
+        return ++sBindingEpoch;
+    }
+
+    private static final class BindingToken {
+        final WeakReference<Object> adapter;
+        final WeakReference<Object> holder;
+        final WeakReference<View> itemRoot;
+        final int viewType;
+        final long epoch;
+        volatile ViewController controller;
+        volatile boolean retryScheduled;
+        volatile View.OnAttachStateChangeListener attachListener;
+
+        BindingToken(Object adapter, Object holder, View itemRoot,
+                int viewType, long epoch) {
+            this.adapter = new WeakReference<>(adapter);
+            this.holder = new WeakReference<>(holder);
+            this.itemRoot = new WeakReference<>(itemRoot);
+            this.viewType = viewType;
+            this.epoch = epoch;
+        }
+
+        boolean matches(Object currentAdapter, Object currentHolder, View currentItemRoot) {
+            return adapter.get() == currentAdapter
+                    && holder.get() == currentHolder
+                    && itemRoot.get() == currentItemRoot;
+        }
     }
 
     /**
