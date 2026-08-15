@@ -3,6 +3,7 @@ package com.kaisar.xposed.godmode.engine.applier;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
@@ -14,6 +15,7 @@ import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.os.ParcelFileDescriptor;
 import android.os.SystemClock;
+import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
@@ -31,6 +33,7 @@ import org.junit.runner.RunWith;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.FileWriter;
 import java.util.ArrayDeque;
 import java.util.Collection;
 import java.util.Queue;
@@ -39,6 +42,66 @@ import java.util.concurrent.atomic.AtomicReference;
 
 @RunWith(AndroidJUnit4.class)
 public final class ModifyApplierInstrumentedTest {
+
+    @Test
+    public void removeGoneDoesNotOwnLayoutParams() throws Exception {
+        withActivity(activity -> {
+                TextView view = attachText(activity, "host");
+                RemoveApplier applier = new RemoveApplier();
+                ActionSpec action = new ActionSpec.Builder()
+                        .visibility(View.GONE)
+                        .build();
+
+                assertTrue(applier.apply(view, action));
+                assertEquals(View.GONE, view.getVisibility());
+                assertEquals(100, view.getLayoutParams().width);
+                assertEquals(50, view.getLayoutParams().height);
+        });
+    }
+
+    @Test
+    public void removeRevokePreservesHostLayoutAndVisibilityChanges() throws Exception {
+        withActivity(activity -> {
+                TextView view = attachText(activity, "host");
+                view.setAlpha(0.65f);
+                view.setClickable(true);
+                RemoveApplier applier = new RemoveApplier();
+                ActionSpec action = new ActionSpec.Builder()
+                        .visibility(View.GONE)
+                        .build();
+
+                assertTrue(applier.apply(view, action));
+                view.getLayoutParams().width = 240;
+                view.getLayoutParams().height = 70;
+                view.setVisibility(View.VISIBLE);
+                view.setAlpha(0.8f);
+                view.setClickable(true);
+
+                assertTrue(applier.revoke(view, action));
+                assertEquals(View.VISIBLE, view.getVisibility());
+                assertEquals(240, view.getLayoutParams().width);
+                assertEquals(70, view.getLayoutParams().height);
+                assertEquals(0.8f, view.getAlpha(), 0f);
+                assertTrue(view.isClickable());
+        });
+    }
+
+    @Test
+    public void safeDecoderRejectsMalformedImage() throws Exception {
+        withActivity(activity -> {
+                File file = new File(activity.getCacheDir(), "malformed-image.bin");
+                try (FileWriter writer = new FileWriter(file)) {
+                    writer.write("not a bitmap");
+                }
+                try (ParcelFileDescriptor descriptor = ParcelFileDescriptor.open(file,
+                        ParcelFileDescriptor.MODE_READ_ONLY)) {
+                    assertNull(SafeBitmapDecoder.decode(descriptor.getFileDescriptor()));
+                } finally {
+                    //noinspection ResultOfMethodCallIgnored
+                    file.delete();
+                }
+        });
+    }
 
     @Test
     public void applyAndRevokeRestoreCapturedBaseline() throws Exception {

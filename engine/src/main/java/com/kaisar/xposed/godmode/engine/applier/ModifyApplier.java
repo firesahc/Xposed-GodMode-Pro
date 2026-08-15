@@ -1,7 +1,6 @@
 package com.kaisar.xposed.godmode.engine.applier;
 
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.graphics.drawable.Drawable;
 import android.os.ParcelFileDescriptor;
 import android.view.View;
@@ -183,7 +182,7 @@ public final class ModifyApplier implements RuleApplier {
         try (ParcelFileDescriptor descriptor =
                      mImageLoader.openImageFileDescriptor(imagePath)) {
             if (descriptor == null) return null;
-            return BitmapFactory.decodeFileDescriptor(descriptor.getFileDescriptor());
+            return SafeBitmapDecoder.decode(descriptor.getFileDescriptor());
         } catch (Exception e) {
             Logger.w(TAG, "loadModImage failed: " + imagePath, e);
             return null;

@@ -1,7 +1,6 @@
 package com.kaisar.xposed.godmode.engine.applier;
 
 import android.view.View;
-import android.view.ViewGroup;
 
 import com.kaisar.xposed.godmode.engine.rule.ActionSpec;
 
@@ -41,20 +40,10 @@ public final class RemoveApplier implements RuleApplier {
         ViewProperty vp = cached != null ? cached : ViewProperty.create(view);
         view.setAlpha(0f);
         view.setClickable(false);
-        ViewGroup.LayoutParams lp = view.getLayoutParams();
-        if (lp != null) {
-            switch (spec.visibility) {
-                case View.GONE:
-                    lp.width = 0;
-                    lp.height = 0;
-                    break;
-                case View.INVISIBLE:
-                    lp.width = vp.layoutParamsWidth;
-                    lp.height = vp.layoutParamsHeight;
-                    break;
-            }
-        }
         ViewCompat.setVisibility(view, spec.visibility);
+        vp.appliedAlpha = 0f;
+        vp.appliedClickable = false;
+        vp.appliedVisibility = spec.visibility;
         mBlockedViewCache.put(view, vp);
         return true;
     }
@@ -64,15 +53,7 @@ public final class RemoveApplier implements RuleApplier {
         if (view == null || spec == null) return false;
         ViewProperty vp = mBlockedViewCache.remove(view);
         if (vp == null) return false;
-        view.setAlpha(vp.alpha);
-        view.setClickable(vp.clickable);
-        ViewCompat.setVisibility(view, vp.visibility);
-        ViewGroup.LayoutParams lp = view.getLayoutParams();
-        if (lp != null) {
-            lp.width = vp.layoutParamsWidth;
-            lp.height = vp.layoutParamsHeight;
-            view.requestLayout();
-        }
+        restoreOwnedProperties(view, vp);
         return true;
     }
 
@@ -89,16 +70,24 @@ public final class RemoveApplier implements RuleApplier {
         if (view == null) return false;
         ViewProperty vp = mBlockedViewCache.remove(view);
         if (vp == null) return false;
-        view.setAlpha(vp.alpha);
-        view.setClickable(vp.clickable);
-        ViewCompat.setVisibility(view, vp.visibility);
-        ViewGroup.LayoutParams lp = view.getLayoutParams();
-        if (lp != null) {
-            lp.width = vp.layoutParamsWidth;
-            lp.height = vp.layoutParamsHeight;
-            view.requestLayout();
-        }
+        restoreOwnedProperties(view, vp);
         return true;
+    }
+
+    /** Restore only values which are still equal to the values written by this rule. */
+    private static void restoreOwnedProperties(View view, ViewProperty property) {
+        if (property.appliedAlpha != null
+                && Float.compare(view.getAlpha(), property.appliedAlpha) == 0) {
+            view.setAlpha(property.alpha);
+        }
+        if (property.appliedClickable != null
+                && view.isClickable() == property.appliedClickable) {
+            view.setClickable(property.clickable);
+        }
+        if (property.appliedVisibility != null
+                && view.getVisibility() == property.appliedVisibility) {
+            ViewCompat.setVisibility(view, property.visibility);
+        }
     }
 
     @Override
@@ -119,26 +108,25 @@ public final class RemoveApplier implements RuleApplier {
         final float alpha;
         final boolean clickable;
         final int visibility;
-        final int layoutParamsWidth;
-        final int layoutParamsHeight;
+        Float appliedAlpha;
+        Boolean appliedClickable;
+        Integer appliedVisibility;
 
         ViewProperty(float alpha, boolean clickable, int visibility,
-                int layoutParamsWidth, int layoutParamsHeight) {
+                Float appliedAlpha, Boolean appliedClickable, Integer appliedVisibility) {
             this.alpha = alpha;
             this.clickable = clickable;
             this.visibility = visibility;
-            this.layoutParamsWidth = layoutParamsWidth;
-            this.layoutParamsHeight = layoutParamsHeight;
+            this.appliedAlpha = appliedAlpha;
+            this.appliedClickable = appliedClickable;
+            this.appliedVisibility = appliedVisibility;
         }
 
         static ViewProperty create(View view) {
             float alpha = view.getAlpha();
             boolean clickable = view.isClickable();
             int visibility = view.getVisibility();
-            ViewGroup.LayoutParams lp = view.getLayoutParams();
-            int w = lp != null ? lp.width : 0;
-            int h = lp != null ? lp.height : 0;
-            return new ViewProperty(alpha, clickable, visibility, w, h);
+            return new ViewProperty(alpha, clickable, visibility, null, null, null);
         }
     }
 }
