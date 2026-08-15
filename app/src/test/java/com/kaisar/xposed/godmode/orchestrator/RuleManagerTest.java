@@ -22,6 +22,12 @@ import java.util.List;
 public final class RuleManagerTest {
 
     @Test
+    public void newManagerStartsUnavailableWithoutTreatingItAsReadyEmpty() throws Exception {
+        RuleManager manager = newManager();
+        assertEquals(RuleManager.LoadState.UNAVAILABLE, manager.getLoadState());
+    }
+
+    @Test
     public void copyRulesClonesListsRecordsAndNestedArrays() {
         RuleRecord sourceRule = rule();
         List<RuleRecord> sourceList = new ArrayList<>(Collections.singletonList(sourceRule));

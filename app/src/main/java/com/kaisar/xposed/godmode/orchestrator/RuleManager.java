@@ -1,6 +1,10 @@
 package com.kaisar.xposed.godmode.orchestrator;
 
+import android.os.Handler;
+import android.os.Looper;
+
 import com.kaisar.xposed.godmode.engine.util.Logger;
+import com.kaisar.xposed.godmode.inject.ModuleBootstrap;
 import com.kaisar.xposed.godmode.ipc.RuleServiceClient;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
@@ -28,6 +32,11 @@ public final class RuleManager {
     /** 规则加载来源枚举 */
     public enum Source { BINDER, PROCESS }
 
+    /** 当前服务快照状态；不可用不等同于合法空规则。 */
+    public enum LoadState { UNAVAILABLE, READY_EMPTY, READY_WITH_RULES }
+
+    private static final long[] RETRY_DELAYS_MS = {250L, 1000L, 3000L};
+
     private static volatile RuleManager sInstance;
 
     private final ActRules mActRules = new ActRules();
@@ -36,6 +45,12 @@ public final class RuleManager {
     private String mPackageName;
     private volatile boolean mInitialized;
     private Source mLastSource = Source.PROCESS;
+    private volatile LoadState mLoadState = LoadState.UNAVAILABLE;
+    private Handler mRetryHandler;
+    private RuleServiceClient mServiceClient;
+    private int mRetryAttempt;
+    private final Runnable mRetryTask = this::retryLoad;
+    private final Runnable mBinderDeathListener = this::onBinderDeath;
 
     // =========================================================================
     // 单例管理
@@ -59,30 +74,17 @@ public final class RuleManager {
         sInstance = new RuleManager();
         sInstance.mPackageName = packageName;
 
-        boolean loadedFromBinder = false;
         RuleServiceClient ipcClient = RuleServiceClient.getDefault();
+        sInstance.mServiceClient = ipcClient;
+        ipcClient.addBinderDeathListener(sInstance.mBinderDeathListener);
 
         // 尝试通过 Binder 获取规则
-        try {
-            ActRules binderRules = ipcClient.getRules(packageName);
-            if (ipcClient.isConnected() && binderRules != null) {
-                sInstance.replaceRules(binderRules);
-                sInstance.mLastSource = Source.BINDER;
-                loadedFromBinder = true;
-                sInstance.mLogger.i("rules loaded from Binder for " + packageName
-                        + " (" + binderRules.size() + " activities)");
-            } else {
-                sInstance.mLogger.i("Binder unavailable for " + packageName
-                        + " — no fallback, empty rules");
-            }
-        } catch (Exception e) {
-            sInstance.mLogger.w("Binder getRules failed: " + e.getMessage()
-                    + " — no fallback, empty rules");
-        }
-
         sInstance.mInitialized = true;
+        sInstance.loadFromService(ipcClient, true);
+
         sInstance.mLogger.i("RuleManager initialized for " + packageName
-                + " (source=" + sInstance.mLastSource + ", rules=" + sInstance.mActRules.size() + ")");
+                + " (source=" + sInstance.mLastSource + ", state=" + sInstance.mLoadState
+                + ", rules=" + sInstance.mActRules.size() + ")");
     }
 
     /** 获取 RuleManager 单例（必须在 {@link #init(String)} 之后调用） */
@@ -152,6 +154,11 @@ public final class RuleManager {
         return mLastSource;
     }
 
+    /** 当前规则快照的服务状态。 */
+    public LoadState getLoadState() {
+        return mLoadState;
+    }
+
     /** 规则是否为空 */
     public boolean hasRules() {
         return !mActRules.isEmpty();
@@ -161,7 +168,72 @@ public final class RuleManager {
      * 资源清理。
      */
     public void shutdown() {
+        if (mRetryHandler != null) {
+            mRetryHandler.removeCallbacks(mRetryTask);
+        }
+        if (mServiceClient != null) {
+            mServiceClient.removeBinderDeathListener(mBinderDeathListener);
+        }
         mInitialized = false;
         mLogger.d("RuleManager shut down");
+    }
+
+    private void loadFromService(RuleServiceClient client, boolean scheduleRetry) {
+        try {
+            ActRules binderRules = client.getRules(mPackageName);
+            if (client.isConnected() && binderRules != null) {
+                boolean hadRules = !mActRules.isEmpty();
+                replaceRules(binderRules);
+                mLastSource = Source.BINDER;
+                mLoadState = binderRules.isEmpty()
+                        ? LoadState.READY_EMPTY : LoadState.READY_WITH_RULES;
+                mRetryAttempt = 0;
+                if (mRetryHandler != null) {
+                    mRetryHandler.removeCallbacks(mRetryTask);
+                }
+                mLogger.i("rules loaded from Binder for " + mPackageName
+                        + " (" + binderRules.size() + " activities, state=" + mLoadState + ")");
+                if (hadRules || !binderRules.isEmpty()) {
+                    ModuleBootstrap.notifyViewRulesChanged(getRules());
+                }
+                return;
+            }
+        } catch (Exception e) {
+            mLogger.w("Binder getRules failed: " + e.getMessage());
+        }
+
+        mLoadState = LoadState.UNAVAILABLE;
+        mLogger.w("Binder unavailable for " + mPackageName
+                + " — retaining last valid rules (" + mActRules.size() + " activities)");
+        if (scheduleRetry) scheduleRetry();
+    }
+
+    private void scheduleRetry() {
+        if (mRetryAttempt >= RETRY_DELAYS_MS.length) return;
+        long delay = RETRY_DELAYS_MS[mRetryAttempt++];
+        Handler handler = getRetryHandler();
+        handler.removeCallbacks(mRetryTask);
+        handler.postDelayed(mRetryTask, delay);
+    }
+
+    private void retryLoad() {
+        if (!mInitialized || mPackageName == null) return;
+        loadFromService(RuleServiceClient.getDefault(), true);
+    }
+
+    private void onBinderDeath() {
+        if (!mInitialized) return;
+        mLoadState = LoadState.UNAVAILABLE;
+        mLogger.w("Binder died for " + mPackageName
+                + " — retaining last valid rules and scheduling reload");
+        mRetryAttempt = 0;
+        scheduleRetry();
+    }
+
+    private Handler getRetryHandler() {
+        if (mRetryHandler == null) {
+            mRetryHandler = new Handler(Looper.getMainLooper());
+        }
+        return mRetryHandler;
     }
 }

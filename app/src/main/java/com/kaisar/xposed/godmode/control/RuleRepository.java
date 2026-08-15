@@ -116,10 +116,14 @@ public final class RuleRepository {
      * </ul>
      */
     public boolean writeRule(String packageName, RuleRecord viewRule, Bitmap snapshot) {
+        if (!PackageNameValidator.isValid(packageName) || viewRule == null) return false;
         try {
             Object writeMsg;
             if (snapshot != null) {
-                writeMsg = new WriteMessage(packageName, viewRule, snapshot, null, null, null, 0L);
+                // Capture the request generation before deferred bitmap I/O. A delete
+                // arriving while the worker is busy must be able to invalidate this write.
+                writeMsg = new WriteMessage(packageName, viewRule, snapshot, null, null, null,
+                        mCache.nextGeneration());
             } else {
                 RuleCache.CacheResult cr = mCache.apply(packageName, viewRule, true);
                 if (cr.oldImagePath != null) {
@@ -144,6 +148,7 @@ public final class RuleRepository {
      * 异步更新规则 — 先应用缓存，再发送 Handler 消息持久化 + 发布。
      */
     public boolean updateRule(String packageName, RuleRecord viewRule) {
+        if (!PackageNameValidator.isValid(packageName) || viewRule == null) return false;
         try {
             RuleCache.CacheResult cr = mCache.apply(packageName, viewRule, false);
             mHandle.obtainMessage(MSG_WRITE_RULE,
@@ -161,6 +166,7 @@ public final class RuleRepository {
      * 异步删除规则。
      */
     public boolean deleteRule(String packageName, RuleRecord viewRule) {
+        if (!PackageNameValidator.isValid(packageName) || viewRule == null) return false;
         try {
             RuleCache.DeleteResult dr = mCache.delete(packageName, viewRule);
             if (dr == null) return false;
@@ -179,9 +185,16 @@ public final class RuleRepository {
      * 异步删除某应用所有规则。
      */
     public boolean deleteRules(String packageName) {
+        if (!PackageNameValidator.isValid(packageName)) return false;
         mLogger.d("delete rules pkg=" + packageName + " size=" + mCache.size());
-        if (mCache.deleteAll(packageName)) {
-            mHandle.obtainMessage(MSG_DELETE_RULES, packageName).sendToTarget();
+        boolean removed = mCache.deleteAll(packageName);
+        // Even when the cache is empty, a deferred snapshot write may still be in flight.
+        // Tombstone it so the worker cannot resurrect the package after this request.
+        long generation = mCache.nextGeneration();
+        mStore.markDeleted(packageName, generation);
+        if (removed) {
+            mHandle.obtainMessage(MSG_DELETE_RULES,
+                    new DeleteAllMessage(packageName, generation)).sendToTarget();
             return true;
         }
         return false;
@@ -237,6 +250,9 @@ public final class RuleRepository {
     }
 
     public String getAppDataDir(String packageName) throws FileNotFoundException {
+        if (!PackageNameValidator.isValid(packageName)) {
+            throw new FileNotFoundException("Invalid package name: " + packageName);
+        }
         return mStore.getAppDataDir(packageName);
     }
 
@@ -267,7 +283,7 @@ public final class RuleRepository {
                 handleDelete((DeleteMessage) msg.obj);
                 return true;
             case MSG_DELETE_RULES:
-                handleDeleteAll((String) msg.obj);
+                handleDeleteAll((DeleteAllMessage) msg.obj);
                 return true;
             case MSG_DEBOUNCE_WRITE:
                 mStore.handleDebouncedWrite((String) msg.obj);
@@ -282,6 +298,10 @@ public final class RuleRepository {
     private void handleWrite(WriteMessage m) {
         if (m.snapshot != null) {
             // ── 快照分支：先 I/O 保存新图，成功后再更新缓存 + 持久化 ──
+            if (!mStore.isGenerationCurrent(m.packageName, m.generation)) {
+                mLogger.d("drop stale snapshot write for deleted package " + m.packageName);
+                return;
+            }
             String oldImagePath = mCache.getOldImagePath(m.packageName, m.viewRule);
 
             String newImagePath;
@@ -297,13 +317,29 @@ public final class RuleRepository {
                 return;
             }
 
+            if (!mStore.isGenerationCurrent(m.packageName, m.generation)) {
+                FileUtils.delete(newImagePath);
+                mLogger.d("drop snapshot write invalidated during image save for "
+                        + m.packageName);
+                return;
+            }
+
             try {
                 m.viewRule.imagePath = newImagePath;
                 RuleCache.CacheResult cr = mCache.apply(m.packageName, m.viewRule, false);
+                if (!mStore.isGenerationCurrent(m.packageName, m.generation)) {
+                    // The delete won the package scope while the snapshot was being saved.
+                    // Remove the provisional cache entry and the newly-created image.
+                    mCache.delete(m.packageName, m.viewRule);
+                    FileUtils.delete(newImagePath);
+                    mLogger.d("drop snapshot write after package tombstone for "
+                            + m.packageName);
+                    return;
+                }
                 // Binder 即时推送
                 mObserverRegistry.notifyObserverRuleChanged(m.packageName, cr.snapshotRules);
                 // 持久化
-                mStore.persistAsync(m.packageName, cr.json);
+                mStore.persistAsync(m.packageName, cr.json, cr.generation);
                 // 清理旧图
                 if (oldImagePath != null && !oldImagePath.isEmpty()) {
                     FileUtils.delete(oldImagePath);
@@ -316,7 +352,7 @@ public final class RuleRepository {
             // ── JSON 分支：缓存已更新，只持久化 + 发布 ──
             try {
                 mObserverRegistry.notifyObserverRuleChanged(m.packageName, m.snapshotRules);
-                mStore.persistAsync(m.packageName, m.json);
+                mStore.persistAsync(m.packageName, m.json, m.generation);
                 scheduleOrphanCleanup();
             } catch (Exception e) {
                 mLogger.w("write rule: persist failed", e);
@@ -327,7 +363,7 @@ public final class RuleRepository {
     private void handleDelete(DeleteMessage m) {
         try {
             mObserverRegistry.notifyObserverRuleChanged(m.packageName, m.snapshotRules);
-            mStore.persistAsync(m.packageName, m.json);
+            mStore.persistAsync(m.packageName, m.json, m.generation);
             if (m.imagePath != null && !m.imagePath.isEmpty()) {
                 FileUtils.delete(m.imagePath);
             }
@@ -337,9 +373,10 @@ public final class RuleRepository {
         }
     }
 
-    private void handleDeleteAll(String packageName) {
+    private void handleDeleteAll(DeleteAllMessage message) {
+        String packageName = message.packageName;
         try {
-            FileUtils.delete(mStore.getAppDataDir(packageName));
+            mStore.deletePackage(packageName, message.generation);
             mObserverRegistry.notifyObserverRuleChanged(packageName, new ActRules());
         } catch (Exception e) {
             mLogger.w("delete all rules failed for " + packageName, e);
@@ -604,7 +641,9 @@ public final class RuleRepository {
         private final Logger mLogger;
         private final RuleCache mCache;
         private final Handler mHandle;
-        private final Map<String, String> mPendingWrites = new HashMap<>();
+        private final Map<String, PendingWrite> mPendingWrites = new HashMap<>();
+        /** Latest package tombstone. Writes from an older cache generation are stale. */
+        private final Map<String, Long> mDeletedGenerations = new HashMap<>();
 
         RuleStore(Gson gson, Logger logger, RuleCache cache, Handler handler) {
             this.mGson = gson;
@@ -646,9 +685,15 @@ public final class RuleRepository {
             }
         }
 
-        void persistAsync(String packageName, String json) {
+        void persistAsync(String packageName, String json, long generation) {
             synchronized (mPendingWrites) {
-                mPendingWrites.put(packageName, json);
+                long deletedGeneration = deletedGenerationLocked(packageName);
+                if (!isWriteCurrent(generation, deletedGeneration)) {
+                    mLogger.d("drop stale persistence for deleted package " + packageName
+                            + ", generation=" + generation + ", tombstone=" + deletedGeneration);
+                    return;
+                }
+                mPendingWrites.put(packageName, new PendingWrite(json, generation));
             }
             mHandle.removeMessages(MSG_DEBOUNCE_WRITE, packageName);
             mHandle.sendMessageDelayed(
@@ -656,7 +701,13 @@ public final class RuleRepository {
                     DEBOUNCE_DELAY_MS);
         }
 
-        private void persistNow(String packageName, String json) {
+        private void persistNow(String packageName, String json, long generation) {
+            synchronized (mPendingWrites) {
+                if (!isWriteCurrent(generation, deletedGenerationLocked(packageName))) {
+                    mLogger.d("drop stale persistence for deleted package " + packageName);
+                    return;
+                }
+            }
             try {
                 File appDataDir = new File(getBaseDir(), packageName);
                 if (!appDataDir.exists() && !appDataDir.mkdirs()) {
@@ -679,25 +730,67 @@ public final class RuleRepository {
                 mLogger.w("persistAsync failed for " + packageName, e);
             }
         }
-
-        void handleDebouncedWrite(String packageName) {
-            String json;
+        void markDeleted(String packageName, long generation) {
             synchronized (mPendingWrites) {
-                json = mPendingWrites.get(packageName);
-                if (json == null) return;
+                long current = deletedGenerationLocked(packageName);
+                if (generation > current) mDeletedGenerations.put(packageName, generation);
                 mPendingWrites.remove(packageName);
             }
-            persistNow(packageName, json);
+            mHandle.removeMessages(MSG_DEBOUNCE_WRITE, packageName);
+        }
+
+        void deletePackage(String packageName, long generation) {
+            try {
+                File packageDir = new File(getBaseDir(), packageName);
+                if (packageDir.exists()) FileUtils.delete(packageDir);
+            } catch (FileNotFoundException e) {
+                mLogger.w("delete package: base dir not found", e);
+            }
+        }
+
+        private long deletedGenerationLocked(String packageName) {
+            Long generation = mDeletedGenerations.get(packageName);
+            return generation != null ? generation : Long.MIN_VALUE;
+        }
+
+        static boolean isWriteCurrent(long generation, long deletedGeneration) {
+            return generation > deletedGeneration;
+        }
+
+        boolean isGenerationCurrent(String packageName, long generation) {
+            synchronized (mPendingWrites) {
+                return isWriteCurrent(generation, deletedGenerationLocked(packageName));
+            }
+        }
+
+        void handleDebouncedWrite(String packageName) {
+            PendingWrite pending;
+            synchronized (mPendingWrites) {
+                pending = mPendingWrites.get(packageName);
+                if (pending == null) return;
+                mPendingWrites.remove(packageName);
+                if (!isWriteCurrent(pending.generation, deletedGenerationLocked(packageName))) {
+                    mLogger.d("drop stale debounced write for deleted package " + packageName);
+                    return;
+                }
+            }
+            persistNow(packageName, pending.json, pending.generation);
         }
 
         void flushPendingWrites() {
-            Map<String, String> pending;
+            Map<String, PendingWrite> pending;
             synchronized (mPendingWrites) {
                 pending = new HashMap<>(mPendingWrites);
                 mPendingWrites.clear();
             }
-            for (Map.Entry<String, String> entry : pending.entrySet()) {
-                persistNow(entry.getKey(), entry.getValue());
+            for (Map.Entry<String, PendingWrite> entry : pending.entrySet()) {
+                synchronized (mPendingWrites) {
+                    if (!isWriteCurrent(entry.getValue().generation,
+                            deletedGenerationLocked(entry.getKey()))) {
+                        continue;
+                    }
+                }
+                persistNow(entry.getKey(), entry.getValue().json, entry.getValue().generation);
             }
         }
 
@@ -847,6 +940,26 @@ public final class RuleRepository {
             this.json = json;
             this.snapshotRules = snapshotRules;
             this.imagePath = imagePath;
+            this.generation = generation;
+        }
+    }
+
+    static final class DeleteAllMessage {
+        final String packageName;
+        final long generation;
+
+        DeleteAllMessage(String packageName, long generation) {
+            this.packageName = packageName;
+            this.generation = generation;
+        }
+    }
+
+    private static final class PendingWrite {
+        final String json;
+        final long generation;
+
+        PendingWrite(String json, long generation) {
+            this.json = json;
             this.generation = generation;
         }
     }

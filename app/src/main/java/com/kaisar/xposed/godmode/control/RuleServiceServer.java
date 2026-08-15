@@ -174,16 +174,16 @@ public final class RuleServiceServer extends IGodModeManager.Stub {
     @Override
     public boolean writeRule(String packageName, RuleRecord viewRule, Bitmap snapshot)
             throws RemoteException {
-        mPermissionEnforcer.enforcePermission(
-                new String[]{packageName, BuildConfig.APPLICATION_ID},
-                "write rule fail permission denied");
+        // Keep the existing write contract (the target package is supplied separately),
+        // while still rejecting malformed filesystem scopes and unauthorized callers.
+        enforcePackageCaller(packageName, "write rule");
         if (!mStarted) { mLogger.w("writeRule(" + packageName + ") ignored — service not started"); return false; }
         return mRepository.writeRule(packageName, viewRule, snapshot);
     }
 
     @Override
     public boolean updateRule(String packageName, RuleRecord viewRule) throws RemoteException {
-        mPermissionEnforcer.enforcePermission("update rule fail permission denied");
+        enforceRulePackage(packageName, viewRule, "update rule");
         if (!mStarted) { mLogger.w("updateRule(" + packageName + ") ignored — service not started"); return false; }
         return mRepository.updateRule(packageName, viewRule);
     }
@@ -192,14 +192,14 @@ public final class RuleServiceServer extends IGodModeManager.Stub {
 
     @Override
     public boolean deleteRule(String packageName, RuleRecord viewRule) throws RemoteException {
-        mPermissionEnforcer.enforcePermission("delete rule fail permission denied");
+        enforceRulePackage(packageName, viewRule, "delete rule");
         if (!mStarted) { mLogger.w("deleteRule(" + packageName + ") ignored — service not started"); return false; }
         return mRepository.deleteRule(packageName, viewRule);
     }
 
     @Override
     public boolean deleteRules(String packageName) throws RemoteException {
-        mPermissionEnforcer.enforcePermission("delete rules fail permission denied");
+        enforcePackageCaller(packageName, "delete rules");
         if (!mStarted) { mLogger.w("deleteRules(" + packageName + ") ignored — service not started"); return false; }
         return mRepository.deleteRules(packageName);
     }
@@ -208,9 +208,7 @@ public final class RuleServiceServer extends IGodModeManager.Stub {
 
     @Override
     public String saveImageFile(String packageName, Bitmap bitmap) throws RemoteException {
-        mPermissionEnforcer.enforcePermission(
-                new String[]{packageName, BuildConfig.APPLICATION_ID},
-                "save image fail permission denied");
+        enforcePackageCaller(packageName, "save image");
         if (!mStarted || bitmap == null || bitmap.isRecycled()) {
             if (!mStarted) mLogger.w("saveImageFile(" + packageName + ") ignored — service not started");
             else mLogger.w("saveImageFile(" + packageName + ") ignored — bitmap invalid");
@@ -250,11 +248,13 @@ public final class RuleServiceServer extends IGodModeManager.Stub {
 
     @Override
     public String getToolbarHiddenItems() throws RemoteException {
+        mPermissionEnforcer.enforcePermission("get toolbar hidden items fail permission denied");
         return mToolbarHiddenItems;
     }
 
     @Override
     public void setToolbarHiddenItems(String items) throws RemoteException {
+        mPermissionEnforcer.enforcePermission("set toolbar hidden items fail permission denied");
         mToolbarHiddenItems = items != null ? items : "";
         mRepository.persistToolbarHiddenItems(mToolbarHiddenItems);
     }
@@ -274,5 +274,28 @@ public final class RuleServiceServer extends IGodModeManager.Stub {
     public void shutdown() {
         mStarted = false;
         mRepository.shutdown();
+    }
+
+    private void enforceRulePackage(String packageName, RuleRecord viewRule, String operation)
+            throws RemoteException {
+        if (viewRule == null || !packageNameEquals(packageName, viewRule.packageName)) {
+            mLogger.w(operation + " rejected: package scope mismatch, package=" + packageName);
+            throw new RemoteException(operation + " fail invalid package scope");
+        }
+        enforcePackageCaller(packageName, operation);
+    }
+
+    private void enforcePackageCaller(String packageName, String operation)
+            throws RemoteException {
+        if (!PackageNameValidator.isValid(packageName)) {
+            throw new RemoteException(operation + " fail invalid package name");
+        }
+        mPermissionEnforcer.enforcePermission(
+                new String[]{packageName, BuildConfig.APPLICATION_ID},
+                operation + " fail permission denied");
+    }
+
+    private static boolean packageNameEquals(String left, String right) {
+        return left != null && left.equals(right);
     }
 }
