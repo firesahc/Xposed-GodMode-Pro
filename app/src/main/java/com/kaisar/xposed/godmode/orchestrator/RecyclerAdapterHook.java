@@ -43,7 +43,6 @@ public final class RecyclerAdapterHook {
 
     /** 当前 ViewHolder 绑定 token；弱键避免持有已回收 holder。 */
     private static final Map<Object, BindingToken> sBindings = new WeakHashMap<>();
-    private static long sBindingEpoch;
 
     private RecyclerAdapterHook() {
         // 工具类不可实例化
@@ -103,7 +102,7 @@ public final class RecyclerAdapterHook {
                             if (previous != null) cancelRetry(previous);
                             BindingToken token = new BindingToken(
                                     adapter, holder, itemView,
-                                    resolveViewType(adapter, position), nextBindingEpoch());
+                                    resolveViewType(adapter, position));
                             synchronized (sBindings) {
                                 sBindings.put(holder, token);
                             }
@@ -115,7 +114,8 @@ public final class RecyclerAdapterHook {
                             Object holder = param.args[0];
                             View itemView = getItemView(holder);
                             BindingToken token = currentBinding(holder);
-                            if (token == null || !token.matches(adapterFor(param), holder, itemView)) {
+                            if (token == null || !token.matches(adapterFor(param), holder, itemView,
+                                    resolveHolderViewType(holder))) {
                                 return;
                             }
                             applyToken(token, delegate);
@@ -131,7 +131,8 @@ public final class RecyclerAdapterHook {
                             View itemView = getItemView(holder);
                             if (itemView == null) return;
                             BindingToken token = currentBinding(holder);
-                            if (token == null || !token.matches(adapterFor(param), holder, itemView)) {
+                            if (token == null || !token.matches(adapterFor(param), holder, itemView,
+                                    resolveHolderViewType(holder))) {
                                 // A stale recycle from another adapter must not touch the
                                 // current binding or its baseline.
                                 return;
@@ -284,33 +285,66 @@ public final class RecyclerAdapterHook {
         }
     }
 
-    private static synchronized long nextBindingEpoch() {
-        return ++sBindingEpoch;
+    private static int resolveHolderViewType(Object holder) {
+        if (holder == null) return -1;
+        try {
+            Object value = XposedHelpers.callMethod(holder, "getItemViewType");
+            return value instanceof Integer ? (Integer) value : -1;
+        } catch (Throwable ignored) {
+            return -1;
+        }
+    }
+
+    /** Invalidates tokens owned by an Activity before its controller is cleared. */
+    public static void invalidateActivity(Activity activity, ViewController controller) {
+        if (activity == null && controller == null) return;
+        synchronized (sBindings) {
+            java.util.Iterator<Map.Entry<Object, BindingToken>> iterator =
+                    sBindings.entrySet().iterator();
+            while (iterator.hasNext()) {
+                Map.Entry<Object, BindingToken> entry = iterator.next();
+                BindingToken token = entry.getValue();
+                View root = token != null ? token.itemRoot.get() : null;
+                boolean owned = token != null && (controller != null && token.controller == controller);
+                if (!owned && activity != null) {
+                    owned = token != null && token.activity.get() == activity;
+                    if (!owned && root != null) {
+                        owned = ViewUtils.getAttachedActivityFromView(root) == activity;
+                    }
+                }
+                if (owned) {
+                    cancelRetry(token);
+                    iterator.remove();
+                }
+            }
+        }
     }
 
     private static final class BindingToken {
         final WeakReference<Object> adapter;
         final WeakReference<Object> holder;
         final WeakReference<View> itemRoot;
+        final WeakReference<Activity> activity;
         final int viewType;
-        final long epoch;
         volatile ViewController controller;
         volatile boolean retryScheduled;
         volatile View.OnAttachStateChangeListener attachListener;
 
         BindingToken(Object adapter, Object holder, View itemRoot,
-                int viewType, long epoch) {
+                int viewType) {
             this.adapter = new WeakReference<>(adapter);
             this.holder = new WeakReference<>(holder);
             this.itemRoot = new WeakReference<>(itemRoot);
+            this.activity = new WeakReference<>(ViewUtils.getAttachedActivityFromView(itemRoot));
             this.viewType = viewType;
-            this.epoch = epoch;
         }
 
-        boolean matches(Object currentAdapter, Object currentHolder, View currentItemRoot) {
+        boolean matches(Object currentAdapter, Object currentHolder, View currentItemRoot,
+                int currentViewType) {
             return adapter.get() == currentAdapter
                     && holder.get() == currentHolder
-                    && itemRoot.get() == currentItemRoot;
+                    && itemRoot.get() == currentItemRoot
+                    && viewType == currentViewType;
         }
     }
 

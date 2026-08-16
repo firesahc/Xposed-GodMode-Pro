@@ -154,6 +154,7 @@ public final class RuleLifecycleManager implements RecyclerAdapterHook.Delegate 
 
         // 清理 Activity 级 ViewController 及其 Applier 缓存
         ViewController vc = mViewControllers.remove(activity);
+        RecyclerAdapterHook.invalidateActivity(activity, vc);
         if (vc != null) {
             vc.clearBlockedCache();
             // 清除 RecyclerView 收集缓存，释放对已销毁 DecorView 的引用

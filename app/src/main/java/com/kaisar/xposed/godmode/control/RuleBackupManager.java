@@ -80,7 +80,7 @@ public final class RuleBackupManager {
                     if (viewRule == null || !packageName.equals(viewRule.packageName)) {
                         throw new IOException("Rule package does not match backup package");
                     }
-                    RuleRecord viewRuleCopy = viewRule.clone();
+                    RuleRecord viewRuleCopy = prepareBackupRecord(viewRule);
                     try {
                         String entryName = copyImageToBackup(backupDir,
                                 viewRule.imagePath, "", imageEntries,
@@ -104,8 +104,6 @@ public final class RuleBackupManager {
                                 Logger.w(TAG, "[Backup] backupRules: skip mod image for " + viewRule.viewClass + ", failed to copy", e);
                             }
                         }
-                    } else if (!viewRule.isModifyRule()) {
-                        viewRule.modImagePath = "";
                     }
                     backupRuleRecordList.add(viewRuleCopy);
                 }
@@ -250,6 +248,13 @@ public final class RuleBackupManager {
 
     static File createOperationDirectory(File cacheDir, String operation) {
         return new File(new File(cacheDir, operation), UUID.randomUUID().toString());
+    }
+
+    /** Creates the export-owned record without mutating the caller's rule. */
+    static RuleRecord prepareBackupRecord(RuleRecord input) {
+        RuleRecord copy = input.clone();
+        if (!input.isModifyRule()) copy.modImagePath = "";
+        return copy;
     }
 
     private static String copyImageToBackup(

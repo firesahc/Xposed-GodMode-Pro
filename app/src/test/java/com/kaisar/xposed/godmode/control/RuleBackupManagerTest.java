@@ -13,6 +13,8 @@ import org.junit.rules.TemporaryFolder;
 import java.io.File;
 import java.io.IOException;
 
+import com.kaisar.xposed.godmode.rule.RuleRecord;
+
 public final class RuleBackupManagerTest {
 
     @Rule
@@ -99,6 +101,21 @@ public final class RuleBackupManagerTest {
                         outside.getAbsolutePath()));
         assertEquals(null,
                 RuleBackupManager.resolveRestoredFile(restoreDir, "missing.webp"));
+    }
+
+    @Test
+    public void prepareBackupRecordDoesNotMutateNonModifyInput() {
+        RuleRecord input = new RuleRecord("label", "com.example", "1", 1, 68,
+                "preview.webp", "alias", 1, 2, 3, 4, new int[]{1},
+                "Activity", "TextView", "id/title", "", "", 0, 1L);
+        input.ruleTag = null;
+        input.modImagePath = "/data/original-mod.webp";
+
+        RuleRecord copy = RuleBackupManager.prepareBackupRecord(input);
+
+        assertEquals("/data/original-mod.webp", input.modImagePath);
+        assertEquals("", copy.modImagePath);
+        assertFalse(input == copy);
     }
 
 }
