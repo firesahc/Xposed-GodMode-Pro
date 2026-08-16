@@ -36,6 +36,9 @@ public final class RuleServiceClient {
     private volatile IBinder mBinder;
     private volatile String mLastError;
     private final CopyOnWriteArrayList<Runnable> mBinderDeathListeners = new CopyOnWriteArrayList<>();
+    /** Local observer registrations survive Binder death and are replayed on reconnect. */
+    private final CopyOnWriteArrayList<ObserverSubscription> mObserverSubscriptions =
+            new CopyOnWriteArrayList<>();
 
     private RuleServiceClient() {
     }
@@ -99,7 +102,20 @@ public final class RuleServiceClient {
             mGMM = IGodModeManager.Stub.asInterface(service);
             mLastError = null;
             Logger.i(TAG, "connected to godmode service via clipboard delegate");
+            reregisterObservers(mGMM);
             return mGMM;
+        }
+    }
+
+    private void reregisterObservers(IGodModeManager service) {
+        for (ObserverSubscription subscription : mObserverSubscriptions) {
+            try {
+                service.addObserver(subscription.packageName, subscription.observer);
+            } catch (RemoteException e) {
+                // Keep the local registration. A later reconnect will retry it.
+                Logger.w(TAG, "observer re-register failed for "
+                        + subscription.packageName, e);
+            }
         }
     }
 
@@ -247,6 +263,13 @@ public final class RuleServiceClient {
     }
 
     public void addObserver(String packageName, IObserver observer) {
+        if (packageName == null || observer == null) return;
+        ObserverSubscription subscription = new ObserverSubscription(packageName, observer);
+        if (!mObserverSubscriptions.contains(subscription)) {
+            mObserverSubscriptions.add(subscription);
+        } else {
+            return;
+        }
         try {
             ensureService().addObserver(packageName, observer);
         } catch (RemoteException e) {
@@ -255,6 +278,8 @@ public final class RuleServiceClient {
     }
 
     public void removeObserver(String packageName, IObserver observer) {
+        if (packageName == null || observer == null) return;
+        mObserverSubscriptions.remove(new ObserverSubscription(packageName, observer));
         try {
             ensureService().removeObserver(packageName, observer);
         } catch (RemoteException e) {
@@ -376,6 +401,30 @@ public final class RuleServiceClient {
             Logger.w(TAG, "forwardLog IPC failed: " + e.getMessage());
         } catch (Throwable t) {
             Logger.w(TAG, "forwardLog unexpected error", t);
+        }
+    }
+
+    private static final class ObserverSubscription {
+        final String packageName;
+        final IObserver observer;
+
+        ObserverSubscription(String packageName, IObserver observer) {
+            this.packageName = packageName;
+            this.observer = observer;
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (!(other instanceof ObserverSubscription)) return false;
+            ObserverSubscription that = (ObserverSubscription) other;
+            return packageName.equals(that.packageName)
+                    && observer.asBinder() == that.observer.asBinder();
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * packageName.hashCode()
+                    + System.identityHashCode(observer.asBinder());
         }
     }
 }

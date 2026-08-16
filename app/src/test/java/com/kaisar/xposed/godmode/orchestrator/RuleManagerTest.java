@@ -93,6 +93,23 @@ public final class RuleManagerTest {
     }
 
     @Test
+    public void acceptedServiceSnapshotPublishesBeforeReplacingAndTracksReadyState()
+            throws Exception {
+        RuleManager manager = newManager();
+        RuleRecord serviceRule = rule();
+        ActRules snapshot = rulesOf(serviceRule);
+
+        manager.acceptServiceSnapshotForTest(snapshot);
+
+        assertEquals(RuleManager.LoadState.READY_WITH_RULES, manager.getLoadState());
+        assertEquals(1, manager.getRules().get(serviceRule.activityClass).size());
+
+        manager.acceptServiceSnapshotForTest(new ActRules());
+        assertEquals(RuleManager.LoadState.READY_EMPTY, manager.getLoadState());
+        assertTrue(manager.getRules().isEmpty());
+    }
+
+    @Test
     public void runtimeComparatorIgnoresPresentationMetadata() {
         RuleRecord left = rule();
         RuleRecord right = left.clone();

@@ -77,7 +77,10 @@ public final class RuleServiceServer extends IGodModeManager.Stub {
 
         // 加载数据；完成后再标记控制面健康
         mRepository.loadAll(
-                () -> mLifecycle.markHealthy(ModuleLifecycle.Layer.CONTROL),
+                () -> {
+                    mLifecycle.markHealthy(ModuleLifecycle.Layer.CONTROL);
+                    mObserverRegistry.notifyRulesLoaded(mRepository.getAllRules());
+                },
                 () -> mLifecycle.markError(ModuleLifecycle.Layer.CONTROL, "load rules failed"));
 
         // 加载工具栏偏好
@@ -123,7 +126,7 @@ public final class RuleServiceServer extends IGodModeManager.Stub {
                 new String[]{packageName, BuildConfig.APPLICATION_ID},
                 "register observer fail permission denied");
         if (!mStarted) { mLogger.w("addObserver(" + packageName + ") ignored — service not started"); return; }
-        ActRules rules = mRepository.getRules(packageName);
+        ActRules rules = areRulesReady() ? mRepository.getRules(packageName) : null;
         mObserverRegistry.addObserver(packageName, observer, mInEditMode, rules);
     }
 
@@ -160,11 +163,11 @@ public final class RuleServiceServer extends IGodModeManager.Stub {
                 "get rules fail permission denied");
         if (!mStarted) {
             mLogger.w("getRules: service not started");
-            return new ActRules();
+            return null;
         }
-        if (!mRepository.isDataLoaded()) {
-            mLogger.w("getRules: data not loaded yet");
-            return new ActRules();
+        if (!areRulesReady()) {
+            mLogger.w("getRules: rules are not ready yet");
+            return null;
         }
         return mRepository.getRules(packageName);
     }
@@ -297,5 +300,10 @@ public final class RuleServiceServer extends IGodModeManager.Stub {
 
     private static boolean packageNameEquals(String left, String right) {
         return left != null && left.equals(right);
+    }
+
+    private boolean areRulesReady() {
+        return mStarted && mLifecycle.getState() == ModuleLifecycle.State.READY
+                && mRepository.isDataLoaded();
     }
 }

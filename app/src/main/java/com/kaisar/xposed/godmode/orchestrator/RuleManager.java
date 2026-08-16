@@ -182,20 +182,7 @@ public final class RuleManager {
         try {
             ActRules binderRules = client.getRules(mPackageName);
             if (client.isConnected() && binderRules != null) {
-                boolean hadRules = !mActRules.isEmpty();
-                replaceRules(binderRules);
-                mLastSource = Source.BINDER;
-                mLoadState = binderRules.isEmpty()
-                        ? LoadState.READY_EMPTY : LoadState.READY_WITH_RULES;
-                mRetryAttempt = 0;
-                if (mRetryHandler != null) {
-                    mRetryHandler.removeCallbacks(mRetryTask);
-                }
-                mLogger.i("rules loaded from Binder for " + mPackageName
-                        + " (" + binderRules.size() + " activities, state=" + mLoadState + ")");
-                if (hadRules || !binderRules.isEmpty()) {
-                    ModuleBootstrap.notifyViewRulesChanged(getRules());
-                }
+                acceptServiceSnapshot(binderRules);
                 return;
             }
         } catch (Exception e) {
@@ -206,6 +193,42 @@ public final class RuleManager {
         mLogger.w("Binder unavailable for " + mPackageName
                 + " — retaining last valid rules (" + mActRules.size() + " activities)");
         if (scheduleRetry) scheduleRetry();
+    }
+
+    /** Accepts both the initial Binder read and observer ready snapshots. */
+    public synchronized void acceptServiceSnapshot(ActRules serviceRules) {
+        if (serviceRules == null) {
+            mLoadState = LoadState.UNAVAILABLE;
+            scheduleRetry();
+            return;
+        }
+        mLastSource = Source.BINDER;
+        mLoadState = serviceRules.isEmpty()
+                ? LoadState.READY_EMPTY : LoadState.READY_WITH_RULES;
+        mRetryAttempt = 0;
+        if (mRetryHandler != null) mRetryHandler.removeCallbacks(mRetryTask);
+
+        // Publish before replacing the manager snapshot. RuleLifecycleManager
+        // must diff against the old runtime rules in order to revoke/apply.
+        ModuleBootstrap.notifyViewRulesChanged(copyRules(serviceRules));
+        // EventBus dispatch is synchronous. Keep a defensive fallback for
+        // processes where no lifecycle subscriber is installed (for example,
+        // a headless test process) without changing the ordering above.
+        replaceRules(serviceRules);
+        mLogger.i("rules accepted from Binder for " + mPackageName
+                + " (" + serviceRules.size() + " activities, state=" + mLoadState + ")");
+    }
+
+    /** JVM-only seam for state tests; production callers must use the event path above. */
+    void acceptServiceSnapshotForTest(ActRules serviceRules) {
+        if (serviceRules == null) {
+            mLoadState = LoadState.UNAVAILABLE;
+            return;
+        }
+        mLastSource = Source.BINDER;
+        mLoadState = serviceRules.isEmpty()
+                ? LoadState.READY_EMPTY : LoadState.READY_WITH_RULES;
+        replaceRules(serviceRules);
     }
 
     private void scheduleRetry() {

@@ -9,6 +9,7 @@ import android.text.TextUtils;
 import com.kaisar.xposed.godmode.IObserver;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.rule.ActRules;
+import com.kaisar.xposed.godmode.rule.AppRules;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -65,7 +66,12 @@ public final class ObserverRegistry {
         // 立即通知新注册的观察者当前状态
         try {
             observer.onEditModeChanged(editModeEnabled);
-            observer.onViewRuleChanged(packageName, currentRules);
+            // LOADING/ERROR is represented by null.  Do not turn an unavailable
+            // repository into a fake empty snapshot; the ready callback below
+            // will deliver the first authoritative snapshot.
+            if (currentRules != null) {
+                observer.onViewRuleChanged(packageName, currentRules);
+            }
         } catch (RemoteException e) {
             mLogger.w("immediate notify observer failed", e);
         }
@@ -106,6 +112,23 @@ public final class ObserverRegistry {
 
     public void notifyObserverEditModeChanged(boolean enable) {
         forEachLiveObserver((proxy) -> proxy.onEditModeChanged(enable));
+    }
+
+    /**
+     * Publishes the first authoritative repository snapshot after loading.
+     * A wildcard observer receives a refresh signal and is expected to call
+     * getAllRules(), while package observers receive their complete snapshot.
+     */
+    public void notifyRulesLoaded(AppRules appRules) {
+        forEachLiveObserver((proxy) -> {
+            if (TextUtils.equals(proxy.packageName, "*")) {
+                proxy.observer.onViewRuleChanged("*", new ActRules());
+                return;
+            }
+            ActRules rules = appRules != null ? appRules.get(proxy.packageName) : null;
+            proxy.observer.onViewRuleChanged(proxy.packageName,
+                    rules != null ? rules : new ActRules());
+        });
     }
 
     // ---- 死观察者清理 ----

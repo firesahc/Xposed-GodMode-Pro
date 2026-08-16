@@ -40,7 +40,9 @@ public final class AppInjector {
 
                     @Override
                     public void onViewRulesChanged(com.kaisar.xposed.godmode.rule.ActRules rules) {
-                        ModuleBootstrap.notifyViewRulesChanged(rules);
+                        if (RuleManager.isInitialized()) {
+                            RuleManager.get().acceptServiceSnapshot(rules);
+                        }
                     }
                 }));
     }
