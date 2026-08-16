@@ -27,10 +27,16 @@ import com.google.android.material.snackbar.Snackbar;
 import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.ui.model.SharedViewModel;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
+import com.kaisar.xposed.godmode.engine.rule.RuleSlotKey;
+import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.util.AppInfoHelper;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 public final class RuleRecordDetailsContainerFragment extends Fragment {
 
@@ -137,11 +143,14 @@ public final class RuleRecordDetailsContainerFragment extends Fragment {
                     @Override public int getNewListSize() { return newData.size(); }
                     @Override
                     public boolean areItemsTheSame(int oldItemPosition, int newItemPosition) {
-                        return oldData.get(oldItemPosition).hashCode() == newData.get(newItemPosition).hashCode();
+                        RuleRecord oldRule = oldData.get(oldItemPosition);
+                        RuleRecord newRule = newData.get(newItemPosition);
+                        return oldRule.slotKey(oldRule.packageName)
+                                .equals(newRule.slotKey(newRule.packageName));
                     }
                     @Override
                     public boolean areContentsTheSame(int oldItemPosition, int newItemPosition) {
-                        return oldData.get(oldItemPosition).toString().equals(newData.get(newItemPosition).toString());
+                        return oldData.get(oldItemPosition).contentEquals(newData.get(newItemPosition));
                     }
                 });
                 adapter.setData(newData);
@@ -187,6 +196,9 @@ public final class RuleRecordDetailsContainerFragment extends Fragment {
     static final class DetailFragmentStateAdapter extends FragmentStateAdapter {
 
         final List<RuleRecord> mData = new ArrayList<>();
+        final Map<RuleSlotKey, List<Long>> mIds = new HashMap<>();
+        final List<Long> mItemIds = new ArrayList<>();
+        long mNextId;
 
         public DetailFragmentStateAdapter(@NonNull Fragment fragment) {
             super(fragment);
@@ -197,8 +209,36 @@ public final class RuleRecordDetailsContainerFragment extends Fragment {
         }
 
         public void setData(List<RuleRecord> data) {
+            Set<RuleSlotKey> liveKeys = new HashSet<>();
+            Map<RuleSlotKey, Integer> occurrences = new HashMap<>();
+            mItemIds.clear();
+            if (data != null) {
+                for (RuleRecord rule : data) {
+                    RuleSlotKey key = rule.slotKey(rule.packageName);
+                    liveKeys.add(key);
+                    int occurrence = occurrences.containsKey(key) ? occurrences.get(key) : 0;
+                    occurrences.put(key, occurrence + 1);
+                    List<Long> ids = mIds.computeIfAbsent(key, unused -> new ArrayList<>());
+                    while (ids.size() <= occurrence) ids.add(mNextId++);
+                    mItemIds.add(ids.get(occurrence));
+                    if (occurrence > 0) {
+                        Logger.w("RuleDetails", "duplicate RuleSlotKey retained for legacy compatibility: " + key);
+                    }
+                }
+            }
+            mIds.keySet().removeIf(key -> !liveKeys.contains(key));
             mData.clear();
             if (data != null) mData.addAll(data);
+        }
+
+        @Override
+        public long getItemId(int position) {
+            return mItemIds.get(position);
+        }
+
+        @Override
+        public boolean containsItem(long itemId) {
+            return mItemIds.contains(itemId);
         }
 
         @NonNull

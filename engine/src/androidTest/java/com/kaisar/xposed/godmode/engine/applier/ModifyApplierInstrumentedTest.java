@@ -26,7 +26,8 @@ import androidx.test.platform.app.InstrumentationRegistry;
 import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry;
 import androidx.test.runner.lifecycle.Stage;
 
-import com.kaisar.xposed.godmode.engine.rule.ActionSpec;
+import com.kaisar.xposed.godmode.engine.rule.ModifyEffect;
+import com.kaisar.xposed.godmode.engine.rule.RemoveEffect;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -48,9 +49,7 @@ public final class ModifyApplierInstrumentedTest {
         withActivity(activity -> {
                 TextView view = attachText(activity, "host");
                 RemoveApplier applier = new RemoveApplier();
-                ActionSpec action = new ActionSpec.Builder()
-                        .visibility(View.GONE)
-                        .build();
+                RemoveEffect action = RemoveEffect.of(View.GONE);
 
                 assertTrue(applier.apply(view, action));
                 assertEquals(View.GONE, view.getVisibility());
@@ -66,9 +65,7 @@ public final class ModifyApplierInstrumentedTest {
                 view.setAlpha(0.65f);
                 view.setClickable(true);
                 RemoveApplier applier = new RemoveApplier();
-                ActionSpec action = new ActionSpec.Builder()
-                        .visibility(View.GONE)
-                        .build();
+                RemoveEffect action = RemoveEffect.of(View.GONE);
 
                 assertTrue(applier.apply(view, action));
                 view.getLayoutParams().width = 240;
@@ -93,9 +90,7 @@ public final class ModifyApplierInstrumentedTest {
                 view.setAlpha(0.65f);
                 view.setClickable(true);
                 RemoveApplier applier = new RemoveApplier();
-                ActionSpec action = new ActionSpec.Builder()
-                        .visibility(View.INVISIBLE)
-                        .build();
+                RemoveEffect action = RemoveEffect.of(View.INVISIBLE);
 
                 assertTrue(applier.apply(view, action));
                 view.setAlpha(0.8f);
@@ -138,7 +133,7 @@ public final class ModifyApplierInstrumentedTest {
                 view.setAlpha(0.65f);
 
                 ModifyApplier applier = directApplier();
-                ActionSpec action = modifyAction();
+                ModifyEffect action = modifyAction();
 
                 assertTrue(applier.apply(view, action));
                 assertEquals(180, view.getLayoutParams().width);
@@ -163,7 +158,7 @@ public final class ModifyApplierInstrumentedTest {
         withActivity(activity -> {
                 TextView view = attachText(activity, "host");
                 ModifyApplier applier = directApplier();
-                ActionSpec action = modifyAction();
+                ModifyEffect action = modifyAction();
                 assertTrue(applier.apply(view, action));
 
                 view.setText("host-new");
@@ -183,7 +178,7 @@ public final class ModifyApplierInstrumentedTest {
         withActivity(activity -> {
                 TextView view = attachText(activity, "host");
                 ModifyApplier applier = directApplier();
-                ActionSpec action = modifyAction();
+                ModifyEffect action = modifyAction();
                 assertTrue(applier.apply(view, action));
 
                 view.setText("host-drift");
@@ -324,8 +319,8 @@ public final class ModifyApplierInstrumentedTest {
         return view;
     }
 
-    private static ActionSpec modifyAction() {
-        return new ActionSpec.Builder()
+    private static ModifyEffect modifyAction() {
+        return new ModifyEffect.Builder()
                 .ruleTag("modify")
                 .modWidth(180)
                 .modHeight(90)
@@ -338,8 +333,8 @@ public final class ModifyApplierInstrumentedTest {
                 .build();
     }
 
-    private static ActionSpec imageAction(String path) {
-        return new ActionSpec.Builder().ruleTag("modify").modImagePath(path).build();
+    private static ModifyEffect imageAction(String path) {
+        return new ModifyEffect.Builder().ruleTag("modify").modImagePath(path).build();
     }
 
     private static File bitmapFile(ModifyApplierTestActivity activity, int color, String name) {

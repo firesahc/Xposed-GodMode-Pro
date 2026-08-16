@@ -4,14 +4,15 @@ import com.kaisar.xposed.godmode.engine.matcher.MatchMode;
 import com.kaisar.xposed.godmode.engine.matcher.TargetLevel;
 
 import java.util.Arrays;
+import java.util.Objects;
 
 /**
  * 匹配规格 — 定义视图匹配所需的所有字段。
  * <p>
- * 从 {@link RuleMatchSpec} 拆分的纯匹配部分，只包含匹配器（Matcher）需要的字段。
+ * 规则的持久化匹配组成，只包含匹配器（Matcher）需要的字段。
  * 不包含任何修改规则或原始值字段。
  * <p>
- * 由 {@link RuleMatchSpec#getMatchSpec()} 生成，或通过 {@link Builder} 直接构造用于纯匹配场景。
+ * 通过 {@link Builder} 构造用于匹配和持久化场景。
  * <p>
  * 不可变对象 — 所有字段通过 {@link Builder} 构建，构造完成后不可修改。
  */
@@ -57,11 +58,11 @@ public final class MatchSpec implements MatchFields {
     private final TargetLevel targetLevel;
 
     private MatchSpec(Builder builder) {
-        this.depth = builder.depth;
+        this.depth = copy(builder.depth);
         this.activityClass = builder.activityClass;
         this.viewClass = builder.viewClass;
         this.resourceName = builder.resourceName;
-        this.itemPath = builder.itemPath;
+        this.itemPath = copy(builder.itemPath);
         this.itemRootClass = builder.itemRootClass;
         this.parentClass = builder.parentClass;
         this.repeatable = builder.repeatable;
@@ -92,41 +93,37 @@ public final class MatchSpec implements MatchFields {
     // ===== 工厂方法 =====
 
     /**
-     * 从 RuleFields 提取匹配字段构造。
-     * <p>
-     * 对 repeatable 规则（itemPath 有效），清除 text/description 字段。
-     * 信息流匹配依赖卡片内相对位置（itemPath），而非文本内容——每个卡片的
-     * 文本内容唯一，参与匹配会阻止定位到其他卡片的同位置元素。</p>
+     * 从匹配字段构造无损规格。
+     * <p>该方法保留原始 text/description 和 nullable enum 值。信息流运行时忽略
+     * 文本的规则只属于匹配语义，不能在持久化组件构造阶段破坏原始数据。</p>
      */
-    public static MatchSpec from(RuleFields fields) {
+    public static MatchSpec from(MatchFields fields) {
+        Objects.requireNonNull(fields, "fields must not be null");
         Builder b = new Builder();
-        b.depth = fields.getDepth() != null ? fields.getDepth().clone() : null;
+        b.depth = copy(fields.getDepth());
         b.activityClass = fields.getActivityClass();
         b.viewClass = fields.getViewClass();
         b.resourceName = fields.getResourceName();
-        b.itemPath = fields.getItemPath() != null ? fields.getItemPath().clone() : null;
+        b.itemPath = copy(fields.getItemPath());
         b.itemRootClass = fields.getItemRootClass();
         b.parentClass = fields.getParentClass();
         b.repeatable = fields.isRepeatable();
-        // repeatable 规则：匹配只靠 itemPath 位置 + viewClass/parentClass 结构，
-        // text/description 内容在卡片间唯一，参与匹配会破坏跨卡片匹配
-        if (b.repeatable && b.itemPath != null && b.itemPath.length > 0) {
-            b.text = null;
-            b.description = null;
-        } else {
-            b.text = fields.getText();
-            b.description = fields.getDescription();
-        }
+        b.text = fields.getText();
+        b.description = fields.getDescription();
         b.matchMode = fields.getMatchMode();
         b.viewType = fields.getInfoFlowViewType();
-        TargetLevel tl = fields.getTargetLevel();
-        b.targetLevel = tl != null ? tl : TargetLevel.ELEMENT;
+        b.targetLevel = fields.getTargetLevel();
         return b.build();
     }
 
-    // ===== clone / equals / hashCode =====
+    // ===== raw value / runtime semantics =====
 
     public MatchSpec clone() {
+        return toBuilder().build();
+    }
+
+    /** Creates a raw-value builder without applying runtime normalization. */
+    public Builder toBuilder() {
         Builder b = new Builder();
         b.depth = this.depth != null ? this.depth.clone() : null;
         b.activityClass = this.activityClass;
@@ -141,7 +138,72 @@ public final class MatchSpec implements MatchFields {
         b.matchMode = this.matchMode;
         b.viewType = this.viewType;
         b.targetLevel = this.targetLevel;
-        return b.build();
+        return b;
+    }
+
+    /**
+     * 是否为具有有效 itemPath 的信息流匹配规格。
+     */
+    public boolean hasRepeatableLocator() {
+        return repeatable && itemPath != null && itemPath.length > 0;
+    }
+
+    /**
+     * 比较真正会改变 Matcher 行为的有效语义。
+     * <p>
+     * 有效 repeatable 规格不使用 text/description；null MatchMode 与 EXACT、
+     * null TargetLevel 与 ELEMENT 在现有 Matcher 中语义等价。其他匹配字段仍
+     * 保守参与比较，确保 matcher 输入变化能够触发重评估。
+     */
+    public boolean hasSameRuntimeSemantics(MatchSpec other) {
+        if (other == null) return false;
+        return Arrays.equals(depth, other.depth)
+                && Objects.equals(activityClass, other.activityClass)
+                && Objects.equals(viewClass, other.viewClass)
+                && Objects.equals(resourceName, other.resourceName)
+                && Arrays.equals(itemPath, other.itemPath)
+                && Objects.equals(itemRootClass, other.itemRootClass)
+                && Objects.equals(parentClass, other.parentClass)
+                && repeatable == other.repeatable
+                && Objects.equals(effectiveText(), other.effectiveText())
+                && Objects.equals(effectiveDescription(), other.effectiveDescription())
+                && effectiveMatchMode() == other.effectiveMatchMode()
+                && viewType == other.viewType
+                && effectiveTargetLevel() == other.effectiveTargetLevel();
+    }
+
+    /** Hash counterpart of {@link #hasSameRuntimeSemantics(MatchSpec)}. */
+    public int runtimeSemanticsHashCode() {
+        int result = Arrays.hashCode(depth);
+        result = 31 * result + Objects.hashCode(activityClass);
+        result = 31 * result + Objects.hashCode(viewClass);
+        result = 31 * result + Objects.hashCode(resourceName);
+        result = 31 * result + Arrays.hashCode(itemPath);
+        result = 31 * result + Objects.hashCode(itemRootClass);
+        result = 31 * result + Objects.hashCode(parentClass);
+        result = 31 * result + Boolean.hashCode(repeatable);
+        result = 31 * result + Objects.hashCode(effectiveText());
+        result = 31 * result + Objects.hashCode(effectiveDescription());
+        result = 31 * result + effectiveMatchMode().hashCode();
+        result = 31 * result + viewType;
+        result = 31 * result + effectiveTargetLevel().hashCode();
+        return result;
+    }
+
+    private String effectiveText() {
+        return hasRepeatableLocator() ? null : text;
+    }
+
+    private String effectiveDescription() {
+        return hasRepeatableLocator() ? null : description;
+    }
+
+    private MatchMode effectiveMatchMode() {
+        return matchMode != null ? matchMode : MatchMode.EXACT;
+    }
+
+    private TargetLevel effectiveTargetLevel() {
+        return targetLevel != null ? targetLevel : TargetLevel.ELEMENT;
     }
 
     @Override
@@ -149,40 +211,45 @@ public final class MatchSpec implements MatchFields {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         MatchSpec matchSpec = (MatchSpec) o;
-        if (repeatable != matchSpec.repeatable) return false;
-        if (!Arrays.equals(depth, matchSpec.depth)) return false;
-        if (!equalsNullable(activityClass, matchSpec.activityClass)) return false;
-        if (!equalsNullable(viewClass, matchSpec.viewClass)) return false;
-        if (!equalsNullable(resourceName, matchSpec.resourceName)) return false;
-        if (!equalsNullable(text, matchSpec.text)) return false;
-        if (!equalsNullable(description, matchSpec.description)) return false;
-        if (repeatable) {
-            return Arrays.equals(itemPath, matchSpec.itemPath)
-                    && equalsNullable(itemRootClass, matchSpec.itemRootClass)
-                       && equalsNullable(parentClass, matchSpec.parentClass);
-        }
-        return true;
+        return repeatable == matchSpec.repeatable
+                && viewType == matchSpec.viewType
+                && Arrays.equals(depth, matchSpec.depth)
+                && Objects.equals(activityClass, matchSpec.activityClass)
+                && Objects.equals(viewClass, matchSpec.viewClass)
+                && Objects.equals(resourceName, matchSpec.resourceName)
+                && Arrays.equals(itemPath, matchSpec.itemPath)
+                && Objects.equals(itemRootClass, matchSpec.itemRootClass)
+                && Objects.equals(parentClass, matchSpec.parentClass)
+                && Objects.equals(text, matchSpec.text)
+                && Objects.equals(description, matchSpec.description)
+                && matchMode == matchSpec.matchMode
+                && targetLevel == matchSpec.targetLevel;
     }
 
     @Override
     public int hashCode() {
         int result = Arrays.hashCode(depth);
-        result = 31 * result + (activityClass != null ? activityClass.hashCode() : 0);
-        result = 31 * result + (viewClass != null ? viewClass.hashCode() : 0);
-        result = 31 * result + (resourceName != null ? resourceName.hashCode() : 0);
-        result = 31 * result + (text != null ? text.hashCode() : 0);
-        result = 31 * result + (description != null ? description.hashCode() : 0);
+        result = 31 * result + Objects.hashCode(activityClass);
+        result = 31 * result + Objects.hashCode(viewClass);
+        result = 31 * result + Objects.hashCode(resourceName);
+        result = 31 * result + Arrays.hashCode(itemPath);
+        result = 31 * result + Objects.hashCode(itemRootClass);
+        result = 31 * result + Objects.hashCode(parentClass);
         result = 31 * result + Boolean.hashCode(repeatable);
-        if (repeatable) {
-            result = 31 * result + Arrays.hashCode(itemPath);
-            result = 31 * result + (itemRootClass != null ? itemRootClass.hashCode() : 0);
-            result = 31 * result + (parentClass != null ? parentClass.hashCode() : 0);
-        }
+        result = 31 * result + Objects.hashCode(text);
+        result = 31 * result + Objects.hashCode(description);
+        result = 31 * result + Objects.hashCode(matchMode);
+        result = 31 * result + viewType;
+        result = 31 * result + Objects.hashCode(targetLevel);
         return result;
     }
 
-    private static boolean equalsNullable(Object a, Object b) {
-        return (a == null) ? (b == null) : a.equals(b);
+    private static int[] copy(int[] value) {
+        return value != null ? value.clone() : null;
+    }
+
+    private static String[] copy(String[] value) {
+        return value != null ? value.clone() : null;
     }
 
     // =========================================================================
@@ -192,8 +259,7 @@ public final class MatchSpec implements MatchFields {
     /**
      * MatchSpec 构建器 — 链式调用，构建不可变的 {@link MatchSpec} 实例。
      * <p>
-     * 调用 {@link #repeatable(boolean)} 设为 true 时会自动清空 text/description，
-     * 因为信息流匹配依赖卡片内相对位置而非文本内容。
+     * Builder 保留所有原始字段，不在构造时执行运行时归一化。
      */
     public static final class Builder {
         int[] depth;
@@ -208,7 +274,7 @@ public final class MatchSpec implements MatchFields {
         String description;
         MatchMode matchMode;
         int viewType;
-        TargetLevel targetLevel = TargetLevel.ELEMENT;
+        TargetLevel targetLevel;
 
         public Builder depth(int[] depth) { this.depth = depth != null ? depth.clone() : null; return this; }
         public Builder activityClass(String activityClass) { this.activityClass = activityClass; return this; }
@@ -218,9 +284,6 @@ public final class MatchSpec implements MatchFields {
         public Builder itemRootClass(String itemRootClass) { this.itemRootClass = itemRootClass; return this; }
         public Builder parentClass(String parentClass) { this.parentClass = parentClass; return this; }
 
-        /**
-         * 设置 repeatable 标志。若为 true 且 itemPath 非空，自动清空 text/description。
-         */
         public Builder repeatable(boolean repeatable) {
             this.repeatable = repeatable;
             return this;

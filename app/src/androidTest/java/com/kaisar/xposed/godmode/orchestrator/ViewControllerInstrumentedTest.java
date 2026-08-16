@@ -18,6 +18,7 @@ import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry;
 import androidx.test.runner.lifecycle.Stage;
 
 import com.kaisar.xposed.godmode.engine.matcher.ViewTraversal;
+import com.kaisar.xposed.godmode.engine.rule.ModifyEffect;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 
 import org.junit.Test;
@@ -95,9 +96,9 @@ public final class ViewControllerInstrumentedTest {
                 TextView target = activity.getTarget();
                 ViewController controller = new ViewController(activity);
                 RuleRecord first = modifyRule(activity, target);
-                RuleRecord second = modifyRule(activity, target);
-                second.modWidth = 240;
-                second.modText = "second";
+                RuleRecord second = modifyRule(activity, target).withEffect(
+                        new ModifyEffect.Builder().ruleTag("modify").visibility(View.VISIBLE)
+                                .modWidth(240).modAlpha(.25f).modText("second").build());
 
                 assertTrue(controller.applyRule(target, first));
                 assertTrue(controller.applyRule(target, second));
@@ -233,12 +234,9 @@ public final class ViewControllerInstrumentedTest {
     }
 
     private static RuleRecord modifyRule(ViewControllerTestActivity activity, TextView target) {
-        RuleRecord rule = baseRule(activity, target, View.VISIBLE);
-        rule.ruleTag = "modify";
-        rule.modWidth = 180;
-        rule.modAlpha = 0.25f;
-        rule.modText = "rule";
-        return rule;
+        return baseRule(activity, target, View.VISIBLE).withEffect(
+                new ModifyEffect.Builder().ruleTag("modify").visibility(View.VISIBLE)
+                        .modWidth(180).modAlpha(0.25f).modText("rule").build());
     }
 
     private static RuleRecord removeRule(ViewControllerTestActivity activity, TextView target) {

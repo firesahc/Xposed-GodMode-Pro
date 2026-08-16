@@ -17,6 +17,7 @@ import com.kaisar.xposed.godmode.editor.overlay.ParticleView;
 import com.kaisar.xposed.godmode.util.BitmapUtils;
 import com.kaisar.xposed.godmode.util.TaskExecutor;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
+import com.kaisar.xposed.godmode.engine.rule.RemoveEffect;
 
 /**
  * 粒子动画辅助工具 — 执行工具栏移除操作的粒子动画和 IPC 持久化流程。
@@ -53,6 +54,7 @@ public final class ParticleEffectHelper {
             final Runnable onComplete) {
         Logger.d(TAG, "execute: starting particle animation for " + packageName);
 
+        final RuleRecord ruleToWrite = viewRule.withEffect(RemoveEffect.of(View.GONE));
         final ParticleView particleView = new ParticleView(activity);
         particleView.setDuration(GmConstants.PARTICLE_ANIM_DURATION_MS);
         particleView.attachToContainer(container);
@@ -60,10 +62,10 @@ public final class ParticleEffectHelper {
             @Override
             public void onAnimationStart(View animView, Animator animation) {
                 try {
-                    viewRule.visibility = View.GONE;
-                    ViewController.getDefault().applyRule(targetView, viewRule);
+                    ViewController.getDefault().applyRule(targetView, ruleToWrite);
                     if (snapshot != null) {
-                        BitmapUtils.drawRectMask(snapshot, viewRule.x, viewRule.y, viewRule.width, viewRule.height);
+                        BitmapUtils.drawRectMask(snapshot, ruleToWrite.x, ruleToWrite.y,
+                                ruleToWrite.width, ruleToWrite.height);
                     }
                 } catch (Exception e) {
                     Logger.e(TAG, "applyRule/drawRuleMask on animation start fail", e);
@@ -83,7 +85,7 @@ public final class ParticleEffectHelper {
                 // 异步 IO 线程执行 IPC 写入
                 TaskExecutor.executeIo(() -> {
                     try {
-                        ruleEditor.writeRule(packageName, viewRule, snapshot);
+                        ruleEditor.writeRule(packageName, ruleToWrite, snapshot);
                     } catch (Exception e) {
                         Logger.e(TAG, "writeRule fail: " + packageName, e);
                     }

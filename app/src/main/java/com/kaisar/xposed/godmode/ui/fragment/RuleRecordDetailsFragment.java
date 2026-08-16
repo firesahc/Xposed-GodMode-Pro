@@ -108,7 +108,7 @@ public final class RuleRecordDetailsFragment extends PreferenceFragmentCompat im
 
         preference = findPreference(getString(R.string.pref_key_detail_rule_applied_activity));
         preference.setTitle(R.string.rule_details_field_activity);
-        preference.setSummary(Preconditions.optionDefault(mRuleRecord.activityClass, "None"));
+        preference.setSummary(Preconditions.optionDefault(mRuleRecord.getActivityClass(), "None"));
 
         mAliasPreference = (EditTextPreference) findPreference(getString(R.string.pref_key_detail_rule_alias));
         mAliasPreference.setTitle(R.string.rule_details_field_alias);
@@ -132,29 +132,29 @@ public final class RuleRecordDetailsFragment extends PreferenceFragmentCompat im
 
         preference = findPreference(getString(R.string.pref_key_detail_view_type));
         preference.setTitle(R.string.rule_details_field_view_type);
-        preference.setSummary(mRuleRecord.viewClass);
+        preference.setSummary(mRuleRecord.getViewClass());
 
         preference = findPreference(getString(R.string.pref_key_detail_view_depth));
         preference.setTitle(R.string.rule_details_field_view_depth);
-        preference.setSummary(Arrays.toString(mRuleRecord.depth));
+        preference.setSummary(Arrays.toString(mRuleRecord.getDepth()));
 
-        if (!TextUtils.isEmpty(mRuleRecord.resourceName)) {
+        if (!TextUtils.isEmpty(mRuleRecord.getResourceName())) {
             preference = findPreference(getString(R.string.pref_key_detail_view_res_name));
             preference.setTitle(R.string.rule_details_field_res_name);
-            preference.setSummary(mRuleRecord.resourceName);
+            preference.setSummary(mRuleRecord.getResourceName());
             preference.setVisible(true);
         }
 
-        if (!TextUtils.isEmpty(mRuleRecord.text)) {
+        if (!TextUtils.isEmpty(mRuleRecord.getText())) {
             preference = findPreference(getString(R.string.pref_key_detail_view_text));
             preference.setTitle(R.string.rule_details_field_text);
-            preference.setSummary(mRuleRecord.text);
+            preference.setSummary(mRuleRecord.getText());
             preference.setVisible(true);
         }
-        if (!TextUtils.isEmpty(mRuleRecord.description)) {
+        if (!TextUtils.isEmpty(mRuleRecord.getDescription())) {
             preference = findPreference(getString(R.string.pref_key_detail_view_description));
             preference.setTitle(R.string.rule_details_field_description);
-            preference.setSummary(mRuleRecord.description);
+            preference.setSummary(mRuleRecord.getDescription());
             preference.setVisible(true);
         }
 
@@ -166,7 +166,8 @@ public final class RuleRecordDetailsFragment extends PreferenceFragmentCompat im
         mVisiblePreference.setSummary("%s");
         mVisiblePreference.setEntries(entries);
         mVisiblePreference.setEntryValues(values);
-        mVisiblePreference.setValue(String.valueOf(mRuleRecord.visibility));
+        mVisiblePreference.setValue(String.valueOf(mRuleRecord.getVisibility()));
+        mVisiblePreference.setVisible(mRuleRecord.isRemoveRule());
 
         mImagePreference = (ImageViewPreference) findPreference(getString(R.string.pref_key_detail_preview_image));
         if (!TextUtils.isEmpty(mRuleRecord.imagePath)) {
@@ -188,32 +189,32 @@ public final class RuleRecordDetailsFragment extends PreferenceFragmentCompat im
         if (mRuleRecord.isWidthModified()) {
             pref = findPreference(getString(R.string.pref_key_detail_mod_width));
             pref.setVisible(true);
-            pref.setSummary(String.valueOf(mRuleRecord.modWidth));
+            pref.setSummary(String.valueOf(mRuleRecord.getModWidth()));
         }
         if (mRuleRecord.isHeightModified()) {
             pref = findPreference(getString(R.string.pref_key_detail_mod_height));
             pref.setVisible(true);
-            pref.setSummary(String.valueOf(mRuleRecord.modHeight));
+            pref.setSummary(String.valueOf(mRuleRecord.getModHeight()));
         }
         if (mRuleRecord.isAlphaModified()) {
             pref = findPreference(getString(R.string.pref_key_detail_mod_alpha));
             pref.setVisible(true);
-            pref.setSummary(String.format(Locale.getDefault(), "%.2f", mRuleRecord.modAlpha));
+            pref.setSummary(String.format(Locale.getDefault(), "%.2f", mRuleRecord.getModAlpha()));
         }
         if (mRuleRecord.isPositionModified()) {
             pref = findPreference(getString(R.string.pref_key_detail_mod_position));
             pref.setVisible(true);
-            pref.setSummary(String.format(Locale.getDefault(), "(%d, %d)", mRuleRecord.modXOffset, mRuleRecord.modYOffset));
+            pref.setSummary(String.format(Locale.getDefault(), "(%d, %d)", mRuleRecord.getModXOffset(), mRuleRecord.getModYOffset()));
         }
-        if (mRuleRecord.isTextModified() && !TextUtils.isEmpty(mRuleRecord.modText)) {
+        if (mRuleRecord.isTextModified() && !TextUtils.isEmpty(mRuleRecord.getModText())) {
             pref = findPreference(getString(R.string.pref_key_detail_mod_text));
             pref.setVisible(true);
-            pref.setSummary(mRuleRecord.modText);
+            pref.setSummary(mRuleRecord.getModText());
         }
-        if (mRuleRecord.isImageModified() && !TextUtils.isEmpty(mRuleRecord.modImagePath)) {
+        if (mRuleRecord.isImageModified() && !TextUtils.isEmpty(mRuleRecord.getModImagePath())) {
             pref = findPreference(getString(R.string.pref_key_detail_mod_image));
             pref.setVisible(true);
-            pref.setSummary(mRuleRecord.modImagePath);
+            pref.setSummary(mRuleRecord.getModImagePath());
         }
     }
 
@@ -329,8 +330,9 @@ public final class RuleRecordDetailsFragment extends PreferenceFragmentCompat im
             mSharedViewModel.updateRule(mRuleRecord);
         } else if (preference == mVisiblePreference) {
             int newVisibility = Integer.parseInt((String) newValue);
-            if (newVisibility != mRuleRecord.visibility) {
-                mRuleRecord.visibility = newVisibility;
+            if (newVisibility != mRuleRecord.getVisibility()) {
+                mRuleRecord = mRuleRecord.withEffect(
+                        com.kaisar.xposed.godmode.engine.rule.RemoveEffect.of(newVisibility));
                 mSharedViewModel.updateRule(mRuleRecord);
             }
         }

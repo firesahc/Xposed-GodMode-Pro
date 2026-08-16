@@ -32,6 +32,7 @@ import com.kaisar.xposed.godmode.util.GmResources;
 import com.kaisar.xposed.godmode.util.TaskExecutor;
 import com.kaisar.xposed.godmode.util.ViewUtils;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
+import com.kaisar.xposed.godmode.rule.RuleDraft;
 
 import java.io.InputStream;
 import java.util.Objects;
@@ -454,26 +455,26 @@ public class PropertyEditorPanel {
 
     private RuleRecord buildCurrentRule(View view) {
         if (mOriginalRule == null) return null;
-        RuleRecord rule = mOriginalRule.clone();
+        RuleDraft draft = RuleDraft.from(mOriginalRule);
         ViewGroup.LayoutParams lp = view.getLayoutParams();
         int w = lp != null && lp.width > 0 ? lp.width : view.getWidth();
         int h = lp != null && lp.height > 0 ? lp.height : view.getHeight();
         float alpha = view.getAlpha();
-        if (rule.origWidth > 0 && w != rule.origWidth) rule.modWidth = w;
-        if (rule.origHeight > 0 && h != rule.origHeight) rule.modHeight = h;
-        if (Math.abs(rule.origAlpha - alpha) > 0.01f) rule.modAlpha = alpha;
+        if (mOriginalRule.origWidth > 0 && w != mOriginalRule.origWidth) draft.modWidth(w);
+        if (mOriginalRule.origHeight > 0 && h != mOriginalRule.origHeight) draft.modHeight(h);
+        if (Math.abs(mOriginalRule.origAlpha - alpha) > 0.01f) draft.modAlpha(alpha);
         if (view instanceof TextView
-                && !Objects.equals(rule.origText, ((TextView) view).getText().toString())) {
-            rule.modText = ((TextView) view).getText().toString();
+                && !Objects.equals(mOriginalRule.origText, ((TextView) view).getText().toString())) {
+            draft.modText(((TextView) view).getText().toString());
         }
-        if (view instanceof ImageView && mPendingImageBitmap != null) rule.modImagePath = "pending";
+        if (view instanceof ImageView && mPendingImageBitmap != null) draft.modImagePath("pending");
         ViewGroup.LayoutParams current = view.getLayoutParams();
         if (current instanceof ViewGroup.MarginLayoutParams && mSavedLayoutParams != null) {
             ViewGroup.MarginLayoutParams margins = (ViewGroup.MarginLayoutParams) current;
-            rule.modXOffset = margins.leftMargin - mSavedLayoutParams.leftMargin;
-            rule.modYOffset = margins.topMargin - mSavedLayoutParams.topMargin;
+            draft.modXOffset(margins.leftMargin - mSavedLayoutParams.leftMargin);
+            draft.modYOffset(margins.topMargin - mSavedLayoutParams.topMargin);
         }
-        return rule;
+        return draft.build();
     }
 
     public void saveCurrent() {
@@ -481,8 +482,8 @@ public class PropertyEditorPanel {
         Activity activity = ViewUtils.getAttachedActivityFromView(mTargetView);
         if (activity == null || !verifyViewIdentity(mTargetView)) return;
         mApplySeekLayoutRunnable.run();
-        final RuleRecord rule = buildCurrentRule(mTargetView);
-        if (rule == null || !rule.hasModifications()) {
+        final RuleRecord draftRule = buildCurrentRule(mTargetView);
+        if (draftRule == null || !draftRule.hasModifications()) {
             Toast.makeText(activity, GmResources.getString(R.string.toast_no_modifications_to_save), Toast.LENGTH_SHORT).show();
             return;
         }
@@ -497,19 +498,22 @@ public class PropertyEditorPanel {
         Bitmap snapshot = null;
         try {
             snapshot = BitmapUtils.snapshotView(ViewUtils.findTopParentViewByChildView(mTargetView));
-            BitmapUtils.drawRectMask(snapshot, rule.x, rule.y, rule.width, rule.height);
+            BitmapUtils.drawRectMask(snapshot, draftRule.x, draftRule.y, draftRule.width, draftRule.height);
         } catch (Exception e) { Logger.w(TAG, "[ModifyPanel] snapshot failed", e); }
         final Bitmap finalSnapshot = snapshot;
         android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
         TaskExecutor.executeIo(() -> {
             boolean imageReady = true;
+            RuleRecord persistedRule = draftRule;
             try {
                 if (pendingImage != null && !pendingImage.isRecycled()) {
                     String path = mRuleEditor.saveImageFile(pkg, pendingImage);
-                    if (path == null) imageReady = false; else rule.modImagePath = path;
+                    if (path == null) imageReady = false;
+                    else persistedRule = draftRule.withModifyImagePath(path);
                 }
             } catch (Exception e) { imageReady = false; Logger.e(TAG, "[ModifyPanel] image save failed", e); }
             final boolean finalImageReady = imageReady;
+            final RuleRecord finalRule = persistedRule;
             mainHandler.post(() -> {
                 if (generation != mGeneration || mTargetView == null || !verifyViewIdentity(mTargetView)) {
                     CommonUtils.recycleNullableBitmap(finalSnapshot);
@@ -526,8 +530,8 @@ public class PropertyEditorPanel {
                 View target = mTargetView;
                 revertViewState();
                 ViewController controller = RuleLifecycleManager.getInstance().getViewController(activity);
-                if (!controller.applyRule(target, rule)) {
-                    applyDraftToView(target, rule);
+                if (!controller.applyRule(target, finalRule)) {
+                    applyDraftToView(target, finalRule);
                     mInFlightImageBitmap = null;
                     finishSaveFailure(activity, "runtime apply failed");
                     CommonUtils.recycleNullableBitmap(finalSnapshot);
@@ -535,7 +539,7 @@ public class PropertyEditorPanel {
                 }
                 TaskExecutor.executeIo(() -> {
                     boolean accepted;
-                    try { accepted = mRuleEditor.writeRule(pkg, rule, finalSnapshot); }
+                    try { accepted = mRuleEditor.writeRule(pkg, finalRule, finalSnapshot); }
                     catch (Exception e) { accepted = false; Logger.e(TAG, "[ModifyPanel] writeRule failed", e); }
                     final boolean finalAccepted = accepted;
                     mainHandler.post(() -> {
@@ -552,8 +556,8 @@ public class PropertyEditorPanel {
                             Toast.makeText(activity, GmResources.getString(R.string.toast_modifications_saved), Toast.LENGTH_SHORT).show();
                             dismiss();
                         } else {
-                            controller.revokeRule(target, rule);
-                            applyDraftToView(target, rule);
+                            controller.revokeRule(target, finalRule);
+                            applyDraftToView(target, finalRule);
                             mInFlightImageBitmap = null;
                             finishSaveFailure(activity, "request rejected");
                         }
@@ -566,17 +570,17 @@ public class PropertyEditorPanel {
     private void applyDraftToView(View target, RuleRecord rule) {
         ViewGroup.LayoutParams lp = target.getLayoutParams();
         if (lp != null) {
-            if (rule.isWidthModified()) lp.width = rule.modWidth;
-            if (rule.isHeightModified()) lp.height = rule.modHeight;
+            if (rule.isWidthModified()) lp.width = rule.getModWidth();
+            if (rule.isHeightModified()) lp.height = rule.getModHeight();
             if (lp instanceof ViewGroup.MarginLayoutParams && mSavedLayoutParams != null) {
                 ViewGroup.MarginLayoutParams margins = (ViewGroup.MarginLayoutParams) lp;
-                margins.leftMargin = mSavedLayoutParams.leftMargin + rule.modXOffset;
-                margins.topMargin = mSavedLayoutParams.topMargin + rule.modYOffset;
+                margins.leftMargin = mSavedLayoutParams.leftMargin + rule.getModXOffset();
+                margins.topMargin = mSavedLayoutParams.topMargin + rule.getModYOffset();
             }
             target.setLayoutParams(lp);
         }
-        if (rule.isAlphaModified()) target.setAlpha(rule.modAlpha);
-        if (target instanceof TextView && rule.isTextModified()) ((TextView) target).setText(rule.modText);
+        if (rule.isAlphaModified()) target.setAlpha(rule.getModAlpha());
+        if (target instanceof TextView && rule.isTextModified()) ((TextView) target).setText(rule.getModText());
         if (target instanceof ImageView && mPendingImageBitmap != null && !mPendingImageBitmap.isRecycled()) {
             ((ImageView) target).setImageBitmap(mPendingImageBitmap);
         }

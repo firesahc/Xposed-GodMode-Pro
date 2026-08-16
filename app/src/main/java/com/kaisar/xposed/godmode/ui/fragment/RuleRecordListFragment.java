@@ -279,29 +279,29 @@ public final class RuleRecordListFragment extends Fragment {
             holder.imageView.setImageDrawable(mIcon);
             if (rule.isRemoveRule()) {
                 if (imageRequests != null) {
-                    imageRequests.load(rule)
+                    imageRequests.load(com.kaisar.xposed.godmode.ui.glide.RulePreviewSpec.from(rule))
                             .placeholder(mIcon).error(mIcon)
                             .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.NONE)
                             .into(holder.imageView);
                 }
-                bindTitle(holder, rule.activityClass, R.string.rule_type_remove);
+                bindTitle(holder, rule.getActivityClass(), R.string.rule_type_remove);
                 SpannableStringBuilder summaryBuilder = new SpannableStringBuilder();
                 if (!TextUtils.isEmpty(rule.alias)) {
                     SpannableString ss = new SpannableString(getString(R.string.field_rule_alias, rule.alias));
                     ss.setSpan(new ForegroundColorSpan(requireContext().getResources().getColor(R.color.prefsAliasColor, requireContext().getTheme())), 0, ss.length(), 0);
                     summaryBuilder.append(ss);
                 }
-                summaryBuilder.append(getString(R.string.field_view, rule.viewClass));
+                summaryBuilder.append(getString(R.string.field_view, rule.getViewClass()));
                 holder.summaryView.setText(summaryBuilder);
                 if (rule.isRepeatable()) appendRepeatableBadge(holder);
             } else {
                 if (!TextUtils.isEmpty(rule.imagePath) && imageRequests != null) {
-                    imageRequests.load(rule)
+                    imageRequests.load(com.kaisar.xposed.godmode.ui.glide.RulePreviewSpec.from(rule))
                             .placeholder(mIcon).error(mIcon)
                             .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.NONE)
                             .into(holder.imageView);
                 }
-                bindTitle(holder, rule.activityClass, R.string.rule_type_modify);
+                bindTitle(holder, rule.getActivityClass(), R.string.rule_type_modify);
                 SpannableStringBuilder summaryBuilder = new SpannableStringBuilder();
                 if (!TextUtils.isEmpty(rule.alias)) {
                     SpannableString ss = new SpannableString(getString(R.string.field_rule_alias, rule.alias));
@@ -309,17 +309,17 @@ public final class RuleRecordListFragment extends Fragment {
                     summaryBuilder.append(ss);
                 }
                 ArrayList<String> mods = new ArrayList<>();
-                if (rule.isWidthModified()) mods.add(getString(R.string.modify_detail_width, rule.modWidth));
-                if (rule.isHeightModified()) mods.add(getString(R.string.modify_detail_height, rule.modHeight));
-                if (rule.isAlphaModified()) mods.add(getString(R.string.modify_detail_alpha, String.format(Locale.getDefault(), "%.1f", rule.modAlpha)));
-                if (rule.isPositionModified()) mods.add(getString(R.string.modify_detail_position, rule.modXOffset, rule.modYOffset));
+                if (rule.isWidthModified()) mods.add(getString(R.string.modify_detail_width, rule.getModWidth()));
+                if (rule.isHeightModified()) mods.add(getString(R.string.modify_detail_height, rule.getModHeight()));
+                if (rule.isAlphaModified()) mods.add(getString(R.string.modify_detail_alpha, String.format(Locale.getDefault(), "%.1f", rule.getModAlpha())));
+                if (rule.isPositionModified()) mods.add(getString(R.string.modify_detail_position, rule.getModXOffset(), rule.getModYOffset()));
                 if (rule.isTextModified()) mods.add(getString(R.string.modify_detail_text));
                 if (rule.isImageModified()) mods.add(getString(R.string.modify_detail_image));
                 if (!mods.isEmpty()) {
                     summaryBuilder.append(TextUtils.join("\n", mods));
                 }
-                summaryBuilder.append("\n").append(getString(R.string.field_view, rule.viewClass));
-                summaryBuilder.append(" ").append(getString(R.string.field_depth, Arrays.toString(rule.depth)));
+                summaryBuilder.append("\n").append(getString(R.string.field_view, rule.getViewClass()));
+                summaryBuilder.append(" ").append(getString(R.string.field_depth, Arrays.toString(rule.getDepth())));
                 holder.summaryView.setText(summaryBuilder);
                 if (rule.isRepeatable()) appendRepeatableBadge(holder);
             }
@@ -371,7 +371,14 @@ public final class RuleRecordListFragment extends Fragment {
             final int position = mRecyclerView.getChildAdapterPosition(view);
             if (position < 0 || position >= mData.size()) return;
             RuleRecord rule = mData.get(position);
-            int rulePos = mAllRules.indexOf(rule);
+            int rulePos = -1;
+            for (int index = 0; index < mAllRules.size(); index++) {
+                RuleRecord candidate = mAllRules.get(index);
+                if (candidate.slotKey(candidate.packageName)
+                        .equals(rule.slotKey(rule.packageName))) {
+                    rulePos = index;
+                }
+            }
             if (rulePos >= 0) {
                 NavHostFragment.findNavController(RuleRecordListFragment.this).navigate(
                         RuleRecordListFragmentDirections.actionRuleRecordListFragmentToRuleRecordDetailsContainerFragment(rulePos));

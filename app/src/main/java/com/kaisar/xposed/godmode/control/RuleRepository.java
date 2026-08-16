@@ -111,16 +111,14 @@ public final class RuleRepository {
 
     static RuleRecord copyForPackage(String packageName, RuleRecord input) {
         if (packageName == null || input == null) return null;
-        RuleRecord copy = input.clone();
-        copy.packageName = packageName;
-        return copy;
+        return input.clone().withPackageName(packageName);
     }
 
     static boolean isPendingSnapshotFor(String packageName, RuleRecord pending,
             String targetPackage, RuleRecord target) {
         return packageName != null && packageName.equals(targetPackage)
                 && pending != null && target != null
-                && pending.isSameViewAs(target);
+                && pending.slotKey(packageName).equals(target.slotKey(targetPackage));
     }
 
     /**
@@ -536,7 +534,7 @@ public final class RuleRepository {
             try {
                 ActRules actRules = mData.get(packageName);
                 if (actRules == null) return null;
-                List<RuleRecord> rules = actRules.get(viewRule.activityClass);
+                List<RuleRecord> rules = actRules.get(viewRule.getActivityClass());
                 if (rules == null) return null;
                 int idx = findRuleIndex(rules, viewRule);
                 return idx >= 0 ? rules.get(idx).imagePath : null;
@@ -553,7 +551,7 @@ public final class RuleRepository {
                     mData.put(packageName, actRules = new ActRules());
                 }
                 List<RuleRecord> viewRules = actRules.computeIfAbsent(
-                        viewRule.activityClass, k -> new java.util.ArrayList<>());
+                        viewRule.getActivityClass(), k -> new java.util.ArrayList<>());
                 int index = findRuleIndex(viewRules, viewRule);
                 String oldImagePath = null;
                 if (index >= 0) {
@@ -581,14 +579,14 @@ public final class RuleRepository {
             try {
                 ActRules actRules = mData.get(packageName);
                 if (actRules == null) return null;
-                List<RuleRecord> viewRules = actRules.get(viewRule.activityClass);
+                List<RuleRecord> viewRules = actRules.get(viewRule.getActivityClass());
                 if (viewRules == null) return null;
                 int idx = findRuleIndex(viewRules, viewRule);
                 RuleRecord removedRule = idx >= 0 ? viewRules.remove(idx) : null;
                 boolean removed = removedRule != null;
                 if (!removed) return null;
                 if (viewRules.isEmpty()) {
-                    actRules.remove(viewRule.activityClass);
+                    actRules.remove(viewRule.getActivityClass());
                 }
                 String json = mGson.toJson(actRules);
                 ActRules snapshotRules = snapshotActRules(actRules);
@@ -625,8 +623,8 @@ public final class RuleRepository {
                         for (RuleRecord rule : rules) {
                             if (rule.imagePath != null && !rule.imagePath.isEmpty())
                                 referenced.add(rule.imagePath);
-                            if (rule.modImagePath != null && !rule.modImagePath.isEmpty())
-                                referenced.add(rule.modImagePath);
+                            if (rule.getModImagePath() != null && !rule.getModImagePath().isEmpty())
+                                referenced.add(rule.getModImagePath());
                         }
                     }
                 }
@@ -636,12 +634,19 @@ public final class RuleRepository {
             }
         }
 
-        private static int findRuleIndex(List<RuleRecord> rules,
-                com.kaisar.xposed.godmode.engine.rule.MatchFields target) {
+        private static int findRuleIndex(List<RuleRecord> rules, RuleRecord target) {
+            int match = -1;
             for (int i = 0; i < rules.size(); i++) {
-                if (rules.get(i).isSameViewAs(target)) return i;
+                RuleRecord candidate = rules.get(i);
+                if (candidate != null && target != null
+                        && candidate.slotKey(candidate.packageName)
+                        .equals(target.slotKey(target.packageName))) {
+                    // Historical snapshots can contain duplicate slots. Preserve their order and
+                    // keep the last writer as the target for legacy replace/delete semantics.
+                    match = i;
+                }
             }
-            return -1;
+            return match;
         }
 
         ActRules snapshotActRules(ActRules source) {

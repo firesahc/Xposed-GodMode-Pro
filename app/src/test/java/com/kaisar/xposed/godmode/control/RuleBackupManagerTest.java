@@ -14,6 +14,7 @@ import java.io.File;
 import java.io.IOException;
 
 import com.kaisar.xposed.godmode.rule.RuleRecord;
+import com.kaisar.xposed.godmode.engine.rule.RuleEffect;
 
 public final class RuleBackupManagerTest {
 
@@ -108,13 +109,13 @@ public final class RuleBackupManagerTest {
         RuleRecord input = new RuleRecord("label", "com.example", "1", 1, 68,
                 "preview.webp", "alias", 1, 2, 3, 4, new int[]{1},
                 "Activity", "TextView", "id/title", "", "", 0, 1L);
-        input.ruleTag = null;
-        input.modImagePath = "/data/original-mod.webp";
+        input = input.withEffect(RuleEffect.fromWireValues(new RuleEffect.WireValues.Builder()
+                .modImagePath("/data/original-mod.webp").build()));
 
         RuleRecord copy = RuleBackupManager.prepareBackupRecord(input);
 
-        assertEquals("/data/original-mod.webp", input.modImagePath);
-        assertEquals("", copy.modImagePath);
+        assertEquals("/data/original-mod.webp", input.getModImagePath());
+        assertEquals("", copy.getModImagePath());
         assertFalse(input == copy);
     }
 

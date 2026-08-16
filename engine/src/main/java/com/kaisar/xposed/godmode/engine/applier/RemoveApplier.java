@@ -2,14 +2,14 @@ package com.kaisar.xposed.godmode.engine.applier;
 
 import android.view.View;
 
-import com.kaisar.xposed.godmode.engine.rule.ActionSpec;
+import com.kaisar.xposed.godmode.engine.rule.RemoveEffect;
 
 import java.util.WeakHashMap;
 
 /**
  * 移除规则应用器 — 将视图设置为 GONE/INVISIBLE 或恢复原始状态。
  */
-public final class RemoveApplier implements RuleApplier {
+public final class RemoveApplier implements RuleApplier<RemoveEffect> {
 
     // 改 WeakHashMap 替代 SparseArray<identityHashCode>——消除哈希碰撞风险，
     // 由 JVM 保证 View 对象唯一性，与 ModifyApplier.mAppliedViews 风格统一
@@ -28,14 +28,14 @@ public final class RemoveApplier implements RuleApplier {
         this.mActivityClassName = activityClassName;
     }
 
-    // ===== 新 API（ActionSpec） =====
+    // ===== RemoveEffect API =====
 
     @Override
-    public boolean apply(View view, ActionSpec spec) {
+    public boolean apply(View view, RemoveEffect spec) {
         if (view == null || spec == null) return false;
         ViewProperty cached = mBlockedViewCache.get(view);
         if (cached != null
-                && view.getVisibility() == spec.visibility
+                && view.getVisibility() == spec.getVisibility()
                 && Float.compare(view.getAlpha(), 0f) == 0
                 && !view.isClickable()) {
             return false; // 已应用相同规则，跳过
@@ -43,16 +43,16 @@ public final class RemoveApplier implements RuleApplier {
         ViewProperty vp = cached != null ? cached : ViewProperty.create(view);
         view.setAlpha(0f);
         view.setClickable(false);
-        ViewCompat.setVisibility(view, spec.visibility);
+        ViewCompat.setVisibility(view, spec.getVisibility());
         vp.appliedAlpha = 0f;
         vp.appliedClickable = false;
-        vp.appliedVisibility = spec.visibility;
+        vp.appliedVisibility = spec.getVisibility();
         mBlockedViewCache.put(view, vp);
         return true;
     }
 
     @Override
-    public boolean revoke(View view, ActionSpec spec) {
+    public boolean revoke(View view, RemoveEffect spec) {
         if (view == null || spec == null) return false;
         ViewProperty vp = mBlockedViewCache.remove(view);
         if (vp == null) return false;

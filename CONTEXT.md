@@ -2,6 +2,29 @@
 
 本上下文统一 6.8 兼容稳定线中规则效果、验收证据和发布状态的用语，避免把匹配结果、运行时所有权和设备验收混为一谈。
 
+## RuleRecord 规则定义边界
+
+`RuleRecord` 是兼容聚合对象，不是所有规则字段的长期职责所有者。它负责承载
+v6.9 的扁平 JSON/ZIP V1 和 Parcelable 兼容边界，并组合以下不可变组件：
+
+- `MatchSpec`：规则如何定位目标，包含 Activity、View、路径、文本和匹配模式等匹配定义；
+- `RuleEffect`：规则对目标施加什么效果，按 `RemoveEffect` 和 `ModifyEffect` 区分；
+- 其余字段：版本、别名、预览图和采集时的原始信息，暂属于兼容/展示数据，不作为运行时身份。
+
+JSON 和 Parcel 的外部布局仍保持旧版扁平形式。组件只在进程内部提供单一的稳定字段所有者，
+不得在 `RuleRecord` 中保留同一稳定字段的扁平影子。
+
+`RuleSlotKey` 是由权威包范围和 `MatchSpec` 派生的运行时槽位身份，不持久化到规则文件，
+也不作为规则效果或 View 基线的替代物。`RuleDraft` 是 Editor 的可变草稿，只负责构造新
+`RuleRecord`；Activity owner、generation、Bitmap、SAVING 状态和异步回调仍由 Editor 会话管理。
+
+`AppliedState` 记录一次实际接管的宿主 View 基线和属性所有权。它与 `MatchSpec`、
+`RuleEffect`、`RuleSlotKey` 相互独立：规则定义描述“应做什么”，AppliedState 描述“本次
+运行时实际接管了什么”。
+
+稳定迁移禁止以下做法：通过完整 `RuleRecord` 复制反复生成匹配/效果小表；让 UI 展示字段
+决定 Runtime diff；将 `RuleSlotKey`、AppliedState 或编辑会话状态写入 Parcelable/备份格式。
+
 ## 规则效果
 
 **匹配身份**：

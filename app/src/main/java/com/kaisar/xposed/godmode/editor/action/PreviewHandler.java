@@ -10,6 +10,7 @@ import com.kaisar.xposed.godmode.rule.RuleRecordFactory;
 import com.kaisar.xposed.godmode.editor.overlay.MaskView;
 import com.kaisar.xposed.godmode.util.ViewUtils;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
+import com.kaisar.xposed.godmode.engine.rule.RemoveEffect;
 
 /**
  * 预览处理器 — 通过临时隐藏视图来预览屏蔽效果。
@@ -44,7 +45,7 @@ public final class PreviewHandler {
         if (view == null) return;
         try {
             mPreviewRule = RuleRecordFactory.makeRemoveRule(view, ModuleBootstrap.getEditorOrchestrator().isInfoFlowMode());
-            mPreviewRule.visibility = View.GONE;
+            mPreviewRule = mPreviewRule.withEffect(RemoveEffect.of(View.GONE));
             ViewController.getDefault().applyRule(view, mPreviewRule);
             mPreviewView = view;
             mIsPreviewing = true;
@@ -64,7 +65,6 @@ public final class PreviewHandler {
      */
     public void restorePreview(MaskView maskView, View selectedView, Runnable onStateChanged) {
         if (mPreviewView != null && mPreviewRule != null) {
-            mPreviewRule.visibility = View.VISIBLE;
             ViewController.getDefault().revokeRule(mPreviewView, mPreviewRule);
             mPreviewView = null;
             mPreviewRule = null;

@@ -14,185 +14,125 @@ import android.widget.TextView;
 import com.kaisar.xposed.godmode.BuildConfig;
 import com.kaisar.xposed.godmode.engine.matcher.TargetLevel;
 import com.kaisar.xposed.godmode.engine.matcher.ViewTraversal;
+import com.kaisar.xposed.godmode.engine.rule.MatchSpec;
+import com.kaisar.xposed.godmode.engine.rule.ModifyEffect;
+import com.kaisar.xposed.godmode.engine.rule.RemoveEffect;
 import com.kaisar.xposed.godmode.engine.util.Logger;
-
 import com.kaisar.xposed.godmode.util.ViewUtils;
-import com.kaisar.xposed.godmode.rule.RuleRecord;
 
 import java.util.Objects;
 
-/**
- * 视图规则构造工厂 — 从视图创建屏蔽/修改规则。
- * <p>
- * 从 {@code ViewHelper} 拆分，职责单一。
- */
+/** Creates complete records from a host view without mutating stable rule components afterward. */
 public final class RuleRecordFactory {
 
     private static final String TAG = "RuleRecordFactory";
 
     private RuleRecordFactory() {}
 
-    /**
-     * 从视图创建屏蔽规则（通用）。
-     *
-     * @param v 目标视图
-     * @param isInfoFlowMode 是否为信息流模式（由调用方通过 EditorOrchestrator.isInfoFlowMode() 传入）
-     * @return 构造完成的 RuleRecord
-     * @throws PackageManager.NameNotFoundException 无法获取包信息时抛出
-     */
-    static RuleRecord makeRule(View v, boolean isInfoFlowMode) throws PackageManager.NameNotFoundException {
-        Activity activity = ViewUtils.getAttachedActivityFromView(v);
-        Objects.requireNonNull(activity, "Can't found attached activity");
-        int[] out = new int[2];
-        v.getLocationInWindow(out);
-        int x = out[0];
-        int y = out[1];
-        int width = v.getWidth();
-        int height = v.getHeight();
-
-        int[] viewHierarchyDepth = ViewUtils.getViewHierarchyDepth(v);
-        String activityClassName = activity.getComponentName().getClassName();
-        String viewClassName = v.getClass().getName();
-        Context context = v.getContext();
-        Resources res = context.getResources();
-        String resourceName = null;
-        try {
-            resourceName = v.getId() != View.NO_ID ? res.getResourceName(v.getId()) : null;
-        } catch (Resources.NotFoundException e) {
-            Logger.d(TAG, "resourceName not found for view id=" + v.getId(), e);
-        }
-        String text = (v instanceof TextView && !TextUtils.isEmpty(((TextView) v).getText()))
-                ? ((TextView) v).getText().toString() : "";
-        String description = (!TextUtils.isEmpty(v.getContentDescription()))
-                ? v.getContentDescription().toString() : "";
+    static RuleRecord makeRule(View view, boolean isInfoFlowMode)
+            throws PackageManager.NameNotFoundException {
+        Activity activity = ViewUtils.getAttachedActivityFromView(view);
+        Objects.requireNonNull(activity, "Can't find attached activity");
+        Context context = view.getContext();
+        int[] location = new int[2];
+        view.getLocationInWindow(location);
+        PackageInfo info = context.getPackageManager().getPackageInfo(context.getPackageName(), 0);
+        String text = view instanceof TextView && !TextUtils.isEmpty(((TextView) view).getText())
+                ? ((TextView) view).getText().toString() : "";
+        String description = !TextUtils.isEmpty(view.getContentDescription())
+                ? view.getContentDescription().toString() : "";
         String alias = !TextUtils.isEmpty(text) ? text : description;
-        String packageName = context.getPackageName();
-        PackageInfo packageInfo = context.getPackageManager().getPackageInfo(packageName, 0);
-        String label = packageInfo.applicationInfo.loadLabel(context.getPackageManager()).toString();
-        String versionName = packageInfo.versionName;
-        int versionCode = packageInfo.versionCode;
-        RuleRecord rule = new RuleRecord(label, packageName, versionName, versionCode,
-                BuildConfig.VERSION_CODE, "", alias,
-                x, y, width, height, viewHierarchyDepth,
-                activityClassName, viewClassName, resourceName, text, description,
-                View.INVISIBLE, System.currentTimeMillis());
-        populateRepeatableInfo(v, rule, isInfoFlowMode);
-        return rule;
+        return new RuleRecord(info.applicationInfo.loadLabel(context.getPackageManager()).toString(),
+                context.getPackageName(), info.versionName, info.versionCode, BuildConfig.VERSION_CODE,
+                "", alias, location[0], location[1], view.getWidth(), view.getHeight(),
+                System.currentTimeMillis(), 0, 0, 1f, null,
+                captureMatchSpec(view, activity, text, description, isInfoFlowMode),
+                RemoveEffect.of(View.INVISIBLE));
     }
 
-    /**
-     * 创建移除规则（ruleTag 留空以兼容旧 JSON 格式）。
-     *
-     * @param v 目标视图
-     * @param isInfoFlowMode 是否为信息流模式（由调用方通过 EditorOrchestrator.isInfoFlowMode() 传入）
-     * @return 构造完成的 RuleRecord
-     * @throws PackageManager.NameNotFoundException 无法获取包信息时抛出
-     */
-    public static RuleRecord makeRemoveRule(View v, boolean isInfoFlowMode) throws PackageManager.NameNotFoundException {
-        return makeRule(v, isInfoFlowMode);
+    public static RuleRecord makeRemoveRule(View view, boolean isInfoFlowMode)
+            throws PackageManager.NameNotFoundException {
+        return makeRule(view, isInfoFlowMode);
     }
 
-    /**
-     * 创建修改规则（使用预先捕获的原始状态快照）。
-     * <p>
-     * 结构信息（depth/viewClass/resourceName 等）从视图捕获（安全，修改不影响结构），
-     * 匹配字段（text）和原始值（orig*）从快照读取（保证为编辑前的原始值）。
-     * 解决了旧方案在视图被修改后调用时
-     * 捕获错误值的问题。
-     *
-     * @param view     目标视图
-     * @param snapshot 视图未修改时预先捕获的原始状态快照
-     * @return 构造完成的 RuleRecord（ruleTag="modify"），所有原始数据正确
-     */
-    public static RuleRecord makeModifyRule(View view, ViewSnapshot snapshot, boolean isInfoFlowMode) {
+    public static RuleRecord makeModifyRule(View view, ViewSnapshot snapshot,
+                                            boolean isInfoFlowMode) {
         try {
-            RuleRecord rule = makeRule(view, isInfoFlowMode);
-            rule.ruleTag = "modify";
-
-            // 匹配字段：来自快照（原始值），非视图当前（可能被修改）值
-            rule.text = snapshot.text;
-            rule.alias = !TextUtils.isEmpty(rule.text) ? rule.text : rule.description;
-
-            // 原始值字段：来自快照（原始值），非视图当前（可能被修改）值
-            rule.origWidth = snapshot.origWidth;
-            rule.origHeight = snapshot.origHeight;
-            rule.origAlpha = snapshot.origAlpha;
-            rule.origText = snapshot.origText;
-            rule.origLeftMargin = snapshot.origLeftMargin;
-            rule.origTopMargin = snapshot.origTopMargin;
-
-            // x/y/width/height 纯展示用途，使用当前视图值可接受
-            fillCoordinates(rule, view);
-            return rule;
+            RuleRecord base = makeRule(view, isInfoFlowMode);
+            MatchSpec match = base.getMatchSpec().toBuilder().text(snapshot.text).build();
+            String alias = !TextUtils.isEmpty(snapshot.text) ? snapshot.text : match.getDescription();
+            return new RuleRecord(base.label, base.packageName, base.matchVersionName,
+                    base.matchVersionCode, base.versionCode, base.imagePath, alias,
+                    base.x, base.y, base.width, base.height, base.timestamp,
+                    snapshot.origWidth, snapshot.origHeight, snapshot.origAlpha, snapshot.origText,
+                    match, new ModifyEffect.Builder().ruleTag("modify")
+                            .visibility(base.getVisibility())
+                            .origLeftMargin(snapshot.origLeftMargin)
+                            .origTopMargin(snapshot.origTopMargin)
+                            .build());
         } catch (PackageManager.NameNotFoundException e) {
             throw new RuntimeException("Failed to create modify rule", e);
         }
     }
 
-    /**
-     * 将视图的当前位置/尺寸写入规则。
-     *
-     * @param rule 目标规则
-     * @param v    当前视图
-     */
-    public static void fillCoordinates(RuleRecord rule, View v) {
-        int[] out = new int[2];
-        v.getLocationInWindow(out);
-        rule.x = out[0];
-        rule.y = out[1];
-        rule.width = v.getWidth();
-        rule.height = v.getHeight();
+    /** Updates only residual capture coordinates; stable components are untouched. */
+    public static void fillCoordinates(RuleRecord rule, View view) {
+        int[] location = new int[2];
+        view.getLocationInWindow(location);
+        rule.x = location[0];
+        rule.y = location[1];
+        rule.width = view.getWidth();
+        rule.height = view.getHeight();
     }
 
-    /** 填充可重复规则信息（itemPath、itemRootClass、parentClass）
-     * @param v 目标视图
-     * @param rule 规则记录
-     * @param isInfoFlowMode 是否为信息流模式（由调用方通过 EditorOrchestrator.isInfoFlowMode() 传入）*/
-    private static void populateRepeatableInfo(View v, RuleRecord rule, boolean isInfoFlowMode) {
+    private static MatchSpec captureMatchSpec(View view, Activity activity, String text,
+                                              String description, boolean isInfoFlowMode) {
+        Resources resources = view.getResources();
+        String resourceName = null;
+        try {
+            resourceName = view.getId() != View.NO_ID ? resources.getResourceName(view.getId()) : null;
+        } catch (Resources.NotFoundException e) {
+            Logger.d(TAG, "resourceName not found for view id=" + view.getId(), e);
+        }
+        MatchSpec.Builder builder = new MatchSpec.Builder()
+                .depth(ViewUtils.getViewHierarchyDepth(view))
+                .activityClass(activity.getComponentName().getClassName())
+                .viewClass(view.getClass().getName())
+                .resourceName(resourceName)
+                .text(text)
+                .description(description);
+        populateRepeatableInfo(view, builder, isInfoFlowMode);
+        return builder.build();
+    }
+
+    private static void populateRepeatableInfo(View view, MatchSpec.Builder builder,
+                                               boolean isInfoFlowMode) {
         if (!isInfoFlowMode) return;
         try {
-            ViewGroup rv = ViewTraversal.findRecyclerViewAncestor(v);
-            if (rv == null) return;
-
-            String[] itemPath = ViewTraversal.getItemPath(v, rv);
-
-            View current = v;
-            ViewParent p = current.getParent();
-            while (p != rv && p instanceof ViewGroup) {
-                current = (View) p;
-                p = p.getParent();
+            ViewGroup recycler = ViewTraversal.findRecyclerViewAncestor(view);
+            if (recycler == null) return;
+            String[] itemPath = ViewTraversal.getItemPath(view, recycler);
+            View itemRoot = view;
+            ViewParent parent = itemRoot.getParent();
+            while (parent != recycler && parent instanceof ViewGroup) {
+                itemRoot = (View) parent;
+                parent = itemRoot.getParent();
             }
-            String itemRootClass = current.getClass().getName();
-
-            // itemPath + itemRootClass 有效即标记 repeatable（不再要求 matchCount >= 2）
-            if (itemPath != null && itemPath.length > 0 && itemRootClass != null) {
-                rule.itemPath = itemPath;
-                rule.itemRootClass = itemRootClass;
-                rule.parentClass = v.getParent() != null ? v.getParent().getClass().getName() : null;
-                rule.repeatable = true;
-                // 新规则默认使用 CARD 模式：以整张卡片为操作单位，稳定性更高
-                rule.targetLevel = TargetLevel.CARD;
-
-                // 捕获 RecyclerView 的 itemViewType 用于精确匹配过滤
-                int vt = -1;
-                try {
-                    if (rv instanceof androidx.recyclerview.widget.RecyclerView) {
-                        androidx.recyclerview.widget.RecyclerView recyclerView =
-                                (androidx.recyclerview.widget.RecyclerView) rv;
-                        androidx.recyclerview.widget.RecyclerView.Adapter<?> adapter =
-                                recyclerView.getAdapter();
-                        if (adapter != null) {
-                            int pos = recyclerView.getChildAdapterPosition(current);
-                            if (pos >= 0) vt = adapter.getItemViewType(pos);
-                        }
-                    }
-                } catch (Exception e) {
-                    Logger.d(TAG, "itemViewType capture failed", e);
-                }
-                if (vt >= 0) rule.viewType = vt;
+            if (itemPath == null || itemPath.length == 0) return;
+            builder.itemPath(itemPath)
+                    .itemRootClass(itemRoot.getClass().getName())
+                    .parentClass(view.getParent() != null ? view.getParent().getClass().getName() : null)
+                    .repeatable(true)
+                    .targetLevel(TargetLevel.CARD);
+            if (recycler instanceof androidx.recyclerview.widget.RecyclerView) {
+                androidx.recyclerview.widget.RecyclerView recyclerView =
+                        (androidx.recyclerview.widget.RecyclerView) recycler;
+                androidx.recyclerview.widget.RecyclerView.Adapter<?> adapter = recyclerView.getAdapter();
+                int position = recyclerView.getChildAdapterPosition(itemRoot);
+                if (adapter != null && position >= 0) builder.viewType(adapter.getItemViewType(position));
             }
         } catch (Exception e) {
-            Logger.w(TAG, "[RuleRecordFactory] populateRepeatableInfo failed", e);
+            Logger.w(TAG, "[RuleRecordFactory] repeatable capture failed", e);
         }
     }
 }

@@ -233,7 +233,8 @@ public final class RuleLifecycleManager implements RecyclerAdapterHook.Delegate 
         return RuleDiff.compute(
                 (Map) currentRules,
                 (Map) newRules,
-                (a, b) -> ((RuleRecord) a).equals(b),
+                (a, b) -> ((RuleRecord) a).slotKey(((RuleRecord) a).getPackageName())
+                        .equals(((RuleRecord) b).slotKey(((RuleRecord) b).getPackageName())),
                 (a, b) -> RuleManager.runtimeContentEquals(
                         (RuleRecord) a, (RuleRecord) b));
     }

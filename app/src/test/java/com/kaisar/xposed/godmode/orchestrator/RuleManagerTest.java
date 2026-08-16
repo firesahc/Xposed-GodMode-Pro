@@ -8,6 +8,8 @@ import static org.junit.Assert.assertTrue;
 
 import com.kaisar.xposed.godmode.engine.matcher.MatchMode;
 import com.kaisar.xposed.godmode.engine.matcher.TargetLevel;
+import com.kaisar.xposed.godmode.engine.rule.MatchSpec;
+import com.kaisar.xposed.godmode.engine.rule.ModifyEffect;
 import com.kaisar.xposed.godmode.engine.rule.RuleDiff;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
@@ -23,59 +25,53 @@ public final class RuleManagerTest {
 
     @Test
     public void newManagerStartsUnavailableWithoutTreatingItAsReadyEmpty() throws Exception {
-        RuleManager manager = newManager();
-        assertEquals(RuleManager.LoadState.UNAVAILABLE, manager.getLoadState());
+        assertEquals(RuleManager.LoadState.UNAVAILABLE, newManager().getLoadState());
     }
 
     @Test
-    public void copyRulesClonesListsRecordsAndNestedArrays() {
+    public void copyRulesClonesListsRecordsAndImmutableComponents() {
         RuleRecord sourceRule = rule();
-        List<RuleRecord> sourceList = new ArrayList<>(Collections.singletonList(sourceRule));
-        ActRules source = new ActRules();
-        source.put(sourceRule.activityClass, sourceList);
+        ActRules source = rulesOf(sourceRule);
+        List<RuleRecord> sourceList = source.get(sourceRule.getActivityClass());
 
         ActRules copy = RuleManager.copyRules(source);
-        RuleRecord copiedRule = copy.get(sourceRule.activityClass).get(0);
+        RuleRecord copiedRule = copy.get(sourceRule.getActivityClass()).get(0);
 
         assertNotSame(source, copy);
-        assertNotSame(sourceList, copy.get(sourceRule.activityClass));
+        assertNotSame(sourceList, copy.get(sourceRule.getActivityClass()));
         assertNotSame(sourceRule, copiedRule);
-        assertNotSame(sourceRule.depth, copiedRule.depth);
-        assertNotSame(sourceRule.itemPath, copiedRule.itemPath);
+        assertNotSame(sourceRule.getMatchSpec(), copiedRule.getMatchSpec());
+        int[] returnedDepth = sourceRule.getDepth();
+        returnedDepth[0] = 99;
+        assertEquals(1, copiedRule.getDepth()[0]);
 
-        sourceRule.modText = "mutated input";
-        sourceRule.depth[0] = 99;
-        assertEquals("replacement", copiedRule.modText);
-        assertEquals(1, copiedRule.depth[0]);
-
-        copiedRule.modImagePath = "mutated output";
-        copiedRule.itemPath[0] = "changed";
-        assertEquals("replacement.png", sourceRule.modImagePath);
-        assertEquals("root", sourceRule.itemPath[0]);
+        sourceRule.alias = "mutated input";
+        assertEquals("alias", copiedRule.alias);
+        copiedRule.alias = "mutated output";
+        assertEquals("mutated input", sourceRule.alias);
     }
 
     @Test
     public void replaceRulesAndGetRulesDoNotExposeOwnedState() throws Exception {
         RuleManager manager = newManager();
         RuleRecord sourceRule = rule();
-        ActRules source = new ActRules();
-        source.put(sourceRule.activityClass,
-                new ArrayList<>(Collections.singletonList(sourceRule)));
+        ActRules source = rulesOf(sourceRule);
 
         manager.replaceRules(source);
-        sourceRule.modText = "mutated input";
-        source.get(sourceRule.activityClass).clear();
+        sourceRule.alias = "mutated input";
+        source.clear();
 
         ActRules firstRead = manager.getRules();
-        RuleRecord returned = firstRead.get(sourceRule.activityClass).get(0);
-        assertEquals("replacement", returned.modText);
-        returned.modText = "mutated output";
-        returned.depth[0] = 99;
+        RuleRecord returned = firstRead.get("ExampleActivity").get(0);
+        assertEquals("alias", returned.alias);
+        returned.alias = "mutated output";
+        int[] returnedDepth = returned.getDepth();
+        returnedDepth[0] = 99;
         firstRead.clear();
 
-        RuleRecord secondRead = manager.getRules().get(sourceRule.activityClass).get(0);
-        assertEquals("replacement", secondRead.modText);
-        assertEquals(1, secondRead.depth[0]);
+        RuleRecord secondRead = manager.getRules().get("ExampleActivity").get(0);
+        assertEquals("alias", secondRead.alias);
+        assertEquals(1, secondRead.getDepth()[0]);
     }
 
     @Test
@@ -97,12 +93,10 @@ public final class RuleManagerTest {
             throws Exception {
         RuleManager manager = newManager();
         RuleRecord serviceRule = rule();
-        ActRules snapshot = rulesOf(serviceRule);
-
-        manager.acceptServiceSnapshotForTest(snapshot);
+        manager.acceptServiceSnapshotForTest(rulesOf(serviceRule));
 
         assertEquals(RuleManager.LoadState.READY_WITH_RULES, manager.getLoadState());
-        assertEquals(1, manager.getRules().get(serviceRule.activityClass).size());
+        assertEquals(1, manager.getRules().get(serviceRule.getActivityClass()).size());
 
         manager.acceptServiceSnapshotForTest(new ActRules());
         assertEquals(RuleManager.LoadState.READY_EMPTY, manager.getLoadState());
@@ -113,52 +107,58 @@ public final class RuleManagerTest {
     public void runtimeComparatorIgnoresPresentationMetadata() {
         RuleRecord left = rule();
         RuleRecord right = left.clone();
-
         right.label = "new label";
         right.alias = "new alias";
         right.timestamp++;
-
+        right.imagePath = "new-preview.png";
+        right.width++;
         assertTrue(RuleManager.runtimeContentEquals(left, right));
     }
 
     @Test
     public void runtimeComparatorNormalizesLegacyMatcherDefaults() {
         RuleRecord left = rule();
-        RuleRecord right = left.clone();
-        left.matchMode = null;
-        left.targetLevel = null;
-
+        RuleRecord right = left.withMatchSpec(left.getMatchSpec().toBuilder()
+                .matchMode(null).targetLevel(null).build());
         assertTrue(RuleManager.runtimeContentEquals(left, right));
     }
 
     @Test
-    public void runtimeComparatorDetectsMatcherActionGeometryVisibilityAndImageChanges() {
-        assertRuntimeChange(rule -> rule.resourceName = "pkg:id/other");
-        assertRuntimeChange(rule -> rule.depth[0]++);
-        assertRuntimeChange(rule -> rule.matchMode = MatchMode.CONTAINS);
-        assertRuntimeChange(rule -> rule.modText = "other replacement");
-        assertRuntimeChange(rule -> rule.width++);
-        assertRuntimeChange(rule -> rule.modXOffset++);
-        assertRuntimeChange(rule -> rule.visibility++);
-        assertRuntimeChange(rule -> rule.imagePath = "other-preview.png");
-        assertRuntimeChange(rule -> rule.modImagePath = "other.png");
+    public void runtimeComparatorDetectsMatcherAndEffectChanges() {
+        assertRuntimeChange(rule -> rule.withMatchSpec(rule.getMatchSpec().toBuilder()
+                .resourceName("pkg:id/other").build()));
+        assertRuntimeChange(rule -> rule.withMatchSpec(rule.getMatchSpec().toBuilder()
+                .depth(new int[] {9, 2}).build()));
+        assertRuntimeChange(rule -> rule.withMatchSpec(rule.getMatchSpec().toBuilder()
+                .matchMode(MatchMode.CONTAINS).build()));
+        assertRuntimeChange(rule -> rule.withEffect(effectWith(rule, "other replacement", 4,
+                "replacement.png")));
+        assertRuntimeChange(rule -> rule.withEffect(effectWith(rule, "replacement", 9,
+                "replacement.png")));
+        assertRuntimeChange(rule -> rule.withEffect(effectWith(rule, "replacement", 4,
+                "other.png")));
     }
 
     @Test
-    public void runtimeDiffDoesNotSkipContentChangesWithSameIdentity() {
+    public void runtimeDiffDoesNotSkipContentChangesWithSameSlot() {
         RuleRecord oldRule = rule();
-        RuleRecord newRule = oldRule.clone();
-        newRule.modText = "new runtime text";
-        ActRules oldRules = rulesOf(oldRule);
-        ActRules newRules = rulesOf(newRule);
+        RuleRecord newRule = oldRule.withEffect(effectWith(oldRule, "new runtime text", 4,
+                "replacement.png"));
 
-        // RuleRecord.equals is intentionally identity-only; the runtime diff must
-        // still revoke the old effect and apply the new one.
-        assertTrue(oldRules.equals(newRules));
-        RuleDiff diff = RuleLifecycleManager.computeRuntimeDiff(oldRules, newRules);
+        assertTrue(oldRule.equals(newRule));
+        RuleDiff diff = RuleLifecycleManager.computeRuntimeDiff(rulesOf(oldRule), rulesOf(newRule));
+        assertSame(oldRule, diff.toRevoke.get(oldRule.getActivityClass()).get(0));
+        assertSame(newRule, diff.toApply.get(newRule.getActivityClass()).get(0));
+    }
 
-        assertSame(oldRule, diff.toRevoke.get(oldRule.activityClass).get(0));
-        assertSame(newRule, diff.toApply.get(newRule.activityClass).get(0));
+    @Test
+    public void runtimeDiffKeepsDirectAndRepeatableSlotsDistinct() {
+        RuleRecord direct = rule().withMatchSpec(rule().getMatchSpec().toBuilder()
+                .repeatable(false).itemPath(null).build());
+        RuleRecord repeatable = rule();
+        RuleDiff diff = RuleLifecycleManager.computeRuntimeDiff(rulesOf(direct), rulesOf(repeatable));
+        assertEquals(1, diff.toRevoke.get(direct.getActivityClass()).size());
+        assertEquals(1, diff.toApply.get(repeatable.getActivityClass()).size());
     }
 
     @Test
@@ -167,51 +167,40 @@ public final class RuleManagerTest {
         RuleRecord newRule = oldRule.clone();
         newRule.label = "new label";
         newRule.alias = "new alias";
-
         assertTrue(RuleLifecycleManager.computeRuntimeDiff(
                 rulesOf(oldRule), rulesOf(newRule)).isEmpty());
     }
 
+    private static ModifyEffect effectWith(RuleRecord rule, String text, int xOffset,
+                                           String imagePath) {
+        return new ModifyEffect.Builder().ruleTag("modify").visibility(rule.getVisibility())
+                .modWidth(80).modHeight(90).modAlpha(.5f).modXOffset(xOffset).modYOffset(5)
+                .modText(text).modImagePath(imagePath).origLeftMargin(6).origTopMargin(7).build();
+    }
+
     private static void assertRuntimeChange(Change change) {
         RuleRecord left = rule();
-        RuleRecord right = left.clone();
-        change.apply(right);
-        assertFalse(RuleManager.runtimeContentEquals(left, right));
+        assertFalse(RuleManager.runtimeContentEquals(left, change.apply(left)));
     }
 
     private static RuleRecord rule() {
-        RuleRecord rule = new RuleRecord(
-                "label", "com.example", "1.0", 1, 68, "preview.png", "alias",
-                10, 20, 100, 200, new int[]{1, 2}, "ExampleActivity", "TextView",
-                "com.example:id/title", "original", "description", 0, 123L);
-        rule.ruleTag = "modify";
-        rule.itemPath = new String[]{"root", "child"};
-        rule.itemRootClass = "RecyclerView";
-        rule.parentClass = "LinearLayout";
-        rule.repeatable = true;
-        rule.matchMode = MatchMode.EXACT;
-        rule.viewType = 3;
-        rule.targetLevel = TargetLevel.ELEMENT;
-        rule.modWidth = 80;
-        rule.modHeight = 90;
-        rule.modAlpha = 0.5f;
-        rule.modXOffset = 4;
-        rule.modYOffset = 5;
-        rule.modText = "replacement";
-        rule.modImagePath = "replacement.png";
-        rule.origWidth = 100;
-        rule.origHeight = 200;
-        rule.origAlpha = 1f;
-        rule.origText = "original";
-        rule.origLeftMargin = 6;
-        rule.origTopMargin = 7;
-        return rule;
+        MatchSpec match = new MatchSpec.Builder()
+                .depth(new int[] {1, 2}).activityClass("ExampleActivity").viewClass("TextView")
+                .resourceName("com.example:id/title").itemPath(new String[] {"root", "child"})
+                .itemRootClass("RecyclerView").parentClass("LinearLayout").repeatable(true)
+                .text("original").description("description").matchMode(MatchMode.EXACT)
+                .viewType(3).targetLevel(TargetLevel.ELEMENT).build();
+        ModifyEffect effect = new ModifyEffect.Builder().ruleTag("modify").visibility(0)
+                .modWidth(80).modHeight(90).modAlpha(.5f).modXOffset(4).modYOffset(5)
+                .modText("replacement").modImagePath("replacement.png")
+                .origLeftMargin(6).origTopMargin(7).build();
+        return new RuleRecord("label", "com.example", "1.0", 1, 68, "preview.png", "alias",
+                10, 20, 100, 200, 123L, 100, 200, 1f, "original", match, effect);
     }
 
     private static ActRules rulesOf(RuleRecord rule) {
         ActRules rules = new ActRules();
-        rules.put(rule.activityClass,
-                new ArrayList<>(Collections.singletonList(rule)));
+        rules.put(rule.getActivityClass(), new ArrayList<>(Collections.singletonList(rule)));
         return rules;
     }
 
@@ -222,6 +211,6 @@ public final class RuleManagerTest {
     }
 
     private interface Change {
-        void apply(RuleRecord rule);
+        RuleRecord apply(RuleRecord rule);
     }
 }

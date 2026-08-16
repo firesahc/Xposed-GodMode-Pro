@@ -8,7 +8,6 @@ import com.kaisar.xposed.godmode.engine.matcher.CompositeMatcher;
 import com.kaisar.xposed.godmode.engine.matcher.ViewTraversal;
 import com.kaisar.xposed.godmode.engine.rule.MatchFields;
 import com.kaisar.xposed.godmode.engine.rule.MatchSpec;
-import com.kaisar.xposed.godmode.engine.rule.RuleMapper;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.util.ViewUtils;
 import com.kaisar.xposed.godmode.rule.ActRules;
@@ -183,7 +182,7 @@ public final class RecyclerAdapterHook {
         for (RuleRecord rule : activityRules) {
             if (!rule.isRepeatable()) continue;
             try {
-                MatchSpec spec = RuleMapper.toEngine(rule).getMatchSpec();
+                MatchSpec spec = rule.getMatchSpec();
                 if (!isApplicableToItem(spec, itemRoot)) continue;
 
                 // CARD 和 ELEMENT 模式走统一的导航+验证管线

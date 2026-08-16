@@ -9,139 +9,54 @@ import android.view.View;
 import androidx.annotation.Keep;
 import androidx.annotation.NonNull;
 
+import com.google.gson.annotations.JsonAdapter;
 import com.google.gson.annotations.SerializedName;
 import com.kaisar.xposed.godmode.engine.matcher.MatchMode;
 import com.kaisar.xposed.godmode.engine.matcher.TargetLevel;
-import com.kaisar.xposed.godmode.engine.rule.RuleFields;
+import com.kaisar.xposed.godmode.engine.rule.MatchSpec;
+import com.kaisar.xposed.godmode.engine.rule.RuleEffect;
+import com.kaisar.xposed.godmode.engine.rule.RuleSlotKey;
 
-import java.util.Arrays;
 import java.util.Objects;
 
 /**
- * app 模块的规则记录 — Parcelable（IPC 序列化）+ Gson @SerializedName（持久化）。
- * <p>
- * 实现 {@link RuleFields} 接口以提供编译期安全的字段访问，
- * 配合 {@link com.kaisar.xposed.godmode.engine.rule.RuleMapper} 实现类型安全的 app→engine 转换。
- * <p>
- * 【内部实现细节】此类的 public 字段是为兼容 Parcelable/Gson 而保留的。
- * 编辑器层操作修改字段应优先使用 {@link #asActionSpec()} 获取 {@code ActionSpec}，
- * 或通过 {@link com.kaisar.xposed.godmode.engine.rule.ActionSpec.Builder} 直接构造。
- * <p>
- * 【同步保障】对方文件 {@code engine/.../engine/rule/RuleMatchSpec.java}（纯 POJO 版）
- * <br>引擎字段总数: 40 &nbsp;|&nbsp; app 字段总数: 40
- * <br>若此处增减字段，请同步修改对方文件的同名字段。Parcel 读写、clone() 和 equals()/hashCode()。
+ * 持久化/IPC 兼容聚合对象。
  *
- * @see RuleFields
- * @see com.kaisar.xposed.godmode.engine.rule.RuleMapper
- * @see com.kaisar.xposed.godmode.engine.rule.ActionSpec
+ * <p>稳定的匹配和效果职责由不可变 {@link MatchSpec}/{@link RuleEffect} 持有；
+ * 本类只保留兼容、展示和采集字段。Gson 仍通过 {@link RuleRecordTypeAdapter}
+ * 输出 v6.9 的扁平 JSON，Parcelable 仍按 v6.9 的旧槽位顺序展开。</p>
  */
 @Keep
-public final class RuleRecord implements RuleFields, Parcelable, Cloneable {
+@JsonAdapter(RuleRecordTypeAdapter.class)
+public final class RuleRecord implements Parcelable, Cloneable {
 
-    // 规则标识字段: 非空=修改规则，null/空=移除规则
-    @SerializedName("rule_tag")
-    public String ruleTag;
+    // 兼容/展示/采集字段
+    @SerializedName("label") public String label;
+    @SerializedName("package_name") public String packageName;
+    @SerializedName("match_version_name") public String matchVersionName;
+    @SerializedName("match_version_code") public int matchVersionCode;
+    @SerializedName("version_code") public int versionCode;
+    @SerializedName("img_path") public String imagePath;
+    @SerializedName("alias") public String alias;
+    @SerializedName("x") public int x;
+    @SerializedName("y") public int y;
+    @SerializedName("width") public int width;
+    @SerializedName("height") public int height;
+    @SerializedName("timestamp") public long timestamp;
+    @SerializedName("orig_width") public int origWidth;
+    @SerializedName("orig_height") public int origHeight;
+    @SerializedName("orig_alpha") public float origAlpha = 1f;
+    @SerializedName("orig_text") public String origText;
 
-    // --- 移除规则字段 ---
-    @SerializedName("label")
-    public String label;
-    @SerializedName("package_name")
-    public String packageName;
-    @SerializedName("match_version_name")
-    public String matchVersionName;
-    @SerializedName("match_version_code")
-    public int matchVersionCode;
-    @SerializedName("version_code")
-    public int versionCode;
-    @SerializedName("img_path")
-    public String imagePath;
-    @SerializedName("alias")
-    public String alias;
-    @SerializedName("x")
-    public int x;
-    @SerializedName("y")
-    public int y;
-    @SerializedName("width")
-    public int width;
-    @SerializedName("height")
-    public int height;
-    @SerializedName("depth")
-    public int[] depth;
-    @SerializedName("act_class")
-    public String activityClass;
-    @SerializedName("view_class")
-    public String viewClass;
-    @SerializedName("res_name")
-    public String resourceName;
-    @SerializedName("item_path")
-    public String[] itemPath;
-    @SerializedName("item_root_class")
-    public String itemRootClass;
-    @SerializedName("parent_class")
-    public String parentClass;
-    @SerializedName("repeatable")
-    public boolean repeatable;
-    @SerializedName("text")
-    public String text;
-    @SerializedName("description")
-    public String description;
+    private final MatchSpec matchSpec;
+    private final RuleEffect effect;
 
-    // ===== 匹配配置 =====
-    @SerializedName("match_mode")
-    public MatchMode matchMode;
-    @SerializedName(value = "view_type", alternate = {"match_threshold"})
-    public int viewType;
-    @SerializedName("target_level")
-    public TargetLevel targetLevel;
-
-    @SerializedName("visibility")
-    public int visibility;
-    @SerializedName("timestamp")
-    public long timestamp;
-
-    // --- 修改规则字段 ---
-    @SerializedName("mod_width")
-    public int modWidth = -1;
-    @SerializedName("mod_height")
-    public int modHeight = -1;
-    @SerializedName("mod_alpha")
-    public float modAlpha = -1f;
-    @SerializedName("mod_x_offset")
-    public int modXOffset;
-    @SerializedName("mod_y_offset")
-    public int modYOffset;
-    @SerializedName("mod_text")
-    public String modText;
-    @SerializedName("mod_img_path")
-    public String modImagePath;
-
-    // --- 原始值(用于应用修改时计算) ---
-    @SerializedName("orig_width")
-    public int origWidth;
-    @SerializedName("orig_height")
-    public int origHeight;
-    @SerializedName("orig_alpha")
-    public float origAlpha = 1f;
-    @SerializedName("orig_text")
-    public String origText;
-    @SerializedName("orig_left_margin")
-    public int origLeftMargin;
-    @SerializedName("orig_top_margin")
-    public int origTopMargin;
-
-    // =========================================================================
-    // 构造方法
-    // =========================================================================
-
-    // Gson 反序列化使用反射调用此私有构造器
-    @SuppressWarnings("unused")
-    private RuleRecord() {
-    }
-
-    public RuleRecord(String label, String packageName, String matchVersionName, int matchVersionCode,
-                      int versionCode, String imagePath, String alias, int x, int y, int width, int height,
-                      int[] depth, String activityClass, String viewClass, String resourceName,
-                      String text, String description, int visibility, long timestamp) {
+    /** Full constructor used by the flat codec and editor builders. */
+    public RuleRecord(String label, String packageName, String matchVersionName,
+                      int matchVersionCode, int versionCode, String imagePath, String alias,
+                      int x, int y, int width, int height, long timestamp,
+                      int origWidth, int origHeight, float origAlpha, String origText,
+                      MatchSpec matchSpec, RuleEffect effect) {
         this.label = label;
         this.packageName = packageName;
         this.matchVersionName = matchVersionName;
@@ -153,18 +68,29 @@ public final class RuleRecord implements RuleFields, Parcelable, Cloneable {
         this.y = y;
         this.width = width;
         this.height = height;
-        this.depth = depth;
-        this.activityClass = activityClass;
-        this.viewClass = viewClass;
-        this.resourceName = resourceName;
-        this.text = text;
-        this.description = description;
-        this.visibility = visibility;
         this.timestamp = timestamp;
+        this.origWidth = origWidth;
+        this.origHeight = origHeight;
+        this.origAlpha = origAlpha;
+        this.origText = origText;
+        this.matchSpec = Objects.requireNonNull(matchSpec, "matchSpec must not be null");
+        this.effect = Objects.requireNonNull(effect, "effect must not be null");
+    }
+
+    /** Legacy capture constructor retained while producers migrate to builders. */
+    public RuleRecord(String label, String packageName, String matchVersionName, int matchVersionCode,
+                      int versionCode, String imagePath, String alias, int x, int y, int width, int height,
+                      int[] depth, String activityClass, String viewClass, String resourceName,
+                      String text, String description, int visibility, long timestamp) {
+        this(label, packageName, matchVersionName, matchVersionCode, versionCode, imagePath, alias,
+                x, y, width, height, timestamp, 0, 0, 1f, null,
+                new MatchSpec.Builder().depth(depth).activityClass(activityClass).viewClass(viewClass)
+                        .resourceName(resourceName).text(text).description(description).build(),
+                com.kaisar.xposed.godmode.engine.rule.RemoveEffect.of(visibility));
     }
 
     protected RuleRecord(Parcel in) {
-        ruleTag = in.readString();
+        String ruleTag = in.readString();
         label = in.readString();
         packageName = in.readString();
         matchVersionName = in.readString();
@@ -176,90 +102,167 @@ public final class RuleRecord implements RuleFields, Parcelable, Cloneable {
         y = in.readInt();
         width = in.readInt();
         height = in.readInt();
-        depth = in.createIntArray();
-        activityClass = in.readString();
-        viewClass = in.readString();
-        resourceName = in.readString();
-        text = in.readString();
-        description = in.readString();
+        int[] depth = in.createIntArray();
+        String activityClass = in.readString();
+        String viewClass = in.readString();
+        String resourceName = in.readString();
+        String text = in.readString();
+        String description = in.readString();
         String modeName = in.readString();
-        matchMode = modeName != null ? MatchMode.valueOf(modeName) : null;
-        viewType = in.readInt();
-        visibility = in.readInt();
+        MatchMode matchMode = modeName != null ? MatchMode.valueOf(modeName) : null;
+        int viewType = in.readInt();
+        int visibility = in.readInt();
         timestamp = in.readLong();
-        modWidth = in.readInt();
-        modHeight = in.readInt();
-        modAlpha = in.readFloat();
-        modXOffset = in.readInt();
-        modYOffset = in.readInt();
-        modText = in.readString();
-        modImagePath = in.readString();
+        int modWidth = in.readInt();
+        int modHeight = in.readInt();
+        float modAlpha = in.readFloat();
+        int modXOffset = in.readInt();
+        int modYOffset = in.readInt();
+        String modText = in.readString();
+        String modImagePath = in.readString();
         origWidth = in.readInt();
         origHeight = in.readInt();
         origAlpha = in.readFloat();
         origText = in.readString();
-        origLeftMargin = in.readInt();
-        origTopMargin = in.readInt();
-        itemPath = in.createStringArray();
-        itemRootClass = in.readString();
-        parentClass = in.readString();
-        repeatable = in.readByte() != 0;
+        int origLeftMargin = in.readInt();
+        int origTopMargin = in.readInt();
+        String[] itemPath = in.createStringArray();
+        String itemRootClass = in.readString();
+        String parentClass = in.readString();
+        boolean repeatable = in.readByte() != 0;
         String levelName = in.readString();
-        targetLevel = levelName != null ? TargetLevel.valueOf(levelName) : null;
+        TargetLevel targetLevel = levelName != null ? TargetLevel.valueOf(levelName) : null;
+
+        matchSpec = new MatchSpec.Builder().depth(depth).activityClass(activityClass).viewClass(viewClass)
+                .resourceName(resourceName).itemPath(itemPath).itemRootClass(itemRootClass)
+                .parentClass(parentClass).repeatable(repeatable).text(text).description(description)
+                .matchMode(matchMode).viewType(viewType).targetLevel(targetLevel).build();
+        RuleEffect.WireValues wire = new RuleEffect.WireValues.Builder().ruleTag(ruleTag)
+                .visibility(visibility).modWidth(modWidth).modHeight(modHeight).modAlpha(modAlpha)
+                .modXOffset(modXOffset).modYOffset(modYOffset).modText(modText)
+                .modImagePath(modImagePath).origLeftMargin(origLeftMargin).origTopMargin(origTopMargin)
+                .build();
+        effect = RuleEffect.fromWireValues(wire);
     }
 
-    // =========================================================================
-    // RuleFields 接口实现 — 40 个 getter（委托到 public 字段）
-    // =========================================================================
+    public MatchSpec getMatchSpec() { return matchSpec; }
+    public RuleEffect getEffect() { return effect; }
+    public RuleSlotKey slotKey(String authoritativePackageName) {
+        return RuleSlotKey.from(authoritativePackageName, matchSpec);
+    }
 
-    @Override public String getRuleTag() { return ruleTag; }
-    @Override public String getLabel() { return label; }
-    @Override public String getPackageName() { return packageName; }
-    @Override public String getMatchVersionName() { return matchVersionName; }
-    @Override public int getMatchVersionCode() { return matchVersionCode; }
-    @Override public int getVersionCode() { return versionCode; }
-    @Override public String getImagePath() { return imagePath; }
-    @Override public String getAlias() { return alias; }
-    @Override public int getX() { return x; }
-    @Override public int getY() { return y; }
-    @Override public int getWidth() { return width; }
-    @Override public int getHeight() { return height; }
-    @Override public int[] getDepth() { return depth; }
-    @Override public String getActivityClass() { return activityClass; }
-    @Override public String getViewClass() { return viewClass; }
-    @Override public String getResourceName() { return resourceName; }
-    @Override public String[] getItemPath() { return itemPath; }
-    @Override public String getItemRootClass() { return itemRootClass; }
-    @Override public String getParentClass() { return parentClass; }
-    @Override public boolean isRepeatable() { return repeatable; }
-    @Override public String getText() { return text; }
-    @Override public String getDescription() { return description; }
-    @Override public MatchMode getMatchMode() { return matchMode; }
-    @Override public int getInfoFlowViewType() { return viewType; }
-    @Override public TargetLevel getTargetLevel() { return targetLevel; }
-    @Override public int getVisibility() { return visibility; }
-    @Override public long getTimestamp() { return timestamp; }
-    @Override public int getModWidth() { return modWidth; }
-    @Override public int getModHeight() { return modHeight; }
-    @Override public float getModAlpha() { return modAlpha; }
-    @Override public int getModXOffset() { return modXOffset; }
-    @Override public int getModYOffset() { return modYOffset; }
-    @Override public String getModText() { return modText; }
-    @Override public String getModImagePath() { return modImagePath; }
-    @Override public int getOrigWidth() { return origWidth; }
-    @Override public int getOrigHeight() { return origHeight; }
-    @Override public float getOrigAlpha() { return origAlpha; }
-    @Override public String getOrigText() { return origText; }
-    @Override public int getOrigLeftMargin() { return origLeftMargin; }
-    @Override public int getOrigTopMargin() { return origTopMargin; }
+    // Compatibility accessors for legacy callers; new Runtime code uses components directly.
+    public String getRuleTag() { return effect.getRuleTag(); }
+    public String getLabel() { return label; }
+    public String getPackageName() { return packageName; }
+    public String getMatchVersionName() { return matchVersionName; }
+    public int getMatchVersionCode() { return matchVersionCode; }
+    public int getVersionCode() { return versionCode; }
+    public String getImagePath() { return imagePath; }
+    public String getAlias() { return alias; }
+    public int getX() { return x; }
+    public int getY() { return y; }
+    public int getWidth() { return width; }
+    public int getHeight() { return height; }
+    public int[] getDepth() { return matchSpec.getDepth(); }
+    public String getActivityClass() { return matchSpec.getActivityClass(); }
+    public String getViewClass() { return matchSpec.getViewClass(); }
+    public String getResourceName() { return matchSpec.getResourceName(); }
+    public String[] getItemPath() { return matchSpec.getItemPath(); }
+    public String getItemRootClass() { return matchSpec.getItemRootClass(); }
+    public String getParentClass() { return matchSpec.getParentClass(); }
+    public boolean isRepeatable() { return matchSpec.isRepeatable(); }
+    public String getText() { return matchSpec.getText(); }
+    public String getDescription() { return matchSpec.getDescription(); }
+    public MatchMode getMatchMode() { return matchSpec.getMatchMode(); }
+    public int getInfoFlowViewType() { return matchSpec.getInfoFlowViewType(); }
+    public TargetLevel getTargetLevel() { return matchSpec.getTargetLevel(); }
+    public int getVisibility() { return effect.toWireValues().getVisibility(); }
+    public long getTimestamp() { return timestamp; }
+    public int getModWidth() { return effect.toWireValues().getModWidth(); }
+    public int getModHeight() { return effect.toWireValues().getModHeight(); }
+    public float getModAlpha() { return effect.toWireValues().getModAlpha(); }
+    public int getModXOffset() { return effect.toWireValues().getModXOffset(); }
+    public int getModYOffset() { return effect.toWireValues().getModYOffset(); }
+    public String getModText() { return effect.toWireValues().getModText(); }
+    public String getModImagePath() { return effect.toWireValues().getModImagePath(); }
+    public int getOrigWidth() { return origWidth; }
+    public int getOrigHeight() { return origHeight; }
+    public float getOrigAlpha() { return origAlpha; }
+    public String getOrigText() { return origText; }
+    public int getOrigLeftMargin() { return effect.toWireValues().getOrigLeftMargin(); }
+    public int getOrigTopMargin() { return effect.toWireValues().getOrigTopMargin(); }
 
-    // =========================================================================
-    // Parcelable
-    // =========================================================================
+    public boolean isRemoveRule() { return effect.isRemove(); }
+    public boolean isModifyRule() { return effect.isModify(); }
+    public boolean isWidthModified() { return getModWidth() >= 0; }
+    public boolean isHeightModified() { return getModHeight() >= 0; }
+    public boolean isAlphaModified() { return getModAlpha() >= 0f; }
+    public boolean isPositionModified() { return getModXOffset() != 0 || getModYOffset() != 0; }
+    public boolean isTextModified() { return getModText() != null; }
+    public boolean isImageModified() { return getModImagePath() != null; }
+    public boolean hasModifications() {
+        return isWidthModified() || isHeightModified() || isAlphaModified()
+                || isPositionModified() || isTextModified() || isImageModified();
+    }
 
-    @Override
+    public int getViewId(Resources res) {
+        if (!TextUtils.isEmpty(getResourceName())) {
+            String[] start = getResourceName().split(":");
+            if (start.length < 2) return View.NO_ID;
+            String[] end = start[1].split("/");
+            if (end.length < 2) return View.NO_ID;
+            return res.getIdentifier(end[1], end[0], start[0]);
+        }
+        return View.NO_ID;
+    }
+
+    public RuleRecord withEffect(RuleEffect newEffect) {
+        return copyWith(matchSpec, newEffect, label, packageName, matchVersionName,
+                matchVersionCode, versionCode, imagePath, alias);
+    }
+
+    /** Replaces the immutable matching component without changing wire metadata. */
+    public RuleRecord withMatchSpec(MatchSpec newMatchSpec) {
+        return copyWith(Objects.requireNonNull(newMatchSpec, "matchSpec must not be null"), effect,
+                label, packageName, matchVersionName, matchVersionCode, versionCode, imagePath, alias);
+    }
+
+    /** Rebinds a cloned record to the caller-authoritative package scope. */
+    public RuleRecord withPackageName(String newPackageName) {
+        return copyWith(matchSpec, effect, label, newPackageName, matchVersionName,
+                matchVersionCode, versionCode, imagePath, alias);
+    }
+
+    public RuleRecord withAlias(String newAlias) {
+        return copyWith(matchSpec, effect, label, packageName, matchVersionName,
+                matchVersionCode, versionCode, imagePath, newAlias);
+    }
+
+    public RuleRecord withImagePath(String newImagePath) {
+        return copyWith(matchSpec, effect, label, packageName, matchVersionName,
+                matchVersionCode, versionCode, newImagePath, alias);
+    }
+
+    /** Returns a new record with the flat-wire replacement-image value updated. */
+    public RuleRecord withModifyImagePath(String newModImagePath) {
+        RuleEffect.WireValues wire = effect.toWireValues().toBuilder()
+                .modImagePath(newModImagePath)
+                .build();
+        return withEffect(RuleEffect.fromWireValues(wire));
+    }
+
+    private RuleRecord copyWith(MatchSpec spec, RuleEffect newEffect, String newLabel,
+                                String newPackage, String newVersionName, int newMatchVersionCode,
+                                int newVersionCode, String newImagePath, String newAlias) {
+        return new RuleRecord(newLabel, newPackage, newVersionName, newMatchVersionCode,
+                newVersionCode, newImagePath, newAlias, x, y, width, height, timestamp,
+                origWidth, origHeight, origAlpha, origText, spec, newEffect);
+    }
+
     public void writeToParcel(Parcel dest, int flags) {
-        dest.writeString(ruleTag);
+        RuleEffect.WireValues wire = effect.toWireValues();
+        dest.writeString(wire.getRuleTag());
         dest.writeString(label);
         dest.writeString(packageName);
         dest.writeString(matchVersionName);
@@ -271,218 +274,70 @@ public final class RuleRecord implements RuleFields, Parcelable, Cloneable {
         dest.writeInt(y);
         dest.writeInt(width);
         dest.writeInt(height);
-        dest.writeIntArray(depth);
-        dest.writeString(activityClass);
-        dest.writeString(viewClass);
-        dest.writeString(resourceName);
-        dest.writeString(text);
-        dest.writeString(description);
-        dest.writeString(matchMode != null ? matchMode.name() : null);
-        dest.writeInt(viewType);
-        dest.writeInt(visibility);
+        dest.writeIntArray(matchSpec.getDepth());
+        dest.writeString(matchSpec.getActivityClass());
+        dest.writeString(matchSpec.getViewClass());
+        dest.writeString(matchSpec.getResourceName());
+        dest.writeString(matchSpec.getText());
+        dest.writeString(matchSpec.getDescription());
+        dest.writeString(matchSpec.getMatchMode() != null ? matchSpec.getMatchMode().name() : null);
+        dest.writeInt(matchSpec.getInfoFlowViewType());
+        dest.writeInt(wire.getVisibility());
         dest.writeLong(timestamp);
-        dest.writeInt(modWidth);
-        dest.writeInt(modHeight);
-        dest.writeFloat(modAlpha);
-        dest.writeInt(modXOffset);
-        dest.writeInt(modYOffset);
-        dest.writeString(modText);
-        dest.writeString(modImagePath);
+        dest.writeInt(wire.getModWidth());
+        dest.writeInt(wire.getModHeight());
+        dest.writeFloat(wire.getModAlpha());
+        dest.writeInt(wire.getModXOffset());
+        dest.writeInt(wire.getModYOffset());
+        dest.writeString(wire.getModText());
+        dest.writeString(wire.getModImagePath());
         dest.writeInt(origWidth);
         dest.writeInt(origHeight);
         dest.writeFloat(origAlpha);
         dest.writeString(origText);
-        dest.writeInt(origLeftMargin);
-        dest.writeInt(origTopMargin);
-        dest.writeStringArray(itemPath);
-        dest.writeString(itemRootClass);
-        dest.writeString(parentClass);
-        dest.writeByte((byte) (repeatable ? 1 : 0));
-        dest.writeString(targetLevel != null ? targetLevel.name() : null);
+        dest.writeInt(wire.getOrigLeftMargin());
+        dest.writeInt(wire.getOrigTopMargin());
+        dest.writeStringArray(matchSpec.getItemPath());
+        dest.writeString(matchSpec.getItemRootClass());
+        dest.writeString(matchSpec.getParentClass());
+        dest.writeByte((byte) (matchSpec.isRepeatable() ? 1 : 0));
+        dest.writeString(matchSpec.getTargetLevel() != null ? matchSpec.getTargetLevel().name() : null);
     }
 
-    @Override
-    public int describeContents() {
-        return 0;
-    }
+    public int describeContents() { return 0; }
 
     public static final Creator<RuleRecord> CREATOR = new Creator<RuleRecord>() {
-        @Override
-        public RuleRecord createFromParcel(Parcel in) {
-            return new RuleRecord(in);
-        }
-
-        @Override
-        public RuleRecord[] newArray(int size) {
-            return new RuleRecord[size];
-        }
+        public RuleRecord createFromParcel(Parcel in) { return new RuleRecord(in); }
+        public RuleRecord[] newArray(int size) { return new RuleRecord[size]; }
     };
 
-    // =========================================================================
-    // Clone
-    // =========================================================================
-
     @NonNull
-    @Override
     public RuleRecord clone() {
-        RuleRecord v = new RuleRecord(label, packageName, matchVersionName, matchVersionCode, versionCode,
-                imagePath, alias, x, y, width, height, depth, activityClass, viewClass,
-                resourceName, text, description, visibility, timestamp);
-        v.ruleTag = ruleTag;
-        v.modWidth = modWidth;
-        v.modHeight = modHeight;
-        v.modAlpha = modAlpha;
-        v.modXOffset = modXOffset;
-        v.modYOffset = modYOffset;
-        v.modText = modText;
-        v.modImagePath = modImagePath;
-        v.origWidth = origWidth;
-        v.origHeight = origHeight;
-        v.origAlpha = origAlpha;
-        v.origText = origText;
-        v.origLeftMargin = origLeftMargin;
-        v.origTopMargin = origTopMargin;
-        v.itemPath = itemPath != null ? itemPath.clone() : null;
-        v.depth = depth != null ? depth.clone() : null;
-        v.itemRootClass = itemRootClass;
-        v.parentClass = parentClass;
-        v.repeatable = repeatable;
-        v.matchMode = matchMode;
-        v.viewType = viewType;
-        v.targetLevel = targetLevel;
-        return v;
+        return new RuleRecord(label, packageName, matchVersionName, matchVersionCode,
+                versionCode, imagePath, alias, x, y, width, height, timestamp, origWidth,
+                origHeight, origAlpha, origText, matchSpec.clone(), effect);
     }
 
-    // =========================================================================
-    // 业务方法
-    // =========================================================================
-
-    public int getViewId(Resources res) {
-        if (!TextUtils.isEmpty(resourceName)) {
-            String[] start = resourceName.split(":");
-            if (start.length < 2) return View.NO_ID;
-            String[] end = start[1].split("/");
-            if (end.length < 2) return View.NO_ID;
-            return res.getIdentifier(end[1], end[0], start[0]);
-        }
-        return View.NO_ID;
+    public boolean equals(Object object) {
+        if (this == object) return true;
+        if (!(object instanceof RuleRecord)) return false;
+        RuleRecord other = (RuleRecord) object;
+        return slotKey(packageName).equals(other.slotKey(other.packageName));
     }
 
-    public boolean isRemoveRule() {
-        return ruleTag == null || ruleTag.isEmpty();
+    public int hashCode() { return slotKey(packageName).hashCode(); }
+
+    public boolean contentEquals(@NonNull RuleRecord other) {
+        return Objects.equals(alias, other.alias)
+                && Objects.equals(matchSpec, other.matchSpec)
+                && Objects.equals(effect, other.effect)
+                && Objects.equals(imagePath, other.imagePath)
+                && x == other.x && y == other.y && width == other.width && height == other.height;
     }
-
-    public boolean isModifyRule() {
-        return ruleTag != null && !ruleTag.isEmpty();
-    }
-
-    public boolean isWidthModified() { return modWidth >= 0; }
-    public boolean isHeightModified() { return modHeight >= 0; }
-    public boolean isAlphaModified() { return modAlpha >= 0f; }
-    public boolean isPositionModified() { return modXOffset != 0 || modYOffset != 0; }
-    public boolean isTextModified() { return modText != null; }
-    public boolean isImageModified() { return modImagePath != null; }
-    public boolean hasModifications() {
-        return isWidthModified() || isHeightModified() || isAlphaModified()
-                || isPositionModified() || isTextModified() || isImageModified();
-    }
-
-    /**
-     * 从当前 RuleRecord 导出 ActionSpec（修改/移除字段子集）。
-     * <p>
-     * 编辑器层应优先使用 ActionSpec.Builder 直接构造动作字段，
-     * 此方法主要用于需要从已有 RuleRecord 读取动作字段的场景（如 PropertyEditorPanel 的取消操作）。
-     */
-    public com.kaisar.xposed.godmode.engine.rule.ActionSpec asActionSpec() {
-        return com.kaisar.xposed.godmode.engine.rule.ActionSpec.from(this);
-    }
-
-    // =========================================================================
-    // equals / hashCode（窄匹配语义 — 仅用于定位身份）
-    // =========================================================================
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        RuleRecord that = (RuleRecord) o;
-        if (!Objects.equals(activityClass, that.activityClass)) return false;
-        if (!Objects.equals(viewClass, that.viewClass)) return false;
-        if (repeatable && that.repeatable) {
-            return Arrays.equals(itemPath, that.itemPath);
-        }
-        return Arrays.equals(depth, that.depth);
-    }
-
-    @Override
-    public int hashCode() {
-        int result = Objects.hashCode(activityClass);
-        result = 31 * result + Objects.hashCode(viewClass);
-        if (repeatable && itemPath != null) {
-            result = 31 * result + Arrays.hashCode(itemPath);
-        } else {
-            result = 31 * result + Arrays.hashCode(depth);
-        }
-        return result;
-    }
-
-    /**
-     * 内容相等判断 — 用于 DiffUtil.areContentsTheSame。
-     * 覆盖所有 UI 展示字段（alias、visibility、mod 字段等），
-     * 避免 equals() 窄匹配语义导致列表不刷新。
-     */
-    public boolean contentEquals(@NonNull RuleRecord that) {
-        if (!Objects.equals(alias, that.alias)) return false;
-        if (visibility != that.visibility) return false;
-        if (isRemoveRule()) {
-            if (x != that.x || y != that.y) return false;
-            if (width != that.width || height != that.height) return false;
-        }
-        if (isModifyRule()) {
-            if (modWidth != that.modWidth) return false;
-            if (modHeight != that.modHeight) return false;
-            if (Float.compare(modAlpha, that.modAlpha) != 0) return false;
-            if (modXOffset != that.modXOffset || modYOffset != that.modYOffset) return false;
-            if (!Objects.equals(modText, that.modText)) return false;
-            if (!Objects.equals(modImagePath, that.modImagePath)) return false;
-        }
-        return true;
-    }
-
-    // =========================================================================
-    // toString
-    // =========================================================================
 
     @NonNull
-    @Override
     public String toString() {
-        final StringBuilder sb = new StringBuilder("RuleRecord{");
-        sb.append("ruleTag='").append(ruleTag).append('\'');
-        sb.append(", label='").append(label).append('\'');
-        sb.append(", packageName='").append(packageName).append('\'');
-        sb.append(", activityClass='").append(activityClass).append('\'');
-        sb.append(", viewClass='").append(viewClass).append('\'');
-        sb.append(", depth=").append(Arrays.toString(depth));
-        if (itemPath != null) sb.append(", itemPath=").append(Arrays.toString(itemPath));
-        if (itemRootClass != null) sb.append(", itemRootClass='").append(itemRootClass).append('\'');
-        if (parentClass != null) sb.append(", parentClass='").append(parentClass).append('\'');
-        if (repeatable) sb.append(", repeatable=true");
-        sb.append(", alias='").append(alias).append('\'');
-        if (isRemoveRule()) {
-            sb.append(", x=").append(x).append(", y=").append(y);
-            sb.append(", width=").append(width).append(", height=").append(height);
-        }
-        if (isModifyRule()) {
-            if (isWidthModified()) sb.append(", modWidth=").append(modWidth);
-            if (isHeightModified()) sb.append(", modHeight=").append(modHeight);
-            if (isAlphaModified()) sb.append(", modAlpha=").append(modAlpha);
-            if (isPositionModified()) sb.append(", pos=(").append(modXOffset).append(",").append(modYOffset).append(")");
-            if (isTextModified()) sb.append(", modText='").append(modText).append('\'');
-            if (isImageModified()) sb.append(", modImagePath='").append(modImagePath).append('\'');
-        }
-        sb.append(", visibility=").append(visibility);
-        sb.append(", timestamp=").append(timestamp);
-        sb.append('}');
-        return sb.toString();
+        return "RuleRecord{" + slotKey(packageName) + ", alias='" + alias + '\''
+                + ", imagePath='" + imagePath + '\'' + ", effect=" + effect.getKind() + '}';
     }
 }

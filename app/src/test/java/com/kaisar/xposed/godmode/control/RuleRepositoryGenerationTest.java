@@ -30,8 +30,9 @@ public final class RuleRepositoryGenerationTest {
         assertTrue(copy != input);
         assertTrue("com.example".equals(copy.packageName));
         assertTrue("other.package".equals(input.packageName));
-        copy.depth[0] = 9;
-        assertTrue(input.depth[0] == 1);
+        int[] returnedDepth = copy.getDepth();
+        returnedDepth[0] = 9;
+        assertTrue(input.getDepth()[0] == 1);
     }
 
     @Test
@@ -40,8 +41,8 @@ public final class RuleRepositoryGenerationTest {
                 "", "alias", 0, 0, 10, 10, new int[]{1}, "Activity",
                 "TextView", "id/title", "text", "", 0, 1L);
         RuleRecord same = pending.clone();
-        RuleRecord differentView = pending.clone();
-        differentView.depth = new int[]{2};
+        RuleRecord differentView = pending.withMatchSpec(pending.getMatchSpec().toBuilder()
+                .depth(new int[] {2}).build());
 
         assertTrue(RuleRepository.isPendingSnapshotFor("com.example", pending,
                 "com.example", same));

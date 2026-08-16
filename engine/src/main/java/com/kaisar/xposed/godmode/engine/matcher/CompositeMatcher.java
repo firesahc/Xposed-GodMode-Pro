@@ -341,8 +341,13 @@ public final class CompositeMatcher implements Matcher {
             return false;
         }
 
+        // Repeatable targets are located structurally. Their captured text is
+        // retained for wire/UI compatibility but must not prevent cross-card matching.
+        boolean structuralRepeatable = spec.isRepeatable() && spec.getItemPath() != null
+                && spec.getItemPath().length > 0;
+
         // ── text ──
-        if (hasContent(spec.getText())) {
+        if (!structuralRepeatable && hasContent(spec.getText())) {
             if (!(view instanceof TextView)) return false;
             CharSequence t = ((TextView) view).getText();
             if (t == null) return false;
@@ -352,7 +357,7 @@ public final class CompositeMatcher implements Matcher {
         }
 
         // ── description ──
-        if (hasContent(spec.getDescription())) {
+        if (!structuralRepeatable && hasContent(spec.getDescription())) {
             CharSequence d = view.getContentDescription();
             if (d == null) return false;
             if (!TextMatcher.matchText(d.toString(), spec.getDescription(), spec.getMatchMode())) {

@@ -88,20 +88,20 @@ public final class RuleBackupManager {
                         viewRuleCopy.imagePath = entryName != null ? entryName : "";
                     } catch (IOException e) {
                         viewRuleCopy.imagePath = "";
-                        Logger.w(TAG, "[Backup] backupRules: skip image for " + viewRule.viewClass + ", failed to copy", e);
+                        Logger.w(TAG, "[Backup] backupRules: skip image for " + viewRule.getViewClass() + ", failed to copy", e);
                     }
-                    if (viewRule.isModifyRule() && !TextUtils.isEmpty(viewRule.modImagePath)) {
-                        if (viewRule.modImagePath.equals(viewRule.imagePath)) {
-                            viewRuleCopy.modImagePath = viewRuleCopy.imagePath;
+                    if (viewRule.isModifyRule() && !TextUtils.isEmpty(viewRule.getModImagePath())) {
+                        if (viewRule.getModImagePath().equals(viewRule.imagePath)) {
+                            viewRuleCopy = viewRuleCopy.withModifyImagePath(viewRuleCopy.imagePath);
                         } else {
                             try {
                                 String entryName = copyImageToBackup(backupDir,
-                                        viewRule.modImagePath, "mod_", imageEntries,
+                                        viewRule.getModImagePath(), "mod_", imageEntries,
                                         backupFilePathList);
-                                viewRuleCopy.modImagePath = entryName != null ? entryName : "";
+                                viewRuleCopy = viewRuleCopy.withModifyImagePath(entryName != null ? entryName : "");
                             } catch (IOException e) {
-                                viewRuleCopy.modImagePath = "";
-                                Logger.w(TAG, "[Backup] backupRules: skip mod image for " + viewRule.viewClass + ", failed to copy", e);
+                                viewRuleCopy = viewRuleCopy.withModifyImagePath("");
+                                Logger.w(TAG, "[Backup] backupRules: skip mod image for " + viewRule.getViewClass() + ", failed to copy", e);
                             }
                         }
                     }
@@ -190,8 +190,8 @@ public final class RuleBackupManager {
                     }
 
                     // 有修改图时一并保存，组装完整规则
-                    if (viewRule.isModifyRule() && !TextUtils.isEmpty(viewRule.modImagePath)) {
-                        File modFile = resolveRestoredFile(restoreDir, viewRule.modImagePath);
+                    if (viewRule.isModifyRule() && !TextUtils.isEmpty(viewRule.getModImagePath())) {
+                        File modFile = resolveRestoredFile(restoreDir, viewRule.getModImagePath());
                         Bitmap modBitmap = null;
                         try {
                             modBitmap = modFile != null
@@ -207,11 +207,11 @@ public final class RuleBackupManager {
                             } catch (Exception e) {
                                 Logger.w(TAG, "[Backup] restoreRules: mod image save failed", e);
                             }
-                            viewRule.modImagePath = savedModPath != null ? savedModPath : "";
+                            viewRule = viewRule.withModifyImagePath(savedModPath != null ? savedModPath : "");
                             recycleNullableBitmap(modBitmap);
                         } else {
                             // A failed replacement image must not leave a dangling ZIP entry name.
-                            viewRule.modImagePath = "";
+                            viewRule = viewRule.withModifyImagePath("");
                         }
                     }
 
@@ -253,8 +253,7 @@ public final class RuleBackupManager {
     /** Creates the export-owned record without mutating the caller's rule. */
     static RuleRecord prepareBackupRecord(RuleRecord input) {
         RuleRecord copy = input.clone();
-        if (!input.isModifyRule()) copy.modImagePath = "";
-        return copy;
+        return input.isModifyRule() ? copy : copy.withModifyImagePath("");
     }
 
     private static String copyImageToBackup(

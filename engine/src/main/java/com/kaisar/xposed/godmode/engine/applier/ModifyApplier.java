@@ -8,7 +8,7 @@ import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.TextView;
 
-import com.kaisar.xposed.godmode.engine.rule.ActionSpec;
+import com.kaisar.xposed.godmode.engine.rule.ModifyEffect;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.engine.util.ThreadPools;
 
@@ -21,7 +21,7 @@ import java.util.WeakHashMap;
 import java.util.concurrent.Executor;
 
 /** Applies modify rules while retaining the host-owned state needed for revoke. */
-public final class ModifyApplier implements RuleApplier {
+public final class ModifyApplier implements RuleApplier<ModifyEffect> {
 
     private static final String TAG = "ModifyApplier";
 
@@ -60,7 +60,7 @@ public final class ModifyApplier implements RuleApplier {
     }
 
     @Override
-    public boolean apply(View view, ActionSpec spec) {
+    public boolean apply(View view, ModifyEffect spec) {
         if (view == null || spec == null || !view.isAttachedToWindow()) return false;
         ActionSnapshot action = ActionSnapshot.create(spec);
         AppliedState previous = mAppliedViews.get(view);
@@ -88,7 +88,7 @@ public final class ModifyApplier implements RuleApplier {
     }
 
     @Override
-    public boolean revoke(View view, ActionSpec spec) {
+    public boolean revoke(View view, ModifyEffect spec) {
         if (view == null || spec == null) return false;
         AppliedState state = mAppliedViews.get(view);
         if (state == null || !state.action.equals(ActionSnapshot.create(spec))) return false;
@@ -332,14 +332,14 @@ public final class ModifyApplier implements RuleApplier {
             this.modImagePath = modImagePath;
         }
 
-        static ActionSnapshot create(ActionSpec spec) {
+        static ActionSnapshot create(ModifyEffect spec) {
             boolean positionModified = spec.isPositionModified();
-            return new ActionSnapshot(spec.modWidth, spec.modHeight, spec.modAlpha,
+            return new ActionSnapshot(spec.getModWidth(), spec.getModHeight(), spec.getModAlpha(),
                     positionModified,
-                    positionModified ? spec.origLeftMargin + spec.modXOffset : 0,
-                    positionModified ? spec.origTopMargin + spec.modYOffset : 0,
-                    spec.modText,
-                    spec.modImagePath);
+                    positionModified ? spec.getOrigLeftMargin() + spec.getModXOffset() : 0,
+                    positionModified ? spec.getOrigTopMargin() + spec.getModYOffset() : 0,
+                    spec.getModText(),
+                    spec.getModImagePath());
         }
 
         @Override

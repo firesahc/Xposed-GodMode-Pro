@@ -11,11 +11,11 @@ import com.kaisar.xposed.godmode.engine.matcher.CompositeMatcher;
 import com.kaisar.xposed.godmode.engine.matcher.Matcher;
 import com.kaisar.xposed.godmode.engine.matcher.TargetLevel;
 import com.kaisar.xposed.godmode.engine.matcher.ViewTraversal;
-import com.kaisar.xposed.godmode.engine.rule.ActionSpec;
 import com.kaisar.xposed.godmode.engine.rule.MatchFields;
 import com.kaisar.xposed.godmode.engine.rule.MatchSpec;
-import com.kaisar.xposed.godmode.engine.rule.RuleMapper;
-import com.kaisar.xposed.godmode.engine.rule.RuleMatchSpec;
+import com.kaisar.xposed.godmode.engine.rule.ModifyEffect;
+import com.kaisar.xposed.godmode.engine.rule.RemoveEffect;
+import com.kaisar.xposed.godmode.engine.rule.RuleSlotKey;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.ipc.RuleServiceClient;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
@@ -29,7 +29,7 @@ import java.util.Map;
 /**
  * 将视图分发给 engine/applier 包中的规则执行器进行处理。
  * <p>
- * 根据 {@link RuleRecord#ruleTag} 决定执行策略：
+ * 根据 {@link RuleRecord#getEffect()} 的具体类型决定执行策略：
  * <ul>
  *   <li>ruleTag 为 null 时，使用 {@link RemoveApplier} 执行移除操作</li>
  *   <li>ruleTag 非 null 时，使用 {@link ModifyApplier} 执行修改操作</li>
@@ -50,10 +50,10 @@ public final class ViewController {
     /** 进程级单例，仅用于向后兼容 */
     private static volatile ViewController sInstance;
 
-    private RuleApplier mModifyApplier;
-    private RuleApplier mRemoveApplier;
+    private RuleApplier<ModifyEffect> mModifyApplier;
+    private RuleApplier<RemoveEffect> mRemoveApplier;
     private Matcher mMatcher;
-    private final Map<RuleRecord, List<WeakReference<View>>> mAppliedRuleTargets =
+    private final Map<RuleSlotKey, List<WeakReference<View>>> mAppliedRuleTargets =
             new HashMap<>();
 
     /** Activity 类名，Activity 级实例时非 null */
@@ -111,7 +111,7 @@ public final class ViewController {
     // Applier 懒加载
     // =========================================================================
 
-    private synchronized RuleApplier getModifyApplier() {
+    private synchronized RuleApplier<ModifyEffect> getModifyApplier() {
         if (mModifyApplier == null) {
             mModifyApplier = new ModifyApplier(
                     path -> RuleServiceClient.getDefault().openImageFileDescriptor(path),
@@ -120,7 +120,7 @@ public final class ViewController {
         return mModifyApplier;
     }
 
-    private synchronized RuleApplier getRemoveApplier() {
+    private synchronized RuleApplier<RemoveEffect> getRemoveApplier() {
         if (mRemoveApplier == null) {
             mRemoveApplier = mActivityClassName != null
                     ? new RemoveApplier(mActivityClassName)
@@ -153,11 +153,6 @@ public final class ViewController {
         if (mRemoveApplier != null) mRemoveApplier.clearCache();
         if (mModifyApplier != null) mModifyApplier.clearCache();
         mAppliedRuleTargets.clear();
-    }
-
-    /** 将 app 模块的 RuleRecord 转换为 engine 模块的 RuleMatchSpec */
-    private static RuleMatchSpec toEngineRule(RuleRecord appRule) {
-        return RuleMapper.toEngine(appRule);
     }
 
     /** 批量应用规则（同步匹配 + 主线程应用）。内部调用 {@link #applyRuleBatch(Activity, List, Runnable)}。 */
@@ -199,7 +194,7 @@ public final class ViewController {
         for (RuleRecord rule : rules) {
             if (rule.isRepeatable()) {
                 batchRules.add(rule);
-                batchSpecs.add(toEngineRule(rule).getMatchSpec());
+                batchSpecs.add(rule.getMatchSpec());
             }
         }
         if (!batchSpecs.isEmpty()) {
@@ -222,7 +217,7 @@ public final class ViewController {
             if (rule.isRepeatable()) continue;
             try {
                 View view = getMatcher().matchView(decorView,
-                        toEngineRule(rule).getMatchSpec());
+                        rule.getMatchSpec());
                 if (view != null) {
                     pending.add(new MatchTask(view, rule));
                 }
@@ -271,14 +266,11 @@ public final class ViewController {
     /** 应用单条规则 */
     public boolean applyRule(View v, RuleRecord viewRule) {
         if (v == null || viewRule == null) return false;
-        RuleMatchSpec engineRule = toEngineRule(viewRule);
-        ActionSpec spec = engineRule.getActionSpec();
-
         v = resolveCardTarget(v, viewRule);
 
         boolean applied = viewRule.isModifyRule()
-                ? getModifyApplier().apply(v, spec)
-                : getRemoveApplier().apply(v, spec);
+                ? getModifyApplier().apply(v, (ModifyEffect) viewRule.getEffect())
+                : getRemoveApplier().apply(v, (RemoveEffect) viewRule.getEffect());
         if (applied) rememberAppliedTarget(viewRule, v);
         return applied;
     }
@@ -290,10 +282,9 @@ public final class ViewController {
         if (decorView == null) return;
         for (RuleRecord rule : rules) {
             try {
-                RuleMatchSpec engineRule = toEngineRule(rule);
                 if (revokeRememberedTargets(rule)) continue;
                 if (rule.isRepeatable()) {
-                    List<View> views = getMatcher().matchAllViews(decorView, engineRule.getMatchSpec());
+                    List<View> views = getMatcher().matchAllViews(decorView, rule.getMatchSpec());
                     if (views != null) {
                         for (View v : views) {
                             if (v != null) revokeRule(v, rule);
@@ -301,7 +292,7 @@ public final class ViewController {
                     }
                     continue;
                 }
-                View view = getMatcher().matchView(decorView, engineRule.getMatchSpec());
+                View view = getMatcher().matchView(decorView, rule.getMatchSpec());
                 if (view == null) {
                     Logger.w(TAG, "[ViewController] revoke rule fail (act=" + activity
                             + "): not match any view");
@@ -315,7 +306,7 @@ public final class ViewController {
     }
 
     private synchronized void rememberAppliedTarget(RuleRecord rule, View view) {
-        RuleRecord key = rule.clone();
+        RuleSlotKey key = rule.slotKey(rule.packageName);
         List<WeakReference<View>> targets = mAppliedRuleTargets.computeIfAbsent(
                 key, unused -> new ArrayList<>());
         for (WeakReference<View> target : targets) {
@@ -325,7 +316,7 @@ public final class ViewController {
     }
 
     private synchronized boolean revokeRememberedTargets(RuleRecord rule) {
-        List<WeakReference<View>> targets = mAppliedRuleTargets.remove(rule);
+        List<WeakReference<View>> targets = mAppliedRuleTargets.remove(rule.slotKey(rule.packageName));
         if (targets == null) return false;
         for (WeakReference<View> target : targets) {
             View view = target.get();
@@ -337,15 +328,12 @@ public final class ViewController {
     /** 撤销单条规则 */
     public void revokeRule(View v, RuleRecord viewRule) {
         if (v == null || viewRule == null) return;
-        RuleMatchSpec engineRule = toEngineRule(viewRule);
-        ActionSpec spec = engineRule.getActionSpec();
-
         v = resolveCardTarget(v, viewRule);
 
         if (viewRule.isModifyRule()) {
-            getModifyApplier().revoke(v, spec);
+            getModifyApplier().revoke(v, (ModifyEffect) viewRule.getEffect());
         } else {
-            if (!getRemoveApplier().revoke(v, spec)) {
+            if (!getRemoveApplier().revoke(v, (RemoveEffect) viewRule.getEffect())) {
                 Logger.w(TAG, "[ViewController] revokeRule: RemoveApplier.revoke() returned false"
                         + " for view=" + v + " rule=" + viewRule);
             }
@@ -354,10 +342,11 @@ public final class ViewController {
     }
 
     private synchronized void forgetAppliedTarget(RuleRecord rule, View view) {
-        List<WeakReference<View>> targets = mAppliedRuleTargets.get(rule);
+        RuleSlotKey key = rule.slotKey(rule.packageName);
+        List<WeakReference<View>> targets = mAppliedRuleTargets.get(key);
         if (targets == null) return;
         targets.removeIf(target -> target.get() == null || target.get() == view);
-        if (targets.isEmpty()) mAppliedRuleTargets.remove(rule);
+        if (targets.isEmpty()) mAppliedRuleTargets.remove(key);
     }
 
     /**
