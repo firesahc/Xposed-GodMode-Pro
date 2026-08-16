@@ -87,6 +87,30 @@ public final class ModifyApplierInstrumentedTest {
     }
 
     @Test
+    public void removeReapplyRepairsAlphaAndClickableDrift() throws Exception {
+        withActivity(activity -> {
+                TextView view = attachText(activity, "host");
+                view.setAlpha(0.65f);
+                view.setClickable(true);
+                RemoveApplier applier = new RemoveApplier();
+                ActionSpec action = new ActionSpec.Builder()
+                        .visibility(View.INVISIBLE)
+                        .build();
+
+                assertTrue(applier.apply(view, action));
+                view.setAlpha(0.8f);
+                view.setClickable(true);
+                assertTrue(applier.apply(view, action));
+                assertEquals(0f, view.getAlpha(), 0f);
+                assertFalse(view.isClickable());
+
+                assertTrue(applier.revoke(view, action));
+                assertEquals(0.65f, view.getAlpha(), 0f);
+                assertTrue(view.isClickable());
+        });
+    }
+
+    @Test
     public void safeDecoderRejectsMalformedImage() throws Exception {
         withActivity(activity -> {
                 File file = new File(activity.getCacheDir(), "malformed-image.bin");

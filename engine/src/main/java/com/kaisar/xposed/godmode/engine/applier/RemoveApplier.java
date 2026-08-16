@@ -34,7 +34,10 @@ public final class RemoveApplier implements RuleApplier {
     public boolean apply(View view, ActionSpec spec) {
         if (view == null || spec == null) return false;
         ViewProperty cached = mBlockedViewCache.get(view);
-        if (cached != null && view.getVisibility() == spec.visibility) {
+        if (cached != null
+                && view.getVisibility() == spec.visibility
+                && Float.compare(view.getAlpha(), 0f) == 0
+                && !view.isClickable()) {
             return false; // 已应用相同规则，跳过
         }
         ViewProperty vp = cached != null ? cached : ViewProperty.create(view);
