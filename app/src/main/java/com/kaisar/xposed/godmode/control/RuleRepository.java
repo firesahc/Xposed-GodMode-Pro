@@ -27,6 +27,7 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -71,6 +72,8 @@ public final class RuleRepository {
     private final HandlerThread mWorkThread;
     private final Handler mHandle;
     private volatile boolean mDataLoaded;
+    private final Object mSnapshotMutationLock = new Object();
+    private final List<WriteMessage> mPendingSnapshots = new ArrayList<>();
 
     // ===== 构造 =====
 
@@ -106,6 +109,20 @@ public final class RuleRepository {
 
     // ===== 写操作 =====
 
+    static RuleRecord copyForPackage(String packageName, RuleRecord input) {
+        if (packageName == null || input == null) return null;
+        RuleRecord copy = input.clone();
+        copy.packageName = packageName;
+        return copy;
+    }
+
+    static boolean isPendingSnapshotFor(String packageName, RuleRecord pending,
+            String targetPackage, RuleRecord target) {
+        return packageName != null && packageName.equals(targetPackage)
+                && pending != null && target != null
+                && pending.isSameViewAs(target);
+    }
+
     /**
      * 异步写入规则（带快照或纯 JSON）。
      * <p>
@@ -118,14 +135,20 @@ public final class RuleRepository {
     public boolean writeRule(String packageName, RuleRecord viewRule, Bitmap snapshot) {
         if (!PackageNameValidator.isValid(packageName) || viewRule == null) return false;
         try {
+            RuleRecord ownedRule = copyForPackage(packageName, viewRule);
             Object writeMsg;
             if (snapshot != null) {
                 // Capture the request generation before deferred bitmap I/O. A delete
                 // arriving while the worker is busy must be able to invalidate this write.
-                writeMsg = new WriteMessage(packageName, viewRule, snapshot, null, null, null,
-                        mCache.nextGeneration());
+                WriteMessage pending;
+                synchronized (mSnapshotMutationLock) {
+                    pending = new WriteMessage(packageName, ownedRule, snapshot,
+                            null, null, null, mCache.nextGeneration());
+                    mPendingSnapshots.add(pending);
+                }
+                writeMsg = pending;
             } else {
-                RuleCache.CacheResult cr = mCache.apply(packageName, viewRule, true);
+                RuleCache.CacheResult cr = mCache.apply(packageName, ownedRule, true);
                 if (cr.oldImagePath != null) {
                     try {
                         FileUtils.delete(cr.oldImagePath);
@@ -133,7 +156,7 @@ public final class RuleRepository {
                         mLogger.w("write rule (json path): delete old image failed", e);
                     }
                 }
-                writeMsg = new WriteMessage(packageName, viewRule, null, cr.json, cr.snapshotRules,
+                writeMsg = new WriteMessage(packageName, ownedRule, null, cr.json, cr.snapshotRules,
                         null, cr.generation);
             }
             mHandle.obtainMessage(MSG_WRITE_RULE, writeMsg).sendToTarget();
@@ -150,7 +173,8 @@ public final class RuleRepository {
     public boolean updateRule(String packageName, RuleRecord viewRule) {
         if (!PackageNameValidator.isValid(packageName) || viewRule == null) return false;
         try {
-            RuleCache.CacheResult cr = mCache.apply(packageName, viewRule, false);
+            RuleRecord ownedRule = copyForPackage(packageName, viewRule);
+            RuleCache.CacheResult cr = mCache.apply(packageName, ownedRule, false);
             mHandle.obtainMessage(MSG_WRITE_RULE,
                     new WriteMessage(packageName, null, null, cr.json, cr.snapshotRules,
                             null, cr.generation))
@@ -168,8 +192,13 @@ public final class RuleRepository {
     public boolean deleteRule(String packageName, RuleRecord viewRule) {
         if (!PackageNameValidator.isValid(packageName) || viewRule == null) return false;
         try {
-            RuleCache.DeleteResult dr = mCache.delete(packageName, viewRule);
-            if (dr == null) return false;
+            RuleCache.DeleteResult dr;
+            boolean cancelledPending;
+            synchronized (mSnapshotMutationLock) {
+                cancelledPending = cancelPendingSnapshotsLocked(packageName, viewRule);
+                dr = mCache.delete(packageName, viewRule);
+            }
+            if (dr == null) return cancelledPending;
             mHandle.obtainMessage(MSG_DELETE_RULE,
                     new DeleteMessage(packageName, dr.json, dr.snapshotRules, dr.imagePath,
                             dr.generation))
@@ -187,11 +216,16 @@ public final class RuleRepository {
     public boolean deleteRules(String packageName) {
         if (!PackageNameValidator.isValid(packageName)) return false;
         mLogger.d("delete rules pkg=" + packageName + " size=" + mCache.size());
-        boolean removed = mCache.deleteAll(packageName);
+        boolean removed;
         // Even when the cache is empty, a deferred snapshot write may still be in flight.
         // Tombstone it so the worker cannot resurrect the package after this request.
-        long generation = mCache.nextGeneration();
-        mStore.markDeleted(packageName, generation);
+        long generation;
+        synchronized (mSnapshotMutationLock) {
+            cancelAllPendingSnapshotsLocked(packageName);
+            removed = mCache.deleteAll(packageName);
+            generation = mCache.nextGeneration();
+            mStore.markDeleted(packageName, generation);
+        }
         if (removed) {
             mHandle.obtainMessage(MSG_DELETE_RULES,
                     new DeleteAllMessage(packageName, generation)).sendToTarget();
@@ -298,38 +332,40 @@ public final class RuleRepository {
     private void handleWrite(WriteMessage m) {
         if (m.snapshot != null) {
             // ── 快照分支：先 I/O 保存新图，成功后再更新缓存 + 持久化 ──
-            if (!mStore.isGenerationCurrent(m.packageName, m.generation)) {
-                mLogger.d("drop stale snapshot write for deleted package " + m.packageName);
-                return;
-            }
-            String oldImagePath = mCache.getOldImagePath(m.packageName, m.viewRule);
-
-            String newImagePath;
             try {
-                newImagePath = mStore.saveBitmap(m.snapshot,
+                if (m.cancelled || !mStore.isGenerationCurrent(m.packageName, m.generation)) {
+                    mLogger.d("drop stale snapshot write for deleted package " + m.packageName);
+                    return;
+                }
+                String oldImagePath = mCache.getOldImagePath(m.packageName, m.viewRule);
+                String newImagePath = mStore.saveBitmap(m.snapshot,
                         mStore.getAppDataDir(m.packageName));
-            } catch (IOException e) {
-                mLogger.w("write rule: save bitmap failed — cache untouched", e);
-                return;
-            }
-            if (newImagePath == null) {
-                mLogger.w("write rule aborted: save snapshot returned null", (String) null);
-                return;
-            }
+                if (newImagePath == null) {
+                    mLogger.w("write rule aborted: save snapshot returned null", (String) null);
+                    return;
+                }
+                if (m.cancelled || !mStore.isGenerationCurrent(m.packageName, m.generation)) {
+                    FileUtils.delete(newImagePath);
+                    mLogger.d("drop snapshot write invalidated during image save for "
+                            + m.packageName);
+                    return;
+                }
 
-            if (!mStore.isGenerationCurrent(m.packageName, m.generation)) {
-                FileUtils.delete(newImagePath);
-                mLogger.d("drop snapshot write invalidated during image save for "
-                        + m.packageName);
-                return;
-            }
-
-            try {
                 m.viewRule.imagePath = newImagePath;
-                RuleCache.CacheResult cr = mCache.apply(m.packageName, m.viewRule, false);
+                RuleCache.CacheResult cr;
+                synchronized (mSnapshotMutationLock) {
+                    if (m.cancelled || !mStore.isGenerationCurrent(m.packageName, m.generation)) {
+                        FileUtils.delete(newImagePath);
+                        return;
+                    }
+                    cr = mCache.apply(m.packageName, m.viewRule, false);
+                }
+                if (m.cancelled) {
+                    // A delete that won after the cache apply owns the final removal.
+                    FileUtils.delete(newImagePath);
+                    return;
+                }
                 if (!mStore.isGenerationCurrent(m.packageName, m.generation)) {
-                    // The delete won the package scope while the snapshot was being saved.
-                    // Remove the provisional cache entry and the newly-created image.
                     mCache.delete(m.packageName, m.viewRule);
                     FileUtils.delete(newImagePath);
                     mLogger.d("drop snapshot write after package tombstone for "
@@ -347,6 +383,8 @@ public final class RuleRepository {
                 scheduleOrphanCleanup();
             } catch (Exception e) {
                 mLogger.w("write rule: persist after snapshot failed", e);
+            } finally {
+                unregisterPendingSnapshot(m);
             }
         } else {
             // ── JSON 分支：缓存已更新，只持久化 + 发布 ──
@@ -357,6 +395,30 @@ public final class RuleRepository {
             } catch (Exception e) {
                 mLogger.w("write rule: persist failed", e);
             }
+        }
+    }
+
+    private boolean cancelPendingSnapshotsLocked(String packageName, RuleRecord target) {
+        boolean cancelled = false;
+        for (WriteMessage pending : mPendingSnapshots) {
+            if (isPendingSnapshotFor(pending.packageName, pending.viewRule,
+                    packageName, target)) {
+                pending.cancelled = true;
+                cancelled = true;
+            }
+        }
+        return cancelled;
+    }
+
+    private void cancelAllPendingSnapshotsLocked(String packageName) {
+        for (WriteMessage pending : mPendingSnapshots) {
+            if (packageName.equals(pending.packageName)) pending.cancelled = true;
+        }
+    }
+
+    private void unregisterPendingSnapshot(WriteMessage message) {
+        synchronized (mSnapshotMutationLock) {
+            mPendingSnapshots.remove(message);
         }
     }
 
@@ -522,7 +584,8 @@ public final class RuleRepository {
                 List<RuleRecord> viewRules = actRules.get(viewRule.activityClass);
                 if (viewRules == null) return null;
                 int idx = findRuleIndex(viewRules, viewRule);
-                boolean removed = idx >= 0 ? viewRules.remove(idx) != null : false;
+                RuleRecord removedRule = idx >= 0 ? viewRules.remove(idx) : null;
+                boolean removed = removedRule != null;
                 if (!removed) return null;
                 if (viewRules.isEmpty()) {
                     actRules.remove(viewRule.activityClass);
@@ -532,7 +595,7 @@ public final class RuleRepository {
                 if (actRules.isEmpty()) {
                     mData.remove(packageName);
                 }
-                return new DeleteResult(json, snapshotRules, viewRule.imagePath, nextGeneration());
+                return new DeleteResult(json, snapshotRules, removedRule.imagePath, nextGeneration());
             } finally {
                 mWriteLock.unlock();
             }
@@ -914,6 +977,7 @@ public final class RuleRepository {
         final ActRules snapshotRules;
         final String imagePath;
         final long generation;
+        volatile boolean cancelled;
 
         WriteMessage(String packageName, RuleRecord viewRule, Bitmap snapshot,
                      String json, ActRules snapshotRules, String imagePath, long generation) {
