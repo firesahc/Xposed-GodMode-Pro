@@ -267,6 +267,40 @@ public final class ModifyApplierInstrumentedTest {
         });
     }
 
+    @Test
+    public void bindingEpochDiscardDoesNotRestoreAdapterValue() throws Exception {
+        withActivity(activity -> {
+                TextView view = attachText(activity, "host");
+                ModifyApplier applier = directApplier();
+                ModifyEffect action = modifyAction();
+
+                assertTrue(applier.apply(view, action, 41L));
+                view.setText("adapter-row");
+                assertTrue(applier.discardForView(view, 41L));
+
+                // A rebind discards the old owner after the adapter has written
+                // its row values; it must not restore the previous baseline.
+                assertEquals("adapter-row", view.getText().toString());
+        });
+    }
+
+    @Test
+    public void staleRecycleEpochCannotRestoreNewBinding() throws Exception {
+        withActivity(activity -> {
+                TextView view = attachText(activity, "row-a");
+                RemoveApplier applier = new RemoveApplier();
+                RemoveEffect action = RemoveEffect.of(View.GONE);
+
+                assertTrue(applier.apply(view, action, 7L));
+                view.setVisibility(View.VISIBLE);
+                assertTrue(applier.apply(view, action, 8L));
+
+                assertFalse(applier.revokeForView(view, 7L));
+                assertTrue(applier.revokeForView(view, 8L));
+                assertEquals(View.VISIBLE, view.getVisibility());
+        });
+    }
+
     private static void withActivity(ActivityAssertion assertion) throws Exception {
         ModifyApplierTestActivity activity = awaitActivity(10_000L);
         assertNotNull("Test host Activity was not started", activity);
