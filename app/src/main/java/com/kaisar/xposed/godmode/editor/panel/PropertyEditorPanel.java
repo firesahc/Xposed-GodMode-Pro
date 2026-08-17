@@ -126,14 +126,17 @@ public class PropertyEditorPanel {
     private WeakReference<Activity> mEditingActivity = new WeakReference<>(null);
     private long mImageRequestGeneration = -1L;
     private final IRuleEditor mRuleEditor;
+    private final SnapshotProvider mSnapshotProvider;
 
-    public PropertyEditorPanel(IRuleEditor ruleEditor) {
-        this(ruleEditor, null);
+    public interface SnapshotProvider {
+        Bitmap capture(View targetView);
     }
 
-    public PropertyEditorPanel(IRuleEditor ruleEditor, SessionListener sessionListener) {
+    public PropertyEditorPanel(IRuleEditor ruleEditor, SessionListener sessionListener,
+            SnapshotProvider snapshotProvider) {
         this.mRuleEditor = ruleEditor;
         this.mSessionListener = sessionListener;
+        this.mSnapshotProvider = Objects.requireNonNull(snapshotProvider, "snapshotProvider");
     }
 
     /**
@@ -490,29 +493,36 @@ public class PropertyEditorPanel {
         final long generation = mGeneration;
         final String pkg = activity.getPackageName();
         final Bitmap pendingImage = mPendingImageBitmap;
+
+        Bitmap capturedSnapshot = null;
+        try {
+            capturedSnapshot = mSnapshotProvider.capture(mTargetView);
+            if (capturedSnapshot == null) {
+                finishSaveFailure(activity, "snapshot failed");
+                return;
+            }
+            BitmapUtils.drawRectMask(capturedSnapshot, draftRule.x, draftRule.y,
+                    draftRule.width, draftRule.height);
+        } catch (Exception e) {
+            Logger.w(TAG, "[ModifyPanel] snapshot failed", e);
+            CommonUtils.recycleNullableBitmap(capturedSnapshot);
+            finishSaveFailure(activity, "snapshot failed");
+            return;
+        }
+        final Bitmap snapshot = capturedSnapshot;
         mInFlightImageBitmap = pendingImage;
         mSaving = true;
         setPanelControlsEnabled(false);
         notifySession();
-
-        Bitmap snapshot = null;
-        try {
-            snapshot = BitmapUtils.snapshotView(ViewUtils.findTopParentViewByChildView(mTargetView));
-            BitmapUtils.drawRectMask(snapshot, draftRule.x, draftRule.y, draftRule.width, draftRule.height);
-        } catch (Exception e) { Logger.w(TAG, "[ModifyPanel] snapshot failed", e); }
         final Bitmap finalSnapshot = snapshot;
         android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
         TaskExecutor.executeIo(() -> {
-            boolean imageReady = true;
             RuleRecord persistedRule = draftRule;
             try {
-                if (pendingImage != null && !pendingImage.isRecycled()) {
-                    String path = mRuleEditor.saveImageFile(pkg, pendingImage);
-                    if (path == null) imageReady = false;
-                    else persistedRule = draftRule.withModifyImagePath(path);
-                }
-            } catch (Exception e) { imageReady = false; Logger.e(TAG, "[ModifyPanel] image save failed", e); }
-            final boolean finalImageReady = imageReady;
+                // The modification image is sent with the rule mutation. The service
+                // publishes neither asset nor rule until both have been persisted.
+            } catch (Exception e) { Logger.e(TAG, "[ModifyPanel] image preparation failed", e); }
+            final boolean finalImageReady = true;
             final RuleRecord finalRule = persistedRule;
             mainHandler.post(() -> {
                 if (generation != mGeneration || mTargetView == null || !verifyViewIdentity(mTargetView)) {
@@ -539,7 +549,8 @@ public class PropertyEditorPanel {
                 }
                 TaskExecutor.executeIo(() -> {
                     boolean accepted;
-                    try { accepted = mRuleEditor.writeRule(pkg, finalRule, finalSnapshot); }
+                    try { accepted = mRuleEditor.writeRule(pkg, finalRule, finalSnapshot,
+                            pendingImage); }
                     catch (Exception e) { accepted = false; Logger.e(TAG, "[ModifyPanel] writeRule failed", e); }
                     final boolean finalAccepted = accepted;
                     mainHandler.post(() -> {
@@ -559,7 +570,9 @@ public class PropertyEditorPanel {
                             controller.revokeRule(target, finalRule);
                             applyDraftToView(target, finalRule);
                             mInFlightImageBitmap = null;
-                            finishSaveFailure(activity, "request rejected");
+                            String reason = mRuleEditor.getFailureMessage();
+                            finishSaveFailure(activity, reason == null
+                                    ? "规则服务拒绝了保存请求" : reason);
                         }
                     });
                 });

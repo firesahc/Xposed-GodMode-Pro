@@ -7,6 +7,7 @@ import com.kaisar.xposed.godmode.engine.util.GmConstants;
 import android.app.Activity;
 import android.graphics.Bitmap;
 import android.graphics.Rect;
+import android.os.Looper;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -24,6 +25,7 @@ import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.editor.action.BlockHandler;
 import com.kaisar.xposed.godmode.editor.action.PreviewHandler;
 import com.kaisar.xposed.godmode.editor.overlay.MaskView;
+import com.kaisar.xposed.godmode.editor.overlay.ParticleView;
 import com.kaisar.xposed.godmode.editor.panel.NodeSelectorPanel;
 import com.kaisar.xposed.godmode.editor.panel.PropertyEditorPanel;
 import com.kaisar.xposed.godmode.editor.panel.SeekBarHandler;
@@ -33,6 +35,8 @@ import com.kaisar.xposed.godmode.util.GmResources;
 import com.kaisar.xposed.godmode.util.ViewUtils;
 
 import java.lang.ref.WeakReference;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -145,7 +149,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
                     } else {
                         mask.updateOverlayBounds(ViewUtils.getLocationInWindow(target));
                     }
-                });
+                }, this::captureWithoutEditorOverlays);
         this.mTouchEventHandler = new TouchEventHandler(this);
         this.mSeekBarHandler = new SeekBarHandler(mNodePanel, mPropertyEditor);
     }
@@ -301,10 +305,10 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
             if (maskView != null) maskView.updateOverlayBounds(new Rect());
 
             final int blockedViewIndex = mNodePanel.getCurrentIndex();
-            hideGmOverlays(View.INVISIBLE);
-            final Bitmap snapshot = BitmapUtils.snapshotView(
-                    ViewUtils.findTopParentViewByChildView(view));
-            hideGmOverlays(View.VISIBLE);
+            final Bitmap snapshot = captureWithoutEditorOverlays(view);
+            if (snapshot == null) {
+                throw new IllegalStateException("snapshot failed");
+            }
 
             BlockHandler.execute(activity, view, container, snapshot, blockedViewIndex,
                     new BlockHandler.OnBlockListener() {
@@ -327,7 +331,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
         }
     }
 
-    /** 隐藏 GodMode 所有覆盖层（截图前隐藏面板，截完后恢复）*/
+    /** Updates known editor overlays for the key-handler visibility callback. */
     private void hideGmOverlays(int visibility) {
         View panelView = mNodePanel.getPanelView();
         if (panelView != null) panelView.setVisibility(visibility);
@@ -335,6 +339,74 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
         if (modifyPanel != null) modifyPanel.setVisibility(visibility);
         MaskView maskView = mNodePanel.getMaskView();
         if (maskView != null) maskView.setVisibility(visibility);
+    }
+
+    /** Captures the host window without editor-owned overlays. Must run on the main thread. */
+    Bitmap captureWithoutEditorOverlays(View targetView) {
+        return captureWithoutEditorOverlays(targetView, Arrays.asList(
+                mNodePanel.getPanelView(),
+                mPropertyEditor.getPanelView(),
+                mNodePanel.getMaskView()));
+    }
+
+    static Bitmap captureWithoutEditorOverlays(View targetView, List<View> ownedOverlays) {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            throw new IllegalStateException("Editor snapshot must run on the main thread");
+        }
+        View root = ViewUtils.findTopParentViewByChildView(targetView);
+        if (root == null) return null;
+
+        List<View> overlays = new ArrayList<>();
+        if (ownedOverlays != null) {
+            for (View overlay : ownedOverlays) {
+                if (overlay != null && overlay.getParent() == root && !overlays.contains(overlay)) {
+                    overlays.add(overlay);
+                }
+            }
+        }
+        if (root instanceof ViewGroup) {
+            ViewGroup rootGroup = (ViewGroup) root;
+            for (int i = 0; i < rootGroup.getChildCount(); i++) {
+                View child = rootGroup.getChildAt(i);
+                if (TAG_GM_CMP.equals(child.getTag())
+                        && !(child instanceof ParticleView)
+                        && !overlays.contains(child)) {
+                    overlays.add(child);
+                }
+            }
+        }
+
+        return captureWithHiddenOverlays(overlays, () -> BitmapUtils.snapshotView(root));
+    }
+
+    interface BitmapCapture {
+        Bitmap capture();
+    }
+
+    static Bitmap captureWithHiddenOverlays(List<View> overlays, BitmapCapture capture) {
+        List<OverlayVisibility> states = new ArrayList<>();
+        try {
+            for (View overlay : overlays) {
+                states.add(new OverlayVisibility(overlay, overlay.getVisibility()));
+                overlay.setVisibility(View.INVISIBLE);
+            }
+            return capture.capture();
+        } finally {
+            for (int i = states.size() - 1; i >= 0; i--) {
+                OverlayVisibility state = states.get(i);
+                state.view.setVisibility(state.visibility);
+            }
+        }
+    }
+
+    private static final class OverlayVisibility {
+        final View view;
+        final int visibility;
+
+        OverlayVisibility(View view, int visibility) {
+            this.view = view;
+            this.visibility = visibility;
+        }
     }
 
     // =========================================================================

@@ -7,7 +7,10 @@ import android.app.Activity;
 import android.graphics.Bitmap;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Toast;
 
+import com.kaisar.xposed.godmode.R;
+import com.kaisar.xposed.godmode.util.GmResources;
 import com.kaisar.xposed.godmode.engine.util.GmConstants;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.orchestrator.ViewController;
@@ -84,10 +87,19 @@ public final class ParticleEffectHelper {
                 }
                 // 异步 IO 线程执行 IPC 写入
                 TaskExecutor.executeIo(() -> {
+                    boolean accepted = false;
                     try {
-                        ruleEditor.writeRule(packageName, ruleToWrite, snapshot);
+                        accepted = ruleEditor.writeRule(packageName, ruleToWrite, snapshot);
                     } catch (Exception e) {
                         Logger.e(TAG, "writeRule fail: " + packageName, e);
+                    }
+                    if (!accepted) {
+                        String reason = ruleEditor.getFailureMessage();
+                        String message = GmResources.getString(
+                                R.string.toast_save_failed_rules_format,
+                                reason == null ? "规则服务拒绝了保存请求" : reason);
+                        activity.runOnUiThread(() -> Toast.makeText(activity, message,
+                                Toast.LENGTH_SHORT).show());
                     }
                     recycleNullableBitmap(snapshot);
                 });
