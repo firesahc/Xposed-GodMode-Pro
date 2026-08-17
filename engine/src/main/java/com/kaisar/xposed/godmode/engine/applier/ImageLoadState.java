@@ -10,16 +10,23 @@ final class ImageLoadState {
 
     private boolean pending;
     private long generation;
+    private long bindingEpoch;
 
     synchronized long begin() {
+        return begin(0L);
+    }
+
+    synchronized long begin(long expectedBindingEpoch) {
         if (pending) return -1L;
         pending = true;
+        bindingEpoch = expectedBindingEpoch;
         return ++generation;
     }
 
     synchronized void cancel() {
         generation++;
         pending = false;
+        bindingEpoch = 0L;
     }
 
     synchronized boolean isPending() {
@@ -30,44 +37,65 @@ final class ImageLoadState {
         return pending && generation == expectedGeneration;
     }
 
+    synchronized boolean isCurrent(long expectedGeneration, long expectedBindingEpoch) {
+        return pending && generation == expectedGeneration
+                && bindingEpoch == expectedBindingEpoch;
+    }
+
     synchronized void finish(long expectedGeneration) {
         if (generation == expectedGeneration) pending = false;
     }
 
-    <T> boolean submit(Executor executor, Callable<T> loader,
+    synchronized void finish(long expectedGeneration, long expectedBindingEpoch) {
+        if (generation == expectedGeneration && bindingEpoch == expectedBindingEpoch) {
+            pending = false;
+            bindingEpoch = 0L;
+        }
+    }
+
+    <T> boolean submit(long expectedBindingEpoch, Executor executor, Callable<T> loader,
             Function<Runnable, Boolean> dispatcher, Consumer<T> resultHandler,
             Consumer<Throwable> failureHandler) {
-        long requestGeneration = begin();
+        long requestGeneration = begin(expectedBindingEpoch);
         if (requestGeneration < 0L) return false;
         try {
-            executor.execute(() -> run(requestGeneration, loader, dispatcher,
+            executor.execute(() -> run(requestGeneration, expectedBindingEpoch, loader, dispatcher,
                     resultHandler, failureHandler));
             return true;
         } catch (Throwable failure) {
-            finish(requestGeneration);
+            finish(requestGeneration, expectedBindingEpoch);
             reportFailure(failureHandler, failure);
             return false;
         }
     }
 
-    private <T> void run(long requestGeneration, Callable<T> loader,
+    <T> boolean submit(Executor executor, Callable<T> loader,
+            Function<Runnable, Boolean> dispatcher, Consumer<T> resultHandler,
+            Consumer<Throwable> failureHandler) {
+        return submit(0L, executor, loader, dispatcher, resultHandler, failureHandler);
+    }
+
+    private <T> void run(long requestGeneration, long expectedBindingEpoch,
+            Callable<T> loader,
             Function<Runnable, Boolean> dispatcher, Consumer<T> resultHandler,
             Consumer<Throwable> failureHandler) {
         try {
             T result = loader.call();
-            if (!isCurrent(requestGeneration)) return;
+            if (!isCurrent(requestGeneration, expectedBindingEpoch)) return;
             boolean posted = Boolean.TRUE.equals(dispatcher.apply(() -> {
                 try {
-                    if (isCurrent(requestGeneration)) resultHandler.accept(result);
+                    if (isCurrent(requestGeneration, expectedBindingEpoch)) {
+                        resultHandler.accept(result);
+                    }
                 } catch (Throwable failure) {
                     reportFailure(failureHandler, failure);
                 } finally {
-                    finish(requestGeneration);
+                    finish(requestGeneration, expectedBindingEpoch);
                 }
             }));
-            if (!posted) finish(requestGeneration);
+            if (!posted) finish(requestGeneration, expectedBindingEpoch);
         } catch (Throwable failure) {
-            finish(requestGeneration);
+            finish(requestGeneration, expectedBindingEpoch);
             reportFailure(failureHandler, failure);
         }
     }

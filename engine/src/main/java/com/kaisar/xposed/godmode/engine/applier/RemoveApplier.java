@@ -32,15 +32,26 @@ public final class RemoveApplier implements RuleApplier<RemoveEffect> {
 
     @Override
     public boolean apply(View view, RemoveEffect spec) {
+        return apply(view, spec, 0L);
+    }
+
+    /**
+     * Applies a remove effect owned by a Recycler binding epoch.
+     * A positive epoch is deliberately kept in the cache so a stale recycle
+     * callback cannot revoke a newer binding's state.
+     */
+    public boolean apply(View view, RemoveEffect spec, long bindingEpoch) {
         if (view == null || spec == null) return false;
         ViewProperty cached = mBlockedViewCache.get(view);
-        if (cached != null
+        if (cached != null && (bindingEpoch <= 0L || cached.bindingEpoch == bindingEpoch)
                 && view.getVisibility() == spec.getVisibility()
                 && Float.compare(view.getAlpha(), 0f) == 0
                 && !view.isClickable()) {
             return false; // 已应用相同规则，跳过
         }
-        ViewProperty vp = cached != null ? cached : ViewProperty.create(view);
+        ViewProperty vp = cached != null && (bindingEpoch <= 0L
+                || cached.bindingEpoch == bindingEpoch)
+                ? cached : ViewProperty.create(view, bindingEpoch);
         view.setAlpha(0f);
         view.setClickable(false);
         ViewCompat.setVisibility(view, spec.getVisibility());
@@ -74,6 +85,25 @@ public final class RemoveApplier implements RuleApplier<RemoveEffect> {
         ViewProperty vp = mBlockedViewCache.remove(view);
         if (vp == null) return false;
         restoreOwnedProperties(view, vp);
+        return true;
+    }
+
+    /** Restores only the state belonging to the supplied binding epoch. */
+    public boolean revokeForView(View view, long bindingEpoch) {
+        if (view == null || bindingEpoch <= 0L) return false;
+        ViewProperty vp = mBlockedViewCache.get(view);
+        if (vp == null || vp.bindingEpoch != bindingEpoch) return false;
+        mBlockedViewCache.remove(view);
+        restoreOwnedProperties(view, vp);
+        return true;
+    }
+
+    /** Drops ownership without restoring physical properties before a rebind. */
+    public boolean discardForView(View view, long bindingEpoch) {
+        if (view == null || bindingEpoch <= 0L) return false;
+        ViewProperty vp = mBlockedViewCache.get(view);
+        if (vp == null || vp.bindingEpoch != bindingEpoch) return false;
+        mBlockedViewCache.remove(view);
         return true;
     }
 
@@ -111,25 +141,28 @@ public final class RemoveApplier implements RuleApplier<RemoveEffect> {
         final float alpha;
         final boolean clickable;
         final int visibility;
+        final long bindingEpoch;
         Float appliedAlpha;
         Boolean appliedClickable;
         Integer appliedVisibility;
 
-        ViewProperty(float alpha, boolean clickable, int visibility,
+        ViewProperty(float alpha, boolean clickable, int visibility, long bindingEpoch,
                 Float appliedAlpha, Boolean appliedClickable, Integer appliedVisibility) {
             this.alpha = alpha;
             this.clickable = clickable;
             this.visibility = visibility;
+            this.bindingEpoch = bindingEpoch;
             this.appliedAlpha = appliedAlpha;
             this.appliedClickable = appliedClickable;
             this.appliedVisibility = appliedVisibility;
         }
 
-        static ViewProperty create(View view) {
+        static ViewProperty create(View view, long bindingEpoch) {
             float alpha = view.getAlpha();
             boolean clickable = view.isClickable();
             int visibility = view.getVisibility();
-            return new ViewProperty(alpha, clickable, visibility, null, null, null);
+            return new ViewProperty(alpha, clickable, visibility, bindingEpoch,
+                    null, null, null);
         }
     }
 }

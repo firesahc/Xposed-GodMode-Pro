@@ -61,24 +61,33 @@ public final class ModifyApplier implements RuleApplier<ModifyEffect> {
 
     @Override
     public boolean apply(View view, ModifyEffect spec) {
+        return apply(view, spec, 0L);
+    }
+
+    /** Applies a modify effect owned by a Recycler binding epoch. */
+    public boolean apply(View view, ModifyEffect spec, long bindingEpoch) {
         if (view == null || spec == null || !view.isAttachedToWindow()) return false;
         ActionSnapshot action = ActionSnapshot.create(spec);
         AppliedState previous = mAppliedViews.get(view);
-        if (previous != null && previous.action.equals(action)
+        boolean sameEpoch = previous == null || bindingEpoch <= 0L
+                || previous.bindingEpoch == bindingEpoch;
+        if (sameEpoch && previous != null && previous.action.equals(action)
                 && previous.isEffectPresent(view)) {
             return false;
         }
 
         AppliedState state;
-        if (previous != null && previous.action.equals(action)) {
+        if (sameEpoch && previous != null && previous.action.equals(action)) {
             previous.imageLoad.cancel();
             state = previous;
         } else {
             if (previous != null) {
                 previous.imageLoad.cancel();
-                previous.restoreOwnedProperties(view);
+                // A binding epoch change happens after the host adapter has
+                // written the new row values. Do not restore the old baseline.
+                if (bindingEpoch <= 0L) previous.restoreOwnedProperties(view);
             }
-            state = AppliedState.capture(view, action);
+            state = AppliedState.capture(view, action, bindingEpoch);
         }
 
         applySynchronousProperties(view, state);
@@ -104,6 +113,27 @@ public final class ModifyApplier implements RuleApplier<ModifyEffect> {
         if (state == null) return false;
         state.imageLoad.cancel();
         state.restoreOwnedProperties(view);
+        return true;
+    }
+
+    /** Restores only the state owned by the supplied binding epoch. */
+    public boolean revokeForView(View view, long bindingEpoch) {
+        if (view == null || bindingEpoch <= 0L) return false;
+        AppliedState state = mAppliedViews.get(view);
+        if (state == null || state.bindingEpoch != bindingEpoch) return false;
+        mAppliedViews.remove(view);
+        state.imageLoad.cancel();
+        state.restoreOwnedProperties(view);
+        return true;
+    }
+
+    /** Drops a binding's ownership without restoring old values before rebind. */
+    public boolean discardForView(View view, long bindingEpoch) {
+        if (view == null || bindingEpoch <= 0L) return false;
+        AppliedState state = mAppliedViews.get(view);
+        if (state == null || state.bindingEpoch != bindingEpoch) return false;
+        mAppliedViews.remove(view);
+        state.imageLoad.cancel();
         return true;
     }
 
@@ -164,13 +194,16 @@ public final class ModifyApplier implements RuleApplier<ModifyEffect> {
             return;
         }
 
-        state.imageLoad.submit(mImageExecutor, () -> loadModImage(imagePath),
+        final long requestBindingEpoch = state.bindingEpoch;
+        state.imageLoad.submit(requestBindingEpoch, mImageExecutor,
+                () -> loadModImage(imagePath),
                 action -> mMainThreadDispatcher.post(target, action),
                 bitmap -> {
                     if (bitmap == null) return;
                     BITMAP_CACHE.put(imagePath, new SoftReference<>(bitmap));
                     AppliedState current = mAppliedViews.get(target);
-                    if (current == state && target.isAttachedToWindow()) {
+                    if (current == state && current.bindingEpoch == requestBindingEpoch
+                            && target.isAttachedToWindow()) {
                         target.setImageBitmap(bitmap);
                         state.appliedDrawable = target.getDrawable();
                     }
@@ -191,6 +224,7 @@ public final class ModifyApplier implements RuleApplier<ModifyEffect> {
 
     private static final class AppliedState {
         final ActionSnapshot action;
+        final long bindingEpoch;
         final int baselineWidth;
         final int baselineHeight;
         final int baselineLeftMargin;
@@ -208,10 +242,12 @@ public final class ModifyApplier implements RuleApplier<ModifyEffect> {
         CharSequence appliedText;
         Drawable appliedDrawable;
 
-        AppliedState(ActionSnapshot action, int baselineWidth, int baselineHeight,
+        AppliedState(ActionSnapshot action, long bindingEpoch,
+                int baselineWidth, int baselineHeight,
                 int baselineLeftMargin, int baselineTopMargin, float baselineAlpha,
                 CharSequence baselineText, Drawable baselineDrawable) {
             this.action = action;
+            this.bindingEpoch = bindingEpoch;
             this.baselineWidth = baselineWidth;
             this.baselineHeight = baselineHeight;
             this.baselineLeftMargin = baselineLeftMargin;
@@ -221,7 +257,7 @@ public final class ModifyApplier implements RuleApplier<ModifyEffect> {
             this.baselineDrawable = baselineDrawable;
         }
 
-        static AppliedState capture(View view, ActionSnapshot action) {
+        static AppliedState capture(View view, ActionSnapshot action, long bindingEpoch) {
             ViewGroup.LayoutParams params = view.getLayoutParams();
             int width = params != null ? params.width : 0;
             int height = params != null ? params.height : 0;
@@ -235,7 +271,7 @@ public final class ModifyApplier implements RuleApplier<ModifyEffect> {
                     ? ((TextView) view).getText() : null;
             Drawable drawable = view instanceof ImageView
                     ? ((ImageView) view).getDrawable() : null;
-            return new AppliedState(action, width, height, left, top,
+            return new AppliedState(action, bindingEpoch, width, height, left, top,
                     view.getAlpha(), text, drawable);
         }
 
