@@ -1,7 +1,5 @@
 package com.kaisar.xposed.godmode.control;
 
-import static com.kaisar.xposed.godmode.engine.util.FileUtils.S_IRWXG;
-import static com.kaisar.xposed.godmode.engine.util.FileUtils.S_IRWXO;
 import static com.kaisar.xposed.godmode.engine.util.FileUtils.S_IRWXU;
 import static com.kaisar.xposed.godmode.engine.util.GmConstants.DATA_DIR;
 
@@ -26,11 +24,13 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
@@ -44,20 +44,18 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  *   <li>{@link RuleStore} — JSON 文件持久化 + 图片保存 + 孤儿清理</li>
  * </ul>
  * <p>
- * 写操作异步执行（HandlerThread），读操作同步返回。
+ * 写操作在统一互斥区内同步完成：候选快照先持久化，成功后才提交缓存并发布。
  * <p>
  * 规则发布走 Binder 即时推送（{@link ObserverRegistry#notifyObserverRuleChanged}），
  * 不再依赖文件快照链路。
  */
 public final class RuleRepository {
+    private static final int PRIVATE_DIR_MODE = S_IRWXU;
+    private static final int PRIVATE_FILE_MODE = 00600;
 
     private static final String TAG = "RuleRepository";
 
     // ===== 消息码 =====
-    private static final int MSG_WRITE_RULE = 0x0001;
-    private static final int MSG_DELETE_RULE = 0x0002;
-    private static final int MSG_DELETE_RULES = 0x0003;
-    private static final int MSG_DEBOUNCE_WRITE = 0x0004;
     private static final int MSG_CLEAN_ORPHANS = 0x0005;
 
     private static final long ORPHAN_CLEAN_INTERVAL = 120_000L;
@@ -73,7 +71,6 @@ public final class RuleRepository {
     private final Handler mHandle;
     private volatile boolean mDataLoaded;
     private final Object mSnapshotMutationLock = new Object();
-    private final List<WriteMessage> mPendingSnapshots = new ArrayList<>();
 
     // ===== 构造 =====
 
@@ -102,12 +99,91 @@ public final class RuleRepository {
         return mCache.getRules(packageName);
     }
 
+    /** Latest generation whose snapshot has been committed to the in-memory authority. */
+    public long getGeneration() {
+        synchronized (mSnapshotMutationLock) {
+            return mCache.currentGeneration();
+        }
+    }
+
+    public RepositorySnapshot<AppRules> getAllRulesSnapshot() {
+        synchronized (mSnapshotMutationLock) {
+            return new RepositorySnapshot<>(mCache.getAllRules(), mCache.currentGeneration());
+        }
+    }
+
+    public RepositorySnapshot<ActRules> getRulesSnapshot(String packageName) {
+        synchronized (mSnapshotMutationLock) {
+            return new RepositorySnapshot<>(mCache.getRules(packageName),
+                    mCache.currentGeneration());
+        }
+    }
+
+    public static final class RepositorySnapshot<T> {
+        public final T value;
+        public final long generation;
+
+        RepositorySnapshot(T value, long generation) {
+            this.value = value;
+            this.generation = generation;
+        }
+    }
+
     /** 查询某规则在缓存中的旧 imagePath */
     public String getOldImagePath(String packageName, RuleRecord viewRule) {
         return mCache.getOldImagePath(packageName, viewRule);
     }
 
     // ===== 写操作 =====
+
+    /**
+     * 结果状态 for synchronous mutations.  A mutation is visible to readers and observers only
+     * after its serialized candidate has been committed successfully.
+     */
+    public enum MutationStatus {
+        COMMITTED,
+        NO_CHANGE,
+        WRITE_FAILED,
+        REJECTED
+    }
+
+    /** Structured result used by the Binder service while the legacy boolean methods remain. */
+    public static final class MutationResult {
+        public final MutationStatus status;
+        public final String packageName;
+        public final long generation;
+        public final ActRules rules;
+        public final String error;
+
+        private MutationResult(MutationStatus status, String packageName, long generation,
+                               ActRules rules, String error) {
+            this.status = status;
+            this.packageName = packageName;
+            this.generation = generation;
+            this.rules = rules;
+            this.error = error;
+        }
+
+        static MutationResult committed(String packageName, long generation, ActRules rules) {
+            return new MutationResult(MutationStatus.COMMITTED, packageName, generation, rules, null);
+        }
+
+        static MutationResult noChange(String packageName, long generation, ActRules rules) {
+            return new MutationResult(MutationStatus.NO_CHANGE, packageName, generation, rules, null);
+        }
+
+        static MutationResult failed(String packageName, String error) {
+            return new MutationResult(MutationStatus.WRITE_FAILED, packageName, 0L, null, error);
+        }
+
+        static MutationResult rejected(String packageName, String error) {
+            return new MutationResult(MutationStatus.REJECTED, packageName, 0L, null, error);
+        }
+
+        public boolean isCommitted() {
+            return status == MutationStatus.COMMITTED;
+        }
+    }
 
     static RuleRecord copyForPackage(String packageName, RuleRecord input) {
         if (packageName == null || input == null) return null;
@@ -122,114 +198,116 @@ public final class RuleRepository {
     }
 
     /**
-     * 异步写入规则（带快照或纯 JSON）。
-     * <p>
-     * 两路分支：
-     * <ul>
-     *   <li><b>带快照</b>：handler 中先执行 I/O（saveBitmap），成功后再更新缓存 + 持久化 + 双通道发布。</li>
-     *   <li><b>纯 JSON</b>：同步更新缓存后 handler 只做持久化 + 双通道发布。</li>
-     * </ul>
+     * Persist-first write entry point.  The optional bitmaps become rule-owned image paths.
+     * The append flag is retained for callers; the existing slot matcher decides whether this
+     * operation inserts or replaces a record, preserving the historical rule semantics.
      */
-    public boolean writeRule(String packageName, RuleRecord viewRule, Bitmap snapshot) {
-        if (!PackageNameValidator.isValid(packageName) || viewRule == null) return false;
-        try {
-            RuleRecord ownedRule = copyForPackage(packageName, viewRule);
-            Object writeMsg;
-            if (snapshot != null) {
-                // Capture the request generation before deferred bitmap I/O. A delete
-                // arriving while the worker is busy must be able to invalidate this write.
-                WriteMessage pending;
-                synchronized (mSnapshotMutationLock) {
-                    pending = new WriteMessage(packageName, ownedRule, snapshot,
-                            null, null, null, mCache.nextGeneration());
-                    mPendingSnapshots.add(pending);
-                }
-                writeMsg = pending;
-            } else {
-                RuleCache.CacheResult cr = mCache.apply(packageName, ownedRule, true);
-                if (cr.oldImagePath != null) {
-                    try {
-                        FileUtils.delete(cr.oldImagePath);
-                    } catch (Exception e) {
-                        mLogger.w("write rule (json path): delete old image failed", e);
-                    }
-                }
-                writeMsg = new WriteMessage(packageName, ownedRule, null, cr.json, cr.snapshotRules,
-                        null, cr.generation);
-            }
-            mHandle.obtainMessage(MSG_WRITE_RULE, writeMsg).sendToTarget();
-            return true;
-        } catch (Exception e) {
-            mLogger.w("write rule failed", e);
-            return false;
+    public MutationResult mutateWrite(String packageName, RuleRecord viewRule,
+                                      Bitmap snapshot, Bitmap modifiedSnapshot,
+                                      boolean append) {
+        if (!PackageNameValidator.isValid(packageName) || viewRule == null) {
+            return MutationResult.rejected(packageName, "invalid package or rule");
         }
-    }
-
-    /**
-     * 异步更新规则 — 先应用缓存，再发送 Handler 消息持久化 + 发布。
-     */
-    public boolean updateRule(String packageName, RuleRecord viewRule) {
-        if (!PackageNameValidator.isValid(packageName) || viewRule == null) return false;
-        try {
-            RuleRecord ownedRule = copyForPackage(packageName, viewRule);
-            RuleCache.CacheResult cr = mCache.apply(packageName, ownedRule, false);
-            mHandle.obtainMessage(MSG_WRITE_RULE,
-                    new WriteMessage(packageName, null, null, cr.json, cr.snapshotRules,
-                            null, cr.generation))
-                    .sendToTarget();
-            return true;
-        } catch (Exception e) {
-            mLogger.w("update rule failed", e);
-            return false;
-        }
-    }
-
-    /**
-     * 异步删除规则。
-     */
-    public boolean deleteRule(String packageName, RuleRecord viewRule) {
-        if (!PackageNameValidator.isValid(packageName) || viewRule == null) return false;
-        try {
-            RuleCache.DeleteResult dr;
-            boolean cancelledPending;
-            synchronized (mSnapshotMutationLock) {
-                cancelledPending = cancelPendingSnapshotsLocked(packageName, viewRule);
-                dr = mCache.delete(packageName, viewRule);
-            }
-            if (dr == null) return cancelledPending;
-            mHandle.obtainMessage(MSG_DELETE_RULE,
-                    new DeleteMessage(packageName, dr.json, dr.snapshotRules, dr.imagePath,
-                            dr.generation))
-                    .sendToTarget();
-            return true;
-        } catch (Exception e) {
-            mLogger.w("delete rule failed", e);
-            return false;
-        }
-    }
-
-    /**
-     * 异步删除某应用所有规则。
-     */
-    public boolean deleteRules(String packageName) {
-        if (!PackageNameValidator.isValid(packageName)) return false;
-        mLogger.d("delete rules pkg=" + packageName + " size=" + mCache.size());
-        boolean removed;
-        // Even when the cache is empty, a deferred snapshot write may still be in flight.
-        // Tombstone it so the worker cannot resurrect the package after this request.
-        long generation;
         synchronized (mSnapshotMutationLock) {
-            cancelAllPendingSnapshotsLocked(packageName);
-            removed = mCache.deleteAll(packageName);
-            generation = mCache.nextGeneration();
-            mStore.markDeleted(packageName, generation);
+            List<String> newImages = new ArrayList<>();
+            File packageDir = new File(DATA_DIR, packageName);
+            boolean packageDirExisted = packageDir.exists();
+            try {
+                RuleRecord ownedRule = copyForPackage(packageName, viewRule);
+                String dir = mStore.getAppDataDir(packageName);
+                if (snapshot != null) {
+                    String path = mStore.saveBitmap(snapshot, dir);
+                    if (path == null) {
+                        cleanupNewImages(newImages, packageDir, packageDirExisted);
+                        return MutationResult.failed(packageName, "main image write failed");
+                    }
+                    newImages.add(path);
+                    ownedRule = ownedRule.withImagePath(path);
+                }
+                if (modifiedSnapshot != null) {
+                    String path = mStore.saveBitmap(modifiedSnapshot, dir);
+                    if (path == null) {
+                        cleanupNewImages(newImages, packageDir, packageDirExisted);
+                        return MutationResult.failed(packageName, "modified image write failed");
+                    }
+                    newImages.add(path);
+                    ownedRule = ownedRule.withModifyImagePath(path);
+                }
+
+                RuleCache.CacheResult candidate = mCache.prepareApply(
+                        packageName, ownedRule, append);
+                if (!mStore.persistNow(packageName, candidate.json, candidate.generation)) {
+                    cleanupNewImages(newImages, packageDir, packageDirExisted);
+                    return MutationResult.failed(packageName, "rule file write failed");
+                }
+                mCache.commitApply(packageName, candidate);
+                mObserverRegistry.notifyObserverRuleChanged(packageName, candidate.generation);
+                deleteReplacedImages(candidate.oldImagePaths, candidate.snapshotRules);
+                scheduleOrphanCleanup();
+                return MutationResult.committed(packageName, candidate.generation,
+                        candidate.snapshotRules);
+            } catch (Exception e) {
+                cleanupNewImages(newImages, packageDir, packageDirExisted);
+                mLogger.w("persist-first write failed", e);
+                return MutationResult.failed(packageName, e.getMessage());
+            }
         }
-        if (removed) {
-            mHandle.obtainMessage(MSG_DELETE_RULES,
-                    new DeleteAllMessage(packageName, generation)).sendToTarget();
-            return true;
+    }
+
+    /** Persist-first deletion of one rule. */
+    public MutationResult mutateDelete(String packageName, RuleRecord viewRule) {
+        if (!PackageNameValidator.isValid(packageName) || viewRule == null) {
+            return MutationResult.rejected(packageName, "invalid package or rule");
         }
-        return false;
+        synchronized (mSnapshotMutationLock) {
+            try {
+                RuleCache.DeleteResult candidate = mCache.prepareDelete(packageName, viewRule);
+                if (candidate == null) {
+                    return MutationResult.noChange(packageName, mCache.currentGeneration(),
+                            mCache.getRules(packageName));
+                }
+                if (!mStore.persistNow(packageName, candidate.json, candidate.generation)) {
+                    return MutationResult.failed(packageName, "rule file write failed");
+                }
+                mCache.commitDelete(packageName, candidate);
+                mObserverRegistry.notifyObserverRuleChanged(packageName, candidate.generation);
+                deleteFiles(candidate.removedImagePaths);
+                scheduleOrphanCleanup();
+                return MutationResult.committed(packageName, candidate.generation,
+                        candidate.snapshotRules);
+            } catch (Exception e) {
+                mLogger.w("persist-first delete failed", e);
+                return MutationResult.failed(packageName, e.getMessage());
+            }
+        }
+    }
+
+    /** Persist-first deletion of a package.  An empty JSON snapshot is the durable tombstone. */
+    public MutationResult mutateDeleteAll(String packageName) {
+        if (!PackageNameValidator.isValid(packageName)) {
+            return MutationResult.rejected(packageName, "invalid package");
+        }
+        synchronized (mSnapshotMutationLock) {
+            try {
+                RuleCache.DeleteAllResult candidate = mCache.prepareDeleteAll(packageName);
+                if (candidate == null) {
+                    return MutationResult.noChange(packageName, mCache.currentGeneration(),
+                            new ActRules());
+                }
+                if (!mStore.persistNow(packageName, "{}", candidate.generation)) {
+                    return MutationResult.failed(packageName, "rule file write failed");
+                }
+                mStore.markDeleted(packageName, candidate.generation);
+                mCache.commitDeleteAll(packageName, candidate);
+                mObserverRegistry.notifyObserverRuleChanged(packageName, candidate.generation);
+                deleteFiles(candidate.removedImagePaths);
+                scheduleOrphanCleanup();
+                return MutationResult.committed(packageName, candidate.generation, new ActRules());
+            } catch (Exception e) {
+                mLogger.w("persist-first delete all failed", e);
+                return MutationResult.failed(packageName, e.getMessage());
+            }
+        }
     }
 
     // ===== 生命周期 =====
@@ -270,7 +348,6 @@ public final class RuleRepository {
 
     /** 关闭，释放资源。 */
     public void shutdown() {
-        mStore.flushPendingWrites();
         mHandle.removeCallbacksAndMessages(null);
         mWorkThread.quitSafely();
     }
@@ -298,8 +375,12 @@ public final class RuleRepository {
         return mStore.loadToolbarPrefs();
     }
 
-    public void persistToolbarHiddenItems(String items) {
-        mStore.persistToolbarPrefs(items);
+    public boolean hasToolbarHiddenItems() {
+        return mStore.hasToolbarPrefs();
+    }
+
+    public boolean persistToolbarHiddenItems(String items) {
+        return mStore.persistToolbarPrefs(items);
     }
 
     // ===================================================================
@@ -307,139 +388,46 @@ public final class RuleRepository {
     // ===================================================================
 
     private boolean handleMessage(Message msg) {
-        switch (msg.what) {
-            case MSG_WRITE_RULE:
-                handleWrite((WriteMessage) msg.obj);
-                return true;
-            case MSG_DELETE_RULE:
-                handleDelete((DeleteMessage) msg.obj);
-                return true;
-            case MSG_DELETE_RULES:
-                handleDeleteAll((DeleteAllMessage) msg.obj);
-                return true;
-            case MSG_DEBOUNCE_WRITE:
-                mStore.handleDebouncedWrite((String) msg.obj);
-                return true;
-            case MSG_CLEAN_ORPHANS:
-                mStore.cleanAllOrphanImages();
-                return true;
+        if (msg.what == MSG_CLEAN_ORPHANS) {
+            mStore.cleanAllOrphanImages();
+            return true;
         }
         return false;
     }
 
-    private void handleWrite(WriteMessage m) {
-        if (m.snapshot != null) {
-            // ── 快照分支：先 I/O 保存新图，成功后再更新缓存 + 持久化 ──
-            try {
-                if (m.cancelled || !mStore.isGenerationCurrent(m.packageName, m.generation)) {
-                    mLogger.d("drop stale snapshot write for deleted package " + m.packageName);
-                    return;
-                }
-                String oldImagePath = mCache.getOldImagePath(m.packageName, m.viewRule);
-                String newImagePath = mStore.saveBitmap(m.snapshot,
-                        mStore.getAppDataDir(m.packageName));
-                if (newImagePath == null) {
-                    mLogger.w("write rule aborted: save snapshot returned null", (String) null);
-                    return;
-                }
-                if (m.cancelled || !mStore.isGenerationCurrent(m.packageName, m.generation)) {
-                    FileUtils.delete(newImagePath);
-                    mLogger.d("drop snapshot write invalidated during image save for "
-                            + m.packageName);
-                    return;
-                }
+    private static void deleteFiles(List<String> paths) {
+        if (paths == null) return;
+        for (String path : paths) {
+            if (path != null && !path.isEmpty()) FileUtils.delete(path);
+        }
+    }
 
-                m.viewRule.imagePath = newImagePath;
-                RuleCache.CacheResult cr;
-                synchronized (mSnapshotMutationLock) {
-                    if (m.cancelled || !mStore.isGenerationCurrent(m.packageName, m.generation)) {
-                        FileUtils.delete(newImagePath);
-                        return;
-                    }
-                    cr = mCache.apply(m.packageName, m.viewRule, false);
+    private static void cleanupNewImages(List<String> paths, File packageDir,
+                                         boolean packageDirExisted) {
+        deleteFiles(paths);
+        if (!packageDirExisted && packageDir.exists()) {
+            File[] children = packageDir.listFiles();
+            if (children == null || children.length == 0) FileUtils.delete(packageDir);
+        }
+    }
+
+    private static void deleteReplacedImages(List<String> oldPaths, ActRules candidateRules) {
+        if (oldPaths == null || oldPaths.isEmpty()) return;
+        java.util.Set<String> retained = new java.util.HashSet<>();
+        if (candidateRules != null) {
+            for (List<RuleRecord> rules : candidateRules.values()) {
+                if (rules == null) continue;
+                for (RuleRecord rule : rules) {
+                    if (rule == null) continue;
+                    if (rule.imagePath != null) retained.add(rule.imagePath);
+                    if (rule.getModImagePath() != null) retained.add(rule.getModImagePath());
                 }
-                if (m.cancelled) {
-                    // A delete that won after the cache apply owns the final removal.
-                    FileUtils.delete(newImagePath);
-                    return;
-                }
-                if (!mStore.isGenerationCurrent(m.packageName, m.generation)) {
-                    mCache.delete(m.packageName, m.viewRule);
-                    FileUtils.delete(newImagePath);
-                    mLogger.d("drop snapshot write after package tombstone for "
-                            + m.packageName);
-                    return;
-                }
-                // Binder 即时推送
-                mObserverRegistry.notifyObserverRuleChanged(m.packageName, cr.snapshotRules);
-                // 持久化
-                mStore.persistAsync(m.packageName, cr.json, cr.generation);
-                // 清理旧图
-                if (oldImagePath != null && !oldImagePath.isEmpty()) {
-                    FileUtils.delete(oldImagePath);
-                }
-                scheduleOrphanCleanup();
-            } catch (Exception e) {
-                mLogger.w("write rule: persist after snapshot failed", e);
-            } finally {
-                unregisterPendingSnapshot(m);
-            }
-        } else {
-            // ── JSON 分支：缓存已更新，只持久化 + 发布 ──
-            try {
-                mObserverRegistry.notifyObserverRuleChanged(m.packageName, m.snapshotRules);
-                mStore.persistAsync(m.packageName, m.json, m.generation);
-                scheduleOrphanCleanup();
-            } catch (Exception e) {
-                mLogger.w("write rule: persist failed", e);
             }
         }
-    }
-
-    private boolean cancelPendingSnapshotsLocked(String packageName, RuleRecord target) {
-        boolean cancelled = false;
-        for (WriteMessage pending : mPendingSnapshots) {
-            if (isPendingSnapshotFor(pending.packageName, pending.viewRule,
-                    packageName, target)) {
-                pending.cancelled = true;
-                cancelled = true;
+        for (String path : oldPaths) {
+            if (path != null && !path.isEmpty() && !retained.contains(path)) {
+                FileUtils.delete(path);
             }
-        }
-        return cancelled;
-    }
-
-    private void cancelAllPendingSnapshotsLocked(String packageName) {
-        for (WriteMessage pending : mPendingSnapshots) {
-            if (packageName.equals(pending.packageName)) pending.cancelled = true;
-        }
-    }
-
-    private void unregisterPendingSnapshot(WriteMessage message) {
-        synchronized (mSnapshotMutationLock) {
-            mPendingSnapshots.remove(message);
-        }
-    }
-
-    private void handleDelete(DeleteMessage m) {
-        try {
-            mObserverRegistry.notifyObserverRuleChanged(m.packageName, m.snapshotRules);
-            mStore.persistAsync(m.packageName, m.json, m.generation);
-            if (m.imagePath != null && !m.imagePath.isEmpty()) {
-                FileUtils.delete(m.imagePath);
-            }
-            scheduleOrphanCleanup();
-        } catch (Exception e) {
-            mLogger.w("delete rule failed", e);
-        }
-    }
-
-    private void handleDeleteAll(DeleteAllMessage message) {
-        String packageName = message.packageName;
-        try {
-            mStore.deletePackage(packageName, message.generation);
-            mObserverRegistry.notifyObserverRuleChanged(packageName, new ActRules());
-        } catch (Exception e) {
-            mLogger.w("delete all rules failed for " + packageName, e);
         }
     }
 
@@ -478,14 +466,13 @@ public final class RuleRepository {
             this.mLogger = logger;
         }
 
-        synchronized long nextGeneration() {
+        synchronized long proposedGeneration() {
             long now = System.currentTimeMillis();
-            if (now > mGeneration) {
-                mGeneration = now;
-            } else {
-                mGeneration++;
-            }
-            return mGeneration;
+            return now > mGeneration ? now : mGeneration + 1L;
+        }
+
+        synchronized void commitGeneration(long generation) {
+            if (generation > mGeneration) mGeneration = generation;
         }
 
         AppRules getAllRules() {
@@ -543,73 +530,70 @@ public final class RuleRepository {
             }
         }
 
-        CacheResult apply(String packageName, RuleRecord viewRule, boolean captureOldImagePath) {
-            mWriteLock.lock();
+        DeleteResult prepareDelete(String packageName, RuleRecord viewRule) {
+            mReadLock.lock();
             try {
-                ActRules actRules = mData.get(packageName);
-                if (actRules == null) {
-                    mData.put(packageName, actRules = new ActRules());
-                }
-                List<RuleRecord> viewRules = actRules.computeIfAbsent(
-                        viewRule.getActivityClass(), k -> new java.util.ArrayList<>());
-                int index = findRuleIndex(viewRules, viewRule);
-                String oldImagePath = null;
-                if (index >= 0) {
-                    if (captureOldImagePath) {
-                        oldImagePath = viewRules.get(index).imagePath;
-                    }
-                    RuleRecord existing = viewRules.get(index);
-                    if (viewRule.alias == null && existing.alias != null) {
-                        viewRule.alias = existing.alias;
-                    }
-                    viewRules.set(index, viewRule);
-                } else {
-                    viewRules.add(viewRule);
-                }
-                String json = mGson.toJson(actRules);
-                ActRules snapshotRules = snapshotActRules(actRules);
-                return new CacheResult(oldImagePath, json, snapshotRules, nextGeneration());
-            } finally {
-                mWriteLock.unlock();
-            }
-        }
-
-        DeleteResult delete(String packageName, RuleRecord viewRule) {
-            mWriteLock.lock();
-            try {
-                ActRules actRules = mData.get(packageName);
-                if (actRules == null) return null;
-                List<RuleRecord> viewRules = actRules.get(viewRule.getActivityClass());
+                ActRules candidate = snapshotActRules(mData.get(packageName));
+                if (candidate.isEmpty()) return null;
+                List<RuleRecord> viewRules = candidate.get(viewRule.getActivityClass());
                 if (viewRules == null) return null;
                 int idx = findRuleIndex(viewRules, viewRule);
                 RuleRecord removedRule = idx >= 0 ? viewRules.remove(idx) : null;
-                boolean removed = removedRule != null;
-                if (!removed) return null;
-                if (viewRules.isEmpty()) {
-                    actRules.remove(viewRule.getActivityClass());
-                }
-                String json = mGson.toJson(actRules);
-                ActRules snapshotRules = snapshotActRules(actRules);
-                if (actRules.isEmpty()) {
-                    mData.remove(packageName);
-                }
-                return new DeleteResult(json, snapshotRules, removedRule.imagePath, nextGeneration());
+                if (removedRule == null) return null;
+                if (viewRules.isEmpty()) candidate.remove(viewRule.getActivityClass());
+                return new DeleteResult(mGson.toJson(candidate), snapshotActRules(candidate),
+                        imagePathsOf(removedRule), candidate, proposedGeneration());
+            } finally {
+                mReadLock.unlock();
+            }
+        }
+
+        void commitDelete(String packageName, DeleteResult candidate) {
+            mWriteLock.lock();
+            try {
+                if (candidate.candidateRules.isEmpty()) mData.remove(packageName);
+                else mData.put(packageName, snapshotActRules(candidate.candidateRules));
+                commitGeneration(candidate.generation);
             } finally {
                 mWriteLock.unlock();
             }
         }
 
-        boolean deleteAll(String packageName) {
+        DeleteAllResult prepareDeleteAll(String packageName) {
+            mReadLock.lock();
+            try {
+                ActRules current = mData.get(packageName);
+                if (current == null) return null;
+                List<String> removed = new ArrayList<>();
+                for (List<RuleRecord> rules : current.values()) {
+                    if (rules == null) continue;
+                    for (RuleRecord rule : rules) removed.addAll(imagePathsOf(rule));
+                }
+                return new DeleteAllResult(removed, proposedGeneration());
+            } finally {
+                mReadLock.unlock();
+            }
+        }
+
+        void commitDeleteAll(String packageName, DeleteAllResult candidate) {
             mWriteLock.lock();
             try {
-                if (mData.containsKey(packageName)) {
-                    mData.remove(packageName);
-                    return true;
-                }
-                return false;
+                mData.remove(packageName);
+                commitGeneration(candidate.generation);
             } finally {
                 mWriteLock.unlock();
             }
+        }
+
+        private static List<String> imagePathsOf(RuleRecord rule) {
+            List<String> paths = new ArrayList<>(2);
+            if (rule != null) {
+                if (rule.imagePath != null && !rule.imagePath.isEmpty()) paths.add(rule.imagePath);
+                if (rule.getModImagePath() != null && !rule.getModImagePath().isEmpty()) {
+                    paths.add(rule.getModImagePath());
+                }
+            }
+            return paths;
         }
 
         void collectReferencedImages(String packageName,
@@ -649,6 +633,51 @@ public final class RuleRepository {
             return match;
         }
 
+        long currentGeneration() {
+            synchronized (this) {
+                return mGeneration;
+            }
+        }
+
+        /** Build a candidate without changing the published cache. */
+        CacheResult prepareApply(String packageName, RuleRecord viewRule,
+                                 boolean captureOldImagePath) {
+            mReadLock.lock();
+            try {
+                ActRules candidate = snapshotActRules(mData.get(packageName));
+                List<RuleRecord> viewRules = candidate.computeIfAbsent(
+                        viewRule.getActivityClass(), k -> new java.util.ArrayList<>());
+                int index = findRuleIndex(viewRules, viewRule);
+                List<String> oldImagePaths = new ArrayList<>();
+                if (index >= 0) {
+                    RuleRecord existing = viewRules.get(index);
+                    if (captureOldImagePath && existing != null) {
+                        oldImagePaths.addAll(imagePathsOf(existing));
+                    }
+                    if (viewRule.alias == null && existing != null && existing.alias != null) {
+                        viewRule = viewRule.withAlias(existing.alias);
+                    }
+                    viewRules.set(index, viewRule);
+                } else {
+                    viewRules.add(viewRule);
+                }
+                return new CacheResult(oldImagePaths, candidate, mGson.toJson(candidate),
+                        snapshotActRules(candidate), proposedGeneration());
+            } finally {
+                mReadLock.unlock();
+            }
+        }
+
+        void commitApply(String packageName, CacheResult candidate) {
+            mWriteLock.lock();
+            try {
+                mData.put(packageName, snapshotActRules(candidate.candidateRules));
+                commitGeneration(candidate.generation);
+            } finally {
+                mWriteLock.unlock();
+            }
+        }
+
         ActRules snapshotActRules(ActRules source) {
             if (source == null) return new ActRules();
             ActRules copy = new ActRules();
@@ -666,13 +695,16 @@ public final class RuleRepository {
         // ---- 内部 DTO ----
 
         static final class CacheResult {
-            final String oldImagePath;
+            final List<String> oldImagePaths;
+            final ActRules candidateRules;
             final String json;
             final ActRules snapshotRules;
             final long generation;
 
-            CacheResult(String oldImagePath, String json, ActRules snapshotRules, long generation) {
-                this.oldImagePath = oldImagePath;
+            CacheResult(List<String> oldImagePaths, ActRules candidateRules, String json,
+                        ActRules snapshotRules, long generation) {
+                this.oldImagePaths = oldImagePaths;
+                this.candidateRules = candidateRules;
                 this.json = json;
                 this.snapshotRules = snapshotRules;
                 this.generation = generation;
@@ -682,13 +714,26 @@ public final class RuleRepository {
         static final class DeleteResult {
             final String json;
             final ActRules snapshotRules;
-            final String imagePath;
+            final List<String> removedImagePaths;
+            final ActRules candidateRules;
             final long generation;
 
-            DeleteResult(String json, ActRules snapshotRules, String imagePath, long generation) {
+            DeleteResult(String json, ActRules snapshotRules, List<String> removedImagePaths,
+                         ActRules candidateRules, long generation) {
                 this.json = json;
                 this.snapshotRules = snapshotRules;
-                this.imagePath = imagePath;
+                this.removedImagePaths = removedImagePaths;
+                this.candidateRules = candidateRules;
+                this.generation = generation;
+            }
+        }
+
+        static final class DeleteAllResult {
+            final List<String> removedImagePaths;
+            final long generation;
+
+            DeleteAllResult(List<String> removedImagePaths, long generation) {
+                this.removedImagePaths = removedImagePaths;
                 this.generation = generation;
             }
         }
@@ -703,13 +748,12 @@ public final class RuleRepository {
         static final String RULE_FILE_SUFFIX = ".rule";
         static final String IMAGE_FILE_SUFFIX = ".webp";
         static final String TOOLBAR_PREFS_FILE = "toolbar_prefs.json";
-        private static final long DEBOUNCE_DELAY_MS = 300L;
-
+        private static final String QUARANTINE_PREFIX = ".quarantine-";
         private final Gson mGson;
         private final Logger mLogger;
         private final RuleCache mCache;
         private final Handler mHandle;
-        private final Map<String, PendingWrite> mPendingWrites = new HashMap<>();
+        private final Object mGenerationLock = new Object();
         /** Latest package tombstone. Writes from an older cache generation are stale. */
         private final Map<String, Long> mDeletedGenerations = new HashMap<>();
 
@@ -726,7 +770,8 @@ public final class RuleRepository {
             if (packageDirs != null) {
                 HashMap<String, ActRules> appRules = new HashMap<>();
                 for (File packageDir : packageDirs) {
-                    if (TOOLBAR_PREFS_FILE.equals(packageDir.getName())) continue;
+                    if (TOOLBAR_PREFS_FILE.equals(packageDir.getName())
+                            || packageDir.getName().startsWith(QUARANTINE_PREFIX)) continue;
                     try {
                         String packageName = packageDir.getName();
                         String appRuleFile = getAppRuleFilePath(packageName);
@@ -746,73 +791,64 @@ public final class RuleRepository {
                         mLogger.w("load rule fail", e);
                     } catch (NullPointerException | JsonSyntaxException e) {
                         mLogger.e("load rule error for " + packageDir.getName(), e);
-                        FileUtils.delete(packageDir);
+                        quarantine(packageDir);
                     }
                 }
                 mCache.putAll(appRules);
             }
         }
 
-        void persistAsync(String packageName, String json, long generation) {
-            synchronized (mPendingWrites) {
-                long deletedGeneration = deletedGenerationLocked(packageName);
-                if (!isWriteCurrent(generation, deletedGeneration)) {
-                    mLogger.d("drop stale persistence for deleted package " + packageName
-                            + ", generation=" + generation + ", tombstone=" + deletedGeneration);
-                    return;
-                }
-                mPendingWrites.put(packageName, new PendingWrite(json, generation));
+        private void quarantine(File packageDir) {
+            File target = new File(packageDir.getParentFile(),
+                    QUARANTINE_PREFIX + packageDir.getName() + "-" + UUID.randomUUID());
+            if (!packageDir.renameTo(target)) {
+                mLogger.w("cannot quarantine corrupt rule directory: " + packageDir);
+            } else {
+                mLogger.w("quarantined corrupt rule directory: " + target);
             }
-            mHandle.removeMessages(MSG_DEBOUNCE_WRITE, packageName);
-            mHandle.sendMessageDelayed(
-                    mHandle.obtainMessage(MSG_DEBOUNCE_WRITE, packageName),
-                    DEBOUNCE_DELAY_MS);
         }
 
-        private void persistNow(String packageName, String json, long generation) {
-            synchronized (mPendingWrites) {
+        private boolean persistNow(String packageName, String json, long generation) {
+            synchronized (mGenerationLock) {
                 if (!isWriteCurrent(generation, deletedGenerationLocked(packageName))) {
                     mLogger.d("drop stale persistence for deleted package " + packageName);
-                    return;
+                    return false;
                 }
             }
+            File tmpFile = null;
             try {
                 File appDataDir = new File(getBaseDir(), packageName);
                 if (!appDataDir.exists() && !appDataDir.mkdirs()) {
-                    mLogger.w("persistAsync: cannot create dir for " + packageName);
-                    return;
+                mLogger.w("persist: cannot create dir for " + packageName);
+                    return false;
                 }
-                FileUtils.setPermissions(appDataDir, S_IRWXU | S_IRWXG | S_IRWXO, -1, -1);
+                FileUtils.setPermissions(appDataDir, PRIVATE_DIR_MODE, -1, -1);
                 File ruleFile = new File(appDataDir, packageName + RULE_FILE_SUFFIX);
-                File tmpFile = new File(appDataDir, packageName + RULE_FILE_SUFFIX + ".tmp");
-                FileUtils.stringToFile(tmpFile, json);
+                tmpFile = new File(appDataDir, packageName + RULE_FILE_SUFFIX + ".tmp");
+                try (FileOutputStream out = new FileOutputStream(tmpFile)) {
+                    out.write(json.getBytes(StandardCharsets.UTF_8));
+                    out.flush();
+                    out.getFD().sync();
+                }
                 if (!tmpFile.renameTo(ruleFile)) {
                     if (tmpFile.exists() && !tmpFile.delete()) {
                         mLogger.w("Failed to delete tmp file: " + tmpFile);
                     }
-                    mLogger.w("persistAsync: atomic rename failed for " + packageName);
-                    return;
+                    mLogger.w("persist: atomic rename failed for " + packageName);
+                    return false;
                 }
-                FileUtils.setPermissions(ruleFile, S_IRWXU | S_IRWXG | S_IRWXO, -1, -1);
-            } catch (IOException e) {
-                mLogger.w("persistAsync failed for " + packageName, e);
+                FileUtils.setPermissions(ruleFile, PRIVATE_FILE_MODE, -1, -1);
+                return true;
+            } catch (Exception e) {
+                if (tmpFile != null && tmpFile.exists()) FileUtils.delete(tmpFile);
+                mLogger.w("persist failed for " + packageName, e);
+                return false;
             }
         }
         void markDeleted(String packageName, long generation) {
-            synchronized (mPendingWrites) {
+            synchronized (mGenerationLock) {
                 long current = deletedGenerationLocked(packageName);
                 if (generation > current) mDeletedGenerations.put(packageName, generation);
-                mPendingWrites.remove(packageName);
-            }
-            mHandle.removeMessages(MSG_DEBOUNCE_WRITE, packageName);
-        }
-
-        void deletePackage(String packageName, long generation) {
-            try {
-                File packageDir = new File(getBaseDir(), packageName);
-                if (packageDir.exists()) FileUtils.delete(packageDir);
-            } catch (FileNotFoundException e) {
-                mLogger.w("delete package: base dir not found", e);
             }
         }
 
@@ -825,44 +861,8 @@ public final class RuleRepository {
             return generation > deletedGeneration;
         }
 
-        boolean isGenerationCurrent(String packageName, long generation) {
-            synchronized (mPendingWrites) {
-                return isWriteCurrent(generation, deletedGenerationLocked(packageName));
-            }
-        }
-
-        void handleDebouncedWrite(String packageName) {
-            PendingWrite pending;
-            synchronized (mPendingWrites) {
-                pending = mPendingWrites.get(packageName);
-                if (pending == null) return;
-                mPendingWrites.remove(packageName);
-                if (!isWriteCurrent(pending.generation, deletedGenerationLocked(packageName))) {
-                    mLogger.d("drop stale debounced write for deleted package " + packageName);
-                    return;
-                }
-            }
-            persistNow(packageName, pending.json, pending.generation);
-        }
-
-        void flushPendingWrites() {
-            Map<String, PendingWrite> pending;
-            synchronized (mPendingWrites) {
-                pending = new HashMap<>(mPendingWrites);
-                mPendingWrites.clear();
-            }
-            for (Map.Entry<String, PendingWrite> entry : pending.entrySet()) {
-                synchronized (mPendingWrites) {
-                    if (!isWriteCurrent(entry.getValue().generation,
-                            deletedGenerationLocked(entry.getKey()))) {
-                        continue;
-                    }
-                }
-                persistNow(entry.getKey(), entry.getValue().json, entry.getValue().generation);
-            }
-        }
-
         String saveBitmap(Bitmap bitmap, String dir) {
+            File file = null;
             try {
                 Bitmap bitmapToSave = bitmap;
                 if (bitmap.getConfig() == Bitmap.Config.HARDWARE) {
@@ -870,10 +870,15 @@ public final class RuleRepository {
                             Bitmap.Config.ARGB_8888);
                     new Canvas(bitmapToSave).drawBitmap(bitmap, 0, 0, null);
                 }
-                File file = new File(dir, System.currentTimeMillis() + IMAGE_FILE_SUFFIX);
+                // Include a monotonic component so two images committed in one millisecond
+                // cannot overwrite one another or accidentally delete an older asset.
+                file = new File(dir, System.currentTimeMillis() + "-" + System.nanoTime()
+                        + IMAGE_FILE_SUFFIX);
                 try (FileOutputStream out = new FileOutputStream(file)) {
                     if (bitmapToSave.compress(Bitmap.CompressFormat.WEBP, 80, out)) {
-                        FileUtils.setPermissions(file, S_IRWXU | S_IRWXG | S_IRWXO, -1, -1);
+                        out.flush();
+                        out.getFD().sync();
+                        FileUtils.setPermissions(file, PRIVATE_FILE_MODE, -1, -1);
                         return file.getAbsolutePath();
                     }
                     throw new FileNotFoundException("bitmap can't compress to " + file);
@@ -883,6 +888,7 @@ public final class RuleRepository {
                     }
                 }
             } catch (IOException e) {
+                if (file != null && file.exists()) FileUtils.delete(file);
                 mLogger.w("save bitmap fail", e);
                 return null;
             }
@@ -922,20 +928,31 @@ public final class RuleRepository {
             return "";
         }
 
-        void persistToolbarPrefs(String items) {
+        boolean hasToolbarPrefs() {
+            try {
+                return new File(getBaseDir(), TOOLBAR_PREFS_FILE).isFile();
+            } catch (Exception e) {
+                mLogger.w("check toolbar prefs failed", e);
+                return false;
+            }
+        }
+
+        boolean persistToolbarPrefs(String items) {
             try {
                 File prefsFile = new File(getBaseDir(), TOOLBAR_PREFS_FILE);
                 FileUtils.stringToFile(prefsFile, items);
-                FileUtils.setPermissions(prefsFile, S_IRWXU | S_IRWXG | S_IRWXO, -1, -1);
+                FileUtils.setPermissions(prefsFile, PRIVATE_FILE_MODE, -1, -1);
+                return true;
             } catch (Exception e) {
                 mLogger.w("persist toolbar prefs failed", e);
+                return false;
             }
         }
 
         String getBaseDir() throws FileNotFoundException {
             File dir = new File(BASE_DIR);
             if (dir.exists() || dir.mkdirs()) {
-                FileUtils.setPermissions(dir, S_IRWXU | S_IRWXG | S_IRWXO, -1, -1);
+                FileUtils.setPermissions(dir, PRIVATE_DIR_MODE, -1, -1);
                 return dir.getAbsolutePath();
             }
             throw new FileNotFoundException("Cannot create base dir: " + BASE_DIR);
@@ -944,7 +961,7 @@ public final class RuleRepository {
         String getAppDataDir(String packageName) throws FileNotFoundException {
             File dir = new File(getBaseDir(), packageName);
             if (dir.exists() || dir.mkdirs()) {
-                FileUtils.setPermissions(dir, S_IRWXU | S_IRWXG | S_IRWXO, -1, -1);
+                FileUtils.setPermissions(dir, PRIVATE_DIR_MODE, -1, -1);
                 return dir.getAbsolutePath();
             }
             throw new FileNotFoundException("Cannot create app data dir: " + dir);
@@ -970,66 +987,4 @@ public final class RuleRepository {
         }
     }
 
-    // ===================================================================
-    // 内部消息 DTO
-    // ===================================================================
-
-    static final class WriteMessage {
-        final String packageName;
-        final RuleRecord viewRule;
-        final Bitmap snapshot;
-        final String json;
-        final ActRules snapshotRules;
-        final String imagePath;
-        final long generation;
-        volatile boolean cancelled;
-
-        WriteMessage(String packageName, RuleRecord viewRule, Bitmap snapshot,
-                     String json, ActRules snapshotRules, String imagePath, long generation) {
-            this.packageName = packageName;
-            this.viewRule = viewRule;
-            this.snapshot = snapshot;
-            this.json = json;
-            this.snapshotRules = snapshotRules;
-            this.imagePath = imagePath;
-            this.generation = generation;
-        }
-    }
-
-    static final class DeleteMessage {
-        final String packageName;
-        final String json;
-        final ActRules snapshotRules;
-        final String imagePath;
-        final long generation;
-
-        DeleteMessage(String packageName, String json, ActRules snapshotRules,
-                      String imagePath, long generation) {
-            this.packageName = packageName;
-            this.json = json;
-            this.snapshotRules = snapshotRules;
-            this.imagePath = imagePath;
-            this.generation = generation;
-        }
-    }
-
-    static final class DeleteAllMessage {
-        final String packageName;
-        final long generation;
-
-        DeleteAllMessage(String packageName, long generation) {
-            this.packageName = packageName;
-            this.generation = generation;
-        }
-    }
-
-    private static final class PendingWrite {
-        final String json;
-        final long generation;
-
-        PendingWrite(String json, long generation) {
-            this.json = json;
-            this.generation = generation;
-        }
-    }
 }

@@ -24,15 +24,16 @@ public final class EditModeController {
         }
     }
 
-    public static void setEditModeEnabled(Context context, boolean enabled) {
-        SharedPreferences sp = PreferenceManager.getDefaultSharedPreferences(context);
-        sp.edit().putBoolean("editor_switch", enabled).apply();
-        RuleServiceClient.getDefault().setEditMode(enabled);
+    public static boolean setEditModeEnabled(Context context, boolean enabled) {
+        return RuleServiceClient.getDefault().setEditMode(enabled);
     }
 
     public static boolean isEditModeEnabled(Context context) {
-        return PreferenceManager.getDefaultSharedPreferences(context)
-                .getBoolean("editor_switch", false);
+        return RuleServiceClient.getDefault().isEditModeEnabled();
+    }
+
+    public static boolean isEditModeClosing(Context context) {
+        return RuleServiceClient.getDefault().isEditModeClosing();
     }
 
     public static boolean isMasterEnabled(Context context, int prefKeyMasterResId) {

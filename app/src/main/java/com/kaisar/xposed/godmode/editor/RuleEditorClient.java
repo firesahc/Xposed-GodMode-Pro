@@ -28,17 +28,24 @@ public final class RuleEditorClient implements IRuleEditor {
     }
 
     @Override
+    public boolean writeRule(String packageName, RuleRecord rule, Bitmap snapshot,
+                             Bitmap modifiedSnapshot) {
+        return RuleServiceClient.getDefault().writeRule(packageName, rule, snapshot,
+                modifiedSnapshot);
+    }
+
+    @Override
     public boolean deleteRule(String packageName, RuleRecord rule) {
         return RuleServiceClient.getDefault().deleteRule(packageName, rule);
     }
 
     @Override
-    public String saveImageFile(String packageName, Bitmap bitmap) {
-        return RuleServiceClient.getDefault().saveImageFile(packageName, bitmap);
+    public String getFailureMessage() {
+        return RuleServiceClient.getDefault().getServiceFailureMessage();
     }
 
     @Override
-    public String getToolbarHiddenItems() {
-        return RuleServiceClient.getDefault().getToolbarHiddenItems();
+    public String getToolbarHiddenItems(String packageName) {
+        return RuleServiceClient.getDefault().getToolbarHiddenItems(packageName);
     }
 }

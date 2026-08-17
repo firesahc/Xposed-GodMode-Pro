@@ -21,6 +21,7 @@ import com.google.android.material.snackbar.Snackbar;
 import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.ipc.RuleServiceClient;
+import com.kaisar.xposed.godmode.ipc.RuleServiceContract;
 import com.kaisar.xposed.godmode.ui.model.SharedViewModel;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.AppRules;
@@ -91,9 +92,8 @@ public final class SettingsFragment extends PreferenceFragmentCompat implements
             saveAllRules.setOnPreferenceClickListener(this);
         }
 
-        // Group C: Toolbar preferences — read from local SharedPreferences (app process)
-        SharedPreferences toolbarPrefs = requireContext().getSharedPreferences(TOOLBAR_PREFS, Context.MODE_PRIVATE);
-        Set<String> hiddenItems = loadHiddenItemsMigrate(toolbarPrefs);
+        // Group C: Toolbar preferences — system_server is authoritative.
+        Set<String> hiddenItems = loadAuthoritativeHiddenItems();
 
         String[] toolbarKeys = {
                 getString(R.string.pref_key_show_info_flow_mode),
@@ -164,8 +164,7 @@ public final class SettingsFragment extends PreferenceFragmentCompat implements
         if (TextUtils.equals(key, getString(R.string.pref_key_show_remove_mode))
                 || TextUtils.equals(key, getString(R.string.pref_key_show_modify_mode))
                 || TextUtils.equals(key, getString(R.string.pref_key_show_info_flow_mode))) {
-            saveToolbarPreference(key, enabled);
-            return true;
+            return saveToolbarPreference(key, enabled);
         }
 
         return false;
@@ -176,13 +175,19 @@ public final class SettingsFragment extends PreferenceFragmentCompat implements
         if (uri == null) return;
         Logger.i(TAG, "[Settings] restoreRules: file selected, uri=" + uri);
         showProgressSnackbar(getString(R.string.menu_title_restore_rules) + "...");
-        mSharedViewModel.restoreRules(uri, new SharedViewModel.ResultCallback() {
+        mSharedViewModel.restoreRules(uri, new SharedViewModel.RestoreCallback() {
             @Override
-            public void onSuccess(int count) {
+            public void onSuccess(com.kaisar.xposed.godmode.control.RuleBackupManager.RestoreReport report) {
                 if (!isAdded()) return;
-                Logger.i(TAG, "[Settings] restoreRules: success, count=" + count);
+                Logger.i(TAG, "[Settings] restoreRules: success, committed=" + report.committed
+                        + ", failed=" + report.failed());
                 dismissProgressSnackbar();
-                Snackbar.make(requireView(), getString(R.string.snack_bar_msg_restore_rules_success, count), Snackbar.LENGTH_SHORT).show();
+                String message = getString(R.string.snack_bar_msg_restore_rules_success,
+                        report.committed);
+                if (report.failed() > 0) {
+                    message += "，失败 " + report.failed() + " 条";
+                }
+                Snackbar.make(requireView(), message, Snackbar.LENGTH_LONG).show();
             }
 
             @Override
@@ -305,45 +310,66 @@ public final class SettingsFragment extends PreferenceFragmentCompat implements
     }
 
     // Group C: Persist toolbar preference — stored as comma-separated string
-    private void saveToolbarPreference(String key, boolean enabled) {
-        SharedPreferences sp = requireContext().getSharedPreferences(TOOLBAR_PREFS, Context.MODE_PRIVATE);
-        Set<String> hidden = loadHiddenItemsMigrate(sp);
+    private boolean saveToolbarPreference(String key, boolean enabled) {
+        String current = RuleServiceClient.getDefault().getToolbarHiddenItems(
+                RuleServiceContract.GLOBAL_SCOPE);
+        if (current == null) current = "";
+        Set<String> hidden = parseHiddenItems(current);
         if (!enabled) {
             hidden.add(key);
         } else {
             hidden.remove(key);
         }
         String value = TextUtils.join(",", hidden);
-        sp.edit().putString(TOOLBAR_HIDDEN_ITEMS, value).apply();
-        // Sync via AIDL for cross-process access
-        RuleServiceClient.getDefault().setToolbarHiddenItems(value);
+        if (!RuleServiceClient.getDefault().setToolbarHiddenItems(value)) {
+            Snackbar.make(requireView(), R.string.snack_bar_msg_save_toolbar_fail,
+                    Snackbar.LENGTH_SHORT).show();
+            return false;
+        }
+        return true;
     }
 
-    /**
-     * 从 SharedPreferences 加载隐藏项目列表，兼容旧版 StringSet 格式。
-     */
-    private static Set<String> loadHiddenItemsMigrate(SharedPreferences sp) {
+    private Set<String> loadAuthoritativeHiddenItems() {
+        String authoritative = RuleServiceClient.getDefault().getToolbarHiddenItems(
+                RuleServiceContract.GLOBAL_SCOPE);
+        SharedPreferences legacy = requireContext().getSharedPreferences(
+                TOOLBAR_PREFS, Context.MODE_PRIVATE);
+        if (authoritative == null) {
+            String legacyValue = readLegacyToolbarValue(legacy);
+            if (!TextUtils.isEmpty(legacyValue)
+                    && RuleServiceClient.getDefault().setToolbarHiddenItems(legacyValue)) {
+                authoritative = legacyValue;
+                legacy.edit().clear().apply();
+            } else if (TextUtils.isEmpty(legacyValue)) {
+                legacy.edit().clear().apply();
+            }
+        } else if (authoritative != null) {
+            legacy.edit().clear().apply();
+        }
+        return parseHiddenItems(authoritative);
+    }
+
+    private static String readLegacyToolbarValue(SharedPreferences sp) {
         Map<String, ?> all = sp.getAll();
         Object raw = all.get(TOOLBAR_HIDDEN_ITEMS);
         if (raw instanceof Set) {
             @SuppressWarnings("unchecked")
             Set<String> oldSet = (Set<String>) raw;
-            // Migrate old StringSet format to comma-separated string
-            sp.edit().putString(TOOLBAR_HIDDEN_ITEMS, TextUtils.join(",", oldSet)).apply();
-            return new HashSet<>(oldSet);
+            return TextUtils.join(",", oldSet);
         } else if (raw instanceof String) {
-            Set<String> result = new HashSet<>();
-            String value = (String) raw;
-            if (!TextUtils.isEmpty(value)) {
-                for (String s : value.split(",")) {
-                    if (!TextUtils.isEmpty(s)) {
-                        result.add(s);
-                    }
-                }
-            }
-            return result;
+            return (String) raw;
         }
-        return new HashSet<>();
+        return "";
+    }
+
+    private static Set<String> parseHiddenItems(String value) {
+        Set<String> result = new HashSet<>();
+        if (!TextUtils.isEmpty(value)) {
+            for (String item : value.split(",")) {
+                if (!TextUtils.isEmpty(item)) result.add(item);
+            }
+        }
+        return result;
     }
 
     private void showProgressSnackbar(String message) {

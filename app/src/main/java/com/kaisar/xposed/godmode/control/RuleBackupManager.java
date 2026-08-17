@@ -1,6 +1,7 @@
 package com.kaisar.xposed.godmode.control;
 
 import static com.kaisar.xposed.godmode.engine.util.CommonUtils.recycleNullableBitmap;
+import static com.kaisar.xposed.godmode.engine.util.GmConstants.MAX_IMAGE_FILE_SIZE_BYTES;
 
 import android.graphics.Bitmap;
 import android.net.Uri;
@@ -17,7 +18,9 @@ import com.kaisar.xposed.godmode.engine.util.FileUtils;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.engine.util.ZipUtils;
 import com.kaisar.xposed.godmode.engine.applier.SafeBitmapDecoder;
+import com.kaisar.xposed.godmode.engine.rule.RuleSlotKey;
 import com.kaisar.xposed.godmode.ipc.RuleServiceClient;
+import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 
 import java.io.File;
@@ -63,73 +66,117 @@ public final class RuleBackupManager {
         public RestoreException(Throwable cause) { super(cause); }
     }
 
+    public static final class RestoreReport {
+        public final int total;
+        public final int committed;
+        public final List<EntryResult> entries;
+
+        RestoreReport(int total, int committed, List<EntryResult> entries) {
+            this.total = total;
+            this.committed = committed;
+            this.entries = java.util.Collections.unmodifiableList(
+                    new ArrayList<>(entries));
+        }
+
+        public int failed() {
+            return total - committed;
+        }
+    }
+
+    public static final class EntryResult {
+        public enum Status { COMMITTED, REJECTED, WRITE_FAILED }
+
+        public final int index;
+        public final Status status;
+        public final String message;
+
+        EntryResult(int index, Status status, String message) {
+            this.index = index;
+            this.status = status;
+            this.message = message;
+        }
+    }
+
     public static void backupRules(Uri toUri, String packageName, List<RuleRecord> viewRules) throws BackupException {
         if (!PackageNameValidator.isValid(packageName) || viewRules == null) {
             throw new BackupException("Invalid backup arguments");
+        }
+        RuleServiceClient serviceClient = RuleServiceClient.getDefault();
+        if (!serviceClient.beginBackup()) {
+            throw new BackupException("Rule service is unavailable or another operation is active");
         }
         Logger.i(TAG, "[Backup] backupRules: start, package=" + packageName + ", ruleCount=" + viewRules.size());
         ArrayList<String> backupFilePathList = new ArrayList<>();
         ArrayList<RuleRecord> backupRuleRecordList = new ArrayList<>(viewRules.size());
         ImageEntryRegistry imageEntries = new ImageEntryRegistry();
-        File backupDir = createOperationDirectory(
-                GodModeApplication.getApplication().getCacheDir(), "backup");
+        File backupDir = null;
         try {
+            backupDir = createOperationDirectory(
+                    GodModeApplication.getApplication().getCacheDir(), "backup");
+            ActRules authoritative = serviceClient.getRules(packageName);
+            if (authoritative == null) {
+                throw new BackupException("Unable to read authoritative rule snapshot");
+            }
+            List<RuleRecord> currentRules = flatten(authoritative);
+            List<RuleRecord> selectedRules = selectCurrentRules(viewRules, currentRules);
+            if (selectedRules.size() != viewRules.size()) {
+                throw new BackupException("Selected rules changed before backup");
+            }
             prepareFreshDirectory(backupDir);
             Logger.d(TAG, "[Backup] backupRules: temp dir created, package=" + packageName);
-                for (RuleRecord viewRule : viewRules) {
-                    if (viewRule == null || !packageName.equals(viewRule.packageName)) {
-                        throw new IOException("Rule package does not match backup package");
+            for (RuleRecord viewRule : selectedRules) {
+                if (viewRule == null || !packageName.equals(viewRule.packageName)) {
+                    throw new IOException("Rule package does not match backup package");
+                }
+                RuleRecord viewRuleCopy = prepareBackupRecord(viewRule);
+                if (!TextUtils.isEmpty(viewRule.imagePath)) {
+                    String entryName = copyImageToBackup(backupDir,
+                            viewRule.imagePath, "", imageEntries,
+                            backupFilePathList);
+                    if (entryName == null) {
+                        throw new IOException("required main image is unavailable");
                     }
-                    RuleRecord viewRuleCopy = prepareBackupRecord(viewRule);
-                    try {
+                    viewRuleCopy.imagePath = entryName;
+                }
+                if (viewRule.isModifyRule() && !TextUtils.isEmpty(viewRule.getModImagePath())) {
+                    if (viewRule.getModImagePath().equals(viewRule.imagePath)) {
+                        viewRuleCopy = viewRuleCopy.withModifyImagePath(viewRuleCopy.imagePath);
+                    } else {
                         String entryName = copyImageToBackup(backupDir,
-                                viewRule.imagePath, "", imageEntries,
+                                viewRule.getModImagePath(), "mod_", imageEntries,
                                 backupFilePathList);
-                        viewRuleCopy.imagePath = entryName != null ? entryName : "";
-                    } catch (IOException e) {
-                        viewRuleCopy.imagePath = "";
-                        Logger.w(TAG, "[Backup] backupRules: skip image for " + viewRule.getViewClass() + ", failed to copy", e);
-                    }
-                    if (viewRule.isModifyRule() && !TextUtils.isEmpty(viewRule.getModImagePath())) {
-                        if (viewRule.getModImagePath().equals(viewRule.imagePath)) {
-                            viewRuleCopy = viewRuleCopy.withModifyImagePath(viewRuleCopy.imagePath);
-                        } else {
-                            try {
-                                String entryName = copyImageToBackup(backupDir,
-                                        viewRule.getModImagePath(), "mod_", imageEntries,
-                                        backupFilePathList);
-                                viewRuleCopy = viewRuleCopy.withModifyImagePath(entryName != null ? entryName : "");
-                            } catch (IOException e) {
-                                viewRuleCopy = viewRuleCopy.withModifyImagePath("");
-                                Logger.w(TAG, "[Backup] backupRules: skip mod image for " + viewRule.getViewClass() + ", failed to copy", e);
-                            }
+                        if (entryName == null) {
+                            throw new IOException("required modified image is unavailable");
                         }
+                        viewRuleCopy = viewRuleCopy.withModifyImagePath(entryName);
                     }
-                    backupRuleRecordList.add(viewRuleCopy);
                 }
-                File manifestFile = new File(backupDir, MANIFEST_FILE);
-                JsonObject jsonObject = new JsonObject();
-                jsonObject.addProperty("version", VERSION);
-                jsonObject.addProperty("packageName", packageName);
-                Gson gson = new GsonBuilder().create();
-                JsonElement jsonElement = gson.toJsonTree(backupRuleRecordList);
-                jsonObject.add("rules", jsonElement);
-                FileUtils.stringToFile(manifestFile, jsonObject.toString());
-                backupFilePathList.add(manifestFile.getPath());
-                Logger.d(TAG, "[Backup] backupRules: manifest written, fileCount=" + backupFilePathList.size());
-                try (OutputStream out = GodModeApplication.getApplication().getContentResolver().openOutputStream(toUri)) {
-                    ZipUtils.compress(out, backupFilePathList.toArray(new String[0]));
-                }
-                Logger.i(TAG, "[Backup] backupRules: success, package=" + packageName + ", rules=" + backupRuleRecordList.size());
-        } catch (IOException e) {
+                backupRuleRecordList.add(viewRuleCopy);
+            }
+            File manifestFile = new File(backupDir, MANIFEST_FILE);
+            JsonObject jsonObject = new JsonObject();
+            jsonObject.addProperty("version", VERSION);
+            jsonObject.addProperty("packageName", packageName);
+            Gson gson = new GsonBuilder().create();
+            JsonElement jsonElement = gson.toJsonTree(backupRuleRecordList);
+            jsonObject.add("rules", jsonElement);
+            FileUtils.stringToFile(manifestFile, jsonObject.toString());
+            backupFilePathList.add(manifestFile.getPath());
+            Logger.d(TAG, "[Backup] backupRules: manifest written, fileCount=" + backupFilePathList.size());
+            try (OutputStream out = GodModeApplication.getApplication().getContentResolver().openOutputStream(toUri)) {
+                ZipUtils.compress(out, backupFilePathList.toArray(new String[0]));
+            }
+            Logger.i(TAG, "[Backup] backupRules: success, package=" + packageName + ", rules=" + backupRuleRecordList.size());
+        } catch (IOException | RuntimeException e) {
             Logger.e(TAG, "[Backup] backupRules: failed, package=" + packageName, e);
             throw new BackupException(e);
         } finally {
-            cleanupTempDirectory("backupRules", backupDir);
+            if (backupDir != null) cleanupTempDirectory("backupRules", backupDir);
+            serviceClient.endBackup();
         }
     }
 
-    public static int restoreRules(Uri fromUri) throws RestoreException {
+    public static RestoreReport restoreRules(Uri fromUri) throws RestoreException {
         Logger.i(TAG, "[Backup] restoreRules: start, uri=" + fromUri);
         File restoreDir = createOperationDirectory(
                 GodModeApplication.getApplication().getCacheDir(), "restore");
@@ -157,71 +204,64 @@ public final class RuleBackupManager {
                 JsonArray jsonArray = jsonObject.getAsJsonArray("rules");
                 if (jsonArray == null) throw new RestoreException("Missing rules array");
                 Logger.d(TAG, "[Backup] restoreRules: manifest parsed, ruleCount=" + jsonArray.size());
-                for (int i = 0; i < jsonArray.size(); i++) {
-                    String ruleJson = jsonArray.get(i).toString();
-                    RuleRecord viewRule = gson.fromJson(ruleJson, RuleRecord.class);
-                    if (viewRule == null || !manifestPackageName.equals(viewRule.packageName)) {
-                        throw new RestoreException("Rule package does not match manifest");
-                    }
-
-                    // 先保存主图，获取持久化路径
-                    Bitmap bitmap = null;
-                    if (!TextUtils.isEmpty(viewRule.imagePath)) {
-                        File imageFile = resolveRestoredFile(restoreDir, viewRule.imagePath);
-                        try {
-                            bitmap = imageFile != null
-                                    ? SafeBitmapDecoder.decodeFile(imageFile.getPath()) : null;
-                        } catch (RuntimeException e) {
-                            Logger.w(TAG, "[Backup] restoreRules: main image decode failed", e);
-                        }
-                        if (bitmap != null) {
-                            String savedPath = null;
-                            try {
-                                savedPath = RuleServiceClient.getDefault()
-                                        .saveImageFile(viewRule.packageName, bitmap);
-                            } catch (Exception e) {
-                                Logger.w(TAG, "[Backup] restoreRules: main image save failed", e);
-                            }
-                            viewRule.imagePath = savedPath != null ? savedPath : "";
-                        } else {
-                            // Never persist a ZIP-relative path as if it were a durable image path.
-                            viewRule.imagePath = "";
-                        }
-                    }
-
-                    // 有修改图时一并保存，组装完整规则
-                    if (viewRule.isModifyRule() && !TextUtils.isEmpty(viewRule.getModImagePath())) {
-                        File modFile = resolveRestoredFile(restoreDir, viewRule.getModImagePath());
-                        Bitmap modBitmap = null;
-                        try {
-                            modBitmap = modFile != null
-                                    ? SafeBitmapDecoder.decodeFile(modFile.getPath()) : null;
-                        } catch (RuntimeException e) {
-                            Logger.w(TAG, "[Backup] restoreRules: mod image decode failed", e);
-                        }
-                        if (modBitmap != null) {
-                            String savedModPath = null;
-                            try {
-                                savedModPath = RuleServiceClient.getDefault()
-                                        .saveImageFile(viewRule.packageName, modBitmap);
-                            } catch (Exception e) {
-                                Logger.w(TAG, "[Backup] restoreRules: mod image save failed", e);
-                            }
-                            viewRule = viewRule.withModifyImagePath(savedModPath != null ? savedModPath : "");
-                            recycleNullableBitmap(modBitmap);
-                        } else {
-                            // A failed replacement image must not leave a dangling ZIP entry name.
-                            viewRule = viewRule.withModifyImagePath("");
-                        }
-                    }
-
-                    // 一次调用写入完整规则（包含主图和修改图路径），消除异步竞态
-                    RuleServiceClient.getDefault().writeRule(viewRule.packageName, viewRule, bitmap);
-
-                    recycleNullableBitmap(bitmap);
+                if (!RuleServiceClient.getDefault().beginRestore()) {
+                    throw new RestoreException("Rule service is unavailable or another restore is active");
                 }
-                Logger.i(TAG, "[Backup] restoreRules: success, ruleCount=" + jsonArray.size());
-                return jsonArray.size();
+                int committed = 0;
+                ArrayList<EntryResult> results = new ArrayList<>(jsonArray.size());
+                for (int i = 0; i < jsonArray.size(); i++) {
+                    Bitmap bitmap = null;
+                    Bitmap modBitmap = null;
+                    try {
+                        String ruleJson = jsonArray.get(i).toString();
+                        RuleRecord viewRule = gson.fromJson(ruleJson, RuleRecord.class);
+                        if (viewRule == null || !manifestPackageName.equals(viewRule.packageName)) {
+                            results.add(new EntryResult(i, EntryResult.Status.REJECTED,
+                                    "rule package does not match manifest"));
+                            continue;
+                        }
+
+                        if (!TextUtils.isEmpty(viewRule.imagePath)) {
+                            File imageFile = resolveRestoredFile(restoreDir, viewRule.imagePath);
+                            bitmap = decodeRequiredImage(imageFile);
+                            if (bitmap == null) {
+                                results.add(new EntryResult(i, EntryResult.Status.REJECTED,
+                                        "main image is missing or invalid"));
+                                continue;
+                            }
+                        }
+
+                        if (viewRule.isModifyRule() && !TextUtils.isEmpty(viewRule.getModImagePath())) {
+                            File modFile = resolveRestoredFile(restoreDir, viewRule.getModImagePath());
+                            modBitmap = decodeRequiredImage(modFile);
+                            if (modBitmap == null) {
+                                results.add(new EntryResult(i, EntryResult.Status.REJECTED,
+                                        "modified image is missing or invalid"));
+                                continue;
+                            }
+                        }
+
+                        boolean accepted = RuleServiceClient.getDefault().writeRule(
+                                viewRule.packageName, viewRule, bitmap, modBitmap);
+                        if (accepted) {
+                            committed++;
+                            results.add(new EntryResult(i, EntryResult.Status.COMMITTED, "committed"));
+                        } else {
+                            results.add(new EntryResult(i, EntryResult.Status.WRITE_FAILED,
+                                    "rule or asset persistence failed"));
+                        }
+                    } catch (Exception e) {
+                        Logger.w(TAG, "[Backup] restoreRules: entry " + i + " rejected", e);
+                        results.add(new EntryResult(i, EntryResult.Status.REJECTED,
+                                e.getMessage() == null ? "invalid rule entry" : e.getMessage()));
+                    } finally {
+                        recycleNullableBitmap(bitmap);
+                        recycleNullableBitmap(modBitmap);
+                    }
+                }
+                Logger.i(TAG, "[Backup] restoreRules: committed=" + committed
+                        + ", failed=" + (jsonArray.size() - committed));
+                return new RestoreReport(jsonArray.size(), committed, results);
         } catch (IOException e) {
             Logger.e(TAG, "[Backup] restoreRules: failed", e);
             throw new RestoreException(e);
@@ -229,7 +269,47 @@ public final class RuleBackupManager {
             Logger.e(TAG, "[Backup] restoreRules: failed, malformed data", e);
             throw new RestoreException(e);
         } finally {
+            RuleServiceClient.getDefault().endRestore();
             cleanupTempDirectory("restoreRules", restoreDir);
+        }
+    }
+
+    private static List<RuleRecord> flatten(ActRules rules) {
+        List<RuleRecord> result = new ArrayList<>();
+        for (List<RuleRecord> entries : rules.values()) {
+            if (entries != null) result.addAll(entries);
+        }
+        return result;
+    }
+
+    static List<RuleRecord> selectCurrentRules(List<RuleRecord> requested,
+                                               List<RuleRecord> current) {
+        List<RuleRecord> selected = new ArrayList<>(requested.size());
+        for (RuleRecord wanted : requested) {
+            if (wanted == null) continue;
+            RuleSlotKey wantedSlot = wanted.slotKey(wanted.packageName);
+            for (int i = current.size() - 1; i >= 0; i--) {
+                RuleRecord candidate = current.get(i);
+                if (candidate != null
+                        && candidate.slotKey(candidate.packageName)
+                        .equals(wantedSlot)) {
+                    selected.add(candidate);
+                    break;
+                }
+            }
+        }
+        return selected;
+    }
+
+    private static Bitmap decodeRequiredImage(File file) {
+        if (file == null || !file.isFile()
+                || file.length() <= 0L || file.length() > MAX_IMAGE_FILE_SIZE_BYTES) {
+            return null;
+        }
+        try {
+            return SafeBitmapDecoder.decodeFile(file.getPath());
+        } catch (RuntimeException e) {
+            return null;
         }
     }
 

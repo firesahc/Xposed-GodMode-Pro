@@ -60,6 +60,23 @@ public final class SafeBitmapDecoder {
         }
     }
 
+    /** Rejects oversized source dimensions instead of downsampling untrusted IPC input. */
+    public static Bitmap decodeFileStrict(String path) {
+        if (path == null || path.isEmpty()) return null;
+        try (FileInputStream input = new FileInputStream(path)) {
+            BitmapFactory.Options bounds = new BitmapFactory.Options();
+            bounds.inJustDecodeBounds = true;
+            BitmapFactory.decodeFileDescriptor(input.getFD(), null, bounds);
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0
+                    || sampledPixels(bounds.outWidth, bounds.outHeight, 1) > MAX_PIXELS) {
+                return null;
+            }
+            return decode(input.getFD());
+        } catch (IOException | RuntimeException | OutOfMemoryError ignored) {
+            return null;
+        }
+    }
+
     private static int sampleSizeFor(int width, int height) {
         int sample = 1;
         while (sample < (1 << 30)

@@ -20,7 +20,8 @@ public final class ToolbarVisibilityController {
         if (panel == null) return;
 
         Set<String> hiddenItems = ToolbarPrefsManager.parseHiddenItems(
-                RuleEditorClient.getInstance().getToolbarHiddenItems());
+                RuleEditorClient.getInstance().getToolbarHiddenItems(
+                        panel.getContext().getPackageName()));
 
         if (hiddenItems.contains("pref_show_remove_mode")) {
             hideView(panel, R.id.remove_mode_toggle);

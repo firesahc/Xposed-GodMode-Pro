@@ -15,6 +15,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * 三个专用池：
  * <ul>
  *   <li>{@link #IMAGE_LOADER} — 图片加载/解码 I/O 操作</li>
+ *   <li>{@link #FD_WRITER} — 单次 Binder mutate 的匿名 pipe 写入</li>
  *   <li>{@link #IO} — 通用文件 I/O 操作</li>
  *   <li>{@link #GENERAL} — 轻量计算任务</li>
  * </ul>
@@ -27,6 +28,10 @@ public final class ThreadPools {
     /** 图片加载线程池 — 适用于 Glide 回调、Bitmap 解码等 */
     public static final ExecutorService IMAGE_LOADER = Executors.newFixedThreadPool(
             2, new DaemonThreadFactory("GM-ImageLoader"));
+
+    /** FD 写入池固定为两个线程，保证主图和修改图可以同时向 pipe 写入。 */
+    public static final ExecutorService FD_WRITER = Executors.newFixedThreadPool(
+            2, new DaemonThreadFactory("GM-FD-Writer"));
 
     /** I/O 线程池 — 适用于文件读写、JSON 序列化、规则持久化等 */
     public static final ExecutorService IO = Executors.newFixedThreadPool(

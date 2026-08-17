@@ -3,7 +3,6 @@
     <string name="app_name">上帝模式Pro</string>
 
     <string name="pref_key_progress_indicator" translatable="false">progress_indicator</string>
-    <string name="pref_key_editor" translatable="false">editor_switch</string>
     <string name="pref_key_master" translatable="false">master_enabled</string>
     <string name="pref_key_guide" translatable="false">guide</string>
     <string name="pref_key_about" translatable="false">about</string>
@@ -136,12 +135,16 @@
     <string name="not_active_module">上帝模式Pro未激活。</string>
     <string name="not_active_module_with_reason">上帝模式Pro未激活。\n\n详细原因：%1$s</string>
     <string name="master_not_enabled">请先在设置中开启上帝模式Pro主开关</string>
+    <string name="edit_mode_update_failed">编辑状态更新失败</string>
+    <string name="edit_mode_closing">编辑正在关闭，请等待当前提交完成</string>
+    <string name="edit_mode_update_failed_with_reason">编辑状态更新失败：%1$s</string>
     <string name="notification_permission_denied">通知权限被拒绝，通知栏开关将无法显示。可通过快捷磁贴控制编辑模式</string>
     <string name="welcome_title">嘿！伙计，真高兴又见到你！欢迎使用上帝模式Pro！</string>
 
     <string name="snack_bar_msg_revert_rule_fail">删除规则失败</string>
     <string name="snack_bar_msg_backup_rule_fail">备份规则失败</string>
     <string name="snack_bar_msg_restore_rules_fail">恢复规则失败</string>
+    <string name="snack_bar_msg_save_toolbar_fail">工具栏设置保存失败</string>
     <string name="confirm_delete_rules">确认删除 %d 条规则？</string>
     <string name="dialog_btn_copy">复制给我的老伙计</string>
     <string name="crash_tip">我想你应该遇了些麻烦，天知道这该死的程序都干了些什么。把下面这些奇奇怪怪的日志复制给老伙计吧，也许有用。\n\n</string>

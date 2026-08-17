@@ -2,46 +2,73 @@ package com.kaisar.xposed.godmode.ipc;
 
 import android.graphics.Bitmap;
 import android.os.DeadObjectException;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 import android.os.ParcelFileDescriptor;
 import android.os.RemoteException;
+import android.os.SharedMemory;
 
-import com.kaisar.xposed.godmode.IGodModeManager;
-import com.kaisar.xposed.godmode.IObserver;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.kaisar.xposed.godmode.engine.util.Logger;
+import com.kaisar.xposed.godmode.ipc.contract.ILeaseOwner;
+import com.kaisar.xposed.godmode.ipc.contract.IRuleObserver;
+import com.kaisar.xposed.godmode.ipc.contract.IRuleService;
+import com.kaisar.xposed.godmode.ipc.contract.ObserverRegistrationParcel;
+import com.kaisar.xposed.godmode.ipc.contract.OperationLeaseParcel;
+import com.kaisar.xposed.godmode.ipc.contract.RuleMutationRequest;
+import com.kaisar.xposed.godmode.ipc.contract.RuleMutationResult;
+import com.kaisar.xposed.godmode.ipc.contract.RuleSnapshotParcel;
+import com.kaisar.xposed.godmode.ipc.contract.ServiceIdentityParcel;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.AppRules;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
+import com.kaisar.xposed.godmode.util.TaskExecutor;
 import com.kaisar.xservicemanager.XServiceManager;
 
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
-/**
- * AIDL 客户端门面 — 通过 XServiceManager 桥接与 system_server 中的 RuleServiceServer 通信。
- * <p>
- * 提供 Binder 连接管理（断连重试、死亡监听）、所有 IPC 方法代理、连通性诊断。
- * 整个应用中唯一直接与 Binder 打交道的客户端类。
- * <p>
- * 使用 {@link #getDefault()} 获取进程级单例。
- */
+/** Single client facade for the canonical 6.10 rule service. */
 public final class RuleServiceClient {
-
     private static final String TAG = "RuleServiceClient";
-    private static final IGodModeManager FALLBACK = new IGodModeManager.Default();
     private static final int CONNECT_RETRY_COUNT = 3;
     private static final long[] CONNECT_RETRY_DELAYS_MS = {80L, 160L};
-
     private static volatile RuleServiceClient instance;
-    private volatile IGodModeManager mGMM;
-    private volatile IBinder mBinder;
-    private volatile String mLastError;
-    private final CopyOnWriteArrayList<Runnable> mBinderDeathListeners = new CopyOnWriteArrayList<>();
-    /** Local observer registrations survive Binder death and are replayed on reconnect. */
-    private final CopyOnWriteArrayList<ObserverSubscription> mObserverSubscriptions =
-            new CopyOnWriteArrayList<>();
 
-    private RuleServiceClient() {
-    }
+    private final Gson mGson = new GsonBuilder().create();
+    private final Handler mMainHandler = new Handler(Looper.getMainLooper());
+    private final CopyOnWriteArrayList<Runnable> mBinderDeathListeners = new CopyOnWriteArrayList<>();
+    private final CopyOnWriteArrayList<ObserverSubscription> mObserverSubscriptions = new CopyOnWriteArrayList<>();
+    private final AtomicLong mConnectionEpoch = new AtomicLong();
+    private final AtomicLong mRuleGeneration = new AtomicLong();
+    private final ClientEditState mEditState = new ClientEditState();
+    private final ILeaseOwner mLeaseOwner = new ILeaseOwner.Stub() {
+        @Override public void onLeaseRevoked(int reason) {
+            mRestoreLease = null;
+            mBackupLease = null;
+            mEditState.reset();
+        }
+    };
+    private volatile Connection mConnection;
+    private volatile String mLastError;
+    private volatile ServiceDiagnostic mServiceDiagnostic;
+    private volatile int mServiceState = RuleServiceContract.STARTING;
+    private volatile String mRestoreLease;
+    private volatile String mBackupLease;
+    private volatile int mLastMutationStatus = RuleServiceContract.RESULT_NO_CHANGE;
+
+    private RuleServiceClient() { }
 
     public static RuleServiceClient getDefault() {
         RuleServiceClient result = instance;
@@ -50,7 +77,6 @@ public final class RuleServiceClient {
                 result = instance;
                 if (result == null) {
                     result = new RuleServiceClient();
-                    result.ensureService();
                     instance = result;
                 }
             }
@@ -58,373 +84,871 @@ public final class RuleServiceClient {
         return result;
     }
 
-    private IGodModeManager ensureService() {
-        IGodModeManager current = mGMM;
-        IBinder binder = mBinder;
-        if (current != null && binder != null && binder.isBinderAlive()) {
-            return current;
-        }
+    private Connection ensureConnection() {
+        Connection current = mConnection;
+        if (isReady(current)) return current;
+        if (mServiceState == RuleServiceContract.REBOOT_REQUIRED) return null;
         synchronized (this) {
-            current = mGMM;
-            binder = mBinder;
-            if (current != null && binder != null && binder.isBinderAlive()) {
-                return current;
-            }
-            IBinder service = connectWithRetry();
-            if (service == null) {
-                mBinder = null;
-                mGMM = null;
-                mLastError = buildBridgeError();
-                Logger.e(TAG, mLastError);
-                return FALLBACK;
+            current = mConnection;
+            if (isReady(current)) return current;
+            IBinder remote = connectWithRetry();
+            if (remote == null) {
+                mServiceState = RuleServiceContract.FAILED;
+                recordDiagnostic(buildBridgeDiagnostic());
+                return null;
             }
             try {
-                service.linkToDeath(() -> {
-                    synchronized (RuleServiceClient.this) {
-                        if (mBinder == service) {
-                            mBinder = null;
-                            mGMM = null;
-                            mLastError = "godmode 服务 Binder 已死亡，等待下次重连";
-                        }
-                    }
-                    Logger.w(TAG, "godmode service binder died, will reconnect on next call");
-                    notifyBinderDead();
-                }, 0);
+                String descriptor = remote.getInterfaceDescriptor();
+                if (!RuleServiceContract.DESCRIPTOR.equals(descriptor)) {
+                    markRebootRequired(ServiceDiagnostic.of(
+                            ServiceDiagnostic.Type.DESCRIPTOR_MISMATCH,
+                            "规则服务 descriptor 不匹配: " + descriptor));
+                    return null;
+                }
+                IRuleService service = IRuleService.Stub.asInterface(remote);
+                ServiceIdentityParcel identity = service.getServiceIdentity();
+                if (!isExpectedIdentity(identity)) {
+                    markRebootRequired(ServiceDiagnostic.of(
+                            ServiceDiagnostic.Type.CONTRACT_MISMATCH,
+                            "规则服务身份或合同指纹不匹配"));
+                    return null;
+                }
+                int state = identity.serviceState;
+                if (state != RuleServiceContract.READY) {
+                    mServiceState = state;
+                    recordDiagnostic(ServiceDiagnostic.forServiceState(state,
+                            "规则服务尚未就绪，state=" + state));
+                    return null;
+                }
+                final Connection connection = new Connection(remote, service, mConnectionEpoch.incrementAndGet());
+                remote.linkToDeath(() -> onBinderDied(connection), 0);
+                mConnection = connection;
+                mServiceState = RuleServiceContract.READY;
+                clearDiagnostic();
+                reregisterObservers(connection);
+                return connection;
             } catch (RemoteException e) {
-                mBinder = null;
-                mGMM = null;
-                mLastError = "godmode 服务在注册死亡监听前已失效: " + e.getMessage();
-                Logger.w(TAG, "godmode service died before linkToDeath", e);
-                notifyBinderDead();
-                return FALLBACK;
+                if (remote.isBinderAlive()) {
+                    mServiceState = RuleServiceContract.FAILED;
+                    recordDiagnostic(ServiceDiagnostic.of(ServiceDiagnostic.Type.UNKNOWN,
+                            "规则服务握手失败: " + e.getMessage()));
+                } else {
+                    mServiceState = RuleServiceContract.STARTING;
+                    recordDiagnostic(ServiceDiagnostic.of(ServiceDiagnostic.Type.BINDER_DIED,
+                            "规则服务握手期间 Binder 已死亡: " + e.getMessage()));
+                }
+                Logger.e(TAG, mLastError == null ? "rule service handshake failed" : mLastError);
+                return null;
+            } catch (RuntimeException e) {
+                mServiceState = RuleServiceContract.FAILED;
+                recordDiagnostic(ServiceDiagnostic.of(ServiceDiagnostic.Type.UNKNOWN,
+                        "规则服务握手异常: " + e.getMessage()));
+                Logger.e(TAG, mLastError);
+                return null;
             }
-            mBinder = service;
-            mGMM = IGodModeManager.Stub.asInterface(service);
-            mLastError = null;
-            Logger.i(TAG, "connected to godmode service via clipboard delegate");
-            reregisterObservers(mGMM);
-            return mGMM;
         }
     }
 
-    private void reregisterObservers(IGodModeManager service) {
-        for (ObserverSubscription subscription : mObserverSubscriptions) {
-            try {
-                service.addObserver(subscription.packageName, subscription.observer);
-            } catch (RemoteException e) {
-                // Keep the local registration. A later reconnect will retry it.
-                Logger.w(TAG, "observer re-register failed for "
-                        + subscription.packageName, e);
-            }
+    private void onBinderDied(Connection dead) {
+        boolean notify = false;
+        synchronized (this) {
+            if (mConnection != dead) return;
+            clearConnectionStateLocked(RuleServiceContract.STARTING,
+                    ServiceDiagnostic.of(ServiceDiagnostic.Type.BINDER_DIED,
+                            "规则服务 Binder 已死亡，等待重新连接"));
+            notify = true;
         }
+        if (notify) notifyBinderDead();
+    }
+
+    private void markRebootRequired(ServiceDiagnostic diagnostic) {
+        synchronized (this) {
+            clearConnectionStateLocked(RuleServiceContract.REBOOT_REQUIRED, diagnostic);
+        }
+        Logger.e(TAG, diagnostic.getTechnicalDetail());
+    }
+
+    private void clearConnectionStateLocked(int state, ServiceDiagnostic diagnostic) {
+        mConnection = null;
+        mConnectionEpoch.incrementAndGet();
+        mServiceState = state;
+        recordDiagnostic(diagnostic);
+        mRestoreLease = null;
+        mBackupLease = null;
+        mEditState.reset();
+        mRuleGeneration.set(0L);
+        for (ObserverSubscription subscription : mObserverSubscriptions) {
+            subscription.clearRemote();
+        }
+    }
+
+    private boolean isReady(Connection connection) {
+        return connection != null && connection.binder.isBinderAlive()
+                && mServiceState == RuleServiceContract.READY;
     }
 
     private IBinder connectWithRetry() {
-        IBinder service = null;
         for (int i = 0; i < CONNECT_RETRY_COUNT; i++) {
-            if (!XServiceManager.pingBridge()) {
-                mLastError = buildBridgeError();
-            } else {
-                service = XServiceManager.getService("godmode");
-                if (service != null) {
-                    return service;
-                }
-                mLastError = buildBridgeError();
+            if (XServiceManager.pingBridge()) {
+                IBinder service = XServiceManager.getService(RuleServiceContract.SERVICE_NAME);
+                if (service != null) return service;
             }
-            if (i < CONNECT_RETRY_DELAYS_MS.length) {
-                sleepQuietly(CONNECT_RETRY_DELAYS_MS[i]);
-            }
+            recordDiagnostic(buildBridgeDiagnostic());
+            if (i < CONNECT_RETRY_DELAYS_MS.length) sleepQuietly(CONNECT_RETRY_DELAYS_MS[i]);
         }
-        return service;
+        return null;
     }
 
     private static void sleepQuietly(long millis) {
-        try {
-            Thread.sleep(millis);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
+        try { Thread.sleep(millis); }
+        catch (InterruptedException e) { Thread.currentThread().interrupt(); }
     }
 
-    private static String buildBridgeError() {
-        String serviceError = XServiceManager.getLastError();
+    private static ServiceDiagnostic buildBridgeDiagnostic() {
+        String error = XServiceManager.getLastError();
         XServiceManager.BridgeStatus status = XServiceManager.getRemoteBridgeStatus();
-        if (status != null) {
-            if (!status.bridgeInstalled) {
-                return "XServiceManager 桥接未安装，请确认模块已在 LSPosed 的 android 作用域启用并重启系统。";
-            }
-            if (!status.systemServer) {
-                return "XServiceManager 桥接没有运行在 system_server，当前注入进程异常。";
-            }
-            if (status.registeredServiceCount == 0) {
-                return "XServiceManager 桥接已安装，但 godmode 服务尚未注册。";
-            }
-            if (status.lastError != null && !status.lastError.trim().isEmpty()) {
-                return "XServiceManager 桥接异常: " + status.lastError;
-            }
+        String detail;
+        if (status != null && !status.bridgeInstalled) {
+            detail = "XServiceManager 桥接未安装";
+            return ServiceDiagnostic.of(ServiceDiagnostic.Type.BRIDGE_UNAVAILABLE, detail);
+        } else if (status != null && !status.systemServer) {
+            detail = "XServiceManager 未运行在 system_server，注入失败";
+            return ServiceDiagnostic.of(ServiceDiagnostic.Type.BRIDGE_UNAVAILABLE, detail);
         }
-        String error = serviceError;
-        if (error == null || error.trim().isEmpty()) {
-            error = XServiceManager.getLastError();
-        }
-        if (error == null || error.trim().isEmpty()) {
-            return "XServiceManager 桥接不可用，可能是模块未在 android 作用域启用或 system_server 尚未完成注入。";
-        }
-        if (error.contains("clipboard is null")) {
-            return "系统 clipboard 服务不可访问，XServiceManager 无法建立桥接。";
-        }
-        if (error.contains("did not handle XServiceManager ping")
-                || error.contains("did not handle XServiceManager transaction")
-                || error.contains("did not handle XServiceManager status")) {
-            return "XServiceManager 私有事务未被 clipboard 桥接处理，请确认模块已启用并重启系统。";
-        }
-        if (error.contains("service godmode is not registered")) {
-            return "XServiceManager 桥接已连接，但 godmode 服务未注册。";
-        }
-        return "XServiceManager 桥接异常: " + error;
+        detail = error == null || error.trim().isEmpty()
+                ? "桥接已就绪，规则服务尚未注册" : error;
+        return status == null
+                ? ServiceDiagnostic.of(ServiceDiagnostic.Type.BRIDGE_UNAVAILABLE, detail)
+                : ServiceDiagnostic.of(ServiceDiagnostic.Type.SERVICE_STARTING, detail);
     }
 
-    public String getLastError() {
-        String error = mLastError;
-        if (error == null || error.trim().isEmpty()) {
-            error = XServiceManager.getLastError();
-        }
-        return error;
+    public String getLastError() { return mLastError; }
+    public ServiceDiagnostic getServiceDiagnostic() { return mServiceDiagnostic; }
+    public String getServiceFailureMessage() {
+        ServiceDiagnostic diagnostic = mServiceDiagnostic;
+        return diagnostic == null ? null : diagnostic.getUserMessage();
     }
 
-    public boolean isConnected() {
-        IBinder binder = mBinder;
-        return mGMM != null && binder != null && binder.isBinderAlive();
+    private void recordDiagnostic(ServiceDiagnostic diagnostic) {
+        mServiceDiagnostic = diagnostic;
+        if (diagnostic == null) {
+            mLastError = null;
+            return;
+        }
+        String detail = diagnostic.getTechnicalDetail();
+        mLastError = detail == null || detail.trim().isEmpty()
+                ? diagnostic.getSummary() : detail;
+    }
+
+    private void clearDiagnostic() {
+        recordDiagnostic(null);
+    }
+
+    private void recordResultFailure(int status, String detail) {
+        recordDiagnostic(ServiceDiagnostic.forResultStatus(status, detail));
+    }
+    public int getServiceState() { ensureConnection(); return mServiceState; }
+    public boolean isReady() { return ensureConnection() != null; }
+    public boolean isConnected() { return isReady(); }
+    public boolean hasReadyConnection() { return isReady(mConnection); }
+    public boolean awaitReady(long timeoutMs) {
+        long deadline = System.currentTimeMillis() + Math.max(0L, timeoutMs);
+        do {
+            if (isReady()) return true;
+            if (mServiceState == RuleServiceContract.REBOOT_REQUIRED) return false;
+            long remaining = deadline - System.currentTimeMillis();
+            if (remaining <= 0L) return false;
+            sleepQuietly(Math.min(100L, remaining));
+        } while (true);
     }
 
     public void addBinderDeathListener(Runnable listener) {
-        if (listener != null && !mBinderDeathListeners.contains(listener)) {
-            mBinderDeathListeners.add(listener);
-        }
+        if (listener != null && !mBinderDeathListeners.contains(listener)) mBinderDeathListeners.add(listener);
     }
-
     public void removeBinderDeathListener(Runnable listener) {
-        if (listener != null) {
-            mBinderDeathListeners.remove(listener);
-        }
+        if (listener != null) mBinderDeathListeners.remove(listener);
     }
-
     private void notifyBinderDead() {
         for (Runnable listener : mBinderDeathListeners) {
-            try {
-                listener.run();
-            } catch (Throwable t) {
-                Logger.w(TAG, "binder death listener failed", t);
-            }
+            mMainHandler.post(() -> {
+                try { listener.run(); }
+                catch (Throwable t) { Logger.w(TAG, "binder death listener failed", t); }
+            });
         }
     }
 
-    private void markServiceDead() {
-        synchronized (this) {
-            mBinder = null;
-            mGMM = null;
+    private void reregisterObservers(Connection connection) {
+        for (ObserverSubscription subscription : mObserverSubscriptions) {
+            try { registerObserver(connection, subscription); }
+            catch (RemoteException e) { Logger.w(TAG, "observer re-register failed", e); }
         }
-        notifyBinderDead();
     }
 
-    private void logError(String method, RemoteException e) {
-        IBinder binder = mBinder;
-        if (e instanceof DeadObjectException || binder == null || !binder.isBinderAlive()) {
-            markServiceDead();
+    private void registerObserver(Connection connection, ObserverSubscription subscription)
+            throws RemoteException {
+        ObserverRelay relay = new ObserverRelay(connection.epoch, subscription.observer);
+        ObserverRegistrationParcel registration = connection.service.addObserver(
+                subscription.packageName, relay);
+        if (registration == null
+                || (registration.status != RuleServiceContract.RESULT_COMMITTED
+                && registration.status != RuleServiceContract.RESULT_NO_CHANGE)) {
+            Logger.w(TAG, "observer registration rejected for " + subscription.packageName);
+            return;
         }
-        mLastError = "RuleServiceClient#" + method + " 调用失败: " + e.getMessage();
-        Logger.e(TAG, "RuleServiceClient#" + method + " failed: " + e.getMessage());
+        subscription.bind(connection.epoch, relay);
+        if (acceptEditState(connection.epoch, registration.editEnabled,
+                registration.editRevision)) {
+            subscription.observer.onEditModeChanged(registration.editEnabled,
+                    registration.editRevision, connection.epoch);
+        }
+        if (acceptRuleGeneration(connection.epoch, registration.ruleGeneration)) {
+            subscription.observer.onRulesInvalidated(subscription.packageName,
+                    registration.ruleGeneration, connection.epoch);
+        }
+    }
+
+    static boolean isExpectedIdentity(ServiceIdentityParcel identity) {
+        return identity != null
+                && identity.protocolVersion == RuleServiceContract.PROTOCOL_VERSION
+                && identity.buildVersionCode == RuleServiceContract.BUILD_VERSION_CODE
+                && RuleServiceContract.CONTRACT_FINGERPRINT.equals(identity.contractFingerprint);
     }
 
     public boolean hasLight() {
-        try {
-            return ensureService().hasLight();
-        } catch (RemoteException e) {
-            logError("hasLight", e);
-            return false;
-        }
+        Connection c = ensureConnection(); if (c == null) return false;
+        try { return c.service.hasLight(); } catch (RemoteException e) { logError("hasLight", c, e); return false; }
     }
 
-    public void setEditMode(boolean enable) {
-        try {
-            ensureService().setEditMode(enable);
-        } catch (RemoteException e) {
-            logError("setEditMode", e);
+    public synchronized boolean setEditMode(boolean enable) {
+        if (enable) {
+            if (!mEditState.canRequestEnable()) {
+                recordDiagnostic(ServiceDiagnostic.of(ServiceDiagnostic.Type.OPERATION_BUSY,
+                        "编辑正在关闭，请等待当前提交完成"));
+                return false;
+            }
+            mEditState.clearStaleDisabledLease();
+            if (mEditState.leaseToken() == null) {
+                String token = openLease(RuleServiceContract.OP_EDIT, null);
+                if (token == null) return false;
+                mEditState.setLeaseToken(token);
+            }
+            return true;
         }
+        String token = mEditState.leaseToken();
+        if (token != null) {
+            if (!closeLease(token)) return false;
+            // The close reply and observer callback cross different Binder channels. Keep the
+            // client in CLOSING until the authoritative disabled revision arrives.
+            mEditState.markClosing(token);
+            return true;
+        }
+        return !enable;
     }
 
-    public boolean isInEditMode() {
-        try {
-            return ensureService().isInEditMode();
-        } catch (RemoteException e) {
-            logError("isInEditMode", e);
-            return false;
-        }
+    public boolean isEditModeEnabled() {
+        return hasReadyConnection() && mEditState.isEnabled();
     }
 
-    public void addObserver(String packageName, IObserver observer) {
+    public boolean isEditStateKnown() {
+        return hasReadyConnection() && mEditState.isKnown();
+    }
+
+    public boolean isEditModeClosing() {
+        return hasReadyConnection() && mEditState.isClosing();
+    }
+
+    private String openLease(int type, String packageName) {
+        Connection c = ensureConnection(); if (c == null) return null;
+        try {
+            OperationLeaseParcel lease = c.service.openOperation(type, packageName, mLeaseOwner);
+            if (lease != null && lease.status == RuleServiceContract.RESULT_COMMITTED) {
+                clearDiagnostic();
+                return lease.token;
+            }
+            if (lease == null) {
+                recordDiagnostic(ServiceDiagnostic.of(ServiceDiagnostic.Type.UNKNOWN,
+                        "规则服务未返回操作租约"));
+            } else {
+                recordResultFailure(lease.status, lease.message);
+            }
+            return null;
+        } catch (RemoteException e) { logError("openOperation", c, e); return null; }
+    }
+
+    private boolean closeLease(String token) {
+        Connection c = ensureConnection(); if (c == null) return false;
+        try {
+            OperationLeaseParcel result = c.service.closeOperation(token, mLeaseOwner);
+            boolean closed = result != null
+                    && (result.status == RuleServiceContract.RESULT_COMMITTED
+                    || result.status == RuleServiceContract.RESULT_NO_CHANGE);
+            if (closed) clearDiagnostic();
+            if (!closed) {
+                if (result == null) {
+                    recordDiagnostic(ServiceDiagnostic.of(ServiceDiagnostic.Type.UNKNOWN,
+                            "规则服务未返回关闭结果"));
+                } else {
+                    recordResultFailure(result.status, result.message);
+                }
+                if (result != null && result.status == RuleServiceContract.RESULT_BUSY
+                        && token.equals(mEditState.leaseToken())) {
+                    mEditState.markClosing(token);
+                }
+            }
+            return closed;
+        }
+        catch (RemoteException e) { logError("closeOperation", c, e); return false; }
+    }
+
+    public void addObserver(String packageName, ObserverCallback observer) {
         if (packageName == null || observer == null) return;
-        ObserverSubscription subscription = new ObserverSubscription(packageName, observer);
-        if (!mObserverSubscriptions.contains(subscription)) {
+        ObserverSubscription subscription = findSubscription(packageName, observer);
+        if (subscription == null) {
+            subscription = new ObserverSubscription(packageName, observer);
             mObserverSubscriptions.add(subscription);
-        } else {
-            return;
         }
-        try {
-            ensureService().addObserver(packageName, observer);
-        } catch (RemoteException e) {
-            logError("addObserver", e);
+        Connection c = ensureConnection(); if (c == null) return;
+        if (subscription.remoteForEpoch(c.epoch) != null) return;
+        try { registerObserver(c, subscription); }
+        catch (RemoteException e) { logError("addObserver", c, e); }
+    }
+
+    public void removeObserver(String packageName, ObserverCallback observer) {
+        if (packageName == null || observer == null) return;
+        ObserverSubscription subscription = findSubscription(packageName, observer);
+        if (subscription == null) return;
+        mObserverSubscriptions.remove(subscription);
+        Connection c = ensureConnection(); if (c == null) return;
+        IRuleObserver relay = subscription.remoteForEpoch(c.epoch);
+        if (relay == null) return;
+        try { c.service.removeObserver(packageName, relay); }
+        catch (RemoteException e) { logError("removeObserver", c, e); }
+    }
+
+    private ObserverSubscription findSubscription(String packageName, ObserverCallback observer) {
+        for (ObserverSubscription subscription : mObserverSubscriptions) {
+            if (subscription.matches(packageName, observer)) return subscription;
+        }
+        return null;
+    }
+
+    private boolean acceptEditState(long epoch, boolean enabled, long revision) {
+        synchronized (this) {
+            return isCurrentEpochLocked(epoch) && mEditState.accept(enabled, revision);
         }
     }
 
-    public void removeObserver(String packageName, IObserver observer) {
-        if (packageName == null || observer == null) return;
-        mObserverSubscriptions.remove(new ObserverSubscription(packageName, observer));
-        try {
-            ensureService().removeObserver(packageName, observer);
-        } catch (RemoteException e) {
-            logError("removeObserver", e);
-        }
+    private boolean acceptRuleGeneration(long epoch, long generation) {
+        if (!isCurrentEpoch(epoch)) return false;
+        long current;
+        do {
+            current = mRuleGeneration.get();
+            if (generation < current) return false;
+        } while (!mRuleGeneration.compareAndSet(current, Math.max(current, generation)));
+        return isCurrentEpoch(epoch);
+    }
+
+    public boolean isCurrentEditEvent(long epoch, long revision) {
+        return ClientEventOrder.isCurrent(epoch, mConnectionEpoch.get(),
+                revision, mEditState.revision()) && isCurrentEpoch(epoch);
+    }
+
+    public boolean isCurrentRuleEvent(long epoch, long generation) {
+        return ClientEventOrder.isCurrent(epoch, mConnectionEpoch.get(),
+                generation, mRuleGeneration.get()) && isCurrentEpoch(epoch);
+    }
+
+    private boolean isCurrentEpoch(long epoch) {
+        synchronized (this) { return isCurrentEpochLocked(epoch); }
+    }
+
+    private boolean isCurrentEpochLocked(long epoch) {
+        return mConnection != null && mConnection.epoch == epoch
+                && mConnectionEpoch.get() == epoch && isReady(mConnection);
     }
 
     public AppRules getAllRules() {
+        return getAllRulesAtLeast(0L);
+    }
+
+    public AppRules getAllRulesAtLeast(long minimumGeneration) {
+        for (int attempt = 0; attempt < 3; attempt++) {
+        Connection c = ensureConnection(); if (c == null) return null;
+            try {
+                RuleSnapshotParcel snapshot = c.service.getAllRulesSnapshot();
+                if (snapshot == null || snapshot.status == RuleServiceContract.SNAPSHOT_UNAVAILABLE) return null;
+                if (snapshot.generation < minimumGeneration) continue;
+                AppRules rules = readSnapshot(snapshot, AppRules.class);
+                mRuleGeneration.accumulateAndGet(snapshot.generation, Math::max);
+                return rules;
+            } catch (RemoteException | RuntimeException e) {
+                logError("getAllRules", c, asRemote(e)); return null;
+            }
+        }
+        return null;
+    }
+
+    public ActRules getRules(String packageName) { return getRulesAtLeast(packageName, 0L); }
+
+    public ActRules getRulesAtLeast(String packageName, long minimumGeneration) {
+        for (int attempt = 0; attempt < 3; attempt++) {
+            Connection c = ensureConnection(); if (c == null) return null;
+            try {
+                RuleSnapshotParcel snapshot = c.service.getRulesSnapshot(packageName);
+                if (snapshot == null || snapshot.status == RuleServiceContract.SNAPSHOT_UNAVAILABLE) return null;
+                if (snapshot.generation < minimumGeneration) continue;
+                ActRules rules = readSnapshot(snapshot, ActRules.class);
+                mRuleGeneration.accumulateAndGet(snapshot.generation, Math::max);
+                return rules;
+            } catch (RemoteException | RuntimeException e) {
+                logError("getRules", c, asRemote(e));
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private <T> T readSnapshot(RuleSnapshotParcel snapshot, Class<T> type) {
+        if (snapshot == null || snapshot.memory == null) return null;
+        ByteBuffer buffer = null;
         try {
-            return ensureService().getAllRules();
-        } catch (RemoteException e) {
-            logError("getAllRules", e);
-            return new AppRules();
-        } catch (RuntimeException e) {
-            logError("getAllRules", new RemoteException(e.getMessage()));
-            return new AppRules();
+            if (snapshot.payloadLength < 0 || snapshot.payloadLength > 8 * 1024 * 1024) return null;
+            buffer = snapshot.memory.mapReadOnly();
+            if (snapshot.payloadLength > buffer.remaining()) return null;
+            byte[] bytes = new byte[snapshot.payloadLength];
+            buffer.get(bytes);
+            if (!sha256(bytes).equalsIgnoreCase(snapshot.sha256)) return null;
+            return mGson.fromJson(new String(bytes, StandardCharsets.UTF_8), type);
+        } catch (Exception e) {
+            throw new IllegalStateException("无法读取规则快照", e);
+        } finally {
+            if (buffer != null) SharedMemory.unmap(buffer);
+            snapshot.memory.close();
         }
     }
 
-    public ActRules getRules(String packageName) {
-        try {
-            return ensureService().getRules(packageName);
-        } catch (RemoteException e) {
-            logError("getRules", e);
-            return null;
-        } catch (RuntimeException e) {
-            logError("getRules", new RemoteException(e.getMessage()));
-            return null;
-        }
+    public boolean writeRule(String packageName, RuleRecord rule, Bitmap snapshot) {
+        return writeRule(packageName, rule, snapshot, null);
     }
 
-    public boolean writeRule(String packageName, RuleRecord viewRule, Bitmap bitmap) {
-        try {
-            return ensureService().writeRule(packageName, viewRule, bitmap);
-        } catch (RemoteException e) {
-            logError("writeRule", e);
-            return false;
-        }
+    public boolean writeRule(String packageName, RuleRecord rule, Bitmap snapshot, Bitmap modifiedSnapshot) {
+        return mutate(packageName, RuleServiceContract.MUTATION_WRITE, rule, snapshot,
+                modifiedSnapshot, null);
     }
-
-    public boolean updateRule(String packageName, RuleRecord viewRule) {
-        try {
-            return ensureService().updateRule(packageName, viewRule);
-        } catch (RemoteException e) {
-            logError("updateRule", e);
-            return false;
-        }
+    public boolean updateRule(String packageName, RuleRecord rule) {
+        return mutate(packageName, RuleServiceContract.MUTATION_UPDATE, rule, null, null, null);
     }
-
-    public boolean deleteRule(String packageName, RuleRecord viewRule) {
-        try {
-            return ensureService().deleteRule(packageName, viewRule);
-        } catch (RemoteException e) {
-            logError("deleteRule", e);
-            return false;
-        }
+    public boolean deleteRule(String packageName, RuleRecord rule) {
+        return mutate(packageName, RuleServiceContract.MUTATION_DELETE, rule, null, null, null);
     }
-
     public boolean deleteRules(String packageName) {
-        try {
-            return ensureService().deleteRules(packageName);
-        } catch (RemoteException e) {
-            logError("deleteRules", e);
+        return mutate(packageName, RuleServiceContract.MUTATION_DELETE_ALL, null, null, null, null);
+    }
+
+    public int getLastMutationStatus() {
+        return mLastMutationStatus;
+    }
+
+    private boolean mutate(String packageName, int operation, RuleRecord rule, Bitmap main,
+                           Bitmap modified, String value) {
+        boolean temporary = false;
+        String lease = mRestoreLease;
+        if (lease == null) {
+            lease = openLease(RuleServiceContract.OP_MUTATION, packageName);
+            temporary = true;
+        }
+        if (lease == null) {
+            mLastMutationStatus = RuleServiceContract.RESULT_BUSY;
             return false;
         }
+        PipeAsset mainPipe = openPipe(main);
+        PipeAsset modifiedPipe = openPipe(modified);
+        if ((main != null && mainPipe == null) || (modified != null && modifiedPipe == null)) {
+            closePipe(mainPipe);
+            closePipe(modifiedPipe);
+            awaitPipe(mainPipe);
+            awaitPipe(modifiedPipe);
+            if (temporary) closeLease(lease);
+            mLastMutationStatus = RuleServiceContract.RESULT_WRITE_FAILED;
+            return false;
+        }
+        String requestId = UUID.randomUUID().toString();
+        RuleMutationRequest request = new RuleMutationRequest(operation, requestId, lease,
+                packageName, rule == null ? null : mGson.toJson(rule),
+                mainPipe == null ? null : mainPipe.readEnd,
+                modifiedPipe == null ? null : modifiedPipe.readEnd, value);
+        Connection c = ensureConnection();
+        boolean accepted = false;
+        boolean uncertain = false;
+        try {
+            if (c != null) {
+                RuleMutationResult result = c.service.mutate(request, mLeaseOwner);
+                mLastMutationStatus = result == null ? RuleServiceContract.RESULT_UNCERTAIN
+                        : result.status;
+                accepted = result != null && (result.status == RuleServiceContract.RESULT_COMMITTED
+                        || result.status == RuleServiceContract.RESULT_NO_CHANGE);
+                if (accepted) clearDiagnostic();
+                if (!accepted) {
+                    String mutationError = result == null ? "规则服务未返回提交结果" : result.message;
+                    if (result == null) {
+                        recordDiagnostic(ServiceDiagnostic.of(ServiceDiagnostic.Type.UNKNOWN,
+                                mutationError));
+                    } else {
+                        recordResultFailure(result.status, mutationError);
+                    }
+                }
+            } else {
+                mLastMutationStatus = RuleServiceContract.RESULT_REJECTED;
+            }
+        } catch (RemoteException e) {
+            if (c != null) logError("mutate", c, e);
+            uncertain = true;
+            mLastMutationStatus = RuleServiceContract.RESULT_UNCERTAIN;
+            recordDiagnostic(ServiceDiagnostic.of(ServiceDiagnostic.Type.COMMIT_UNCERTAIN,
+                    "规则提交结果未知，请刷新规则后再操作 (requestId=" + requestId + ")"));
+        }
+        finally {
+            if (mainPipe != null) mainPipe.closeRead();
+            if (modifiedPipe != null) modifiedPipe.closeRead();
+            awaitPipe(mainPipe);
+            awaitPipe(modifiedPipe);
+            Throwable pipeFailure = firstFailure(mainPipe, modifiedPipe);
+            if (pipeFailure != null && !accepted && !uncertain) {
+                mLastMutationStatus = RuleServiceContract.RESULT_WRITE_FAILED;
+                recordDiagnostic(ServiceDiagnostic.of(ServiceDiagnostic.Type.UNKNOWN,
+                        "图片管道写入失败: " + pipeFailure.getMessage()));
+            }
+            closePipe(mainPipe);
+            closePipe(modifiedPipe);
+            ServiceDiagnostic mutationDiagnostic = mServiceDiagnostic;
+            String mutationError = mLastError;
+            if (temporary) closeLease(lease);
+            if (!accepted && mutationDiagnostic != null) {
+                mServiceDiagnostic = mutationDiagnostic;
+                mLastError = mutationError;
+            }
+        }
+        if (uncertain) {
+            int reconciled = reconcileUncertain(packageName, operation, rule,
+                    main != null, modified != null, value);
+            mLastMutationStatus = reconciled;
+            if (reconciled == RuleServiceContract.RESULT_COMMITTED) {
+                clearDiagnostic();
+                return true;
+            }
+            if (reconciled == RuleServiceContract.RESULT_REJECTED) {
+                recordDiagnostic(ServiceDiagnostic.of(ServiceDiagnostic.Type.UNKNOWN,
+                        "规则服务读回未发现本次提交，请刷新规则后再操作"
+                                + " (requestId=" + requestId + ")"));
+            } else {
+                recordDiagnostic(ServiceDiagnostic.of(ServiceDiagnostic.Type.COMMIT_UNCERTAIN,
+                        "规则提交状态未知，请刷新规则后再操作"
+                                + " (requestId=" + requestId + ")"));
+            }
+            return false;
+        }
+        return accepted;
     }
 
-    public ParcelFileDescriptor openImageFileDescriptor(String filePath) {
+    private int reconcileUncertain(String packageName, int operation, RuleRecord rule,
+                                   boolean hadMainImage, boolean hadModifiedImage,
+                                   String value) {
+        if (operation == RuleServiceContract.MUTATION_SET_TOOLBAR) {
+            String current = getToolbarHiddenItems(RuleServiceContract.GLOBAL_SCOPE);
+            if (current == null) return RuleServiceContract.RESULT_UNCERTAIN;
+            return current.equals(value == null ? "" : value)
+                    ? RuleServiceContract.RESULT_COMMITTED
+                    : RuleServiceContract.RESULT_REJECTED;
+        }
+        ActRules rules = getRules(packageName);
+        if (rules == null) return RuleServiceContract.RESULT_UNCERTAIN;
+        switch (operation) {
+            case RuleServiceContract.MUTATION_WRITE:
+            case RuleServiceContract.MUTATION_UPDATE:
+                return containsCommittedRule(rules, rule, hadMainImage, hadModifiedImage)
+                        ? RuleServiceContract.RESULT_COMMITTED
+                        : RuleServiceContract.RESULT_REJECTED;
+            case RuleServiceContract.MUTATION_DELETE:
+                return containsSlot(rules, rule) ? RuleServiceContract.RESULT_REJECTED
+                        : RuleServiceContract.RESULT_COMMITTED;
+            case RuleServiceContract.MUTATION_DELETE_ALL:
+                return isEmpty(rules) ? RuleServiceContract.RESULT_COMMITTED
+                        : RuleServiceContract.RESULT_REJECTED;
+            default:
+                return RuleServiceContract.RESULT_UNCERTAIN;
+        }
+    }
+
+    static boolean containsCommittedRule(ActRules rules, RuleRecord expected,
+                                         boolean hadMainImage, boolean hadModifiedImage) {
+        if (rules == null || expected == null) return false;
+        for (List<RuleRecord> activityRules : rules.values()) {
+            if (activityRules == null) continue;
+            for (RuleRecord actual : activityRules) {
+                if (actual == null || !actual.slotKey(actual.packageName)
+                        .equals(expected.slotKey(expected.packageName))) continue;
+                RuleRecord normalized = expected;
+                if (hadMainImage) normalized = normalized.withImagePath(actual.imagePath);
+                if (hadModifiedImage) {
+                    normalized = normalized.withModifyImagePath(actual.getModImagePath());
+                }
+                if (actual.contentEquals(normalized)) return true;
+            }
+        }
+        return false;
+    }
+
+    static boolean containsSlot(ActRules rules, RuleRecord expected) {
+        if (rules == null || expected == null) return false;
+        for (List<RuleRecord> activityRules : rules.values()) {
+            if (activityRules == null) continue;
+            for (RuleRecord actual : activityRules) {
+                if (actual != null && actual.slotKey(actual.packageName)
+                        .equals(expected.slotKey(expected.packageName))) return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean isEmpty(ActRules rules) {
+        for (List<RuleRecord> activityRules : rules.values()) {
+            if (activityRules != null && !activityRules.isEmpty()) return false;
+        }
+        return true;
+    }
+
+    private PipeAsset openPipe(Bitmap bitmap) {
+        if (bitmap == null) return null;
+        if (bitmap.isRecycled()) {
+            recordDiagnostic(ServiceDiagnostic.of(ServiceDiagnostic.Type.UNKNOWN,
+                    "图片已回收，取消规则提交"));
+            return null;
+        }
         try {
-            return ensureService().openImageFileDescriptor(filePath);
-        } catch (RemoteException e) {
-            logError("openImageFileDescriptor", e);
+            ParcelFileDescriptor[] pipe = ParcelFileDescriptor.createPipe();
+            PipeAsset asset = new PipeAsset(pipe[0], pipe[1], bitmap);
+            TaskExecutor.executeFdWrite(asset::write);
+            return asset;
+        } catch (IOException e) {
+            recordDiagnostic(ServiceDiagnostic.of(ServiceDiagnostic.Type.UNKNOWN,
+                    "创建图片管道失败: " + e.getMessage()));
             return null;
         }
     }
 
-    public String saveImageFile(String packageName, Bitmap bitmap) {
+    private static void awaitPipe(PipeAsset asset) {
+        if (asset == null) return;
         try {
-            return ensureService().saveImageFile(packageName, bitmap);
-        } catch (RemoteException e) {
-            logError("saveImageFile", e);
-            return null;
+            if (!asset.finished.await(10, TimeUnit.SECONDS)) {
+                asset.failure.compareAndSet(null,
+                        new IOException("pipe writer did not stop within 10 seconds"));
+                asset.closeWrite();
+            }
+        }
+        catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            asset.failure.compareAndSet(null, e);
+            asset.closeWrite();
         }
     }
 
-    public String getToolbarHiddenItems() {
-        try {
-            return ensureService().getToolbarHiddenItems();
-        } catch (RemoteException e) {
-            logError("getToolbarHiddenItems", e);
-            return "";
+    private static void closePipe(PipeAsset asset) {
+        if (asset == null) return;
+        asset.closeRead();
+        asset.closeWrite();
+    }
+
+    private static Throwable firstFailure(PipeAsset first, PipeAsset second) {
+        Throwable failure = first == null ? null : first.failure.get();
+        return failure != null || second == null ? failure : second.failure.get();
+    }
+
+    private final class PipeAsset {
+        final ParcelFileDescriptor readEnd;
+        private ParcelFileDescriptor writeEnd;
+        final Bitmap bitmap;
+        final CountDownLatch finished = new CountDownLatch(1);
+        final AtomicReference<Throwable> failure = new AtomicReference<>();
+
+        PipeAsset(ParcelFileDescriptor readEnd, ParcelFileDescriptor writeEnd, Bitmap bitmap) {
+            this.readEnd = readEnd;
+            this.writeEnd = writeEnd;
+            this.bitmap = bitmap;
+        }
+
+        void write() {
+            try (ParcelFileDescriptor.AutoCloseOutputStream output =
+                         new ParcelFileDescriptor.AutoCloseOutputStream(writeEnd)) {
+                writeEnd = null;
+                if (!bitmap.compress(Bitmap.CompressFormat.WEBP, 80, output)) {
+                    throw new IOException("bitmap encode failed");
+                }
+                output.flush();
+            } catch (Throwable t) {
+                failure.compareAndSet(null, t);
+                closeWrite();
+            } finally {
+                finished.countDown();
+            }
+        }
+
+        void closeRead() {
+            try { if (readEnd != null) readEnd.close(); } catch (IOException ignored) { }
+        }
+
+        void closeWrite() {
+            ParcelFileDescriptor current = writeEnd;
+            writeEnd = null;
+            try { if (current != null) current.close(); } catch (IOException ignored) { }
         }
     }
 
-    public void setToolbarHiddenItems(String items) {
-        try {
-            ensureService().setToolbarHiddenItems(items);
-        } catch (RemoteException e) {
-            logError("setToolbarHiddenItems", e);
-        }
+    public ParcelFileDescriptor openImageFileDescriptor(String path) {
+        Connection c = ensureConnection(); if (c == null) return null;
+        try { return c.service.openImageFileDescriptor(path); }
+        catch (RemoteException e) { logError("openImageFileDescriptor", c, e); return null; }
     }
 
-    // ---- 日志转发（Logger.Writer 回调）----
+    public String getToolbarHiddenItems(String packageName) {
+        Connection c = ensureConnection(); if (c == null) return null;
+        try { return c.service.getToolbarHiddenItems(packageName); }
+        catch (RemoteException e) { logError("getToolbarHiddenItems", c, e); return null; }
+    }
 
-    /**
-     * 通过 IPC 向 system_server 转发一条日志。
-     * 此方法仅供 {@link com.kaisar.xposed.godmode.engine.util.Logger.Writer} 使用，
-     * 内部直接用 Logger.w 处理异常（forwardLog 走 logcat 通道，不触发 Writer 回调，无递归风险）。
-     */
+    public boolean setToolbarHiddenItems(String items) {
+        return mutate(RuleServiceContract.GLOBAL_SCOPE, RuleServiceContract.MUTATION_SET_TOOLBAR,
+                null, null, null, items);
+    }
+
     public void forwardLog(int level, String tag, String msg, long timestamp) {
         forwardLog("unknown", level, tag, msg, timestamp);
     }
-
     public void forwardLog(String packageName, int level, String tag, String msg, long timestamp) {
-        try {
-            ensureService().log(level, packageName != null ? packageName : "unknown",
-                    timestamp, tag, msg);
-        } catch (RemoteException e) {
-            Logger.w(TAG, "forwardLog IPC failed: " + e.getMessage());
-        } catch (Throwable t) {
-            Logger.w(TAG, "forwardLog unexpected error", t);
+        Connection c = ensureConnection(); if (c == null) return;
+        try { c.service.log(level, packageName == null ? "unknown" : packageName, timestamp, tag, msg); }
+        catch (RemoteException e) { logError("log", c, e); }
+    }
+
+    public boolean beginRestore() {
+        if (mRestoreLease != null) return true;
+        mRestoreLease = openLease(RuleServiceContract.OP_RESTORE, null);
+        return mRestoreLease != null;
+    }
+    public boolean beginBackup() {
+        if (mBackupLease != null) return false;
+        mBackupLease = openLease(RuleServiceContract.OP_BACKUP, null);
+        return mBackupLease != null;
+    }
+    public void endRestore() {
+        if (mRestoreLease != null && closeLease(mRestoreLease)) mRestoreLease = null;
+    }
+    public void endBackup() {
+        if (mBackupLease != null && closeLease(mBackupLease)) mBackupLease = null;
+    }
+
+    private void logError(String method, Connection connection, RemoteException e) {
+        boolean notify = false;
+        boolean current = false;
+        String detail = "RuleServiceClient#" + method + " 调用失败: " + e.getMessage();
+        synchronized (this) {
+            current = mConnection == connection;
+            if (current && (e instanceof DeadObjectException || !connection.binder.isBinderAlive())) {
+                clearConnectionStateLocked(RuleServiceContract.STARTING,
+                        ServiceDiagnostic.of(ServiceDiagnostic.Type.BINDER_DIED, detail));
+                notify = true;
+            }
+        }
+        if (notify) notifyBinderDead();
+        if (current && !notify) {
+            recordDiagnostic(ServiceDiagnostic.of(ServiceDiagnostic.Type.UNKNOWN, detail));
+        }
+        Logger.e(TAG, detail);
+    }
+
+    private static RemoteException asRemote(Exception e) {
+        RemoteException remote = new RemoteException(e.getMessage());
+        remote.initCause(e);
+        return remote;
+    }
+
+    private static String sha256(byte[] data) throws Exception {
+        byte[] digest = MessageDigest.getInstance("SHA-256").digest(data);
+        StringBuilder out = new StringBuilder(digest.length * 2);
+        for (byte value : digest) out.append(String.format("%02x", value & 0xff));
+        return out.toString();
+    }
+
+    private static final class Connection {
+        final IBinder binder;
+        final IRuleService service;
+        final long epoch;
+        Connection(IBinder binder, IRuleService service, long epoch) {
+            this.binder = binder; this.service = service; this.epoch = epoch;
+        }
+    }
+
+    public interface ObserverCallback {
+        void onEditModeChanged(boolean enabled, long editRevision, long connectionEpoch);
+        void onRulesInvalidated(String packageName, long generation, long connectionEpoch);
+    }
+
+    private final class ObserverRelay extends IRuleObserver.Stub {
+        private final long mEpoch;
+        private final ObserverCallback mObserver;
+
+        ObserverRelay(long epoch, ObserverCallback observer) {
+            mEpoch = epoch;
+            mObserver = observer;
+        }
+
+        @Override public void onEditModeChanged(boolean enable, long editRevision) {
+            if (acceptEditState(mEpoch, enable, editRevision)) {
+                mObserver.onEditModeChanged(enable, editRevision, mEpoch);
+            }
+        }
+
+        @Override public void onRulesInvalidated(String packageName, long generation) {
+            if (acceptRuleGeneration(mEpoch, generation)) {
+                mObserver.onRulesInvalidated(packageName, generation, mEpoch);
+            }
         }
     }
 
     private static final class ObserverSubscription {
         final String packageName;
-        final IObserver observer;
+        final ObserverCallback observer;
+        private volatile long remoteEpoch = -1L;
+        private volatile IRuleObserver remote;
 
-        ObserverSubscription(String packageName, IObserver observer) {
-            this.packageName = packageName;
-            this.observer = observer;
+        ObserverSubscription(String packageName, ObserverCallback observer) {
+            this.packageName = packageName; this.observer = observer;
         }
 
-        @Override
-        public boolean equals(Object other) {
+        void bind(long epoch, IRuleObserver relay) {
+            remoteEpoch = epoch;
+            remote = relay;
+        }
+
+        IRuleObserver remoteForEpoch(long epoch) {
+            return remoteEpoch == epoch ? remote : null;
+        }
+
+        void clearRemote() {
+            remoteEpoch = -1L;
+            remote = null;
+        }
+
+        boolean matches(String packageName, ObserverCallback observer) {
+            return this.packageName.equals(packageName) && this.observer == observer;
+        }
+
+        @Override public boolean equals(Object other) {
             if (!(other instanceof ObserverSubscription)) return false;
             ObserverSubscription that = (ObserverSubscription) other;
-            return packageName.equals(that.packageName)
-                    && observer.asBinder() == that.observer.asBinder();
+            return matches(that.packageName, that.observer);
         }
-
-        @Override
-        public int hashCode() {
-            return 31 * packageName.hashCode()
-                    + System.identityHashCode(observer.asBinder());
+        @Override public int hashCode() {
+            return 31 * packageName.hashCode() + System.identityHashCode(observer);
         }
     }
 }

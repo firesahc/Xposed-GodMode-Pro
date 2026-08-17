@@ -11,7 +11,6 @@ import android.text.TextUtils;
 import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.ViewModel;
 
-import com.kaisar.xposed.godmode.IObserver;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.ipc.RuleServiceClient;
 import com.kaisar.xposed.godmode.rule.ActRules;
@@ -32,17 +31,24 @@ public class SharedViewModel extends ViewModel {
     public final MutableLiveData<AppRules> appRules = new MutableLiveData<>();
     public final MutableLiveData<List<RuleRecord>> actRules = new MutableLiveData<>();
     public final MutableLiveData<String> selectedPackage = new MutableLiveData<>();
-    private final IObserver mRuleObserver = new IObserver.Stub() {
+    private final RuleServiceClient.ObserverCallback mRuleObserver =
+            new RuleServiceClient.ObserverCallback() {
         @Override
-        public void onEditModeChanged(boolean enable) {
+        public void onEditModeChanged(boolean enable, long editRevision, long connectionEpoch) {
         }
 
         @Override
-        public void onViewRuleChanged(String packageName, ActRules actRules) {
-            appRules.postValue(RuleServiceClient.getDefault().getAllRules());
-            if (TextUtils.equals(packageName, selectedPackage.getValue())) {
-                selectedPackage.postValue(packageName);
-            }
+        public void onRulesInvalidated(String packageName, long generation,
+                                       long connectionEpoch) {
+            RuleServiceClient client = RuleServiceClient.getDefault();
+            AppRules latest = client.getAllRulesAtLeast(generation);
+            mMainHandler.post(() -> {
+                if (!client.isCurrentRuleEvent(connectionEpoch, generation)) return;
+                appRules.setValue(latest);
+                if (TextUtils.equals(packageName, selectedPackage.getValue())) {
+                    selectedPackage.setValue(packageName);
+                }
+            });
         }
     };
 
@@ -106,13 +112,14 @@ public class SharedViewModel extends ViewModel {
         return pm.getComponentEnabledSetting(cmp) == PackageManager.COMPONENT_ENABLED_STATE_DISABLED;
     }
 
-    public void restoreRules(Uri uri, ResultCallback callback) {
+    public void restoreRules(Uri uri, RestoreCallback callback) {
         TaskExecutor.executeIo(() -> {
             try {
                 Logger.i(TAG, "[ViewModel] restoreRules: start, uri=" + uri);
-                int count = RuleBackupManager.restoreRules(uri);
-                Logger.i(TAG, "[ViewModel] restoreRules: success, count=" + count);
-                mMainHandler.post(() -> callback.onSuccess(count));
+                RuleBackupManager.RestoreReport report = RuleBackupManager.restoreRules(uri);
+                Logger.i(TAG, "[ViewModel] restoreRules: success, committed=" + report.committed
+                        + ", failed=" + report.failed());
+                mMainHandler.post(() -> callback.onSuccess(report));
             } catch (RuleBackupManager.RestoreException e) {
                 Logger.w(TAG, "[ViewModel] restoreRules: failed", e);
                 mMainHandler.post(() -> callback.onFailure(e));
@@ -136,6 +143,11 @@ public class SharedViewModel extends ViewModel {
 
     public interface ResultCallback {
         void onSuccess(int count);
+        void onFailure(Exception e);
+    }
+
+    public interface RestoreCallback {
+        void onSuccess(RuleBackupManager.RestoreReport report);
         void onFailure(Exception e);
     }
 }

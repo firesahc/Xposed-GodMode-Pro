@@ -23,16 +23,41 @@ import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.ipc.RuleServiceClient;
 import com.kaisar.xposed.godmode.ui.EditModeController;
 import com.kaisar.xposed.godmode.ui.SettingsActivity;
+import com.kaisar.xposed.godmode.util.TaskExecutor;
 
 public final class NotificationService extends Service implements SharedPreferences.OnSharedPreferenceChangeListener {
 
     private static final String TAG = "NotificationService";
+    private final Handler mMainHandler = new Handler(Looper.getMainLooper());
+    private final RuleServiceClient.ObserverCallback mEditObserver =
+            new RuleServiceClient.ObserverCallback() {
+                @Override public void onEditModeChanged(boolean enabled, long editRevision,
+                                                        long connectionEpoch) {
+                    mMainHandler.post(() -> {
+                        RuleServiceClient client = RuleServiceClient.getDefault();
+                        if (isMasterEnabled()
+                                && client.isCurrentEditEvent(connectionEpoch, editRevision)) {
+                            showNotification(enabled);
+                        }
+                    });
+                }
+
+                @Override public void onRulesInvalidated(String packageName, long generation,
+                                                         long connectionEpoch) { }
+            };
+    private final Runnable mBinderDeathListener = () ->
+            mMainHandler.post(() -> {
+                if (isMasterEnabled()) showNotification(false);
+            });
 
     @Override
     public void onCreate() {
         super.onCreate();
         createControlChannel();
         PreferenceManager.getDefaultSharedPreferences(this).registerOnSharedPreferenceChangeListener(this);
+        RuleServiceClient client = RuleServiceClient.getDefault();
+        client.addBinderDeathListener(mBinderDeathListener);
+        client.addObserver("*", mEditObserver);
     }
 
     @Override
@@ -50,16 +75,41 @@ public final class NotificationService extends Service implements SharedPreferen
     }
 
     private void handleEditToggle(Intent intent) {
+        if (EditModeController.isEditModeClosing(this)) {
+            showNotification(true);
+            return;
+        }
         boolean editMode = EditModeController.isEditModeEnabled(this);
         if (intent != null && TextUtils.equals(intent.getAction(), Intent.ACTION_EDIT)) {
-            if (!RuleServiceClient.getDefault().hasLight()) {
-                Toast.makeText(this, R.string.not_active_module, Toast.LENGTH_SHORT).show();
+            RuleServiceClient client = RuleServiceClient.getDefault();
+            if (!client.hasLight()) {
+                String reason = client.getServiceFailureMessage();
+                Toast.makeText(this, reason == null
+                                ? getString(R.string.not_active_module)
+                                : getString(R.string.not_active_module_with_reason, reason),
+                        Toast.LENGTH_SHORT).show();
                 return;
             }
-            editMode = !editMode;
-            EditModeController.setEditModeEnabled(this, editMode);
+            final boolean requested = !editMode;
+            TaskExecutor.executeIo(() -> {
+                boolean committed = EditModeController.setEditModeEnabled(this, requested);
+                mMainHandler.post(() -> {
+                    if (!committed) showToggleFailure();
+                    if (isMasterEnabled()) {
+                        showNotification(EditModeController.isEditModeEnabled(this));
+                    }
+                });
+            });
         }
         showNotification(editMode);
+    }
+
+    private void showToggleFailure() {
+        String reason = RuleServiceClient.getDefault().getServiceFailureMessage();
+        Toast.makeText(this, reason == null
+                ? getString(R.string.edit_mode_update_failed)
+                : getString(R.string.edit_mode_update_failed_with_reason, reason),
+                Toast.LENGTH_SHORT).show();
     }
 
     private void createControlChannel() {
@@ -90,7 +140,10 @@ public final class NotificationService extends Service implements SharedPreferen
                 .setSmallIcon(R.drawable.ic_angel_small)
                 .setLargeIcon(BitmapFactory.decodeResource(getResources(), R.drawable.ic_angel_normal))
                 .setContentTitle(getText(R.string.app_name))
-                .setContentText(editMode ? getString(R.string.notification_edit_exit) : getString(R.string.notification_edit_start))
+                .setContentText(EditModeController.isEditModeClosing(this)
+                        ? getString(R.string.edit_mode_closing)
+                        : editMode ? getString(R.string.notification_edit_exit)
+                        : getString(R.string.notification_edit_start))
                 .setContentIntent(pendingIntent)
                 .addAction(android.R.drawable.ic_menu_manage, getString(R.string.manage), managerPendingIntent)
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT)
@@ -107,7 +160,12 @@ public final class NotificationService extends Service implements SharedPreferen
 
     @Override
     public void onDestroy() {
+        RuleServiceClient client = RuleServiceClient.getDefault();
+        client.removeObserver("*", mEditObserver);
+        client.removeBinderDeathListener(mBinderDeathListener);
+        mMainHandler.removeCallbacksAndMessages(null);
         PreferenceManager.getDefaultSharedPreferences(this).unregisterOnSharedPreferenceChangeListener(this);
+        super.onDestroy();
     }
 
     public boolean isEditMode() {
@@ -126,10 +184,6 @@ public final class NotificationService extends Service implements SharedPreferen
             } else {
                 stopForeground(STOP_FOREGROUND_REMOVE);
                 stopSelf();
-            }
-        } else if (TextUtils.equals(key, getString(R.string.pref_key_editor))) {
-            if (isMasterEnabled()) {
-                showNotification(sharedPreferences.getBoolean(key, false));
             }
         }
     }

@@ -38,10 +38,12 @@ import com.kaisar.xposed.godmode.GodModeApplication;
 import com.kaisar.xposed.godmode.ui.EditModeController;
 import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.ipc.RuleServiceClient;
+import com.kaisar.xposed.godmode.ipc.RuleServiceContract;
 import com.kaisar.xposed.godmode.ui.preference.ProgressPreference;
 import com.kaisar.xposed.godmode.ui.model.SharedViewModel;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.AppRules;
+import com.kaisar.xposed.godmode.util.TaskExecutor;
 
 import java.util.Map;
 import java.util.Set;
@@ -90,7 +92,10 @@ public final class GeneralPreferenceFragment extends PreferenceFragmentCompat im
 
     private void onAppRuleChange(AppRules appRules) {
         mProgressPreference.setVisible(false);
-        appRules = appRules != null ? appRules : new AppRules();
+        if (appRules == null) {
+            showRebootRequiredDialog();
+            return;
+        }
         Set<Map.Entry<String, ActRules>> entries = appRules.entrySet();
         PreferenceCategory category = (PreferenceCategory) findPreference(getString(R.string.pref_key_app_rules));
         category.removeAll();
@@ -166,12 +171,26 @@ public final class GeneralPreferenceFragment extends PreferenceFragmentCompat im
 
         SharedPreferences settingsSp = requireContext().getSharedPreferences(SETTING_PREFS, Context.MODE_PRIVATE);
         int previousVersionCode = settingsSp.getInt(KEY_VERSION_CODE, 0);
-        if (previousVersionCode != BuildConfig.VERSION_CODE) {
+        int serviceState = RuleServiceClient.getDefault().getServiceState();
+        if (serviceState == RuleServiceContract.REBOOT_REQUIRED) {
+            mEditorSwitchPreference.setEnabled(false);
+            showRebootRequiredDialog();
+        } else if (previousVersionCode != BuildConfig.VERSION_CODE) {
             settingsSp.edit().putInt(KEY_VERSION_CODE, BuildConfig.VERSION_CODE).apply();
             showUpdatePolicyDialog();
         } else if (!RuleServiceClient.getDefault().hasLight()) {
             showEnableModuleDialog();
         }
+    }
+
+    private void showRebootRequiredDialog() {
+        if (!isAdded()) return;
+        String reason = RuleServiceClient.getDefault().getServiceFailureMessage();
+        new AlertDialog.Builder(requireContext())
+                .setTitle(R.string.hey_guy)
+                .setMessage(reason == null ? "规则服务需要重新启动，请重启系统后再试。" : reason)
+                .setPositiveButton(android.R.string.ok, null)
+                .show();
     }
 
     @Override
@@ -189,12 +208,17 @@ public final class GeneralPreferenceFragment extends PreferenceFragmentCompat im
     public boolean onPreferenceClick(Preference preference) {
         String key = preference.getKey();
         if (mEditorSwitchPreference == preference) {
-            if (!RuleServiceClient.getDefault().hasLight()) {
-                Toast.makeText(requireContext(), R.string.not_active_module, Toast.LENGTH_SHORT).show();
+            RuleServiceClient client = RuleServiceClient.getDefault();
+            if (!client.hasLight()) {
+                String reason = client.getServiceFailureMessage();
+                Toast.makeText(requireContext(), reason == null
+                                ? getString(R.string.not_active_module)
+                                : getString(R.string.not_active_module_with_reason, reason),
+                        Toast.LENGTH_SHORT).show();
                 return true;
             }
             boolean masterOn = mEditorSwitchPreference.isChecked();
-        setMasterEnabled(masterOn);
+            setMasterEnabled(masterOn);
         } else if (TextUtils.equals(key, getString(R.string.pref_key_guide))) {
             NavController navController = NavHostFragment.findNavController(this);
             navController.navigate(actionGeneralPreferenceFragmentToGuideFragment());
@@ -214,7 +238,9 @@ public final class GeneralPreferenceFragment extends PreferenceFragmentCompat im
         SharedPreferences sp = PreferenceManager.getDefaultSharedPreferences(requireContext());
         sp.edit().putBoolean(getString(R.string.pref_key_master), enable).apply();
         if (!enable) {
-            EditModeController.setEditModeEnabled(requireContext(), false);
+            Context applicationContext = requireContext().getApplicationContext();
+            TaskExecutor.executeIo(() ->
+                    EditModeController.setEditModeEnabled(applicationContext, false));
         }
         EditModeController.startNotificationService(requireContext());
     }
@@ -246,9 +272,9 @@ public final class GeneralPreferenceFragment extends PreferenceFragmentCompat im
     private void showEnableModuleDialog() {
         RuleServiceClient client = RuleServiceClient.getDefault();
         String message = getString(R.string.not_active_module);
-        String lastError = client.getLastError();
-        if (!TextUtils.isEmpty(lastError)) {
-            message = getString(R.string.not_active_module_with_reason, lastError);
+        String failureMessage = client.getServiceFailureMessage();
+        if (!TextUtils.isEmpty(failureMessage)) {
+            message = getString(R.string.not_active_module_with_reason, failureMessage);
         }
         new AlertDialog.Builder(requireContext())
                 .setTitle(R.string.hey_guy)

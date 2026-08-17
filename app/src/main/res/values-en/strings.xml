@@ -125,12 +125,16 @@
     <string name="not_active_module">GodMode Pro module is not activated.</string>
     <string name="not_active_module_with_reason">GodMode Pro module is not activated.\n\nReason: %1$s</string>
     <string name="master_not_enabled">Please enable the GodMode Pro master switch in Settings first</string>
+    <string name="edit_mode_update_failed">Failed to update edit mode</string>
+    <string name="edit_mode_closing">Editor is closing. Wait for the current save to finish</string>
+    <string name="edit_mode_update_failed_with_reason">Failed to update edit mode: %1$s</string>
     <string name="notification_permission_denied">Notification permission denied. You can still use the Quick Settings tile</string>
     <string name="welcome_title">Hey guys, Welcome!</string>
 
     <string name="snack_bar_msg_revert_rule_fail">Delete rule failed</string>
     <string name="snack_bar_msg_backup_rule_fail">Backup rules failed</string>
     <string name="snack_bar_msg_restore_rules_fail">Restore rules failed</string>
+    <string name="snack_bar_msg_save_toolbar_fail">Failed to save toolbar settings</string>
     <string name="confirm_delete_rules">Confirm delete %d rules?</string>
     <string name="dialog_btn_copy">COPY</string>
     <string name="crash_tip">Crash detected. Copy the log below for feedback.\n\n</string>

@@ -30,6 +30,11 @@ public final class TaskExecutor {
         ThreadPools.IMAGE_LOADER.execute(task);
     }
 
+    /** 单次 Binder mutate 的匿名 pipe 写入。 */
+    public static void executeFdWrite(Runnable task) {
+        ThreadPools.FD_WRITER.execute(task);
+    }
+
     /** 通用线程池：轻量计算、视图遍历等。 */
     public static void executeGeneral(Runnable task) {
         ThreadPools.GENERAL.execute(task);

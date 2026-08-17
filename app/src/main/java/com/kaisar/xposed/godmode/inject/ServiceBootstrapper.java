@@ -4,6 +4,7 @@ import android.os.Binder;
 
 import com.kaisar.xposed.godmode.control.RuleServiceServer;
 import com.kaisar.xposed.godmode.engine.util.Logger;
+import com.kaisar.xposed.godmode.ipc.RuleServiceContract;
 import com.kaisar.xservicemanager.XServiceManager;
 
 /**
@@ -36,7 +37,7 @@ public final class ServiceBootstrapper {
                     + XServiceManager.getLastError());
         }
 
-        XServiceManager.registerService("godmode",
+        XServiceManager.registerService(RuleServiceContract.SERVICE_NAME,
                 (XServiceManager.ServiceFetcher<Binder>) RuleServiceServer::new);
         XServiceManager.flushRegisteredServices();
     }
