@@ -6,7 +6,6 @@ import android.view.ViewGroup;
 
 import com.kaisar.xposed.godmode.engine.applier.ModifyApplier;
 import com.kaisar.xposed.godmode.engine.applier.RemoveApplier;
-import com.kaisar.xposed.godmode.engine.applier.RuleApplier;
 import com.kaisar.xposed.godmode.engine.matcher.CompositeMatcher;
 import com.kaisar.xposed.godmode.engine.matcher.Matcher;
 import com.kaisar.xposed.godmode.engine.matcher.TargetLevel;
@@ -50,10 +49,10 @@ public final class ViewController {
     /** 进程级单例，仅用于向后兼容 */
     private static volatile ViewController sInstance;
 
-    private RuleApplier<ModifyEffect> mModifyApplier;
-    private RuleApplier<RemoveEffect> mRemoveApplier;
+    private ModifyApplier mModifyApplier;
+    private RemoveApplier mRemoveApplier;
     private Matcher mMatcher;
-    private final Map<RuleSlotKey, List<WeakReference<View>>> mAppliedRuleTargets =
+    private final Map<RuleSlotKey, List<AppliedTarget>> mAppliedRuleTargets =
             new HashMap<>();
 
     /** Activity 类名，Activity 级实例时非 null */
@@ -111,7 +110,7 @@ public final class ViewController {
     // Applier 懒加载
     // =========================================================================
 
-    private synchronized RuleApplier<ModifyEffect> getModifyApplier() {
+    private synchronized ModifyApplier getModifyApplier() {
         if (mModifyApplier == null) {
             mModifyApplier = new ModifyApplier(
                     path -> RuleServiceClient.getDefault().openImageFileDescriptor(path),
@@ -120,7 +119,7 @@ public final class ViewController {
         return mModifyApplier;
     }
 
-    private synchronized RuleApplier<RemoveEffect> getRemoveApplier() {
+    private synchronized RemoveApplier getRemoveApplier() {
         if (mRemoveApplier == null) {
             mRemoveApplier = mActivityClassName != null
                     ? new RemoveApplier(mActivityClassName)
@@ -265,13 +264,18 @@ public final class ViewController {
 
     /** 应用单条规则 */
     public boolean applyRule(View v, RuleRecord viewRule) {
+        return applyRule(v, viewRule, 0L);
+    }
+
+    /** Applies a rule and records ownership for a Recycler binding epoch. */
+    public boolean applyRule(View v, RuleRecord viewRule, long bindingEpoch) {
         if (v == null || viewRule == null) return false;
         v = resolveCardTarget(v, viewRule);
 
         boolean applied = viewRule.isModifyRule()
-                ? getModifyApplier().apply(v, (ModifyEffect) viewRule.getEffect())
-                : getRemoveApplier().apply(v, (RemoveEffect) viewRule.getEffect());
-        if (applied) rememberAppliedTarget(viewRule, v);
+                ? getModifyApplier().apply(v, (ModifyEffect) viewRule.getEffect(), bindingEpoch)
+                : getRemoveApplier().apply(v, (RemoveEffect) viewRule.getEffect(), bindingEpoch);
+        if (applied) rememberAppliedTarget(viewRule, v, bindingEpoch);
         return applied;
     }
 
@@ -305,21 +309,22 @@ public final class ViewController {
         }
     }
 
-    private synchronized void rememberAppliedTarget(RuleRecord rule, View view) {
+    private synchronized void rememberAppliedTarget(RuleRecord rule, View view,
+            long bindingEpoch) {
         RuleSlotKey key = rule.slotKey(rule.packageName);
-        List<WeakReference<View>> targets = mAppliedRuleTargets.computeIfAbsent(
+        List<AppliedTarget> targets = mAppliedRuleTargets.computeIfAbsent(
                 key, unused -> new ArrayList<>());
-        for (WeakReference<View> target : targets) {
-            if (target.get() == view) return;
+        for (AppliedTarget target : targets) {
+            if (target.view.get() == view && target.bindingEpoch == bindingEpoch) return;
         }
-        targets.add(new WeakReference<>(view));
+        targets.add(new AppliedTarget(view, bindingEpoch));
     }
 
     private synchronized boolean revokeRememberedTargets(RuleRecord rule) {
-        List<WeakReference<View>> targets = mAppliedRuleTargets.remove(rule.slotKey(rule.packageName));
+        List<AppliedTarget> targets = mAppliedRuleTargets.remove(rule.slotKey(rule.packageName));
         if (targets == null) return false;
-        for (WeakReference<View> target : targets) {
-            View view = target.get();
+        for (AppliedTarget target : targets) {
+            View view = target.view.get();
             if (view != null) revokeRule(view, rule);
         }
         return true;
@@ -343,10 +348,23 @@ public final class ViewController {
 
     private synchronized void forgetAppliedTarget(RuleRecord rule, View view) {
         RuleSlotKey key = rule.slotKey(rule.packageName);
-        List<WeakReference<View>> targets = mAppliedRuleTargets.get(key);
+        List<AppliedTarget> targets = mAppliedRuleTargets.get(key);
         if (targets == null) return;
-        targets.removeIf(target -> target.get() == null || target.get() == view);
+        targets.removeIf(target -> target.view.get() == null || target.view.get() == view);
         if (targets.isEmpty()) mAppliedRuleTargets.remove(key);
+    }
+
+    /** Removes only target memories owned by one binding epoch. */
+    private synchronized void forgetAppliedTarget(View view, long bindingEpoch) {
+        if (view == null || bindingEpoch <= 0L) return;
+        java.util.Iterator<Map.Entry<RuleSlotKey, List<AppliedTarget>>> iterator =
+                mAppliedRuleTargets.entrySet().iterator();
+        while (iterator.hasNext()) {
+            List<AppliedTarget> targets = iterator.next().getValue();
+            targets.removeIf(target -> target.view.get() == null
+                    || (target.view.get() == view && target.bindingEpoch == bindingEpoch));
+            if (targets.isEmpty()) iterator.remove();
+        }
     }
 
     /**
@@ -362,14 +380,38 @@ public final class ViewController {
      * @param root 被回收的 itemView 根
      */
     public void revokeAllRules(View root) {
+        revokeAllRules(root, 0L);
+    }
+
+    /** Restores only effects owned by a specific binding epoch. */
+    public void revokeAllRules(View root, long bindingEpoch) {
         if (root == null) return;
         // 先撤销 root 本身
-        revokeForView(root);
+        if (bindingEpoch > 0L) {
+            revokeForView(root, bindingEpoch);
+        } else {
+            revokeForView(root);
+        }
         // 递归子树
         if (root instanceof ViewGroup) {
             ViewGroup vg = (ViewGroup) root;
             for (int i = 0; i < vg.getChildCount(); i++) {
-                revokeAllRules(vg.getChildAt(i));
+                revokeAllRules(vg.getChildAt(i), bindingEpoch);
+            }
+        }
+    }
+
+    /**
+     * Invalidates a binding without restoring its old baseline. The host
+     * adapter is expected to write the next row values immediately after bind.
+     */
+    public void discardBindingEffects(View root, long bindingEpoch) {
+        if (root == null || bindingEpoch <= 0L) return;
+        discardForView(root, bindingEpoch);
+        if (root instanceof ViewGroup) {
+            ViewGroup vg = (ViewGroup) root;
+            for (int i = 0; i < vg.getChildCount(); i++) {
+                discardBindingEffects(vg.getChildAt(i), bindingEpoch);
             }
         }
     }
@@ -384,6 +426,30 @@ public final class ViewController {
         }
     }
 
+    private void revokeForView(View view, long bindingEpoch) {
+        if (view == null || bindingEpoch <= 0L) return;
+        boolean revoked = false;
+        if (mRemoveApplier != null) {
+            revoked |= mRemoveApplier.revokeForView(view, bindingEpoch);
+        }
+        if (mModifyApplier != null) {
+            revoked |= mModifyApplier.revokeForView(view, bindingEpoch);
+        }
+        if (revoked) forgetAppliedTarget(view, bindingEpoch);
+    }
+
+    private void discardForView(View view, long bindingEpoch) {
+        if (view == null || bindingEpoch <= 0L) return;
+        boolean discarded = false;
+        if (mRemoveApplier != null) {
+            discarded |= mRemoveApplier.discardForView(view, bindingEpoch);
+        }
+        if (mModifyApplier != null) {
+            discarded |= mModifyApplier.discardForView(view, bindingEpoch);
+        }
+        if (discarded) forgetAppliedTarget(view, bindingEpoch);
+    }
+
     // ── 异步匹配辅助 ──
 
     /** 异步批量匹配过程中暂存 (View, RuleRecord) 对，等待主线程 apply。 */
@@ -394,6 +460,16 @@ public final class ViewController {
         MatchTask(View view, RuleRecord rule) {
             this.view = view;
             this.rule = rule;
+        }
+    }
+
+    private static final class AppliedTarget {
+        final WeakReference<View> view;
+        final long bindingEpoch;
+
+        AppliedTarget(View view, long bindingEpoch) {
+            this.view = new WeakReference<>(view);
+            this.bindingEpoch = bindingEpoch;
         }
     }
 }
