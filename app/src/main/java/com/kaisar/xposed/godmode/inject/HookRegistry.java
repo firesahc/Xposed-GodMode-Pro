@@ -26,6 +26,13 @@ public final class HookRegistry {
 
     private static final String TAG = "HookRegistry";
     private static volatile boolean sHooksRegistered;
+    private static volatile boolean sResumeHookInstalled;
+    private static volatile boolean sCreateHookInstalled;
+    private static volatile boolean sPostResumeHookInstalled;
+    private static volatile boolean sDestroyHookInstalled;
+    private static volatile boolean sTouchHookInstalled;
+    private static volatile boolean sKeyHookInstalled;
+    private static volatile boolean sEventBusRegistered;
 
     private HookRegistry() {}
 
@@ -34,47 +41,86 @@ public final class HookRegistry {
      * <p>
      * 注册顺序保持与重构前一致：onResume → onCreate → hooks → observer
      */
-    public static synchronized void registerAll(XC_LoadPackage.LoadPackageParam lpp,
-                                                Property<Boolean> switchProp) {
+    public static synchronized HookInstallReport registerAll(XC_LoadPackage.LoadPackageParam lpp,
+                                                              Property<Boolean> switchProp) {
         if (sHooksRegistered) {
-            Logger.d(TAG, "hooks already registered, skipping");
-            return;
+            return new HookInstallReport(true, sTouchHookInstalled, sKeyHookInstalled, true);
         }
 
-        // 1) Activity.onResume — 记录当前 Activity
-        XposedHelpers.findAndHookMethod(Activity.class, "onResume",
-                new LifecycleHooks.ActivityResumeHook());
+        sResumeHookInstalled |= install("Activity.onResume", () ->
+                XposedHelpers.findAndHookMethod(Activity.class, "onResume",
+                        new LifecycleHooks.ActivityResumeHook()));
+        sCreateHookInstalled |= install("Activity.onCreate", () ->
+                XposedHelpers.findAndHookMethod(Activity.class, "onCreate", Bundle.class,
+                        new LifecycleHooks.ActivityCreateHook(switchProp)));
 
-        // 2) Activity.onCreate — 注入模块资源 + 编辑面板显示
-        XposedHelpers.findAndHookMethod(Activity.class, "onCreate", Bundle.class,
-                new LifecycleHooks.ActivityCreateHook(switchProp));
-
-        // 3) Activity 生命周期事件 Hook (onPostResume + onDestroy)
-        // LifecycleHooks 作为 XC_MethodHook 接收原始事件并通过 EventBus 转发
         LifecycleHooks lifecycleHooks = new LifecycleHooks();
-        XposedHelpers.findAndHookMethod(Activity.class, "onPostResume", lifecycleHooks);
-        XposedHelpers.findAndHookMethod(Activity.class, "onDestroy", lifecycleHooks);
-        // 注册 RuleLifecycleManager 到 EventBus，消费 ActivityLifecycleEvent 和 RulesChangedEvent
-        ModuleBootstrap.getEventBus().register(RuleLifecycleManager.getInstance());
+        sPostResumeHookInstalled |= install("Activity.onPostResume", () ->
+                XposedHelpers.findAndHookMethod(Activity.class, "onPostResume", lifecycleHooks));
+        sDestroyHookInstalled |= install("Activity.onDestroy", () ->
+                XposedHelpers.findAndHookMethod(Activity.class, "onDestroy", lifecycleHooks));
 
-        // 4) 调试布局模式 Hook
-        DebugHooks.install(switchProp);
+        boolean coreReady = sResumeHookInstalled && sCreateHookInstalled
+                && sPostResumeHookInstalled && sDestroyHookInstalled;
+        if (coreReady && !sEventBusRegistered) {
+            try {
+                ModuleBootstrap.getEventBus().register(RuleLifecycleManager.getInstance());
+                sEventBusRegistered = true;
+            } catch (Throwable failure) {
+                Logger.w(TAG, "RuleLifecycleManager registration failed", failure);
+            }
+        }
 
-        // 5) 触摸事件 Hook
-        InteractionHooks.TouchHook touchHook =
-                new InteractionHooks.TouchHook(ModuleBootstrap.getEditorOrchestrator());
-        ModuleBootstrap.getSwitchProp().addOnPropertyChangeListener(
-                ModuleBootstrap.getEditorOrchestrator());
-        XposedHelpers.findAndHookMethod(View.class, "dispatchTouchEvent",
-                MotionEvent.class, touchHook);
+        try {
+            DebugHooks.install(switchProp);
+        } catch (Throwable failure) {
+            Logger.w(TAG, "debug hooks unavailable", failure);
+        }
 
-        // 6) 按键事件 Hook
-        InteractionHooks.KeyHook keyHook =
-                new InteractionHooks.KeyHook(ModuleBootstrap.getEditorOrchestrator());
-        XposedHelpers.findAndHookMethod(Activity.class, "dispatchKeyEvent",
-                KeyEvent.class, keyHook);
+        sTouchHookInstalled |= install("View.dispatchTouchEvent", () -> {
+            InteractionHooks.TouchHook hook = new InteractionHooks.TouchHook(
+                    ModuleBootstrap.getEditorOrchestrator());
+            XposedHelpers.findAndHookMethod(View.class, "dispatchTouchEvent",
+                    MotionEvent.class, hook);
+            ModuleBootstrap.getSwitchProp().addOnPropertyChangeListener(
+                    ModuleBootstrap.getEditorOrchestrator());
+        });
+        sKeyHookInstalled |= install("Activity.dispatchKeyEvent", () ->
+                XposedHelpers.findAndHookMethod(Activity.class, "dispatchKeyEvent",
+                        KeyEvent.class,
+                        new InteractionHooks.KeyHook(ModuleBootstrap.getEditorOrchestrator())));
 
-        sHooksRegistered = true;
-        Logger.d(TAG, "all hooks registered successfully");
+        sHooksRegistered = coreReady && sEventBusRegistered;
+        Logger.i(TAG, "hook install result: core=" + sHooksRegistered
+                + ", touch=" + sTouchHookInstalled + ", key=" + sKeyHookInstalled);
+        return new HookInstallReport(sHooksRegistered, sTouchHookInstalled,
+                sKeyHookInstalled, sEventBusRegistered);
+    }
+
+    private static boolean install(String name, HookInstall action) {
+        try {
+            action.install();
+            return true;
+        } catch (Throwable failure) {
+            Logger.w(TAG, name + " unavailable; continuing without this hook", failure);
+            return false;
+        }
+    }
+
+    private interface HookInstall { void install() throws Throwable; }
+
+    public static final class HookInstallReport {
+        public final boolean coreReady;
+        public final boolean touchInstalled;
+        public final boolean keyInstalled;
+        public final boolean eventBusRegistered;
+
+        HookInstallReport(boolean coreReady, boolean touchInstalled,
+                          boolean keyInstalled, boolean eventBusRegistered) {
+            this.coreReady = coreReady;
+            this.touchInstalled = touchInstalled;
+            this.keyInstalled = keyInstalled;
+            this.eventBusRegistered = eventBusRegistered;
+        }
     }
 }

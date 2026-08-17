@@ -18,20 +18,35 @@ public final class AppInjector {
 
     /** 注入目标应用 */
     public void inject(XC_LoadPackage.LoadPackageParam lpp, String packageName) {
+        RuleServiceClient serviceClient = RuleServiceClient.getDefault();
+        if (!serviceClient.awaitReady(2_500L)) {
+            Logger.e(TAG, "[GodMode] IPC handshake failed; skip hooks for " + packageName
+                    + ", state=" + serviceClient.getServiceState());
+            return;
+        }
+
         // 设置日志 Writer：通过 IPC 转发到 system_server → GodModeLog → godmodepro.log
         Logger.setWriter((level, tag, msg, timestamp) -> {
-            RuleServiceClient.getDefault().forwardLog(packageName, level, tag, msg, timestamp);
+            serviceClient.forwardLog(packageName, level, tag, msg, timestamp);
         });
         Logger.d(TAG, "[GodMode] inject into app: " + packageName);
 
         // 注册所有 Xposed Hook
-        HookRegistry.registerAll(lpp, ModuleBootstrap.getSwitchProp());
+        HookRegistry.HookInstallReport hookReport = HookRegistry.registerAll(
+                lpp, ModuleBootstrap.getSwitchProp());
+        if (!hookReport.coreReady) {
+            Logger.e(TAG, "[GodMode] lifecycle hooks unavailable; skip runtime for "
+                    + packageName);
+            return;
+        }
 
         // [Phase 4] 初始化 RuleManager（Binder 获取规则 + 文件快照降级）
         RuleManager.init(packageName);
+        serviceClient.addBinderDeathListener(() ->
+                ModuleBootstrap.notifyEditModeChanged(false));
 
         // 注册 IPC 观察者，监听规则变更
-        RuleServiceClient.getDefault().addObserver(packageName, new ServiceObserver(
+        serviceClient.addObserver(packageName, new ServiceObserver(
                 new ServiceObserver.Callback() {
                     @Override
                     public void onEditModeChanged(boolean enable) {
