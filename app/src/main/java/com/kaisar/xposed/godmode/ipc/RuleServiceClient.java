@@ -585,14 +585,14 @@ public final class RuleServiceClient {
                 RuleMutationResult result = c.service.mutate(request, mLeaseOwner);
                 mLastMutationStatus = result == null ? RuleServiceContract.RESULT_UNCERTAIN
                         : result.status;
+                uncertain = result == null;
                 accepted = result != null && (result.status == RuleServiceContract.RESULT_COMMITTED
                         || result.status == RuleServiceContract.RESULT_NO_CHANGE);
                 if (accepted) clearDiagnostic();
                 if (!accepted) {
                     String mutationError = result == null ? "规则服务未返回提交结果" : result.message;
                     if (result == null) {
-                        recordDiagnostic(ServiceDiagnostic.of(ServiceDiagnostic.Type.UNKNOWN,
-                                mutationError));
+                        recordResultFailure(RuleServiceContract.RESULT_UNCERTAIN, mutationError);
                     } else {
                         recordResultFailure(result.status, mutationError);
                     }

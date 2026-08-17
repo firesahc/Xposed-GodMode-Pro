@@ -138,7 +138,11 @@ public final class RuleServiceServer extends IRuleService.Stub {
         if (owner == null || leaseToken == null) return leaseResult(0,
                 RuleServiceContract.RESULT_INVALID, "operation owner and token are required");
         LeaseRegistration registration = ownerRegistration(leaseToken);
-        int type = registration == null ? 0 : registration.type;
+        if (registration == null) {
+            return new OperationLeaseParcel(RuleServiceContract.RESULT_NO_CHANGE, 0, null,
+                    "lease already released");
+        }
+        int type = registration.type;
         try {
             OperationCoordinator.CloseResult closed = mCoordinator.close(leaseToken,
                     owner.asBinder(), Binder.getCallingUid(), OperationCoordinator.CLOSE_TIMEOUT_MS);

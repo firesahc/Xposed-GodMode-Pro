@@ -11,6 +11,8 @@ import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
 
 import com.kaisar.xposed.godmode.ipc.contract.IRuleService;
+import com.kaisar.xposed.godmode.ipc.contract.ILeaseOwner;
+import com.kaisar.xposed.godmode.ipc.contract.OperationLeaseParcel;
 import com.kaisar.xposed.godmode.ipc.contract.ServiceIdentityParcel;
 import com.kaisar.xservicemanager.XServiceManager;
 
@@ -50,6 +52,29 @@ public final class RuleServiceBridgeInstrumentedTest {
         assertTrue(client.getLastError(), client.awaitReady(5_000L));
         assertEquals(RuleServiceContract.READY, client.getServiceState());
         assertTrue(client.hasLight());
+    }
+
+    @Test
+    public void liveMutationLeaseCloseIsIdempotent() throws Exception {
+        requireLiveBridge();
+
+        IRuleService service = IRuleService.Stub.asInterface(
+                XServiceManager.getService(RuleServiceContract.SERVICE_NAME));
+        assertNotNull(service);
+        ILeaseOwner owner = new ILeaseOwner.Stub() {
+            @Override public void onLeaseRevoked(int reason) { }
+        };
+        String managerPackage = InstrumentationRegistry.getInstrumentation()
+                .getTargetContext().getPackageName();
+        OperationLeaseParcel lease = service.openOperation(
+                RuleServiceContract.OP_MUTATION, managerPackage, owner);
+        assertNotNull(lease);
+        assertEquals(RuleServiceContract.RESULT_COMMITTED, lease.status);
+
+        OperationLeaseParcel first = service.closeOperation(lease.token, owner);
+        OperationLeaseParcel second = service.closeOperation(lease.token, owner);
+        assertEquals(RuleServiceContract.RESULT_COMMITTED, first.status);
+        assertEquals(RuleServiceContract.RESULT_NO_CHANGE, second.status);
     }
 
     private static void requireLiveBridge() {
