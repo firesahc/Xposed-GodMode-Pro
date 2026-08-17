@@ -189,6 +189,7 @@ public final class RuleManager {
             mLogger.w("Binder getRules failed: " + e.getMessage());
         }
 
+        suspendRuntimeForUnavailableService();
         mLoadState = LoadState.UNAVAILABLE;
         mLogger.w("Binder unavailable for " + mPackageName
                 + " — retaining last valid rules (" + mActRules.size() + " activities)");
@@ -198,6 +199,7 @@ public final class RuleManager {
     /** Accepts both the initial Binder read and observer ready snapshots. */
     public synchronized void acceptServiceSnapshot(ActRules serviceRules) {
         if (serviceRules == null) {
+            suspendRuntimeForUnavailableService();
             mLoadState = LoadState.UNAVAILABLE;
             scheduleRetry();
             return;
@@ -246,11 +248,18 @@ public final class RuleManager {
 
     private void onBinderDeath() {
         if (!mInitialized) return;
+        suspendRuntimeForUnavailableService();
         mLoadState = LoadState.UNAVAILABLE;
         mLogger.w("Binder died for " + mPackageName
-                + " — retaining last valid rules and scheduling reload");
+                + " — revoked module-owned effects and scheduling reload");
         mRetryAttempt = 0;
         scheduleRetry();
+    }
+
+    private synchronized void suspendRuntimeForUnavailableService() {
+        if (mActRules.isEmpty()) return;
+        ModuleBootstrap.notifyViewRulesChanged(new ActRules());
+        replaceRules(new ActRules());
     }
 
     private Handler getRetryHandler() {
