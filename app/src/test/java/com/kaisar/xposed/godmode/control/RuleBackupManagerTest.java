@@ -12,6 +12,8 @@ import org.junit.rules.TemporaryFolder;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.List;
 
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 import com.kaisar.xposed.godmode.engine.rule.RuleEffect;
@@ -117,6 +119,25 @@ public final class RuleBackupManagerTest {
         assertEquals("/data/original-mod.webp", input.getModImagePath());
         assertEquals("", copy.getModImagePath());
         assertFalse(input == copy);
+    }
+
+    @Test
+    public void selectedBackupUsesLastAuthoritativeDuplicateSlot() {
+        RuleRecord first = ruleWithAlias("first");
+        RuleRecord last = ruleWithAlias("last");
+
+        List<RuleRecord> selected = RuleBackupManager.selectCurrentRules(
+                Arrays.asList(first, last), Arrays.asList(first, last));
+
+        assertEquals(2, selected.size());
+        assertEquals("last", selected.get(0).alias);
+        assertEquals("last", selected.get(1).alias);
+    }
+
+    private static RuleRecord ruleWithAlias(String alias) {
+        return new RuleRecord("label", "com.example", "1", 1, 68,
+                "preview.webp", alias, 1, 2, 3, 4, new int[]{1},
+                "Activity", "TextView", "id/title", "", "", 0, 1L);
     }
 
 }

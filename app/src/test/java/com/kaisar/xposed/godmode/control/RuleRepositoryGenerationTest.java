@@ -1,8 +1,11 @@
 package com.kaisar.xposed.godmode.control;
 
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+import com.google.gson.Gson;
+import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 
 import org.junit.Test;
@@ -18,6 +21,18 @@ public final class RuleRepositoryGenerationTest {
     @Test
     public void writeAfterDeleteWithNewGenerationIsAccepted() {
         assertTrue(RuleRepository.RuleStore.isWriteCurrent(42L, 41L));
+    }
+
+    @Test
+    public void candidateGenerationIsNotPublishedUntilCommit() {
+        RuleRepository.RuleCache cache = new RuleRepository.RuleCache(
+                new Gson(), Logger.getLogger("RuleRepositoryGenerationTest"));
+
+        long proposed = cache.proposedGeneration();
+
+        assertEquals(0L, cache.currentGeneration());
+        cache.commitGeneration(proposed);
+        assertEquals(proposed, cache.currentGeneration());
     }
 
     @Test
