@@ -50,8 +50,8 @@
 <small>A semi-transparent panel appears on the right when editing</small><br>
 <br>&#8226; <b>Slider</b> &ensp;&ensp;&ensp;&ensp;&ensp; Select elements by hierarchy depth<br>
 &#8226; <b>Toggle Position</b> &ensp; Panel left / right side<br>
-&#8226; <b>Remove·Modify</b> &ensp; Expand respective menus<br>
 &#8226; <b>Feed Mode</b> &ensp;&ensp;&ensp; Toggle ON / OFF (default OFF)<br>
+&#8226; <b>Remove·Modify</b> &ensp; Expand respective menus<br>
 &#8226; <b>Prev·Next</b> &ensp;&ensp;&ensp; Navigate elements one by one<br>
 <br><b>Volume Keys</b><br>
 &#8226; <b>Single Press</b> &ensp; Navigate prev/next when panel is open<br>
@@ -75,7 +75,6 @@
 <br><i>Rules and screenshots saved automatically</i><br><br>
 
 <b>6. Modify Mode</b><br>
-<br><b>◆ Property Editing</b><br>
 ① Select element → tap <b>Modify</b> button to open property panel<br>
 ② Adjust properties:<br>
 &ensp;&#8226; <b>Width·Height</b> &ensp; Slider or manual input (0–2000)<br>
