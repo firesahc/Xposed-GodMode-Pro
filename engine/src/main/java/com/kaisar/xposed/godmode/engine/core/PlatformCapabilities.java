@@ -36,11 +36,6 @@ public final class PlatformCapabilities {
         return SDK <= 25;
     }
 
-    /** API 29+ 需要 debug_layout 属性 workaround（DisplayProperties API 替代 SystemProperties） */
-    public static boolean requiresDebugLayoutWorkaround() {
-        return SDK >= 29;
-    }
-
     // ===== 厂商检测 =====
 
     private static final String MANUFACTURER =

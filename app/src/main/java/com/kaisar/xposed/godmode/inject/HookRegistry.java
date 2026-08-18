@@ -8,7 +8,6 @@ import android.view.View;
 
 import com.kaisar.xposed.godmode.engine.Property;
 import com.kaisar.xposed.godmode.engine.util.Logger;
-import com.kaisar.xposed.godmode.inject.hooks.DebugHooks;
 import com.kaisar.xposed.godmode.inject.hooks.InteractionHooks;
 import com.kaisar.xposed.godmode.inject.hooks.LifecycleHooks;
 import com.kaisar.xposed.godmode.orchestrator.RuleLifecycleManager;
@@ -69,12 +68,6 @@ public final class HookRegistry {
             } catch (Throwable failure) {
                 Logger.w(TAG, "RuleLifecycleManager registration failed", failure);
             }
-        }
-
-        try {
-            DebugHooks.install(switchProp);
-        } catch (Throwable failure) {
-            Logger.w(TAG, "debug hooks unavailable", failure);
         }
 
         sTouchHookInstalled |= install("View.dispatchTouchEvent", () -> {
