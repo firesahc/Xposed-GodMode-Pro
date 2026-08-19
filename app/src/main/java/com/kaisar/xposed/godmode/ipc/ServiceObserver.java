@@ -37,9 +37,25 @@ public final class ServiceObserver implements Handler.Callback,
 
     @Override
     public void onRulesInvalidated(String packageName, long generation, long connectionEpoch) {
+        mHandler.post(() -> loadRules(packageName, generation, connectionEpoch, 0));
+    }
+
+    private void loadRules(String packageName, long generation, long connectionEpoch, int attempt) {
         ActRules rules = mClient.getRulesAtLeast(packageName, generation);
-        mHandler.obtainMessage(ACTION_VIEW_RULES_CHANGED,
-                new RulesUpdate(generation, connectionEpoch, rules)).sendToTarget();
+        if (rules != null) {
+            mHandler.obtainMessage(ACTION_VIEW_RULES_CHANGED,
+                    new RulesUpdate(generation, connectionEpoch, rules)).sendToTarget();
+            return;
+        }
+        if (attempt < 2 && mClient.isCurrentRuleEvent(connectionEpoch, generation)) {
+            Logger.d(TAG, "load rules after invalidation retry package=" + packageName
+                    + " generation=" + generation + " attempt=" + (attempt + 1));
+            mHandler.postDelayed(() -> loadRules(packageName, generation, connectionEpoch,
+                    attempt + 1), 100L * (attempt + 1));
+        } else {
+            Logger.w(TAG, "load rules after invalidation failed package=" + packageName
+                    + " generation=" + generation + " attempts=" + (attempt + 1));
+        }
     }
 
     @Override
@@ -52,13 +68,25 @@ public final class ServiceObserver implements Handler.Callback,
             EditUpdate update = (EditUpdate) msg.obj;
             if (mCallback != null
                     && mClient.isCurrentEditEvent(update.connectionEpoch, update.editRevision)) {
-                mCallback.onEditModeChanged(update.enabled);
+                try {
+                    mCallback.onEditModeChanged(update.enabled);
+                } catch (Throwable failure) {
+                    Logger.w(TAG, "edit observer callback failed epoch="
+                            + update.connectionEpoch + " revision=" + update.editRevision,
+                            failure);
+                }
             }
         } else if (msg.what == ACTION_VIEW_RULES_CHANGED) {
             RulesUpdate update = (RulesUpdate) msg.obj;
             if (mCallback != null
                     && mClient.isCurrentRuleEvent(update.connectionEpoch, update.generation)) {
-                mCallback.onViewRulesChanged(update.rules);
+                try {
+                    mCallback.onViewRulesChanged(update.rules);
+                } catch (Throwable failure) {
+                    Logger.w(TAG, "rules observer callback failed generation="
+                            + update.generation + " epoch=" + update.connectionEpoch,
+                            failure);
+                }
             }
         }
         return true;

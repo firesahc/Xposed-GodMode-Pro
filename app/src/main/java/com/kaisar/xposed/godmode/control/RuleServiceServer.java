@@ -62,6 +62,8 @@ public final class RuleServiceServer extends IRuleService.Stub {
 
     public RuleServiceServer(Context context) {
         mLogger = Logger.getLogger("RuleServiceServer");
+        Logger.setWriter((level, tag, msg, timestamp) ->
+                GodModeLog.write(level, "system_server", tag, msg, timestamp));
         mIncomingImageReader = new IncomingImageReader(mLogger);
         mPermissionEnforcer = new PermissionEnforcer(context);
         mObserverRegistry = new ObserverRegistry(Logger.getLogger("ObserverRegistry"));
@@ -70,8 +72,6 @@ public final class RuleServiceServer extends IRuleService.Stub {
         mRepository = new RuleRepository(mGson, Logger.getLogger("RuleRepository"),
                 mObserverRegistry);
         cleanupStaleIncomingFiles();
-        Logger.setWriter((level, tag, msg, timestamp) ->
-                GodModeLog.write(level, "system_server", tag, msg, timestamp));
         mRepository.loadAll(
                 () -> {
                     mLifecycle.markHealthy(ModuleLifecycle.Layer.CONTROL);
@@ -105,10 +105,18 @@ public final class RuleServiceServer extends IRuleService.Stub {
     @Override public OperationLeaseParcel openOperation(int operationType, String packageName,
                                                         ILeaseOwner owner)
             throws RemoteException {
-        if (!areRulesReady()) return leaseResult(operationType,
-                RuleServiceContract.RESULT_BUSY, "rule service is not ready");
-        if (owner == null) return leaseResult(operationType,
-                RuleServiceContract.RESULT_INVALID, "operation owner is required");
+        if (!areRulesReady()) {
+            mLogger.w("operation rejected type=" + operationName(operationType)
+                    + " reason=service_not_ready");
+            return leaseResult(operationType,
+                    RuleServiceContract.RESULT_BUSY, "rule service is not ready");
+        }
+        if (owner == null) {
+            mLogger.w("operation rejected type=" + operationName(operationType)
+                    + " reason=missing_owner");
+            return leaseResult(operationType,
+                    RuleServiceContract.RESULT_INVALID, "operation owner is required");
+        }
         int callingUid = Binder.getCallingUid();
         boolean moduleCaller = mPermissionEnforcer.isModuleUid(callingUid);
         boolean ownsPackage = PackageNameValidator.isValid(packageName)
@@ -116,12 +124,20 @@ public final class RuleServiceServer extends IRuleService.Stub {
         OperationCoordinator.OpenResult opened = mCoordinator.open(operationType, packageName,
                 callingUid, moduleCaller, ownsPackage, owner.asBinder());
         if (opened.status != RuleServiceContract.RESULT_COMMITTED) {
+            mLogger.w("operation rejected type=" + operationName(operationType)
+                    + " package=" + packageName + " uid=" + callingUid
+                    + " status=" + resultName(opened.status)
+                    + " reason=" + opened.message);
             return leaseResult(operationType, opened.status, opened.message);
         }
-        if (!registerOwner(opened.token, operationType, owner.asBinder())) {
+        if (!registerOwner(opened.token, operationType, packageName, callingUid,
+                owner.asBinder())) {
             OperationCoordinator.CloseResult closed = mCoordinator.ownerDied(opened.token,
                     owner.asBinder());
             handleEditTransition(closed);
+            mLogger.w("operation owner died before registration type="
+                    + operationName(operationType) + " package=" + packageName
+                    + " uid=" + callingUid);
             return leaseResult(operationType, RuleServiceContract.RESULT_BUSY,
                     "operation owner already died");
         }
@@ -129,16 +145,23 @@ public final class RuleServiceServer extends IRuleService.Stub {
             mObserverRegistry.notifyObserverEditModeChanged(opened.editEnabled,
                     opened.editRevision);
         }
+        mLogger.i("operation opened type=" + operationName(operationType)
+                + " package=" + packageName + " uid=" + callingUid
+                + " editRevision=" + opened.editRevision);
         return new OperationLeaseParcel(opened.status, operationType, opened.token,
                 opened.message);
     }
 
     @Override public OperationLeaseParcel closeOperation(String leaseToken, ILeaseOwner owner)
             throws RemoteException {
-        if (owner == null || leaseToken == null) return leaseResult(0,
-                RuleServiceContract.RESULT_INVALID, "operation owner and token are required");
+        if (owner == null || leaseToken == null) {
+            mLogger.w("operation close rejected reason=missing_owner_or_token");
+            return leaseResult(0,
+                    RuleServiceContract.RESULT_INVALID, "operation owner and token are required");
+        }
         LeaseRegistration registration = ownerRegistration(leaseToken);
         if (registration == null) {
+            mLogger.d("operation close ignored: lease already released");
             return new OperationLeaseParcel(RuleServiceContract.RESULT_NO_CHANGE, 0, null,
                     "lease already released");
         }
@@ -147,13 +170,24 @@ public final class RuleServiceServer extends IRuleService.Stub {
             OperationCoordinator.CloseResult closed = mCoordinator.close(leaseToken,
                     owner.asBinder(), Binder.getCallingUid(), OperationCoordinator.CLOSE_TIMEOUT_MS);
             handleEditTransition(closed);
-            if (!closed.closed) return leaseResult(type, RuleServiceContract.RESULT_BUSY,
-                    "operation is still active");
+            if (!closed.closed) {
+                mLogger.w("operation close busy type=" + operationName(type)
+                        + " package=" + registration.packageName
+                        + " uid=" + registration.uid);
+                return leaseResult(type, RuleServiceContract.RESULT_BUSY,
+                        "operation is still active");
+            }
             unregisterOwner(leaseToken, true);
+            mLogger.i("operation closed type=" + operationName(type)
+                    + " package=" + registration.packageName
+                    + " uid=" + registration.uid);
             return new OperationLeaseParcel(RuleServiceContract.RESULT_COMMITTED, type, null,
                     "lease released");
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+            mLogger.w("operation close interrupted type=" + operationName(type)
+                    + " package=" + registration.packageName
+                    + " uid=" + registration.uid, e);
             return leaseResult(type, RuleServiceContract.RESULT_BUSY,
                     "interrupted while closing operation");
         }
@@ -163,11 +197,17 @@ public final class RuleServiceServer extends IRuleService.Stub {
                                                             IRuleObserver observer)
             throws RemoteException {
         enforceObserverScope(packageName, "register observer");
-        if (!mStarted || observer == null) return new ObserverRegistrationParcel(
-                RuleServiceContract.RESULT_BUSY, false, 0L, mRepository.getGeneration(),
-                "rule service is not ready");
+        if (!mStarted || observer == null) {
+            mLogger.w("observer registration rejected package=" + packageName
+                    + " reason=service_not_ready_or_null_observer");
+            return new ObserverRegistrationParcel(
+                    RuleServiceContract.RESULT_BUSY, false, 0L, mRepository.getGeneration(),
+                    "rule service is not ready");
+        }
         boolean registered = mObserverRegistry.addObserver(packageName, observer);
         OperationCoordinator.EditState state = mCoordinator.editState();
+        mLogger.d("observer " + (registered ? "registered" : "already registered")
+                + " package=" + packageName + " generation=" + mRepository.getGeneration());
         return new ObserverRegistrationParcel(registered
                 ? RuleServiceContract.RESULT_COMMITTED : RuleServiceContract.RESULT_NO_CHANGE,
                 state.enabled, state.revision, mRepository.getGeneration(),
@@ -177,12 +217,20 @@ public final class RuleServiceServer extends IRuleService.Stub {
     @Override public void removeObserver(String packageName, IRuleObserver observer)
             throws RemoteException {
         enforceObserverScope(packageName, "unregister observer");
-        mObserverRegistry.removeObserver(observer);
+        if (mObserverRegistry.removeObserver(observer)) {
+            mLogger.d("observer unregistered package=" + packageName);
+        } else if (observer == null) {
+            mLogger.w("observer unregister rejected package=" + packageName
+                    + " reason=null_observer");
+        }
     }
 
     @Override public RuleSnapshotParcel getAllRulesSnapshot() throws RemoteException {
         mPermissionEnforcer.enforcePermission("get all rules fail permission denied");
-        if (!areRulesReady()) return unavailableSnapshot(RuleServiceContract.GLOBAL_SCOPE);
+        if (!areRulesReady()) {
+            mLogger.d("snapshot unavailable scope=global reason=service_not_ready");
+            return unavailableSnapshot(RuleServiceContract.GLOBAL_SCOPE);
+        }
         RuleRepository.RepositorySnapshot<AppRules> snapshot =
                 mRepository.getAllRulesSnapshot();
         return createSnapshot("all", RuleServiceContract.GLOBAL_SCOPE, snapshot.value,
@@ -192,17 +240,47 @@ public final class RuleServiceServer extends IRuleService.Stub {
     @Override public RuleSnapshotParcel getRulesSnapshot(String packageName)
             throws RemoteException {
         enforcePackageOrManager(packageName, "get rules");
-        if (!areRulesReady()) return unavailableSnapshot(packageName);
+        if (!areRulesReady()) {
+            mLogger.d("snapshot unavailable scope=" + packageName
+                    + " reason=service_not_ready");
+            return unavailableSnapshot(packageName);
+        }
         RuleRepository.RepositorySnapshot<ActRules> snapshot =
                 mRepository.getRulesSnapshot(packageName);
         return createSnapshot(packageName, packageName, snapshot.value, snapshot.generation);
     }
 
     @Override public RuleMutationResult mutate(RuleMutationRequest request, ILeaseOwner owner) {
+        RuleMutationResult result = null;
         try {
-            return mutateInternal(request, owner);
+            result = mutateInternal(request, owner);
+            return result;
         } finally {
+            logMutationResult(request, result);
             closeInputFds(request);
+        }
+    }
+
+    private void logMutationResult(RuleMutationRequest request, RuleMutationResult result) {
+        if (result == null) {
+            mLogger.e("mutation completed without result requestId="
+                    + (request == null ? "null" : request.requestId));
+            return;
+        }
+        String message = result.message == null ? "" : " reason=" + result.message;
+        String line = "mutation complete operation="
+                + mutationName(request == null ? 0 : request.operation)
+                + " requestId=" + result.requestId
+                + " package=" + result.packageName
+                + " status=" + resultName(result.status)
+                + " generation=" + result.generation + message;
+        if (result.status == RuleServiceContract.RESULT_COMMITTED
+                || result.status == RuleServiceContract.RESULT_NO_CHANGE) {
+            mLogger.i(line);
+        } else if (result.status == RuleServiceContract.RESULT_WRITE_FAILED) {
+            mLogger.e(line);
+        } else {
+            mLogger.w(line);
         }
     }
 
@@ -309,7 +387,9 @@ public final class RuleServiceServer extends IRuleService.Stub {
                             RuleServiceContract.RESULT_INVALID, null, "unknown mutation");
             }
         } catch (Exception e) {
-            mLogger.w("mutation failed for " + request.packageName, e);
+            mLogger.w("mutation failed operation=" + mutationName(request.operation)
+                    + " requestId=" + request.requestId
+                    + " package=" + request.packageName, e);
             return mutationResult(request.requestId, request.packageName,
                     RuleServiceContract.RESULT_WRITE_FAILED, null, e.getMessage());
         } finally {
@@ -327,6 +407,7 @@ public final class RuleServiceServer extends IRuleService.Stub {
     @Override public ParcelFileDescriptor openImageFileDescriptor(String filePath)
             throws RemoteException {
         if (!mRepository.isValidImagePath(filePath)) {
+            mLogger.w("open image rejected reason=invalid_path");
             throw new RemoteException("unauthorized image path");
         }
         File file = new File(filePath).getAbsoluteFile();
@@ -360,6 +441,8 @@ public final class RuleServiceServer extends IRuleService.Stub {
         } catch (Exception e) {
             if (fd != null) try { Os.close(fd); } catch (Exception ignored) { }
             if (dirFd != null) try { Os.close(dirFd); } catch (Exception ignored) { }
+            mLogger.w("open image failed package=" + packageName
+                    + " file=" + file.getName(), e);
             if (e instanceof RemoteException) throw (RemoteException) e;
             RemoteException remote = new RemoteException("open image failed: " + e.getMessage());
             remote.initCause(e);
@@ -376,7 +459,7 @@ public final class RuleServiceServer extends IRuleService.Stub {
     @Override public void log(int level, String packageName, long timestamp, String tag, String msg)
             throws RemoteException {
         enforcePackageOrManager(packageName, "forward log");
-        GodModeLog.write(level, packageName, tag, msg, timestamp);
+        GodModeLog.write(level, packageName, tag, msg, timestamp, Binder.getCallingPid());
     }
 
     public void shutdown() {
@@ -397,9 +480,11 @@ public final class RuleServiceServer extends IRuleService.Stub {
         mRepository.shutdown();
     }
 
-    private boolean registerOwner(String token, int type, IBinder owner) {
+    private boolean registerOwner(String token, int type, String packageName, int uid,
+                                  IBinder owner) {
         IBinder.DeathRecipient deathRecipient = () -> onOwnerDied(token, owner);
-        LeaseRegistration registration = new LeaseRegistration(type, owner, deathRecipient);
+        LeaseRegistration registration = new LeaseRegistration(type, packageName, uid, owner,
+                deathRecipient);
         synchronized (mOwnerLock) {
             mOwnerRegistrations.put(token, registration);
         }
@@ -415,11 +500,16 @@ public final class RuleServiceServer extends IRuleService.Stub {
     }
 
     private void onOwnerDied(String token, IBinder owner) {
+        LeaseRegistration registration;
         synchronized (mOwnerLock) {
-            mOwnerRegistrations.remove(token);
+            registration = mOwnerRegistrations.remove(token);
         }
         OperationCoordinator.CloseResult closed = mCoordinator.ownerDied(token, owner);
         handleEditTransition(closed);
+        if (registration != null) {
+            mLogger.w("operation owner died type=" + operationName(registration.type)
+                    + " package=" + registration.packageName + " uid=" + registration.uid);
+        }
     }
 
     private LeaseRegistration ownerRegistration(String token) {
@@ -477,7 +567,8 @@ public final class RuleServiceServer extends IRuleService.Stub {
     }
 
     private void cleanupStaleIncomingFiles() {
-        IncomingImageReader.cleanupStaleFiles(new File(DATA_DIR));
+        int cleaned = IncomingImageReader.cleanupStaleFiles(new File(DATA_DIR));
+        if (cleaned > 0) mLogger.i("cleaned stale incoming files count=" + cleaned);
     }
 
     private void enforceObserverScope(String packageName, String operation)
@@ -528,13 +619,13 @@ public final class RuleServiceServer extends IRuleService.Stub {
 
     private RuleSnapshotParcel createSnapshot(String label, String packageName, Object snapshot,
                                               long generation) throws RemoteException {
-        byte[] bytes = mGson.toJson(snapshot).getBytes(StandardCharsets.UTF_8);
-        if (bytes.length > 8 * 1024 * 1024) {
-            throw new RemoteException("snapshot exceeds 8 MiB");
-        }
         SharedMemory memory = null;
         ByteBuffer buffer = null;
         try {
+            byte[] bytes = mGson.toJson(snapshot).getBytes(StandardCharsets.UTF_8);
+            if (bytes.length > 8 * 1024 * 1024) {
+                throw new RemoteException("snapshot exceeds 8 MiB");
+            }
             memory = SharedMemory.create("godmode-" + label, Math.max(1, bytes.length));
             buffer = memory.mapReadWrite();
             buffer.put(bytes);
@@ -548,6 +639,8 @@ public final class RuleServiceServer extends IRuleService.Stub {
                     bytes.length, sha256(bytes), memory);
         } catch (Exception e) {
             if (memory != null) memory.close();
+            mLogger.w("create snapshot failed scope=" + packageName
+                    + " generation=" + generation, e);
             if (e instanceof RemoteException) throw (RemoteException) e;
             RemoteException remote = new RemoteException("create snapshot failed: " + e.getMessage());
             remote.initCause(e);
@@ -578,13 +671,53 @@ public final class RuleServiceServer extends IRuleService.Stub {
 
     private static final class LeaseRegistration {
         final int type;
+        final String packageName;
+        final int uid;
         final IBinder owner;
         final IBinder.DeathRecipient deathRecipient;
 
-        LeaseRegistration(int type, IBinder owner, IBinder.DeathRecipient deathRecipient) {
+        LeaseRegistration(int type, String packageName, int uid, IBinder owner,
+                          IBinder.DeathRecipient deathRecipient) {
             this.type = type;
+            this.packageName = packageName;
+            this.uid = uid;
             this.owner = owner;
             this.deathRecipient = deathRecipient;
+        }
+    }
+
+    private static String operationName(int operation) {
+        switch (operation) {
+            case RuleServiceContract.OP_EDIT: return "edit";
+            case RuleServiceContract.OP_RESTORE: return "restore";
+            case RuleServiceContract.OP_MUTATION: return "mutation";
+            case RuleServiceContract.OP_BACKUP: return "backup";
+            default: return "unknown(" + operation + ")";
+        }
+    }
+
+    private static String resultName(int status) {
+        switch (status) {
+            case RuleServiceContract.RESULT_COMMITTED: return "committed";
+            case RuleServiceContract.RESULT_NO_CHANGE: return "no_change";
+            case RuleServiceContract.RESULT_BUSY: return "busy";
+            case RuleServiceContract.RESULT_REJECTED: return "rejected";
+            case RuleServiceContract.RESULT_WRITE_FAILED: return "write_failed";
+            case RuleServiceContract.RESULT_REBOOT_REQUIRED: return "reboot_required";
+            case RuleServiceContract.RESULT_INVALID: return "invalid";
+            case RuleServiceContract.RESULT_UNCERTAIN: return "uncertain";
+            default: return "unknown(" + status + ")";
+        }
+    }
+
+    private static String mutationName(int operation) {
+        switch (operation) {
+            case RuleServiceContract.MUTATION_WRITE: return "write";
+            case RuleServiceContract.MUTATION_UPDATE: return "update";
+            case RuleServiceContract.MUTATION_DELETE: return "delete";
+            case RuleServiceContract.MUTATION_DELETE_ALL: return "delete_all";
+            case RuleServiceContract.MUTATION_SET_TOOLBAR: return "set_toolbar";
+            default: return "unknown(" + operation + ")";
         }
     }
 

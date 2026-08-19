@@ -33,12 +33,13 @@ public final class ObserverRegistry {
                 && mCallbacks.register(observer, new Subscription(packageName));
     }
 
-    public void removeObserver(IRuleObserver observer) {
-        if (observer != null) mCallbacks.unregister(observer);
+    public boolean removeObserver(IRuleObserver observer) {
+        return observer != null && mCallbacks.unregister(observer);
     }
 
     public void notifyObserverRuleChanged(String packageName, long committedGeneration) {
-        forEachLiveObserver((subscription, observer) -> {
+        forEachLiveObserver("rules changed package=" + packageName
+                + " generation=" + committedGeneration, (subscription, observer) -> {
             if (TextUtils.equals(subscription.packageName, packageName)
                     || TextUtils.equals(subscription.packageName, "*")) {
                 observer.onRulesInvalidated(packageName, committedGeneration);
@@ -47,13 +48,14 @@ public final class ObserverRegistry {
     }
 
     public void notifyObserverEditModeChanged(boolean enabled, long editRevision) {
-        forEachLiveObserver((subscription, observer) ->
+        forEachLiveObserver("edit mode changed enabled=" + enabled
+                + " revision=" + editRevision, (subscription, observer) ->
                 observer.onEditModeChanged(enabled, editRevision));
     }
 
     /** Publishes the authoritative generation loaded by the repository. */
     public void notifyRulesLoaded(long committedGeneration) {
-        forEachLiveObserver((subscription, observer) ->
+        forEachLiveObserver("rules loaded generation=" + committedGeneration, (subscription, observer) ->
                 observer.onRulesInvalidated(subscription.packageName, committedGeneration));
     }
 
@@ -61,7 +63,7 @@ public final class ObserverRegistry {
         mCallbacks.kill();
     }
 
-    private void forEachLiveObserver(ObserverAction action) {
+    private void forEachLiveObserver(String operation, ObserverAction action) {
         List<Callback> callbacks = new ArrayList<>();
         int count = mCallbacks.beginBroadcast();
         try {
@@ -80,7 +82,8 @@ public final class ObserverRegistry {
             try {
                 action.execute(callback.subscription, callback.observer);
             } catch (Exception e) {
-                mLogger.w("notify observer failed", e);
+                mLogger.w("notify observer failed operation=" + operation
+                        + " target=" + callback.subscription.packageName, e);
             }
         }
     }

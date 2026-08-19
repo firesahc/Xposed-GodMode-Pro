@@ -3,6 +3,7 @@ package com.kaisar.xposed.godmode.control;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 
 import java.util.EnumMap;
+import java.util.Objects;
 
 /**
  * 模块生命周期 — 真正编排模块的整体健康状态，而非 CRUD 调度。
@@ -40,6 +41,7 @@ public final class ModuleLifecycle {
 
     private volatile State mState = State.INIT;
     private final EnumMap<Layer, Health> mHealth = new EnumMap<>(Layer.class);
+    private final EnumMap<Layer, String> mHealthReasons = new EnumMap<>(Layer.class);
     private final Layer[] mRequiredLayers;
 
     public ModuleLifecycle() {
@@ -60,7 +62,12 @@ public final class ModuleLifecycle {
      * 直接转换到指定状态。
      */
     public void transition(State newState) {
+        if (newState == null) {
+            Logger.w(TAG, "ignored null state transition");
+            return;
+        }
         State old = mState;
+        if (old == newState) return;
         mState = newState;
         Logger.i(TAG, "state: " + old + " → " + newState);
     }
@@ -69,27 +76,38 @@ public final class ModuleLifecycle {
      * 标记指定层为健康。
      */
     public void markHealthy(Layer layer) {
-        mHealth.put(layer, Health.HEALTHY);
+        Health old = mHealth.put(layer, Health.HEALTHY);
+        mHealthReasons.remove(layer);
         recomputeOverall();
-        Logger.i(TAG, layer + " → HEALTHY (overall: " + mState + ")");
+        if (old != Health.HEALTHY) {
+            Logger.i(TAG, layer + " → HEALTHY (overall: " + mState + ")");
+        }
     }
 
     /**
      * 标记指定层为降级。
      */
     public void markDegraded(Layer layer, String reason) {
-        mHealth.put(layer, Health.DEGRADED);
-        Logger.w(TAG, layer + " → DEGRADED: " + reason);
+        String normalizedReason = reason == null ? "" : reason;
+        Health old = mHealth.put(layer, Health.DEGRADED);
+        String oldReason = mHealthReasons.put(layer, normalizedReason);
         recomputeOverall();
+        if (old != Health.DEGRADED || !Objects.equals(oldReason, normalizedReason)) {
+            Logger.w(TAG, layer + " → DEGRADED: " + normalizedReason);
+        }
     }
 
     /**
      * 标记指定层为错误。
      */
     public void markError(Layer layer, String reason) {
-        mHealth.put(layer, Health.ERROR);
-        Logger.e(TAG, layer + " → ERROR: " + reason);
+        String normalizedReason = reason == null ? "" : reason;
+        Health old = mHealth.put(layer, Health.ERROR);
+        String oldReason = mHealthReasons.put(layer, normalizedReason);
         recomputeOverall();
+        if (old != Health.ERROR || !Objects.equals(oldReason, normalizedReason)) {
+            Logger.e(TAG, layer + " → ERROR: " + normalizedReason);
+        }
     }
 
     // ===== 查询 =====

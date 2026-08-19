@@ -8,6 +8,7 @@ import android.os.RemoteException;
 import androidx.annotation.NonNull;
 
 import com.kaisar.xposed.godmode.BuildConfig;
+import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.ipc.RuleServiceContract;
 
 /**
@@ -16,6 +17,8 @@ import com.kaisar.xposed.godmode.ipc.RuleServiceContract;
  * 从 {@code service/} 移入 control/ 包，职责不变。
  */
 final class PermissionEnforcer {
+
+    private static final String TAG = "PermissionEnforcer";
 
     interface PackageLookup {
         String[] packagesForUid(int uid);
@@ -81,12 +84,15 @@ final class PermissionEnforcer {
         int uid = mCallingUidSource.getCallingUid();
         if (allowGlobalScope && RuleServiceContract.GLOBAL_SCOPE.equals(packageName)) {
             if (isModuleUid(uid)) return;
+            Logger.w(TAG, "global permission denied uid=" + uid);
             throw new RemoteException(message);
         }
         if (PackageNameValidator.isValid(packageName)
                 && (isModuleUid(uid) || uidOwnsPackage(uid, packageName))) {
             return;
         }
+        Logger.w(TAG, "package permission denied uid=" + uid
+                + " package=" + packageName + " global=" + allowGlobalScope);
         throw new RemoteException(message);
     }
 
@@ -94,7 +100,9 @@ final class PermissionEnforcer {
      * 单包名权限校验 — 仅允许 GodMode 自身调用。
      */
     void enforcePermission(String message) throws RemoteException {
-        if (!checkPermission(BuildConfig.APPLICATION_ID)) {
+        int uid = mCallingUidSource.getCallingUid();
+        if (!uidOwnsPackage(uid, BuildConfig.APPLICATION_ID)) {
+            Logger.w(TAG, "module permission denied uid=" + uid);
             throw new RemoteException(message);
         }
     }

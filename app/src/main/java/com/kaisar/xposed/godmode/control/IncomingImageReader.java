@@ -43,30 +43,49 @@ final class IncomingImageReader {
                 }
                 output.flush();
             }
-            if (total <= 0L) return ReadResult.invalid();
+            if (total <= 0L) {
+                mLogger.w("fd mutate image rejected requestId=" + requestId
+                        + " package=" + packageName + " image=" + label
+                        + " bytes=0 reason=empty");
+                return ReadResult.invalid();
+            }
             Bitmap bitmap = SafeBitmapDecoder.decodeFileStrict(incoming.getPath());
-            return bitmap == null ? ReadResult.invalid() : ReadResult.valid(bitmap);
+            if (bitmap == null) {
+                mLogger.w("fd mutate image rejected requestId=" + requestId
+                        + " package=" + packageName + " image=" + label
+                        + " bytes=" + total + " reason=decode_failed");
+                return ReadResult.invalid();
+            }
+            return ReadResult.valid(bitmap);
         } catch (Exception e) {
             mLogger.w("fd mutate image rejected requestId=" + requestId
                     + " package=" + packageName + " image=" + label
                     + " bytes=" + total, e);
             return ReadResult.invalid();
         } finally {
-            FileUtils.delete(incoming.getPath());
+            if (incoming.exists() && !FileUtils.delete(incoming.getPath())) {
+                mLogger.w("fd mutate temp cleanup failed requestId=" + requestId
+                        + " package=" + packageName + " image=" + label
+                        + " file=" + incoming.getName());
+            }
         }
     }
 
-    static void cleanupStaleFiles(File root) {
+    static int cleanupStaleFiles(File root) {
+        int cleaned = 0;
         File[] packageDirs = root.listFiles(File::isDirectory);
-        if (packageDirs == null) return;
+        if (packageDirs == null) return 0;
         for (File packageDir : packageDirs) {
             File[] assets = packageDir.listFiles(file -> file.isFile()
                     && (file.getName().startsWith(".incoming-")
                     || file.getName().startsWith(".asset-"))
                     && file.getName().endsWith(".tmp"));
             if (assets == null) continue;
-            for (File asset : assets) FileUtils.delete(asset.getPath());
+            for (File asset : assets) {
+                if (FileUtils.delete(asset.getPath())) cleaned++;
+            }
         }
+        return cleaned;
     }
 
     static final class ReadResult {
