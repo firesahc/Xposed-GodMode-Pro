@@ -33,7 +33,7 @@ public final class AppInjector {
 
         // 注册所有 Xposed Hook
         HookRegistry.HookInstallReport hookReport = HookRegistry.registerAll(
-                lpp, ModuleBootstrap.getSwitchProp());
+                ModuleBootstrap.getSwitchProp());
         if (!hookReport.coreReady) {
             Logger.e(TAG, "[GodMode] lifecycle hooks unavailable; skip runtime for "
                     + packageName);

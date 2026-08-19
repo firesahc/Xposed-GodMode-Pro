@@ -12,7 +12,6 @@ import com.kaisar.xposed.godmode.inject.hooks.InteractionHooks;
 import com.kaisar.xposed.godmode.inject.hooks.LifecycleHooks;
 import com.kaisar.xposed.godmode.orchestrator.RuleLifecycleManager;
 
-import de.robv.android.xposed.callbacks.XC_LoadPackage;
 import de.robv.android.xposed.XposedHelpers;
 
 /**
@@ -40,8 +39,7 @@ public final class HookRegistry {
      * <p>
      * 注册顺序保持与重构前一致：onResume → onCreate → hooks → observer
      */
-    public static synchronized HookInstallReport registerAll(XC_LoadPackage.LoadPackageParam lpp,
-                                                              Property<Boolean> switchProp) {
+    public static synchronized HookInstallReport registerAll(Property<Boolean> switchProp) {
         if (sHooksRegistered) {
             return new HookInstallReport(true, sTouchHookInstalled, sKeyHookInstalled, true);
         }
