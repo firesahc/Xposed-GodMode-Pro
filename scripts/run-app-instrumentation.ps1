@@ -11,6 +11,7 @@ $testPackage = "com.viewblocker.jrsen.test"
 $runner = "com.viewblocker.jrsen.test/androidx.test.runner.AndroidJUnitRunner"
 $activity = "com.kaisar.xposed.godmode.orchestrator.ViewControllerTestActivity"
 $testClass = "com.kaisar.xposed.godmode.orchestrator.ViewControllerInstrumentedTest"
+$deviceLogRoot = "/data/misc/godmode"
 $tests = @(
     "deletingVisibleModifyRuleRestoresOwnedProperties",
     "deletingRemoveRuleRestoresViewHiddenByThatRule",
@@ -20,6 +21,40 @@ $tests = @(
     "recreatedActivityCanApplyAndRevokeWithoutOldOwnerState",
     "deletingOneRuleDoesNotRevokeAnotherTargetWithSameAction"
 )
+
+function Assert-DeviceLogRoot {
+    $savedErrorAction = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        $lines = & $Adb shell su -c "ls -d $deviceLogRoot" 2>&1
+        $exitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $savedErrorAction
+    }
+    if ($exitCode -ne 0 -or (($lines -join "`n") -notmatch [regex]::Escape($deviceLogRoot))) {
+        throw "Device log root is missing: $deviceLogRoot"
+    }
+}
+
+function Bring-TestHostToForeground([string]$package, [string]$activity, [string]$test) {
+    $start = & $Adb shell su -c "am start -W -n $package/$activity" 2>&1
+    $startText = $start -join [Environment]::NewLine
+    if ($LASTEXITCODE -ne 0 -or $startText -notmatch "Status: ok") {
+        throw "Unable to foreground test host for $test`n$startText"
+    }
+    for ($check = 0; $check -lt 20; $check++) {
+        $activities = ((& $Adb shell dumpsys activity activities 2>&1) -join "`n") -replace "\s+", " "
+        if ($activities -match "topResumedActivity=.*$package/$activity" -or
+            $activities -match "ResumedActivity:.*$package/$activity") {
+            return
+        }
+        Start-Sleep -Milliseconds 250
+    }
+    throw "Test host did not reach RESUMED for $test`n$startText"
+}
+
+Assert-DeviceLogRoot
+Write-Host "DEVICE_LOG_ROOT $deviceLogRoot"
 
 foreach ($apk in @($appApk, $testApk)) {
     if (-not (Test-Path -LiteralPath $apk)) {
@@ -55,14 +90,7 @@ foreach ($test in $tests) {
         $stderr = $process.StandardError.ReadToEndAsync()
 
         Start-Sleep -Seconds 3
-        $start = & $Adb shell su -c "am start -W -n $targetPackage/$activity" 2>&1
-        $startText = $start -join [Environment]::NewLine
-        if ($LASTEXITCODE -ne 0 -or $startText -notmatch "Status: ok") {
-            if (-not $process.HasExited) {
-                $process.Kill()
-            }
-            throw "Unable to foreground test host for $test`n$startText"
-        }
+        Bring-TestHostToForeground $targetPackage $activity $test
 
         if (-not $process.WaitForExit(30000)) {
             $process.Kill()

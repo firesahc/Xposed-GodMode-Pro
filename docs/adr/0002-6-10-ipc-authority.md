@@ -56,4 +56,6 @@ Parcelable、ZIP V1、图片路径、matcher 或 effect 语义。不做旧规则
 非 READY 状态不能伪装为空规则。写入失败必须保持旧快照和 generation；恢复返回
 逐条结果，不能按输入数量伪报成功。自动化门禁通过只是静态/JVM/构建证据，发布
 仍需要同一候选 SHA 上的真实 Binder、LSPosed、SELinux/owner、不同 ROM Hook、
-Recycler 快速复用、detach/destroy 和异步图片验证。
+Recycler 快速复用、detach/destroy 和异步图片验证。这些设备验证统一遵循仓库级
+[设备测试规则](../device-test-rules.md)：需要前台的测试必须逐方法显式唤起并确认
+`RESUMED`，所有测试轮次必须核对 `/data/misc/godmode/` 持久化日志。
