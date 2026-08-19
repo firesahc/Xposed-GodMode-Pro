@@ -201,6 +201,102 @@ try {
         $failures.Add("Unable to scan for retired IPC references")
     }
 
+    # Logging is part of the 6.10 observability contract. Production code may use
+    # android.util.Log only inside the Logger/GodModeLog adapters or the legacy
+    # XServiceManager default delegate; all business paths must go through Logger.
+    $directLogMatches = rg -n --glob "*.java" --glob "!**/build/**" `
+        "android\.util\.Log|import\s+android\.util\.Log" `
+        app/src/main engine/src/main libxservicemanager/src/main 2>$null
+    if ($LASTEXITCODE -eq 0) {
+        $unexpectedDirectLogs = @($directLogMatches | Where-Object {
+            $_ -notmatch "(engine[\\/]src[\\/]main[\\/]java[\\/]com[\\/]kaisar[\\/]xposed[\\/]godmode[\\/]engine[\\/]util[\\/]Logger\.java|app[\\/]src[\\/]main[\\/]java[\\/]com[\\/]kaisar[\\/]xposed[\\/]godmode[\\/]control[\\/]GodModeLog\.java|libxservicemanager[\\/]src[\\/]main[\\/]java[\\/]com[\\/]kaisar[\\/]xservicemanager[\\/]XServiceManager\.java)"
+        })
+        if ($unexpectedDirectLogs.Count -gt 0) {
+            $failures.Add("Production code bypasses Logger with direct android.util.Log:`n$($unexpectedDirectLogs -join "`n")")
+        }
+    } elseif ($LASTEXITCODE -ne 1) {
+        $failures.Add("Unable to scan direct production logging calls")
+    }
+
+    $writerInstallations = rg -n --glob "*.java" --glob "!**/build/**" `
+        "Logger\.setWriter\(" app/src/main engine/src/main 2>$null
+    if ($LASTEXITCODE -eq 0) {
+        $unexpectedWriterInstallations = @($writerInstallations | Where-Object {
+            $_ -notmatch "(RuleServiceClient\.java|RuleServiceServer\.java|ServiceBootstrapper\.java)"
+        })
+        if ($unexpectedWriterInstallations.Count -gt 0) {
+            $failures.Add("Logger writer installed outside approved process boundaries:`n$($unexpectedWriterInstallations -join "`n")")
+        }
+    } elseif ($LASTEXITCODE -ne 1) {
+        $failures.Add("Unable to scan Logger writer installations")
+    }
+    foreach ($requiredProcessLoggingCall in @(
+        "app/src/main/java/com/kaisar/xposed/godmode/GodModeApplication.java",
+        "app/src/main/java/com/kaisar/xposed/godmode/inject/AppInjector.java"
+    )) {
+        if ((Get-Content -Raw $requiredProcessLoggingCall) -notmatch "installProcessLogging") {
+            $failures.Add("Process logging bridge is missing: $requiredProcessLoggingCall")
+        }
+    }
+
+    $messageOnlyThrowable = rg -n --glob "*.java" --glob "!**/build/**" `
+        "Logger\.(d|i|w|e)\([^;`r`n]*getMessage\(\)" `
+        app/src/main engine/src/main libxservicemanager/src/main 2>$null
+    if ($LASTEXITCODE -eq 0) {
+        $failures.Add("Throwable message is logged without the Throwable object:`n$messageOnlyThrowable")
+    } elseif ($LASTEXITCODE -ne 1) {
+        $failures.Add("Unable to scan Throwable logging calls")
+    }
+
+    $godModeLogSource = "app/src/main/java/com/kaisar/xposed/godmode/control/GodModeLog.java"
+    $loggerSource = "engine/src/main/java/com/kaisar/xposed/godmode/engine/util/Logger.java"
+    if (!(Test-Path $godModeLogSource) -or !(Test-Path $loggerSource)) {
+        $failures.Add("Unified logging implementation is missing")
+    } else {
+        $godModeLogText = Get-Content -Raw $godModeLogSource
+        $loggerText = Get-Content -Raw $loggerSource
+        foreach ($requiredLogContract in @(
+            "formatLine",
+            "sourcePid",
+            "oneLine",
+            "Log\.VERBOSE",
+            "Log\.ASSERT",
+            "MAX_PENDING_RECORDS",
+            "ThreadPoolExecutor"
+        )) {
+            if ($godModeLogText -notmatch $requiredLogContract) {
+                $failures.Add("GodModeLog contract is missing: $requiredLogContract")
+            }
+        }
+        foreach ($requiredLoggerContract in @(
+            "d\(String tag, String msg, Throwable tr\)",
+            "sDispatching",
+            "log writer failed",
+            "eImmediate"
+        )) {
+            if ($loggerText -notmatch $requiredLoggerContract) {
+                $failures.Add("Logger contract is missing: $requiredLoggerContract")
+            }
+        }
+        if ($godModeLogText -notmatch "/data/misc/godmode/godmodepro\.log") {
+            $failures.Add("GodModeLog persistent path is missing")
+        }
+    }
+    $clientSource = "app/src/main/java/com/kaisar/xposed/godmode/ipc/RuleServiceClient.java"
+    if (!(Test-Path $clientSource) -or
+        (Get-Content -Raw $clientSource) -notmatch "MAX_PENDING_LOGS|flushPendingLogs|PendingLog") {
+        $failures.Add("Client logging backlog contract is missing")
+    }
+    $logTest = "app/src/test/java/com/kaisar/xposed/godmode/control/GodModeLogTest.java"
+    if (!(Test-Path $logTest)) {
+        $failures.Add("GodModeLog format contract test is missing: $logTest")
+    }
+    $logRulesDoc = "docs/device-test-rules.md"
+    if (!(Test-Path $logRulesDoc) -or
+        (Get-Content -Raw $logRulesDoc) -notmatch "MM-dd HH:mm:ss\.SSS pid LEVEL/tag") {
+        $failures.Add("Device log format contract is missing from $logRulesDoc")
+    }
+
     if ($failures.Count -gt 0) {
         $failures | ForEach-Object { Write-Error $_ }
         exit 1
@@ -212,6 +308,7 @@ try {
     Write-Host "IPC: canonical 6.10 contract present; retired AIDL absent"
     Write-Host "IPC: snapshot envelope, single-call input FDs, and no direct Bitmap transport"
     Write-Host "Storage: no world-writable production permissions"
+    Write-Host "Logging: unified adapters, Throwable preservation, single-line format, and contract test present"
     Write-Host "RuleRecord: flat JSON and Parcelable boundaries present (golden tests enforce wire slots)"
     Write-Host "Modules: app, engine, libxservicemanager"
     Write-Host "libxservicemanager: $currentSubmodule"

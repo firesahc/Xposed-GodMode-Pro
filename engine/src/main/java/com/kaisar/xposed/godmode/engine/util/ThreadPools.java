@@ -17,6 +17,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  *   <li>{@link #IMAGE_LOADER} — 图片加载/解码 I/O 操作</li>
  *   <li>{@link #FD_WRITER} — 单次 Binder mutate 的匿名 pipe 写入</li>
  *   <li>{@link #IO} — 通用文件 I/O 操作</li>
+ *   <li>{@link #LOG} — 日志 Writer 串行派发，隔离业务 I/O 并保持顺序</li>
  *   <li>{@link #GENERAL} — 轻量计算任务</li>
  * </ul>
  */
@@ -36,6 +37,16 @@ public final class ThreadPools {
     /** I/O 线程池 — 适用于文件读写、JSON 序列化、规则持久化等 */
     public static final ExecutorService IO = Executors.newFixedThreadPool(
             2, new DaemonThreadFactory("GM-IO"));
+
+    /**
+     * 日志派发池 — 单线程保证同一进程内日志顺序，并与规则/图片 I/O 隔离。
+     * 有界队列防止日志异常时无限占用进程内存；拒绝由 Logger 回退到 logcat。
+     */
+    public static final ExecutorService LOG = new ThreadPoolExecutor(
+            1, 1, 0L, TimeUnit.MILLISECONDS,
+            new LinkedBlockingQueue<>(1024),
+            new DaemonThreadFactory("GM-Log"),
+            new ThreadPoolExecutor.AbortPolicy());
 
     /** 通用线程池 — 适用于轻量计算、匹配遍历等（有界队列，最大线程数=CPU*2） */
     public static final ExecutorService GENERAL = new ThreadPoolExecutor(

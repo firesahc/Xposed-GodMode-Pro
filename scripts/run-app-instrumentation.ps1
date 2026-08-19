@@ -1,5 +1,6 @@
 param(
-    [string]$Adb = "adb"
+    [string]$Adb = "adb",
+    [switch]$RequirePersistentLog
 )
 
 $ErrorActionPreference = "Stop"
@@ -123,6 +124,13 @@ foreach ($test in $tests) {
 
 if ($failed.Count -gt 0) {
     throw "Instrumentation failures: $($failed -join ', ')"
+}
+
+if ($RequirePersistentLog) {
+    & (Join-Path $PSScriptRoot "assert-persistent-log.ps1") `
+        -Adb $Adb -DeviceLogRoot $deviceLogRoot
+} else {
+    Write-Host "PERSISTENT_LOG_CHECK not requested; pass -RequirePersistentLog for file/format validation."
 }
 
 Write-Host "All $($tests.Count) app instrumentation tests passed."

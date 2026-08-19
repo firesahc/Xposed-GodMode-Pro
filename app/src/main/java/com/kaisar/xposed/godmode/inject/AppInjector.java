@@ -19,23 +19,22 @@ public final class AppInjector {
     /** 注入目标应用 */
     public void inject(XC_LoadPackage.LoadPackageParam lpp, String packageName) {
         RuleServiceClient serviceClient = RuleServiceClient.getDefault();
+        // Install the sink before the handshake so failures during startup use the same
+        // contract as later runtime logs. forwardLog remains best effort until Binder is ready.
+        serviceClient.installProcessLogging(packageName);
         if (!serviceClient.awaitReady(2_500L)) {
-            Logger.e(TAG, "[GodMode] IPC handshake failed; skip hooks for " + packageName
+            Logger.e(TAG, "IPC handshake failed; skip hooks for " + packageName
                     + ", state=" + serviceClient.getServiceState());
             return;
         }
 
-        // 设置日志 Writer：通过 IPC 转发到 system_server → GodModeLog → godmodepro.log
-        Logger.setWriter((level, tag, msg, timestamp) -> {
-            serviceClient.forwardLog(packageName, level, tag, msg, timestamp);
-        });
-        Logger.d(TAG, "[GodMode] inject into app: " + packageName);
+        Logger.d(TAG, "inject into app: " + packageName);
 
         // 注册所有 Xposed Hook
         HookRegistry.HookInstallReport hookReport = HookRegistry.registerAll(
                 ModuleBootstrap.getSwitchProp());
         if (!hookReport.coreReady) {
-            Logger.e(TAG, "[GodMode] lifecycle hooks unavailable; skip runtime for "
+            Logger.e(TAG, "lifecycle hooks unavailable; skip runtime for "
                     + packageName);
             return;
         }

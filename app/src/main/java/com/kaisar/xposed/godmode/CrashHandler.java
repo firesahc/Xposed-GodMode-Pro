@@ -60,7 +60,7 @@ public final class CrashHandler implements Thread.UncaughtExceptionHandler {
                     return StandardCharsets.UTF_8.decode(byteBuffer).toString();
                 }
             } catch (IOException | RuntimeException | OutOfMemoryError e) {
-                Logger.e(TAG, "[CrashHandler] read crash info fail", e);
+                Logger.e(TAG, "read crash info failed", e);
             } finally {
                 //noinspection ResultOfMethodCallIgnored
                 logFile.delete();
@@ -104,9 +104,9 @@ public final class CrashHandler implements Thread.UncaughtExceptionHandler {
                 }
             }
         } catch (IOException ioe) {
-            Logger.w(TAG, "[CrashHandler] Failed to write crash log to file", ioe);
+            Logger.w(TAG, "write crash log file failed", ioe);
         }
-        Logger.e(TAG, String.format("[CrashHandler] Crash on %s thread", t.getName()), e);
+        Logger.eImmediate(TAG, String.format("crash on %s thread", t.getName()), e);
     }
 
     private void scheduleRestartIfAllowed() {

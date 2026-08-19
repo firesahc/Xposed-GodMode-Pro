@@ -87,7 +87,7 @@ public final class ModuleBootstrap implements IXposedHookLoadPackage, IXposedHoo
             addAssetPath.invoke(am, startupParam.modulePath);
             moduleRes = new Resources(am, null, null);
         } catch (Exception e) {
-            Logger.e(TAG, "[Bootstrap] Failed to create module Resources via reflection", e);
+            Logger.e(TAG, "failed to create module Resources via reflection", e);
         }
         ModuleResources.init(startupParam.modulePath, moduleRes);
     }
@@ -111,12 +111,10 @@ public final class ModuleBootstrap implements IXposedHookLoadPackage, IXposedHoo
         }
 
         final String packageName = lpp.packageName;
-        Logger.i(TAG, "[Bootstrap] routing package: " + packageName
-                + " process: " + lpp.processName);
 
         if ("android".equals(packageName)) {
             sLoadPackageParam = lpp;
-            Logger.i(TAG, "[Bootstrap] injecting RuleServiceServer into system_server");
+            Logger.i(TAG, "injecting RuleServiceServer into system_server");
             ServiceBootstrapper.bootstrap();
             return;
         }
@@ -132,12 +130,12 @@ public final class ModuleBootstrap implements IXposedHookLoadPackage, IXposedHoo
     private static boolean shouldInject(String packageName, XC_LoadPackage.LoadPackageParam lpp) {
         String processName = lpp.processName;
         if (!TextUtils.equals(packageName, processName)) {
-            Logger.d(TAG, "[Bootstrap] skip non-main process: pkg=" + packageName
+            Logger.d(TAG, "skip non-main process: pkg=" + packageName
                     + " process=" + processName);
             return false;
         }
         if (BlockListChecker.isBlocked(packageName)) {
-            Logger.d(TAG, "[Bootstrap] skip blocked package before hooks: " + packageName);
+            Logger.d(TAG, "skip blocked package before hooks: " + packageName);
             return false;
         }
         return true;
@@ -149,14 +147,14 @@ public final class ModuleBootstrap implements IXposedHookLoadPackage, IXposedHoo
 
     public static void notifyEditModeChanged(boolean enable) {
         if (sLoadPackageParam == null) {
-            Logger.w(TAG, "[Bootstrap] edit mode change ignored: loadPackageParam not ready");
+            Logger.w(TAG, "edit mode change ignored: loadPackageParam not ready");
             return;
         }
         if (sState == State.UNKNOWN) {
             sState = BlockListChecker.isBlocked(getPackageName())
                     ? State.BLOCKED : State.ALLOWED;
         }
-        Logger.i(TAG, "[Bootstrap] edit mode " + enable + " state=" + sState
+        Logger.i(TAG, "edit mode " + enable + " state=" + sState
                 + " pkg=" + getPackageName());
         if (sState == State.ALLOWED) {
             switchProp.set(enable);
