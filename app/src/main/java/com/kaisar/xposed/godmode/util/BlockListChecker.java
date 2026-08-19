@@ -19,28 +19,28 @@ public final class BlockListChecker {
 
     public static boolean isBlocked(String packageName) {
         if (TextUtils.equals("com.android.systemui", packageName)) {
-            Logger.d(TAG, "[BlockListChecker] blocked (systemui): " + packageName);
+            Logger.d(TAG, "blocked (systemui): " + packageName);
             return true;
         }
         if (TextUtils.equals(BuildConfig.APPLICATION_ID, packageName)) {
-            Logger.d(TAG, "[BlockListChecker] blocked (self): " + packageName);
+            Logger.d(TAG, "blocked (self): " + packageName);
             return true;
         }
         try {
             if (isLauncher(packageName)) {
-                Logger.d(TAG, "[BlockListChecker] blocked (launcher): " + packageName);
+                Logger.d(TAG, "blocked (launcher): " + packageName);
                 return true;
             }
             if (isInputMethod(packageName)) {
-                Logger.d(TAG, "[BlockListChecker] blocked (IME): " + packageName);
+                Logger.d(TAG, "blocked (IME): " + packageName);
                 return true;
             }
             if (hasNoActivities(packageName)) {
-                Logger.d(TAG, "[BlockListChecker] blocked (no activities): " + packageName);
+                Logger.d(TAG, "blocked (no activities): " + packageName);
                 return true;
             }
         } catch (Throwable t) {
-            Logger.e(TAG, "[BlockListChecker] checkBlockList failed, block for safety", t);
+            Logger.e(TAG, "checkBlockList failed, block for safety", t);
             return true;
         }
         return false;

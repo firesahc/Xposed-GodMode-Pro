@@ -169,17 +169,14 @@ public final class RuleRecordListFragment extends Fragment {
             showSnackbar(R.string.snack_bar_msg_backup_rule_fail);
             return;
         }
-        Logger.i(TAG, "backupRules: start, package=" + mPackageName + ", ruleCount=" + rulesToBackup.size());
         mSharedViewModel.backupRules(uri, mPackageName, rulesToBackup, new SharedViewModel.ResultCallback() {
             @Override
             public void onSuccess(int count) {
-                Logger.i(TAG, "backupRules: success, package=" + mPackageName + ", ruleCount=" + count);
                 showSnackbar(R.string.snack_bar_msg_backup_rule_success, count);
             }
 
             @Override
             public void onFailure(Exception e) {
-                Logger.w(TAG, "backupRules: failed, package=" + mPackageName, e);
                 showSnackbar(R.string.snack_bar_msg_backup_rule_fail);
             }
         });
@@ -470,12 +467,14 @@ public final class RuleRecordListFragment extends Fragment {
                 try {
                     if (!mSharedViewModel.deleteRule(rule)) {
                         failed++;
-                        Logger.w(TAG, "deleteFilteredRules: delete failed: " + rule);
+                        Logger.w(TAG, "deleteFilteredRules: delete returned false package="
+                                + mPackageName + " activity=" + rule.getActivityClass()
+                                + " view=" + rule.getViewClass()
+                                + " resource=" + rule.getResourceName());
                     }
                 } catch (Exception e) {
                     failed++;
-                    Logger.w(TAG, "deleteFilteredRules: delete failed: " + rule);
-                    Logger.e(TAG, "deleteFilteredRules: delete exception", e);
+                    Logger.w(TAG, "deleteFilteredRules: delete exception", e);
                 }
             }
             mIsBatchOperation = false;

@@ -53,12 +53,12 @@ public final class ModuleResources {
         try {
             String path = sModulePath;
             if (path == null) {
-                Logger.e(TAG, "[ModuleResources] module path not initialized");
+                Logger.e(TAG, "module path not initialized");
                 return false;
             }
             File f = new File(path);
             if (!f.exists()) {
-                Logger.e(TAG, "[ModuleResources] module apk not found: " + path);
+                Logger.e(TAG, "module apk not found: " + path);
                 return false;
             }
             AssetManager assets = res.getAssets();
@@ -67,20 +67,20 @@ public final class ModuleResources {
             addAssetPath.setAccessible(true);
             int cookie = (int) addAssetPath.invoke(assets, path);
             if (cookie == 0) {
-                Logger.e(TAG, "[ModuleResources] addAssetPath returned 0 for path=" + path);
+                Logger.e(TAG, "addAssetPath returned 0 for path=" + path);
                 return false;
             }
             // 验证注入是否生效
             try {
-                Logger.i(TAG, "[ModuleResources] " + res.getString(R.string.res_inject_success));
+                Logger.i(TAG, res.getString(R.string.res_inject_success));
                 return true;
             } catch (Resources.NotFoundException e) {
-                Logger.e(TAG, "[ModuleResources] injection verification failed! cookie=" + cookie
+            Logger.e(TAG, "injection verification failed! cookie=" + cookie
                         + " path=" + path + " exists=" + f.exists());
                 return false;
             }
         } catch (Exception e) {
-            Logger.e(TAG, "[ModuleResources] inject failed", e);
+            Logger.e(TAG, "inject failed", e);
             return false;
         }
     }

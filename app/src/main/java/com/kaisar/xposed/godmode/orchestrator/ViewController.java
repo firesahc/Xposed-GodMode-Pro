@@ -207,7 +207,7 @@ public final class ViewController {
                     }
                 }
             } catch (Exception e) {
-                Logger.w(TAG, "[ViewController] batch match failed", e);
+                Logger.w(TAG, "batch match failed", e);
             }
         }
 
@@ -221,7 +221,7 @@ public final class ViewController {
                     pending.add(new MatchTask(view, rule));
                 }
             } catch (Exception e) {
-                Logger.w(TAG, "[ViewController] match failed", e);
+                Logger.w(TAG, "match failed", e);
             }
         }
 
@@ -231,7 +231,7 @@ public final class ViewController {
             try {
                 if (applyRule(task.view, task.rule)) applied++;
             } catch (Exception e) {
-                Logger.w(TAG, "[ViewController] apply rule failed", e);
+                Logger.w(TAG, "apply rule failed", e);
             }
         }
         if (onComplete != null) onComplete.run();
@@ -298,13 +298,14 @@ public final class ViewController {
                 }
                 View view = getMatcher().matchView(decorView, rule.getMatchSpec());
                 if (view == null) {
-                    Logger.w(TAG, "[ViewController] revoke rule fail (act=" + activity
-                            + "): not match any view");
+                    Logger.w(TAG, "revoke rule failed activity="
+                            + (activity == null ? "null" : activity.getClass().getName())
+                            + " reason=no_matching_view");
                     continue;
                 }
                 revokeRule(view, rule);
             } catch (Exception e) {
-                Logger.w(TAG, "[ViewController] revoke rule failed", e);
+                Logger.w(TAG, "revoke rule failed", e);
             }
         }
     }
@@ -339,7 +340,7 @@ public final class ViewController {
             getModifyApplier().revoke(v, (ModifyEffect) viewRule.getEffect());
         } else {
             if (!getRemoveApplier().revoke(v, (RemoveEffect) viewRule.getEffect())) {
-                Logger.w(TAG, "[ViewController] revokeRule: RemoveApplier.revoke() returned false"
+                Logger.w(TAG, "revokeRule: RemoveApplier.revoke() returned false"
                         + " for view=" + v + " rule=" + viewRule);
             }
         }

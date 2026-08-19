@@ -105,7 +105,7 @@ public final class RuleBackupManager {
         if (!serviceClient.beginBackup()) {
             throw new BackupException("Rule service is unavailable or another operation is active");
         }
-        Logger.i(TAG, "[Backup] backupRules: start, package=" + packageName + ", ruleCount=" + viewRules.size());
+        Logger.i(TAG, "backupRules start package=" + packageName + " ruleCount=" + viewRules.size());
         ArrayList<String> backupFilePathList = new ArrayList<>();
         ArrayList<RuleRecord> backupRuleRecordList = new ArrayList<>(viewRules.size());
         ImageEntryRegistry imageEntries = new ImageEntryRegistry();
@@ -123,7 +123,7 @@ public final class RuleBackupManager {
                 throw new BackupException("Selected rules changed before backup");
             }
             prepareFreshDirectory(backupDir);
-            Logger.d(TAG, "[Backup] backupRules: temp dir created, package=" + packageName);
+            Logger.d(TAG, "backupRules temp directory created package=" + packageName);
             for (RuleRecord viewRule : selectedRules) {
                 if (viewRule == null || !packageName.equals(viewRule.packageName)) {
                     throw new IOException("Rule package does not match backup package");
@@ -162,13 +162,14 @@ public final class RuleBackupManager {
             jsonObject.add("rules", jsonElement);
             FileUtils.stringToFile(manifestFile, jsonObject.toString());
             backupFilePathList.add(manifestFile.getPath());
-            Logger.d(TAG, "[Backup] backupRules: manifest written, fileCount=" + backupFilePathList.size());
+            Logger.d(TAG, "backupRules manifest written fileCount=" + backupFilePathList.size());
             try (OutputStream out = GodModeApplication.getApplication().getContentResolver().openOutputStream(toUri)) {
                 ZipUtils.compress(out, backupFilePathList.toArray(new String[0]));
             }
-            Logger.i(TAG, "[Backup] backupRules: success, package=" + packageName + ", rules=" + backupRuleRecordList.size());
+            Logger.i(TAG, "backupRules success package=" + packageName
+                    + " rules=" + backupRuleRecordList.size());
         } catch (IOException | RuntimeException e) {
-            Logger.e(TAG, "[Backup] backupRules: failed, package=" + packageName, e);
+            Logger.e(TAG, "backupRules failed package=" + packageName, e);
             throw new BackupException(e);
         } finally {
             if (backupDir != null) cleanupTempDirectory("backupRules", backupDir);
@@ -177,7 +178,7 @@ public final class RuleBackupManager {
     }
 
     public static RestoreReport restoreRules(Uri fromUri) throws RestoreException {
-        Logger.i(TAG, "[Backup] restoreRules: start, uri=" + fromUri);
+        Logger.i(TAG, "restoreRules start source=selected_uri");
         File restoreDir = createOperationDirectory(
                 GodModeApplication.getApplication().getCacheDir(), "restore");
         try {
@@ -203,7 +204,7 @@ public final class RuleBackupManager {
                 String manifestPackageName = jsonObject.get("packageName").getAsString();
                 JsonArray jsonArray = jsonObject.getAsJsonArray("rules");
                 if (jsonArray == null) throw new RestoreException("Missing rules array");
-                Logger.d(TAG, "[Backup] restoreRules: manifest parsed, ruleCount=" + jsonArray.size());
+                Logger.d(TAG, "restoreRules manifest parsed ruleCount=" + jsonArray.size());
                 if (!RuleServiceClient.getDefault().beginRestore()) {
                     throw new RestoreException("Rule service is unavailable or another restore is active");
                 }
@@ -216,6 +217,8 @@ public final class RuleBackupManager {
                         String ruleJson = jsonArray.get(i).toString();
                         RuleRecord viewRule = gson.fromJson(ruleJson, RuleRecord.class);
                         if (viewRule == null || !manifestPackageName.equals(viewRule.packageName)) {
+                            Logger.w(TAG, "restoreRules entry rejected index=" + i
+                                    + " reason=package_mismatch");
                             results.add(new EntryResult(i, EntryResult.Status.REJECTED,
                                     "rule package does not match manifest"));
                             continue;
@@ -225,6 +228,8 @@ public final class RuleBackupManager {
                             File imageFile = resolveRestoredFile(restoreDir, viewRule.imagePath);
                             bitmap = decodeRequiredImage(imageFile);
                             if (bitmap == null) {
+                                Logger.w(TAG, "restoreRules entry rejected index=" + i
+                                        + " reason=main_image_invalid");
                                 results.add(new EntryResult(i, EntryResult.Status.REJECTED,
                                         "main image is missing or invalid"));
                                 continue;
@@ -235,6 +240,8 @@ public final class RuleBackupManager {
                             File modFile = resolveRestoredFile(restoreDir, viewRule.getModImagePath());
                             modBitmap = decodeRequiredImage(modFile);
                             if (modBitmap == null) {
+                                Logger.w(TAG, "restoreRules entry rejected index=" + i
+                                        + " reason=modified_image_invalid");
                                 results.add(new EntryResult(i, EntryResult.Status.REJECTED,
                                         "modified image is missing or invalid"));
                                 continue;
@@ -247,11 +254,12 @@ public final class RuleBackupManager {
                             committed++;
                             results.add(new EntryResult(i, EntryResult.Status.COMMITTED, "committed"));
                         } else {
+                            Logger.w(TAG, "restoreRules entry write failed index=" + i);
                             results.add(new EntryResult(i, EntryResult.Status.WRITE_FAILED,
                                     "rule or asset persistence failed"));
                         }
                     } catch (Exception e) {
-                        Logger.w(TAG, "[Backup] restoreRules: entry " + i + " rejected", e);
+                        Logger.w(TAG, "restoreRules entry rejected index=" + i, e);
                         results.add(new EntryResult(i, EntryResult.Status.REJECTED,
                                 e.getMessage() == null ? "invalid rule entry" : e.getMessage()));
                     } finally {
@@ -259,14 +267,14 @@ public final class RuleBackupManager {
                         recycleNullableBitmap(modBitmap);
                     }
                 }
-                Logger.i(TAG, "[Backup] restoreRules: committed=" + committed
-                        + ", failed=" + (jsonArray.size() - committed));
+                Logger.i(TAG, "restoreRules complete committed=" + committed
+                        + " failed=" + (jsonArray.size() - committed));
                 return new RestoreReport(jsonArray.size(), committed, results);
         } catch (IOException e) {
-            Logger.e(TAG, "[Backup] restoreRules: failed", e);
+            Logger.e(TAG, "restoreRules failed", e);
             throw new RestoreException(e);
         } catch (Exception e) {
-            Logger.e(TAG, "[Backup] restoreRules: failed, malformed data", e);
+            Logger.e(TAG, "restoreRules failed malformed_data", e);
             throw new RestoreException(e);
         } finally {
             RuleServiceClient.getDefault().endRestore();

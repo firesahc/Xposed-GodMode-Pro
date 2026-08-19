@@ -55,6 +55,7 @@ import de.robv.android.xposed.XposedHelpers;
 public class PropertyEditorPanel {
 
     private static final String TAG = "PropertyEditorPanel";
+    private static final String MODIFY_TAG = "ModifyPanel";
 
     private static final int REQUEST_CODE_PICK_IMAGE = 0x5A45;
     private static final int ANIM_DURATION_SHORT = 200;
@@ -172,7 +173,7 @@ public class PropertyEditorPanel {
             mPanelView.setAlpha(0);
             mPanelView.animate().alpha(1).setDuration(ANIM_DURATION_SHORT).start();
         } catch (Exception e) {
-            Logger.e(TAG, "[ModifyPanel] showModifyPanel fail", e);
+            Logger.e(MODIFY_TAG, "showModifyPanel fail", e);
             mPanelView = null;
             mTargetView = null;
             mOriginalRule = null;
@@ -409,7 +410,7 @@ public class PropertyEditorPanel {
     private void revertViewState() {
         if (mTargetView == null) return;
         if (!verifyViewIdentity(mTargetView)) {
-            Logger.w(TAG, "[ModifyPanel] revertViewState: view identity changed, skip revert for safety");
+            Logger.w(MODIFY_TAG, "revertViewState: view identity changed, skip revert for safety");
             return;
         }
 
@@ -504,7 +505,7 @@ public class PropertyEditorPanel {
             BitmapUtils.drawRectMask(capturedSnapshot, draftRule.x, draftRule.y,
                     draftRule.width, draftRule.height);
         } catch (Exception e) {
-            Logger.w(TAG, "[ModifyPanel] snapshot failed", e);
+            Logger.w(MODIFY_TAG, "snapshot failed", e);
             CommonUtils.recycleNullableBitmap(capturedSnapshot);
             finishSaveFailure(activity, "snapshot failed");
             return;
@@ -521,7 +522,7 @@ public class PropertyEditorPanel {
             try {
                 // The modification image is sent with the rule mutation. The service
                 // publishes neither asset nor rule until both have been persisted.
-            } catch (Exception e) { Logger.e(TAG, "[ModifyPanel] image preparation failed", e); }
+            } catch (Exception e) { Logger.e(MODIFY_TAG, "image preparation failed", e); }
             final boolean finalImageReady = true;
             final RuleRecord finalRule = persistedRule;
             mainHandler.post(() -> {
@@ -551,7 +552,7 @@ public class PropertyEditorPanel {
                     boolean accepted;
                     try { accepted = mRuleEditor.writeRule(pkg, finalRule, finalSnapshot,
                             pendingImage); }
-                    catch (Exception e) { accepted = false; Logger.e(TAG, "[ModifyPanel] writeRule failed", e); }
+                    catch (Exception e) { accepted = false; Logger.e(MODIFY_TAG, "writeRule failed", e); }
                     final boolean finalAccepted = accepted;
                     mainHandler.post(() -> {
                         CommonUtils.recycleNullableBitmap(finalSnapshot);
@@ -680,13 +681,14 @@ public class PropertyEditorPanel {
                                     ((ImageView) targetView).setImageBitmap(bitmap);
                                 }
                             } catch (Exception e) {
-                                Logger.e(TAG, "[ModifyPanel] handle image pick fail", e);
+                                Logger.e(MODIFY_TAG, "handle image pick fail", e);
                             }
                         }
                     });
             mActivityResultHooked = true;
         } catch (Exception e) {
-            Logger.e(TAG, "[ModifyPanel] hookActivityResult: Xposed hook failed, image replacement disabled", e);
+            Logger.e(MODIFY_TAG,
+                    "hookActivityResult: Xposed hook failed, image replacement disabled", e);
         }
     }
 

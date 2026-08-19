@@ -45,7 +45,10 @@ public final class BlockHandler {
             final ViewGroup container, final Bitmap snapshot,
             final int blockedViewIndex, final OnBlockListener listener,
             final IRuleEditor ruleEditor) {
-        Logger.i(TAG, "execute: blocking " + view + " in " + activity.getPackageName());
+        Logger.i(TAG, "execute: blocking package=" + activity.getPackageName()
+                + " viewClass=" + (view == null ? "null" : view.getClass().getName())
+                + " viewId=" + (view == null ? -1 : view.getId())
+                + " index=" + blockedViewIndex);
         try {
             final RuleRecord viewRule = RuleRecordFactory.makeRemoveRule(view, ModuleBootstrap.getEditorOrchestrator().isInfoFlowMode());
             ParticleEffectHelper.execute(activity, view, container, viewRule, snapshot,

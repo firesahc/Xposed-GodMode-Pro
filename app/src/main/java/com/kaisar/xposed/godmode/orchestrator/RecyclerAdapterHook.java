@@ -89,8 +89,7 @@ public final class RecyclerAdapterHook {
                 viewHolderClass = XposedHelpers.findClass(
                     "androidx.recyclerview.widget.RecyclerView$ViewHolder", cl);
             } catch (Throwable missingViewHolder) {
-                Logger.d(TAG, "RecyclerView ViewHolder class unavailable: "
-                        + missingViewHolder.getMessage());
+                Logger.d(TAG, "RecyclerView ViewHolder class unavailable", missingViewHolder);
             }
 
             // Install each hook independently. A ROM may expose only part of the
@@ -113,8 +112,7 @@ public final class RecyclerAdapterHook {
                             });
                     sNotifyDataSetChangedHookInstalled = true;
                 } catch (Throwable failure) {
-                    Logger.d(TAG, "notifyDataSetChanged hook unavailable: "
-                            + failure.getMessage());
+                    Logger.d(TAG, "notifyDataSetChanged hook unavailable", failure);
                 }
             }
 
@@ -171,7 +169,7 @@ public final class RecyclerAdapterHook {
                     });
                     sBindViewHolderHookInstalled = true;
                 } catch (Throwable failure) {
-                    Logger.d(TAG, "bindViewHolder hook unavailable: " + failure.getMessage());
+                    Logger.d(TAG, "bindViewHolder hook unavailable", failure);
                 }
             }
 
@@ -217,7 +215,7 @@ public final class RecyclerAdapterHook {
                     });
                     sRecycleHookInstalled = true;
                 } catch (Throwable failure) {
-                    Logger.d(TAG, "onViewRecycled hook unavailable: " + failure.getMessage());
+                    Logger.d(TAG, "onViewRecycled hook unavailable", failure);
                 }
             }
 
@@ -231,7 +229,7 @@ public final class RecyclerAdapterHook {
                     : "RecyclerView bind/recycle hooks installed; notify hook unavailable")
                     : "RecyclerView adapter hooks partially installed");
         } catch (Throwable t) {
-            Logger.d(TAG, "RecyclerView hook skipped: " + t.getMessage());
+            Logger.d(TAG, "RecyclerView hook skipped", t);
         }
     }
 

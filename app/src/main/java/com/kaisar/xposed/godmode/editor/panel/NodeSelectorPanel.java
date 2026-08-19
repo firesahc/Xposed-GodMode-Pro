@@ -358,7 +358,7 @@ public class NodeSelectorPanel {
                         try {
                             toolbarColumn.setBackground(GmResources.getDrawable(R.drawable.rounded_bg_full));
                         } catch (Exception e) {
-                            Logger.d(TAG, "toolbar resource fallback failed: " + e.getMessage(), e);
+                            Logger.d(TAG, "toolbar resource fallback failed", e);
                         }
                     }
                 }
@@ -367,7 +367,7 @@ public class NodeSelectorPanel {
             // ── 按钮背景 ripple_drawable_20dp (所有交互按钮) ──
             Drawable rippleBg = null;
             try { rippleBg = GmResources.getDrawable(R.drawable.ripple_drawable_20dp); } catch (Exception e) {
-                Logger.d(TAG, "toolbar resource fallback failed: " + e.getMessage(), e);
+                Logger.d(TAG, "toolbar resource fallback failed", e);
             }
             if (rippleBg != null) {
                 int[] rippleViewIds = {
@@ -391,7 +391,7 @@ public class NodeSelectorPanel {
                 try {
                     removeMenu.setBackground(GmResources.getDrawable(R.drawable.rounded_bg_bottom_background));
                 } catch (Exception e) {
-                    Logger.d(TAG, "toolbar resource fallback failed: " + e.getMessage(), e);
+                    Logger.d(TAG, "toolbar resource fallback failed", e);
                 }
             }
 
@@ -418,7 +418,7 @@ public class NodeSelectorPanel {
                 if (modifyPreviewBtn != null) TooltipCompat.setTooltipText(modifyPreviewBtn,
                         GmResources.getText(R.string.accessibility_modify_preview));
             } catch (Exception e) {
-                Logger.d(TAG, "toolbar resource fallback failed: " + e.getMessage(), e);
+                Logger.d(TAG, "toolbar resource fallback failed", e);
             }
         } catch (Exception e) {
             // 回退设置失败不应阻止 toolbar 显示,静默处理
@@ -434,7 +434,7 @@ public class NodeSelectorPanel {
                     Drawable d = GmResources.getDrawable(drawableResId);
                     if (d != null) ib.setImageDrawable(d);
                 } catch (Exception e) {
-                    Logger.d(TAG, "toolbar resource fallback failed: " + e.getMessage(), e);
+                    Logger.d(TAG, "toolbar resource fallback failed", e);
                 }
             }
         }
@@ -449,7 +449,7 @@ public class NodeSelectorPanel {
                     CharSequence text = GmResources.getText(stringResId);
                     if (text != null) tv.setText(text);
                 } catch (Exception e) {
-                    Logger.d(TAG, "toolbar resource fallback failed: " + e.getMessage(), e);
+                    Logger.d(TAG, "toolbar resource fallback failed", e);
                 }
             }
         }

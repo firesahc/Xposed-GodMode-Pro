@@ -186,7 +186,7 @@ public final class RuleManager {
                 return;
             }
         } catch (Exception e) {
-            mLogger.w("Binder getRules failed: " + e.getMessage());
+            mLogger.w("Binder getRules failed package=" + mPackageName, e);
         }
 
         suspendRuntimeForUnavailableService();
@@ -199,6 +199,8 @@ public final class RuleManager {
     /** Accepts both the initial Binder read and observer ready snapshots. */
     public synchronized void acceptServiceSnapshot(ActRules serviceRules) {
         if (serviceRules == null) {
+            mLogger.w("null Binder snapshot for " + mPackageName
+                    + ", suspending runtime");
             suspendRuntimeForUnavailableService();
             mLoadState = LoadState.UNAVAILABLE;
             scheduleRetry();

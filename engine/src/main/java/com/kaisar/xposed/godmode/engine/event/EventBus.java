@@ -91,9 +91,9 @@ public final class EventBus {
             try {
                 ref.method.invoke(subscriber, event);
             } catch (IllegalAccessException | InvocationTargetException e) {
+                Throwable cause = e.getCause() != null ? e.getCause() : e;
                 Logger.w(TAG, "Subscriber " + subscriber.getClass().getSimpleName()
-                        + "#" + ref.method.getName() + " threw: "
-                        + (e.getCause() != null ? e.getCause().getMessage() : e.getMessage()));
+                        + "#" + ref.method.getName() + " threw", cause);
             }
         }
         if (dead != null) {

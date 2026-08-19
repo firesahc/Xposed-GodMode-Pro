@@ -280,7 +280,7 @@ public final class CompositeMatcher implements Matcher {
                 }
             }
         } catch (Exception e) {
-            Logger.d("CompositeMatcher", "checkViewType reflection failed: " + e.getMessage());
+            Logger.d("CompositeMatcher", "checkViewType reflection failed", e);
         }
         return false;
     }

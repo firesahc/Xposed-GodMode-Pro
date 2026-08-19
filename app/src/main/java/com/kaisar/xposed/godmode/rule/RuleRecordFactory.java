@@ -132,7 +132,7 @@ public final class RuleRecordFactory {
                 if (adapter != null && position >= 0) builder.viewType(adapter.getItemViewType(position));
             }
         } catch (Exception e) {
-            Logger.w(TAG, "[RuleRecordFactory] repeatable capture failed", e);
+            Logger.w(TAG, "repeatable capture failed", e);
         }
     }
 }

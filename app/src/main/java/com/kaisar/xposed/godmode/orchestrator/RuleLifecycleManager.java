@@ -379,7 +379,7 @@ public final class RuleLifecycleManager implements RecyclerAdapterHook.Delegate 
         try {
             return (ViewGroup) activity.getWindow().getDecorView();
         } catch (Exception e) {
-            Logger.w(TAG, "getDecorView failed: " + e.getMessage());
+            Logger.w(TAG, "getDecorView failed", e);
             return null;
         }
     }
@@ -507,7 +507,7 @@ public final class RuleLifecycleManager implements RecyclerAdapterHook.Delegate 
                     resetGuards();
                 }
             } catch (Exception e) {
-                Logger.w(TAG, "applyRuleIfMatchCondition failed: " + e.getMessage());
+                Logger.w(TAG, "applyRuleIfMatchCondition failed", e);
                 resetGuards();
             }
         }

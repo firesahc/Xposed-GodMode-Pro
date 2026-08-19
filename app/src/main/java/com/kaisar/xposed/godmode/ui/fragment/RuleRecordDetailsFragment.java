@@ -234,7 +234,7 @@ public final class RuleRecordDetailsFragment extends PreferenceFragmentCompat im
                 mImagePreference.reserveHeight(Math.max(height, 1));
             }
         } catch (Exception e) {
-            Logger.w(TAG, "[reserveImagePlaceholder] " + e.getMessage());
+            Logger.w(TAG, "reserveImagePlaceholder failed", e);
         }
     }
 
@@ -288,7 +288,7 @@ public final class RuleRecordDetailsFragment extends PreferenceFragmentCompat im
                 try { pfd.close(); } catch (Exception e) { /* closeSilently */ }
             }
         } catch (Exception e) {
-            Logger.w(TAG, "[RuleRecordDetails] " + e.getMessage());
+            Logger.w(TAG, "load rule details failed", e);
             return null;
         }
     }

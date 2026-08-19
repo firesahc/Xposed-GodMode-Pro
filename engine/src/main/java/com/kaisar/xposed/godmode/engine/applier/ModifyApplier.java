@@ -214,8 +214,17 @@ public final class ModifyApplier implements RuleApplier<ModifyEffect> {
     private Bitmap loadModImage(String imagePath) {
         try (ParcelFileDescriptor descriptor =
                      mImageLoader.openImageFileDescriptor(imagePath)) {
-            if (descriptor == null) return null;
-            return SafeBitmapDecoder.decode(descriptor.getFileDescriptor());
+            if (descriptor == null) {
+                Logger.w(TAG, "loadModImage unavailable image=" + imagePath
+                        + " reason=no_descriptor");
+                return null;
+            }
+            Bitmap bitmap = SafeBitmapDecoder.decode(descriptor.getFileDescriptor());
+            if (bitmap == null) {
+                Logger.w(TAG, "loadModImage rejected image=" + imagePath
+                        + " reason=decode_failed");
+            }
+            return bitmap;
         } catch (Exception e) {
             Logger.w(TAG, "loadModImage failed: " + imagePath, e);
             return null;

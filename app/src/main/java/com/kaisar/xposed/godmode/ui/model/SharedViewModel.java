@@ -115,13 +115,9 @@ public class SharedViewModel extends ViewModel {
     public void restoreRules(Uri uri, RestoreCallback callback) {
         TaskExecutor.executeIo(() -> {
             try {
-                Logger.i(TAG, "[ViewModel] restoreRules: start, uri=" + uri);
                 RuleBackupManager.RestoreReport report = RuleBackupManager.restoreRules(uri);
-                Logger.i(TAG, "[ViewModel] restoreRules: success, committed=" + report.committed
-                        + ", failed=" + report.failed());
                 mMainHandler.post(() -> callback.onSuccess(report));
             } catch (RuleBackupManager.RestoreException e) {
-                Logger.w(TAG, "[ViewModel] restoreRules: failed", e);
                 mMainHandler.post(() -> callback.onFailure(e));
             }
         });
@@ -130,12 +126,9 @@ public class SharedViewModel extends ViewModel {
     public void backupRules(Uri uri, String packageName, List<RuleRecord> viewRules, ResultCallback callback) {
         TaskExecutor.executeIo(() -> {
             try {
-                Logger.i(TAG, "[ViewModel] backupRules: start, package=" + packageName + ", ruleCount=" + viewRules.size());
                 RuleBackupManager.backupRules(uri, packageName, viewRules);
-                Logger.i(TAG, "[ViewModel] backupRules: success, package=" + packageName);
                 mMainHandler.post(() -> callback.onSuccess(viewRules.size()));
             } catch (RuleBackupManager.BackupException e) {
-                Logger.w(TAG, "[ViewModel] backupRules: failed, package=" + packageName, e);
                 mMainHandler.post(() -> callback.onFailure(e));
             }
         });

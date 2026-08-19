@@ -216,13 +216,17 @@ public final class RuleSnapshot {
      */
     public String toJson() {
         try {
+            JsonConversionStats stats = new JsonConversionStats();
             JSONObject obj = new JSONObject();
             obj.put(KEY_SCHEMA_VERSION, schemaVersion);
             obj.put(KEY_GENERATION, generation);
             obj.put(KEY_CREATED_AT, createdAt);
             obj.put(KEY_PUBLISHER, publisher);
             obj.put(KEY_PACKAGE_NAME, packageName);
-            obj.put(KEY_PAYLOAD, toJsonPayload(payload));
+            obj.put(KEY_PAYLOAD, toJsonPayload(payload, stats));
+            if (stats.droppedEntries > 0) {
+                Logger.w(TAG, "toJson dropped payload entries=" + stats.droppedEntries);
+            }
             return obj.toString(2);
         } catch (Exception e) {
             Logger.e(TAG, "toJson failed", e);
@@ -262,21 +266,23 @@ public final class RuleSnapshot {
      * 将 payload（Map<String, Map<String, Object> | List<...>>）转换为 JSONObject。
      */
     @SuppressWarnings("unchecked")
-    private static Object toJsonValue(Object value) {
+    private static Object toJsonValue(Object value, JsonConversionStats stats) {
         if (value == null) return JSONObject.NULL;
         if (value instanceof Map) {
             JSONObject obj = new JSONObject();
             for (Map.Entry<String, ?> entry : ((Map<String, ?>) value).entrySet()) {
                 try {
-                    obj.put(entry.getKey(), toJsonValue(entry.getValue()));
-                } catch (Exception ignored) {}
+                    obj.put(entry.getKey(), toJsonValue(entry.getValue(), stats));
+                } catch (Exception ignored) {
+                    stats.droppedEntries++;
+                }
             }
             return obj;
         }
         if (value instanceof List) {
             JSONArray arr = new JSONArray();
             for (Object item : (List<?>) value) {
-                arr.put(toJsonValue(item));
+                arr.put(toJsonValue(item, stats));
             }
             return arr;
         }
@@ -284,15 +290,21 @@ public final class RuleSnapshot {
         return value;
     }
 
-    private static Object toJsonPayload(Map<String, ?> payload) {
+    private static Object toJsonPayload(Map<String, ?> payload, JsonConversionStats stats) {
         if (payload == null) return JSONObject.NULL;
         JSONObject obj = new JSONObject();
         for (Map.Entry<String, ?> entry : payload.entrySet()) {
             try {
-                obj.put(entry.getKey(), toJsonValue(entry.getValue()));
-            } catch (Exception ignored) {}
+                obj.put(entry.getKey(), toJsonValue(entry.getValue(), stats));
+            } catch (Exception ignored) {
+                stats.droppedEntries++;
+            }
         }
         return obj;
+    }
+
+    private static final class JsonConversionStats {
+        int droppedEntries;
     }
 
     /**

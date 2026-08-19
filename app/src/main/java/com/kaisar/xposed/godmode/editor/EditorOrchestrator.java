@@ -53,6 +53,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     // 常量定义    // =========================================================================
 
     private static final String TAG = "EditorOrchestrator";
+    private static final String KEY_EVENT_TAG = "KeyEventHook";
     private static final int OVERLAY_COLOR = GmConstants.OVERLAY_COLOR_RED;
 
     // =========================================================================
@@ -211,12 +212,12 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     public void setDisplay(Boolean display) {
         Activity act = mCurrentActivityRef.get();
         if (act == null) {
-            Logger.w(TAG, "[EditorOrchestrator] setDisplay(" + display + ") ignored — no current activity");
+            Logger.w(TAG, "setDisplay(" + display + ") ignored — no current activity");
             return;
         }
         if (display == null) return;
         if (display && !mSwitchProp.get()) {
-            Logger.w(TAG, "[EditorOrchestrator] setDisplay(true) ignored — edit mode switch is off");
+            Logger.w(TAG, "setDisplay(true) ignored — edit mode switch is off");
             return;
         }
         if (display) {
@@ -267,7 +268,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     // =========================================================================
 
     private void showNodeSelectPanel(final Activity activity) {
-        Logger.i(TAG, "[KeyEventHook] showNodeSelectPanel for " + activity.getPackageName());
+        Logger.i(KEY_EVENT_TAG, "showNodeSelectPanel for " + activity.getPackageName());
         List<WeakReference<View>> viewNodes = ViewTraversal.buildViewNodes(
                 activity.getWindow().getDecorView());
         final ViewGroup container = (ViewGroup) activity.getWindow().getDecorView();
@@ -279,7 +280,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     }
 
     private void dismissNodeSelectPanel() {
-        Logger.i(TAG, "[KeyEventHook] dismissNodeSelectPanel");
+        Logger.i(KEY_EVENT_TAG, "dismissNodeSelectPanel");
         if (mPropertyEditor.isSaving()) return;
         mPropertyEditor.cancel();
         mPreviewHandler.restorePreview(null, null, null);
@@ -325,7 +326,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
                         }
                     }, mRuleEditor);
         } catch (Exception e) {
-            Logger.e(TAG, "[KeyEventHook] block fail", e);
+            Logger.e(KEY_EVENT_TAG, "block fail", e);
             Toast.makeText(activity, GmResources.getString(R.string.block_fail, e.getMessage()),
                     Toast.LENGTH_SHORT).show();
         }
