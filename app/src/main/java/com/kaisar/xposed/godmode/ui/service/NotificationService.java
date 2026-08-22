@@ -8,7 +8,6 @@ import android.app.Service;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.BitmapFactory;
-import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
@@ -20,6 +19,7 @@ import androidx.core.app.NotificationCompat;
 import androidx.preference.PreferenceManager;
 
 import com.kaisar.xposed.godmode.R;
+import com.kaisar.xposed.godmode.engine.core.PlatformCapabilities;
 import com.kaisar.xposed.godmode.ipc.RuleServiceClient;
 import com.kaisar.xposed.godmode.ui.EditModeController;
 import com.kaisar.xposed.godmode.ui.SettingsActivity;
@@ -121,7 +121,7 @@ public final class NotificationService extends Service implements SharedPreferen
 
     private void showNotification(boolean editMode) {
         Notification notification = buildNotification(editMode);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+        if (PlatformCapabilities.supportsForegroundServiceType()) {
             startForeground(1, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
         } else {
             startForeground(1, notification);

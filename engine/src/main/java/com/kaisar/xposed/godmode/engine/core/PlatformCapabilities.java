@@ -17,9 +17,21 @@ public final class PlatformCapabilities {
 
     // ===== 匹配能力 =====
 
-    /** RecyclerView Hook 需要 Android N+（API 24+）：ClassLoader 可访问 androidx.recyclerview.widget */
+    /** RecyclerView Hook 需要 Android N+（API 24+），ClassLoader 可发现 androidx.recyclerview.widget */
     public static boolean supportsRecyclerViewHook() {
         return SDK >= 24;
+    }
+
+    // ===== UI/服务能力 =====
+
+    /** Android 13+（API 33）通知权限需运行时请求 */
+    public static boolean canRequestNotificationPermission() {
+        return SDK >= Build.VERSION_CODES.TIRAMISU;
+    }
+
+    /** Android 14+（API 34）startForeground 必须声明前台服务类型 */
+    public static boolean supportsForegroundServiceType() {
+        return SDK >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE;
     }
 
     private PlatformCapabilities() {

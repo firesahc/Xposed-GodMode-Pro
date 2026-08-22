@@ -3,7 +3,6 @@ package com.kaisar.xposed.godmode.ui;
 
 import android.Manifest;
 import android.content.pm.PackageManager;
-import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.Toast;
@@ -22,6 +21,7 @@ import androidx.navigation.ui.AppBarConfiguration;
 import androidx.navigation.ui.NavigationUI;
 
 import com.kaisar.xposed.godmode.R;
+import com.kaisar.xposed.godmode.engine.core.PlatformCapabilities;
 
 public class SettingsActivity extends AppCompatActivity {
 
@@ -62,7 +62,7 @@ public class SettingsActivity extends AppCompatActivity {
     }
 
     private void requestNotificationPermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        if (PlatformCapabilities.canRequestNotificationPermission()) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
                     != PackageManager.PERMISSION_GRANTED) {
                 mNotificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS);
