@@ -28,6 +28,10 @@
 它不能替代真实设备验证。发布候选还必须保留 JVM、AndroidTest、注入、Binder
 死亡重连、SELinux/owner、ROM Hook、Recycler 快速复用和图片迟到回调证据。
 
+libxservicemanager 子模块指针自 `abd9f62` 起恢复常规更新，门禁不再将其
+与 v6.8.0 基线比较（该断言在分叉后恒红已无守门价值）；子模块变更仍随
+主仓库提交统一评审。
+
 ## 不变项
 
 6.10 不迁移规则，也不引入新的规则语义。以下内容必须由 golden 测试锁定：

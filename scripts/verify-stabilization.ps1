@@ -166,11 +166,9 @@ try {
         }
     }
 
-    $baselineSubmodule = git rev-parse "$Baseline`:libxservicemanager"
+    # 子模块指针已于 6.10 线解冻（abd9f62 起恢复常规更新），不再与 v6.8.0 基线比较；
+    # 仅输出当前指针供发布台账核对。
     $currentSubmodule = git rev-parse "HEAD:libxservicemanager"
-    if ($baselineSubmodule -ne $currentSubmodule) {
-        $failures.Add("libxservicemanager gitlink changed")
-    }
 
     $expectedModules = @("app", "engine", "libxservicemanager")
     $actualModules = Select-String -Path "settings.gradle" `
