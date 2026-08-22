@@ -29,6 +29,10 @@ build/
 *.swo
 *~
 .vscode/
+.project
+.classpath
+.settings/
+
 
 # OS
 Thumbs.db
