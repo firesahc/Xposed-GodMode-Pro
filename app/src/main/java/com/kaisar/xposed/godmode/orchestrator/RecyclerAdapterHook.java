@@ -194,7 +194,6 @@ public final class RecyclerAdapterHook {
                                 }
                                 removeBinding(holder, token);
                                 token.active = false;
-                                cancelRetry(token);
                                 View.OnAttachStateChangeListener lifecycle = token.lifecycleListener;
                                 if (lifecycle != null) {
                                     itemView.removeOnAttachStateChangeListener(lifecycle);
@@ -244,13 +243,13 @@ public final class RecyclerAdapterHook {
      * 优先于 onGlobalLayout 全树扫描，精确匹配目标规则并应用。
      */
     private static ViewController applyRepeatableRulesToBoundItem(
-            View itemRoot, long bindingEpoch, Delegate delegate) {
+            View itemRoot, long bindingEpoch, int boundViewType, Delegate delegate) {
         if (itemRoot == null || delegate == null
                 || itemRoot.getVisibility() != View.VISIBLE) return null;
         Activity activity = ViewUtils.getAttachedActivityFromView(itemRoot);
         if (activity == null || activity.isFinishing()) return null;
 
-        ActRules rules = RuleManager.get().getRules();
+        ActRules rules = RuleManager.get().viewRules();
         List<RuleRecord> activityRules = rules.get(
                 activity.getComponentName().getClassName());
         if (activityRules == null || activityRules.isEmpty()) return null;
@@ -261,7 +260,7 @@ public final class RecyclerAdapterHook {
             if (!rule.isRepeatable()) continue;
             try {
                 MatchSpec spec = rule.getMatchSpec();
-                if (!isApplicableToItem(spec, itemRoot)) continue;
+                if (!isApplicableToItem(spec, itemRoot, boundViewType)) continue;
 
                 // CARD 和 ELEMENT 模式走统一的导航+验证管线
                 View target = navigateAndValidate(itemRoot, spec);
@@ -279,15 +278,11 @@ public final class RecyclerAdapterHook {
         View itemView = token.itemRoot.get();
         if (itemView == null || !isCurrent(token)) return;
         ViewController owner = applyRepeatableRulesToBoundItem(
-                itemView, token.bindingEpoch, delegate);
+                itemView, token.bindingEpoch, token.viewType, delegate);
         if (owner != null) {
             token.controller = owner;
         }
         ensureLifecycleListener(token, delegate);
-        if (owner != null) return;
-        if (!itemView.isAttachedToWindow() && !token.retryScheduled) {
-            token.retryScheduled = true;
-        }
     }
 
     private static void ensureLifecycleListener(BindingToken token, Delegate delegate) {
@@ -298,18 +293,16 @@ public final class RecyclerAdapterHook {
             @Override
             public void onViewAttachedToWindow(View view) {
                 if (!isCurrent(token) || !token.active) return;
-                token.detached = false;
-                token.retryScheduled = false;
-                view.post(() -> {
-                    if (isCurrent(token) && token.active) applyToken(token, delegate);
-                });
+                // cached-view 免 rebind 复用时此处是规则唯一恢复入口。
+                // 原 view.post 会先渲染一帧宿主原始内容全高可见（GONE 规则下
+                // 表现为下拉回看时列表突然向上弹跳）；attach 回调先于本帧
+                // child 测量执行，同步应用使塌缩直接参与本次测量布局。
+                applyToken(token, delegate);
             }
 
             @Override
             public void onViewDetachedFromWindow(View view) {
                 if (!isCurrent(token) || !token.active) return;
-                token.detached = true;
-                cancelRetry(token);
                 ViewController controller = token.controller;
                 if (controller == null) {
                     Activity activity = token.activity.get();
@@ -326,21 +319,9 @@ public final class RecyclerAdapterHook {
         itemView.addOnAttachStateChangeListener(listener);
     }
 
-    private static void cancelRetry(BindingToken token) {
-        if (token == null) return;
-        View itemView = token.itemRoot.get();
-        View.OnAttachStateChangeListener listener = token.attachListener;
-        if (itemView != null && listener != null) {
-            itemView.removeOnAttachStateChangeListener(listener);
-        }
-        token.attachListener = null;
-        token.retryScheduled = false;
-    }
-
     private static void deactivateForRebind(BindingToken token, Delegate delegate) {
         if (token == null) return;
         token.active = false;
-        cancelRetry(token);
         View itemView = token.itemRoot.get();
         View.OnAttachStateChangeListener lifecycle = token.lifecycleListener;
         if (itemView != null && lifecycle != null) {
@@ -432,7 +413,6 @@ public final class RecyclerAdapterHook {
                 }
                 if (owned) {
                     token.active = false;
-                    cancelRetry(token);
                     if (root != null && token.lifecycleListener != null) {
                         root.removeOnAttachStateChangeListener(token.lifecycleListener);
                         token.lifecycleListener = null;
@@ -454,10 +434,7 @@ public final class RecyclerAdapterHook {
         final int viewType;
         final long bindingEpoch;
         volatile ViewController controller;
-        volatile boolean retryScheduled;
         volatile boolean active = true;
-        volatile boolean detached;
-        volatile View.OnAttachStateChangeListener attachListener;
         volatile View.OnAttachStateChangeListener lifecycleListener;
 
         BindingToken(Object adapter, Object holder, View itemRoot,
@@ -482,15 +459,23 @@ public final class RecyclerAdapterHook {
 
     /**
      * 检查规则规格是否适用于当前 itemRoot。
+     * <p>
+     * 与批量路径（{@code CompositeMatcher.matchAllViewsBatch}）的过滤条件
+     * 保持同构：itemPath 非空 + itemRootClass 类名相等 + viewType 匹配
+     * （spec.viewType=0 表示不过滤，向后兼容旧规则）。
      *
-     * @param spec     规则匹配规格
-     * @param itemRoot item 的根 View
+     * @param spec          规则匹配规格
+     * @param itemRoot      item 的根 View
+     * @param boundViewType 当前绑定 holder 的实际 viewType（token 权威值）
      * @return true 如果该规则应应用于此 item
      */
-    private static boolean isApplicableToItem(MatchFields spec, View itemRoot) {
+    private static boolean isApplicableToItem(MatchFields spec, View itemRoot,
+            int boundViewType) {
         return spec.getItemPath() != null && spec.getItemPath().length > 0
                 && spec.getItemRootClass() != null
-                && itemRoot.getClass().getName().equals(spec.getItemRootClass());
+                && itemRoot.getClass().getName().equals(spec.getItemRootClass())
+                && (spec.getInfoFlowViewType() <= 0
+                    || spec.getInfoFlowViewType() == boundViewType);
     }
 
     /**
