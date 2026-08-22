@@ -205,9 +205,9 @@ public final class RuleManagerTest {
     }
 
     private static RuleManager newManager() throws Exception {
-        Constructor<RuleManager> constructor = RuleManager.class.getDeclaredConstructor();
+        Constructor<RuleManager> constructor = RuleManager.class.getDeclaredConstructor(String.class);
         constructor.setAccessible(true);
-        return constructor.newInstance();
+        return constructor.newInstance("com.example.test");
     }
 
     private interface Change {

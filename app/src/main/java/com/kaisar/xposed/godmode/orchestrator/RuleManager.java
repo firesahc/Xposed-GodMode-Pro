@@ -43,7 +43,7 @@ public final class RuleManager {
     private final ActRules mActRules = new ActRules();
     private final Logger mLogger = Logger.getLogger(TAG);
 
-    private String mPackageName;
+    private final String mPackageName;
     private volatile boolean mInitialized;
     private Source mLastSource = Source.PROCESS;
     private volatile LoadState mLoadState = LoadState.UNAVAILABLE;
@@ -57,7 +57,14 @@ public final class RuleManager {
     // 单例管理
     // =========================================================================
 
-    private RuleManager() {}
+    /**
+     * 包名经构造参数注入并声明为 final：实例在发布到 {@code sInstance} 之前
+     * 完成全部字段初始化（safe publication），消除 {@link #get()} 在
+     * init 序列中间观察到未初始化状态的窗口。
+     */
+    private RuleManager(String packageName) {
+        this.mPackageName = packageName;
+    }
 
     /**
      * 初始化 RuleManager 单例。
@@ -72,8 +79,7 @@ public final class RuleManager {
             return;
         }
 
-        sInstance = new RuleManager();
-        sInstance.mPackageName = packageName;
+        sInstance = new RuleManager(packageName);
 
         RuleServiceClient ipcClient = RuleServiceClient.getDefault();
         sInstance.mServiceClient = ipcClient;
