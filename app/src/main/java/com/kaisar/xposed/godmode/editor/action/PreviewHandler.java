@@ -4,7 +4,6 @@ import android.graphics.Rect;
 import android.view.View;
 
 import com.kaisar.xposed.godmode.engine.util.Logger;
-import com.kaisar.xposed.godmode.inject.ModuleBootstrap;
 import com.kaisar.xposed.godmode.orchestrator.ViewController;
 import com.kaisar.xposed.godmode.rule.RuleRecordFactory;
 import com.kaisar.xposed.godmode.editor.overlay.MaskView;
@@ -37,14 +36,16 @@ public final class PreviewHandler {
     /**
      * 开始预览：通过临时设置视图 visibility = GONE 来隐藏目标视图。
      *
-     * @param view          要隐藏的目标视图
-     * @param maskView      MaskView 用于清除高亮遮罩
+     * @param view           要隐藏的目标视图
+     * @param maskView       MaskView 用于清除高亮遮罩
      * @param onStateChanged 预览状态变化回调，用于更新 UI
+     * @param infoFlowMode   当前信息流模式，由调用方在触发时显式传入
      */
-    public void startPreview(View view, MaskView maskView, Runnable onStateChanged) {
+    public void startPreview(View view, MaskView maskView, Runnable onStateChanged,
+            boolean infoFlowMode) {
         if (view == null) return;
         try {
-            mPreviewRule = RuleRecordFactory.makeRemoveRule(view, ModuleBootstrap.getEditorOrchestrator().isInfoFlowMode());
+            mPreviewRule = RuleRecordFactory.makeRemoveRule(view, infoFlowMode);
             mPreviewRule = mPreviewRule.withEffect(RemoveEffect.of(View.GONE));
             ViewController.getDefault().applyRule(view, mPreviewRule);
             mPreviewView = view;

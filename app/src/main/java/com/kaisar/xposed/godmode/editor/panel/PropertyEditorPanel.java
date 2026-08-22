@@ -20,7 +20,6 @@ import android.widget.Toast;
 
 import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.engine.util.Logger;
-import com.kaisar.xposed.godmode.inject.ModuleBootstrap;
 import com.kaisar.xposed.godmode.util.ModuleResources;
 import com.kaisar.xposed.godmode.editor.IRuleEditor;
 import com.kaisar.xposed.godmode.rule.RuleRecordFactory;
@@ -142,8 +141,11 @@ public class PropertyEditorPanel {
 
     /**
      * Show the property editor panel for the target view.
+     *
+     * @param infoFlowMode 当前信息流模式，由调用方在触发时显式传入
      */
-    public void show(View targetView, Activity activity, ViewGroup container) {
+    public void show(View targetView, Activity activity, ViewGroup container,
+            boolean infoFlowMode) {
         if (mPanelView != null || targetView == null) return;
         mTargetView = targetView;
         try {
@@ -151,7 +153,7 @@ public class PropertyEditorPanel {
             // 在视图被编辑前捕获原始状态快照
             mSnapshot = ViewSnapshot.capture(targetView);
             mOriginalRule = RuleRecordFactory.makeModifyRule(targetView, mSnapshot,
-                    ModuleBootstrap.getEditorOrchestrator().isInfoFlowMode());
+                    infoFlowMode);
             mSaving = false;
             mPreviewing = false;
             mGeneration++;
@@ -518,13 +520,6 @@ public class PropertyEditorPanel {
         final Bitmap finalSnapshot = snapshot;
         android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
         TaskExecutor.executeIo(() -> {
-            RuleRecord persistedRule = draftRule;
-            try {
-                // The modification image is sent with the rule mutation. The service
-                // publishes neither asset nor rule until both have been persisted.
-            } catch (Exception e) { Logger.e(MODIFY_TAG, "image preparation failed", e); }
-            final boolean finalImageReady = true;
-            final RuleRecord finalRule = persistedRule;
             mainHandler.post(() -> {
                 if (generation != mGeneration || mTargetView == null || !verifyViewIdentity(mTargetView)) {
                     CommonUtils.recycleNullableBitmap(finalSnapshot);
@@ -532,17 +527,11 @@ public class PropertyEditorPanel {
                     abortSaveIfActive();
                     return;
                 }
-                if (!finalImageReady) {
-                    mInFlightImageBitmap = null;
-                    finishSaveFailure(activity, "image save failed");
-                    CommonUtils.recycleNullableBitmap(finalSnapshot);
-                    return;
-                }
                 View target = mTargetView;
                 revertViewState();
                 ViewController controller = RuleLifecycleManager.getInstance().getViewController(activity);
-                if (!controller.applyRule(target, finalRule)) {
-                    applyDraftToView(target, finalRule);
+                if (!controller.applyRule(target, draftRule)) {
+                    applyDraftToView(target, draftRule);
                     mInFlightImageBitmap = null;
                     finishSaveFailure(activity, "runtime apply failed");
                     CommonUtils.recycleNullableBitmap(finalSnapshot);
@@ -550,7 +539,9 @@ public class PropertyEditorPanel {
                 }
                 TaskExecutor.executeIo(() -> {
                     boolean accepted;
-                    try { accepted = mRuleEditor.writeRule(pkg, finalRule, finalSnapshot,
+                    // The modification image is sent with the rule mutation. The service
+                    // publishes neither asset nor rule until both have been persisted.
+                    try { accepted = mRuleEditor.writeRule(pkg, draftRule, finalSnapshot,
                             pendingImage); }
                     catch (Exception e) { accepted = false; Logger.e(MODIFY_TAG, "writeRule failed", e); }
                     final boolean finalAccepted = accepted;
@@ -568,8 +559,8 @@ public class PropertyEditorPanel {
                             Toast.makeText(activity, GmResources.getString(R.string.toast_modifications_saved), Toast.LENGTH_SHORT).show();
                             dismiss();
                         } else {
-                            controller.revokeRule(target, finalRule);
-                            applyDraftToView(target, finalRule);
+                            controller.revokeRule(target, draftRule);
+                            applyDraftToView(target, draftRule);
                             mInFlightImageBitmap = null;
                             String reason = mRuleEditor.getFailureMessage();
                             finishSaveFailure(activity, reason == null

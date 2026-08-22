@@ -92,7 +92,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
 
                 @Override
                 public void onModifyRequested(View selectedView, Activity activity, ViewGroup container) {
-                    mPropertyEditor.show(selectedView, activity, container);
+                    mPropertyEditor.show(selectedView, activity, container, isInfoFlowMode());
                 }
 
                 @Override
@@ -324,7 +324,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
                                     GmResources.getString(R.string.block_fail, message),
                                     Toast.LENGTH_SHORT).show();
                         }
-                    }, mRuleEditor);
+                    }, mRuleEditor, isInfoFlowMode());
         } catch (Exception e) {
             Logger.e(KEY_EVENT_TAG, "block fail", e);
             Toast.makeText(activity, GmResources.getString(R.string.block_fail, e.getMessage()),
@@ -426,7 +426,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
             if (view == null) return;
             MaskView maskView = mNodePanel.getMaskView();
             mPreviewHandler.startPreview(view, maskView,
-                    () -> updatePreviewButton(true));
+                    () -> updatePreviewButton(true), isInfoFlowMode());
         }
     }
 

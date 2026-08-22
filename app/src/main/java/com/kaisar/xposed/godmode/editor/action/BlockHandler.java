@@ -7,7 +7,6 @@ import android.view.ViewGroup;
 
 import com.kaisar.xposed.godmode.editor.IRuleEditor;
 import com.kaisar.xposed.godmode.engine.util.Logger;
-import com.kaisar.xposed.godmode.inject.ModuleBootstrap;
 import com.kaisar.xposed.godmode.orchestrator.ViewController;
 import com.kaisar.xposed.godmode.rule.RuleRecordFactory;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
@@ -40,17 +39,18 @@ public final class BlockHandler {
      * @param snapshot         屏蔽前的截图快照
      * @param blockedViewIndex 被屏蔽视图在列表中的索引
      * @param listener         操作回调
+     * @param infoFlowMode     当前信息流模式，由调用方在触发时显式传入
      */
     public static void execute(final Activity activity, final View view,
             final ViewGroup container, final Bitmap snapshot,
             final int blockedViewIndex, final OnBlockListener listener,
-            final IRuleEditor ruleEditor) {
+            final IRuleEditor ruleEditor, final boolean infoFlowMode) {
         Logger.i(TAG, "execute: blocking package=" + activity.getPackageName()
                 + " viewClass=" + (view == null ? "null" : view.getClass().getName())
                 + " viewId=" + (view == null ? -1 : view.getId())
                 + " index=" + blockedViewIndex);
         try {
-            final RuleRecord viewRule = RuleRecordFactory.makeRemoveRule(view, ModuleBootstrap.getEditorOrchestrator().isInfoFlowMode());
+            final RuleRecord viewRule = RuleRecordFactory.makeRemoveRule(view, infoFlowMode);
             ParticleEffectHelper.execute(activity, view, container, viewRule, snapshot,
                     activity.getPackageName(), /* maskView */ null,
                     ruleEditor, /* onComplete */ () -> {

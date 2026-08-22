@@ -3,8 +3,9 @@ package com.kaisar.xposed.godmode.orchestrator;
 import android.os.Handler;
 import android.os.Looper;
 
+import com.kaisar.xposed.godmode.engine.event.EventBus;
+import com.kaisar.xposed.godmode.engine.event.RulesChangedEvent;
 import com.kaisar.xposed.godmode.engine.util.Logger;
-import com.kaisar.xposed.godmode.inject.ModuleBootstrap;
 import com.kaisar.xposed.godmode.ipc.RuleServiceClient;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
@@ -214,7 +215,7 @@ public final class RuleManager {
 
         // Publish before replacing the manager snapshot. RuleLifecycleManager
         // must diff against the old runtime rules in order to revoke/apply.
-        ModuleBootstrap.notifyViewRulesChanged(copyRules(serviceRules));
+        publishRulesChanged(copyRules(serviceRules));
         // EventBus dispatch is synchronous. Keep a defensive fallback for
         // processes where no lifecycle subscriber is installed (for example,
         // a headless test process) without changing the ordering above.
@@ -260,8 +261,18 @@ public final class RuleManager {
 
     private synchronized void suspendRuntimeForUnavailableService() {
         if (mActRules.isEmpty()) return;
-        ModuleBootstrap.notifyViewRulesChanged(new ActRules());
+        publishRulesChanged(new ActRules());
         replaceRules(new ActRules());
+    }
+
+    /**
+     * 发布规则变更事件 — 与 {@link EventBus#getDefault()} 单例直连，
+     * 不经 inject 层全局容器转发，保持 orchestrator 包对入口层的零依赖。
+     */
+    private static void publishRulesChanged(ActRules actRules) {
+        if (actRules == null) return;
+        EventBus.getDefault().post(new RulesChangedEvent(
+                sInstance.mPackageName != null ? sInstance.mPackageName : "", actRules));
     }
 
     private Handler getRetryHandler() {
