@@ -24,7 +24,6 @@ import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -52,6 +51,10 @@ public final class RuleBackupManager {
     private static final int MAX_BACKUP_RULES = 512;
     private static final int MAX_BACKUP_ENTRIES = 1 + 2 * MAX_BACKUP_RULES;
     private static final long MAX_BACKUP_UNCOMPRESSED_BYTES = 256L * 1024L * 1024L;
+
+    /** 生产图片流来源 — 经服务端描述符打开规则图片；返回拥有型流，关闭即释放 pfd。 */
+    private static final BackupImageOpener SERVICE_IMAGE_OPENER =
+            RuleBackupManager::openServiceImage;
 
     private RuleBackupManager() {
     }
@@ -106,9 +109,6 @@ public final class RuleBackupManager {
             throw new BackupException("Rule service is unavailable or another operation is active");
         }
         Logger.i(TAG, "backupRules start package=" + packageName + " ruleCount=" + viewRules.size());
-        ArrayList<String> backupFilePathList = new ArrayList<>();
-        ArrayList<RuleRecord> backupRuleRecordList = new ArrayList<>(viewRules.size());
-        ImageEntryRegistry imageEntries = new ImageEntryRegistry();
         File backupDir = null;
         try {
             backupDir = createOperationDirectory(
@@ -124,50 +124,14 @@ public final class RuleBackupManager {
             }
             prepareFreshDirectory(backupDir);
             Logger.d(TAG, "backupRules temp directory created package=" + packageName);
-            for (RuleRecord viewRule : selectedRules) {
-                if (viewRule == null || !packageName.equals(viewRule.packageName)) {
-                    throw new IOException("Rule package does not match backup package");
-                }
-                RuleRecord viewRuleCopy = prepareBackupRecord(viewRule);
-                if (!TextUtils.isEmpty(viewRule.imagePath)) {
-                    String entryName = copyImageToBackup(backupDir,
-                            viewRule.imagePath, "", imageEntries,
-                            backupFilePathList);
-                    if (entryName == null) {
-                        throw new IOException("required main image is unavailable");
-                    }
-                    viewRuleCopy.imagePath = entryName;
-                }
-                if (viewRule.isModifyRule() && !TextUtils.isEmpty(viewRule.getModImagePath())) {
-                    if (viewRule.getModImagePath().equals(viewRule.imagePath)) {
-                        viewRuleCopy = viewRuleCopy.withModifyImagePath(viewRuleCopy.imagePath);
-                    } else {
-                        String entryName = copyImageToBackup(backupDir,
-                                viewRule.getModImagePath(), "mod_", imageEntries,
-                                backupFilePathList);
-                        if (entryName == null) {
-                            throw new IOException("required modified image is unavailable");
-                        }
-                        viewRuleCopy = viewRuleCopy.withModifyImagePath(entryName);
-                    }
-                }
-                backupRuleRecordList.add(viewRuleCopy);
+            List<String> backupFilePathList;
+            try (OutputStream out = GodModeApplication.getApplication()
+                    .getContentResolver().openOutputStream(toUri)) {
+                backupFilePathList = writeArchive(out, backupDir, packageName, selectedRules);
             }
-            File manifestFile = new File(backupDir, MANIFEST_FILE);
-            JsonObject jsonObject = new JsonObject();
-            jsonObject.addProperty("version", VERSION);
-            jsonObject.addProperty("packageName", packageName);
-            Gson gson = new GsonBuilder().create();
-            JsonElement jsonElement = gson.toJsonTree(backupRuleRecordList);
-            jsonObject.add("rules", jsonElement);
-            FileUtils.stringToFile(manifestFile, jsonObject.toString());
-            backupFilePathList.add(manifestFile.getPath());
-            Logger.d(TAG, "backupRules manifest written fileCount=" + backupFilePathList.size());
-            try (OutputStream out = GodModeApplication.getApplication().getContentResolver().openOutputStream(toUri)) {
-                ZipUtils.compress(out, backupFilePathList.toArray(new String[0]));
-            }
+            Logger.d(TAG, "backupRules archive assembled fileCount=" + backupFilePathList.size());
             Logger.i(TAG, "backupRules success package=" + packageName
-                    + " rules=" + backupRuleRecordList.size());
+                    + " rules=" + viewRules.size());
         } catch (IOException | RuntimeException e) {
             Logger.e(TAG, "backupRules failed package=" + packageName, e);
             throw new BackupException(e);
@@ -175,6 +139,83 @@ public final class RuleBackupManager {
             if (backupDir != null) cleanupTempDirectory("backupRules", backupDir);
             serviceClient.endBackup();
         }
+    }
+
+    /**
+     * ZIP V1 归档组装内核 — 纯净的核心循环，不含任何 Android 环境依赖
+     * （图片来源经 {@link BackupImageOpener} 注入），可在 JVM 单测中锁定布局合同。
+     * <p>
+     * 职责：遍历 {@code rules} 并复制关联图片到 {@code workDir}——主图沿用源文件名，
+     * mod 图追加 {@code mod_} 前缀；同源路径复用同一归档条目；重名冲突由
+     * {@link ImageEntryRegistry#reserve} 追加 {@code _N} 后缀，空源名兜底
+     * {@code image.webp}。随后将各副本记录的 {@code imagePath}/{@code getModImagePath()}
+     * 替换为归档条目名，序列化 manifest {@code {version: VERSION, packageName,
+     * rules:[...]}} 写入 {@code workDir} 下的 {@value #MANIFEST_FILE}；最后经
+     * {@link ZipUtils#compress} 将全部文件以平铺条目（仅取 {@link File#getName()}，
+     * 无目录层级）写入 {@code out}。
+     * 编排职责（临时目录生命周期、服务端快照选取、备份租约、清理与日志）仍归
+     * {@link #backupRules} 所有。
+     *
+     * @param out         归档目标输出流；压缩完成后随 ZipOutputStream 一并关闭
+     * @param workDir     归档暂存目录，必须已存在且可写
+     * @param packageName 备份归属包名，用于逐条校验规则归属并写入 manifest
+     * @param rules       待归档的规则集（应为服务端权威快照的选中子集）
+     * @return 实际写入的文件路径列表（图片文件 + manifest），顺序即压缩顺序
+     * @throws IOException 任一规则包名与 {@code packageName} 不匹配、必需图片不可用
+     *                     或发生 I/O 失败
+     */
+    static List<String> writeArchive(OutputStream out, File workDir, String packageName,
+                                     List<RuleRecord> rules) throws IOException {
+        return writeArchive(out, workDir, packageName, rules, SERVICE_IMAGE_OPENER);
+    }
+
+    /** 内核重载 — 注入图片流来源使归档组装保持 JVM 可测；生产路径固定走服务端实现。 */
+    static List<String> writeArchive(OutputStream out, File workDir, String packageName,
+                                     List<RuleRecord> rules,
+                                     BackupImageOpener imageOpener) throws IOException {
+        ArrayList<String> backupFilePathList = new ArrayList<>();
+        ArrayList<RuleRecord> backupRuleRecordList = new ArrayList<>(rules.size());
+        ImageEntryRegistry imageEntries = new ImageEntryRegistry();
+        for (RuleRecord viewRule : rules) {
+            if (viewRule == null || !packageName.equals(viewRule.packageName)) {
+                throw new IOException("Rule package does not match backup package");
+            }
+            RuleRecord viewRuleCopy = prepareBackupRecord(viewRule);
+            if (!isEmptyText(viewRule.imagePath)) {
+                String entryName = copyImageToBackup(workDir,
+                        viewRule.imagePath, "", imageEntries, backupFilePathList,
+                        imageOpener);
+                if (entryName == null) {
+                    throw new IOException("required main image is unavailable");
+                }
+                viewRuleCopy.imagePath = entryName;
+            }
+            if (viewRule.isModifyRule() && !isEmptyText(viewRule.getModImagePath())) {
+                if (viewRule.getModImagePath().equals(viewRule.imagePath)) {
+                    viewRuleCopy = viewRuleCopy.withModifyImagePath(viewRuleCopy.imagePath);
+                } else {
+                    String entryName = copyImageToBackup(workDir,
+                            viewRule.getModImagePath(), "mod_", imageEntries,
+                            backupFilePathList, imageOpener);
+                    if (entryName == null) {
+                        throw new IOException("required modified image is unavailable");
+                    }
+                    viewRuleCopy = viewRuleCopy.withModifyImagePath(entryName);
+                }
+            }
+            backupRuleRecordList.add(viewRuleCopy);
+        }
+        File manifestFile = new File(workDir, MANIFEST_FILE);
+        JsonObject jsonObject = new JsonObject();
+        jsonObject.addProperty("version", VERSION);
+        jsonObject.addProperty("packageName", packageName);
+        Gson gson = new GsonBuilder().create();
+        JsonElement jsonElement = gson.toJsonTree(backupRuleRecordList);
+        jsonObject.add("rules", jsonElement);
+        FileUtils.stringToFile(manifestFile, jsonObject.toString());
+        backupFilePathList.add(manifestFile.getPath());
+        ZipUtils.compress(out, backupFilePathList.toArray(new String[0]));
+        return backupFilePathList;
     }
 
     public static RestoreReport restoreRules(Uri fromUri) throws RestoreException {
@@ -347,19 +388,18 @@ public final class RuleBackupManager {
     private static String copyImageToBackup(
             File backupDir, String imagePath, String preferredPrefix,
             ImageEntryRegistry imageEntries,
-            List<String> backupFilePathList) throws IOException {
-        if (TextUtils.isEmpty(imagePath)) return null;
+            List<String> backupFilePathList,
+            BackupImageOpener imageOpener) throws IOException {
+        if (isEmptyText(imagePath)) return null;
         String existingEntry = imageEntries.find(imagePath);
         if (existingEntry != null) return existingEntry;
-        try (ParcelFileDescriptor pfd = RuleServiceClient.getDefault()
-                .openImageFileDescriptor(imagePath)) {
-            if (pfd == null) return null;
+        try (InputStream in = imageOpener.open(imagePath)) {
+            if (in == null) return null;
             String sourceName = new File(imagePath).getName();
             if (sourceName.isEmpty()) sourceName = "image.webp";
             String entryName = imageEntries.reserve(preferredPrefix + sourceName);
             File file = new File(backupDir, entryName);
-            try (InputStream in = new FileInputStream(pfd.getFileDescriptor());
-                 OutputStream out = new FileOutputStream(file)) {
+            try (OutputStream out = new FileOutputStream(file)) {
                 if (!FileUtils.copy(in, out)) {
                     throw new IOException("Failed to copy image: " + imagePath);
                 }
@@ -368,6 +408,24 @@ public final class RuleBackupManager {
             imageEntries.record(imagePath, entryName);
             return entryName;
         }
+    }
+
+    /** 生产实现 — 打开服务端图片描述符并包装为拥有型流；{@code null} 表示来源不可用。 */
+    private static InputStream openServiceImage(String imagePath) {
+        ParcelFileDescriptor pfd = RuleServiceClient.getDefault()
+                .openImageFileDescriptor(imagePath);
+        return pfd == null ? null : new ParcelFileDescriptor.AutoCloseInputStream(pfd);
+    }
+
+    /** 规则图片输入流来源 — 生产路径绑定服务端描述符，内核测试注入本地文件实现。 */
+    interface BackupImageOpener {
+
+        /**
+         * 打开指定规则图片的输入流；由调用方负责关闭返回的流。
+         *
+         * @return 图片输入流，{@code null} 表示图片来源不可用
+         */
+        InputStream open(String imagePath) throws IOException;
     }
 
     static final class ImageEntryRegistry {
@@ -419,5 +477,10 @@ public final class RuleBackupManager {
         } catch (RuntimeException e) {
             Logger.w(TAG, operation + ": cleanup temp directory failed: " + dir, e);
         }
+    }
+
+    /** 归档内核专用空串判断，语义与 {@code TextUtils.isEmpty} 一致以保持 JVM 纯净。 */
+    private static boolean isEmptyText(String value) {
+        return value == null || value.length() == 0;
     }
 }
