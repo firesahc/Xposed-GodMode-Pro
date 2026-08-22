@@ -24,4 +24,17 @@ public enum MatchMode {
     /** 正则表达式匹配，Pattern.matches(value, target) */
     REGEX;
 
+    /**
+     * 宽松解析 — 未知或缺失名称返回 null（语义等同默认 EXACT，
+     * 见 {@link com.kaisar.xposed.godmode.engine.rule.MatchFields#getMatchMode} 契约）。
+     * 与 RuleRecordTypeAdapter 的 JSON 容错读取语义对称；供 Parcel 反序列化等 wire 入口复用。
+     */
+    public static MatchMode fromName(String name) {
+        if (name == null) return null;
+        for (MatchMode mode : values()) {
+            if (mode.name().equals(name)) return mode;
+        }
+        return null;
+    }
+
 }

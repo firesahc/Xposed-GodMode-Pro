@@ -109,7 +109,7 @@ public final class RuleRecord implements Parcelable, Cloneable {
         String text = in.readString();
         String description = in.readString();
         String modeName = in.readString();
-        MatchMode matchMode = modeName != null ? MatchMode.valueOf(modeName) : null;
+        MatchMode matchMode = MatchMode.fromName(modeName);
         int viewType = in.readInt();
         int visibility = in.readInt();
         timestamp = in.readLong();
@@ -131,7 +131,7 @@ public final class RuleRecord implements Parcelable, Cloneable {
         String parentClass = in.readString();
         boolean repeatable = in.readByte() != 0;
         String levelName = in.readString();
-        TargetLevel targetLevel = levelName != null ? TargetLevel.valueOf(levelName) : null;
+        TargetLevel targetLevel = TargetLevel.fromName(levelName);
 
         matchSpec = new MatchSpec.Builder().depth(depth).activityClass(activityClass).viewClass(viewClass)
                 .resourceName(resourceName).itemPath(itemPath).itemRootClass(itemRootClass)

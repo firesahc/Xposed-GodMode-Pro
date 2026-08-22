@@ -2,6 +2,7 @@ package com.kaisar.xposed.godmode.rule;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 
 import android.os.Parcel;
 
@@ -93,7 +94,31 @@ public final class RuleRecordParcelInstrumentedTest {
         }
     }
 
+    /** Unknown enum names degrade to null (defaulted semantics per MatchFields), never throw. */
+    @Test
+    public void creatorToleratesUnknownEnumNames() {
+        Parcel parcel = Parcel.obtain();
+        try {
+            writeV69Fixture(parcel, "BOGUS_MODE", "BOGUS_LEVEL");
+            parcel.setDataPosition(0);
+            RuleRecord record = RuleRecord.CREATOR.createFromParcel(parcel);
+
+            assertNull(record.getMatchMode());
+            assertNull(record.getTargetLevel());
+            // 其余槽位不受枚举降级影响
+            assertEquals("modify", record.getRuleTag());
+            assertEquals("ExampleActivity", record.getActivityClass());
+            assertArrayEquals(new String[] {"row", "title"}, record.getItemPath());
+        } finally {
+            parcel.recycle();
+        }
+    }
+
     private static void writeV69Fixture(Parcel parcel) {
+        writeV69Fixture(parcel, "CONTAINS", "CARD");
+    }
+
+    private static void writeV69Fixture(Parcel parcel, String modeName, String levelName) {
         parcel.writeString("modify");
         parcel.writeString("label");
         parcel.writeString("com.example");
@@ -112,7 +137,7 @@ public final class RuleRecordParcelInstrumentedTest {
         parcel.writeString("com.example:id/title");
         parcel.writeString("raw text");
         parcel.writeString("raw description");
-        parcel.writeString("CONTAINS");
+        parcel.writeString(modeName);
         parcel.writeInt(7);
         parcel.writeInt(4);
         parcel.writeLong(5L);
@@ -133,7 +158,7 @@ public final class RuleRecordParcelInstrumentedTest {
         parcel.writeString("FrameLayout");
         parcel.writeString("LinearLayout");
         parcel.writeByte((byte) 1);
-        parcel.writeString("CARD");
+        parcel.writeString(levelName);
     }
 
     private static RuleRecord record() {
