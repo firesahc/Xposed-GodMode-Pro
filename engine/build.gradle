@@ -31,6 +31,12 @@ android {
         targetCompatibility JavaVersion.VERSION_1_8
         coreLibraryDesugaringEnabled = true
     }
+
+    testOptions {
+        // engine 为纯逻辑模块：android.* stub（如 Log.getStackTraceString）按默认值放行，
+        // 使 TextMatcher/Logger 协同路径可在 JVM 上完整测试。
+        unitTests.returnDefaultValues = true
+    }
 }
 
 dependencies {
