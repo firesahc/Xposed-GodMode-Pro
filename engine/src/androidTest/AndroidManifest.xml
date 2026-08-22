@@ -4,5 +4,8 @@
         <activity
             android:name="com.kaisar.xposed.godmode.engine.applier.ModifyApplierTestActivity"
             android:exported="false" />
+        <activity
+            android:name="com.kaisar.xposed.godmode.engine.matcher.CompositeMatcherTestActivity"
+            android:exported="false" />
     </application>
 </manifest>
