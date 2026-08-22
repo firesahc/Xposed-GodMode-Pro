@@ -32,6 +32,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.ArrayDeque;
+import java.util.Locale;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -137,7 +138,7 @@ public final class RuleServiceClient {
                 if (!RuleServiceContract.DESCRIPTOR.equals(descriptor)) {
                     markRebootRequired(ServiceDiagnostic.of(
                             ServiceDiagnostic.Type.DESCRIPTOR_MISMATCH,
-                            String.format(DiagnosticMessages.DESCRIPTOR_MISMATCH_DETAIL, descriptor)));
+                            String.format(Locale.US, DiagnosticMessages.DESCRIPTOR_MISMATCH_DETAIL, descriptor)));
                     return null;
                 }
                 IRuleService service = IRuleService.Stub.asInterface(remote);
@@ -152,7 +153,7 @@ public final class RuleServiceClient {
                 if (state != RuleServiceContract.READY) {
                     mServiceState = state;
                     recordDiagnostic(ServiceDiagnostic.forServiceState(state,
-                            String.format(DiagnosticMessages.SERVICE_NOT_READY_STATE_DETAIL, state)));
+                            String.format(Locale.US, DiagnosticMessages.SERVICE_NOT_READY_STATE_DETAIL, state)));
                     return null;
                 }
                 final Connection connection = new Connection(remote, service, mConnectionEpoch.incrementAndGet());
@@ -171,18 +172,18 @@ public final class RuleServiceClient {
                 if (remote.isBinderAlive()) {
                     mServiceState = RuleServiceContract.FAILED;
                     recordDiagnostic(ServiceDiagnostic.of(ServiceDiagnostic.Type.UNKNOWN,
-                            String.format(DiagnosticMessages.HANDSHAKE_FAILED_DETAIL, e.getMessage())));
+                            String.format(Locale.US, DiagnosticMessages.HANDSHAKE_FAILED_DETAIL, e.getMessage())));
                 } else {
                     mServiceState = RuleServiceContract.STARTING;
                     recordDiagnostic(ServiceDiagnostic.of(ServiceDiagnostic.Type.BINDER_DIED,
-                            String.format(DiagnosticMessages.HANDSHAKE_BINDER_DEAD_DETAIL, e.getMessage())));
+                            String.format(Locale.US, DiagnosticMessages.HANDSHAKE_BINDER_DEAD_DETAIL, e.getMessage())));
                 }
                 Logger.e(TAG, "rule service handshake failed state=" + mServiceState, e);
                 return null;
             } catch (RuntimeException e) {
                 mServiceState = RuleServiceContract.FAILED;
                 recordDiagnostic(ServiceDiagnostic.of(ServiceDiagnostic.Type.UNKNOWN,
-                        String.format(DiagnosticMessages.HANDSHAKE_UNEXPECTED_FAILURE_DETAIL, e.getMessage())));
+                        String.format(Locale.US, DiagnosticMessages.HANDSHAKE_UNEXPECTED_FAILURE_DETAIL, e.getMessage())));
                 Logger.e(TAG, "rule service handshake exception state=" + mServiceState, e);
                 return null;
             }
@@ -755,7 +756,7 @@ public final class RuleServiceClient {
             uncertain = true;
             mLastMutationStatus = RuleServiceContract.RESULT_UNCERTAIN;
             recordDiagnostic(ServiceDiagnostic.of(ServiceDiagnostic.Type.COMMIT_UNCERTAIN,
-                    String.format(DiagnosticMessages.MUTATE_UNCERTAIN_REQUEST_ID_DETAIL, requestId)));
+                    String.format(Locale.US, DiagnosticMessages.MUTATE_UNCERTAIN_REQUEST_ID_DETAIL, requestId)));
         }
         finally {
             if (mainPipe != null) mainPipe.closeRead();
@@ -770,7 +771,7 @@ public final class RuleServiceClient {
                 if (!accepted && !uncertain) {
                     mLastMutationStatus = RuleServiceContract.RESULT_WRITE_FAILED;
                     recordDiagnostic(ServiceDiagnostic.of(ServiceDiagnostic.Type.UNKNOWN,
-                            String.format(DiagnosticMessages.IMAGE_PIPE_WRITE_FAILED_DETAIL,
+                            String.format(Locale.US, DiagnosticMessages.IMAGE_PIPE_WRITE_FAILED_DETAIL,
                                     pipeFailure.getMessage())));
                 }
             }
@@ -796,11 +797,11 @@ public final class RuleServiceClient {
             }
             if (reconciled == RuleServiceContract.RESULT_REJECTED) {
                 recordDiagnostic(ServiceDiagnostic.of(ServiceDiagnostic.Type.UNKNOWN,
-                        String.format(DiagnosticMessages.MUTATE_READBACK_NOT_FOUND_REQUEST_ID_DETAIL,
+                        String.format(Locale.US, DiagnosticMessages.MUTATE_READBACK_NOT_FOUND_REQUEST_ID_DETAIL,
                                 requestId)));
             } else {
                 recordDiagnostic(ServiceDiagnostic.of(ServiceDiagnostic.Type.COMMIT_UNCERTAIN,
-                        String.format(DiagnosticMessages.MUTATE_RECONCILE_UNKNOWN_REQUEST_ID_DETAIL,
+                        String.format(Locale.US, DiagnosticMessages.MUTATE_RECONCILE_UNKNOWN_REQUEST_ID_DETAIL,
                                 requestId)));
             }
             logMutationTerminal(operation, packageName, requestId, reconciled,
@@ -934,7 +935,7 @@ public final class RuleServiceClient {
             return asset;
         } catch (IOException e) {
             recordDiagnostic(ServiceDiagnostic.of(ServiceDiagnostic.Type.UNKNOWN,
-                    String.format(DiagnosticMessages.IMAGE_PIPE_CREATE_FAILED_DETAIL, e.getMessage())));
+                    String.format(Locale.US, DiagnosticMessages.IMAGE_PIPE_CREATE_FAILED_DETAIL, e.getMessage())));
             Logger.w(TAG, "create image pipe failed", e);
             return null;
         }
