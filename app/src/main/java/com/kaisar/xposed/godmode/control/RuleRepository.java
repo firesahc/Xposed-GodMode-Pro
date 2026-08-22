@@ -822,7 +822,7 @@ public final class RuleRepository {
                 mLogger.w("persist: cannot create dir for " + packageName);
                     return false;
                 }
-                FileUtils.setPermissions(appDataDir, PRIVATE_DIR_MODE, -1, -1);
+                FileUtils.setPermissions(appDataDir, PRIVATE_DIR_MODE);
                 File ruleFile = new File(appDataDir, packageName + RULE_FILE_SUFFIX);
                 tmpFile = new File(appDataDir, packageName + RULE_FILE_SUFFIX + ".tmp");
                 try (FileOutputStream out = new FileOutputStream(tmpFile)) {
@@ -837,7 +837,7 @@ public final class RuleRepository {
                     mLogger.w("persist: atomic rename failed for " + packageName);
                     return false;
                 }
-                FileUtils.setPermissions(ruleFile, PRIVATE_FILE_MODE, -1, -1);
+                FileUtils.setPermissions(ruleFile, PRIVATE_FILE_MODE);
                 return true;
             } catch (Exception e) {
                 if (tmpFile != null && tmpFile.exists()) FileUtils.delete(tmpFile);
@@ -878,7 +878,7 @@ public final class RuleRepository {
                     if (bitmapToSave.compress(Bitmap.CompressFormat.WEBP, 80, out)) {
                         out.flush();
                         out.getFD().sync();
-                        FileUtils.setPermissions(file, PRIVATE_FILE_MODE, -1, -1);
+                        FileUtils.setPermissions(file, PRIVATE_FILE_MODE);
                         return file.getAbsolutePath();
                     }
                     throw new FileNotFoundException("bitmap can't compress to " + file);
@@ -941,7 +941,7 @@ public final class RuleRepository {
             try {
                 File prefsFile = new File(getBaseDir(), TOOLBAR_PREFS_FILE);
                 FileUtils.stringToFile(prefsFile, items);
-                FileUtils.setPermissions(prefsFile, PRIVATE_FILE_MODE, -1, -1);
+                FileUtils.setPermissions(prefsFile, PRIVATE_FILE_MODE);
                 return true;
             } catch (Exception e) {
                 mLogger.w("persist toolbar prefs failed", e);
@@ -952,7 +952,7 @@ public final class RuleRepository {
         String getBaseDir() throws FileNotFoundException {
             File dir = new File(BASE_DIR);
             if (dir.exists() || dir.mkdirs()) {
-                FileUtils.setPermissions(dir, PRIVATE_DIR_MODE, -1, -1);
+                FileUtils.setPermissions(dir, PRIVATE_DIR_MODE);
                 return dir.getAbsolutePath();
             }
             throw new FileNotFoundException("Cannot create base dir: " + BASE_DIR);
@@ -961,7 +961,7 @@ public final class RuleRepository {
         String getAppDataDir(String packageName) throws FileNotFoundException {
             File dir = new File(getBaseDir(), packageName);
             if (dir.exists() || dir.mkdirs()) {
-                FileUtils.setPermissions(dir, PRIVATE_DIR_MODE, -1, -1);
+                FileUtils.setPermissions(dir, PRIVATE_DIR_MODE);
                 return dir.getAbsolutePath();
             }
             throw new FileNotFoundException("Cannot create app data dir: " + dir);

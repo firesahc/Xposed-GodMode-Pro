@@ -1,5 +1,8 @@
 package com.kaisar.xposed.godmode.engine.util;
 
+import android.system.ErrnoException;
+import android.system.Os;
+
 import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -10,7 +13,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 
 /**
- * 文件 I/O 工具类 — 不属于 Android 框架，可独立于 app 模块运行。
+ * 文件 I/O 工具类 — 仅依赖平台核心 API（android.system / java.io），不依赖 app 模块。
  * 提供文件读写、删除、权限设置的原子操作。
  */
 public final class FileUtils {
@@ -54,41 +57,28 @@ public final class FileUtils {
     }
 
     /**
-     * Set owner and mode of of given {@link File}.
+     * Apply permission bits of given {@link File} via {@code chmod}.
      *
-     * @param mode to apply through {@code chmod}
-     * @param uid  to apply through {@code chown}, or -1 to leave unchanged
-     * @param gid  to apply through {@code chown}, or -1 to leave unchanged
-     * @return 0 on success, otherwise errno.
+     * @param mode permission bits, e.g. {@link #S_IRWXU}
+     * @return 0 on success, otherwise errno ({@code ENOENT} if the path does not exist).
      */
-    public static int setPermissions(File path, int mode, int uid, int gid) {
-        return setPermissions(path.getAbsolutePath(), mode, uid, gid);
+    public static int setPermissions(File path, int mode) {
+        return setPermissions(path.getAbsolutePath(), mode);
     }
 
     /**
-     * Set owner and mode of of given path.
+     * Apply permission bits of given path via {@code chmod}.
      *
-     * @param mode to apply through {@code chmod}
-     * @param uid  to apply through {@code chown}, or -1 to leave unchanged
-     * @param gid  to apply through {@code chown}, or -1 to leave unchanged
-     * @return 0 on success, otherwise errno.
+     * @param mode permission bits, e.g. {@link #S_IRWXU}
+     * @return 0 on success, otherwise errno ({@code ENOENT} if the path does not exist).
      */
-    public static int setPermissions(String path, int mode, int uid, int gid) {
+    public static int setPermissions(String path, int mode) {
         try {
-            File file = new File(path);
-            if (!file.exists()) return -1;
-            if (file.isDirectory()) {
-                file.setExecutable((mode & 0100) != 0, false);
-                file.setReadable((mode & 0400) != 0, false);
-                file.setWritable((mode & 0200) != 0, false);
-            } else {
-                file.setExecutable((mode & 0100) != 0, (mode & 0001) == 0);
-                file.setReadable((mode & 0400) != 0, (mode & 0004) == 0);
-                file.setWritable((mode & 0200) != 0, (mode & 0002) == 0);
-            }
+            Os.chmod(path, mode);
             return 0;
-        } catch (Exception e) {
-            return -1;
+        } catch (ErrnoException e) {
+            Logger.w(TAG, "chmod failed: " + path, e);
+            return e.errno;
         }
     }
 
