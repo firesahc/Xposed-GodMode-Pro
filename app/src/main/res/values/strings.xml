@@ -28,10 +28,7 @@
     <string name="menu_delete_rules">删除全部规则</string>
     <string name="menu_backup_rules">备份全部规则</string>
     <string name="menu_title_restore_rules">恢复规则</string>
-    <string name="menu_title_restore_rules_description">从备份文件恢复规则</string>
-    <string name="menu_icon_switch_show">显示图标</string>
     <string name="menu_icon_switch_hide">隐藏图标</string>
-    <string name="menu_icon_switch_description">从桌面隐藏或显示应用图标</string>
 
     <string name="title_app_rule">应用规则</string>
     <string name="title_rule_details">规则详情</string>
@@ -161,8 +158,6 @@
     <string name="rule_details_invisible">占位不可见</string>
     <string name="rule_details_gone">不占位隐藏</string>
     <string name="rule_details_set_alias">设置别名</string>
-
-    <string name="top_revert_tip">噢 上帝，原谅这只愚蠢的土拨鼠吧！</string>
     <string name="accessibility_block">屏蔽</string>
     <string name="accessibility_preview">预览</string>
     <string name="accessibility_preview_exit">退出预览</string>
@@ -228,7 +223,6 @@
     <string name="toolbar_remove_mode">移除模式</string>
     <string name="toolbar_modify_mode">修改模式</string>
     <string name="toolbar_info_flow_mode">信息流模式</string>
-    <string name="filter_icon_desc">筛选规则</string>
     <string name="filter_dialog_title">规则筛选</string>
     <string name="pref_restore_rules">恢复规则</string>
     <string name="snack_bar_msg_restore_rules_success">已恢复 %d 条规则</string>
@@ -237,16 +231,12 @@
     <string name="snack_bar_msg_backup_all_result">保存完成: %1$d 成功, %2$d 失败</string>
 
     <string name="settings_category_features">功能</string>
-    <string name="restore_rules_success">恢复规则成功</string>
-    <string name="save_all_rules_result">保存完成：%1$d 成功，%2$d 失败</string>
     <string name="pref_key_hide_icon" translatable="false">pref_hide_icon</string>
     <string name="pref_key_show_remove_mode" translatable="false">pref_show_remove_mode</string>
     <string name="pref_key_show_modify_mode" translatable="false">pref_show_modify_mode</string>
     <string name="pref_key_show_info_flow_mode" translatable="false">pref_show_info_flow_mode</string>
 
     <!-- 注入进程内 Toast 提示（通过 GmResources 访问） -->
-    <string name="toast_multi_touch_not_supported">不支持多点操作</string>
-    <string name="toast_float_window_not_editable">该控件属于悬浮窗暂不支持编辑</string>
     <string name="toast_cannot_open_image_picker">无法打开图片选择器</string>
     <string name="toast_no_modifications_to_save">没有需要保存的修改</string>
     <string name="toast_modifications_saved">所有修改已保存</string>

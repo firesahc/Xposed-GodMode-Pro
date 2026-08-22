@@ -36,7 +36,6 @@
             tools:gravity="right">
 
             <FrameLayout
-                android:id="@+id/slider_frame"
                 android:layout_width="wrap_content"
                 android:layout_height="160dp"
                 android:layout_marginTop="10dp"

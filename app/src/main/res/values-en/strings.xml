@@ -22,10 +22,7 @@
     <string name="menu_delete_rules">Delete rules</string>
     <string name="menu_backup_rules">Backup rules</string>
     <string name="menu_title_restore_rules">Restore rules</string>
-    <string name="menu_title_restore_rules_description">Restore rules from backup file</string>
-    <string name="menu_icon_switch_show">Show icon</string>
     <string name="menu_icon_switch_hide">Hide icon</string>
-    <string name="menu_icon_switch_description">Show or hide app icon from launcher</string>
 
     <string name="title_app_rule">App Rules</string>
     <string name="title_rule_details">Details</string>
@@ -154,8 +151,6 @@
     <string name="rule_details_invisible">Invisible (occupy space)</string>
     <string name="rule_details_gone">Gone (no space)</string>
     <string name="rule_details_set_alias">Set alias</string>
-
-    <string name="top_revert_tip">Release here to cancel</string>
     <string name="accessibility_block">Block</string>
     <string name="accessibility_preview">Preview</string>
     <string name="accessibility_preview_exit">Exit preview</string>
@@ -199,19 +194,14 @@
     <string name="toolbar_remove_mode">Remove Mode</string>
     <string name="toolbar_modify_mode">Modify Mode</string>
     <string name="toolbar_info_flow_mode">Info Flow Mode</string>
-    <string name="filter_icon_desc">Filter Rules</string>
     <string name="filter_dialog_title">Rule Filter</string>
     <string name="settings_category_features">Features</string>
-    <string name="restore_rules_success">Restore rules succeeded</string>
-    <string name="save_all_rules_result">Saved: %1$d success, %2$d failed</string>
     <string name="pref_restore_rules">Restore Rules</string>
     <string name="snack_bar_msg_restore_rules_success">Restored %d rules</string>
     <string name="snack_bar_msg_restore_rules_failed_count">, %1$d failed</string>
     <string name="snack_bar_msg_backup_rule_success">Backed up %d rules</string>
     <string name="snack_bar_msg_backup_all_result">Saved: %1$d success, %2$d failed</string>
     <!-- Injected process Toast messages (accessed via GmResources) -->
-    <string name="toast_multi_touch_not_supported">Multi-touch not supported</string>
-    <string name="toast_float_window_not_editable">Floating window elements cannot be edited</string>
     <string name="toast_cannot_open_image_picker">Cannot open image picker</string>
     <string name="toast_no_modifications_to_save">No modifications to save</string>
     <string name="toast_modifications_saved">All modifications saved</string>
