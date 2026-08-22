@@ -34,6 +34,11 @@ public final class ModifyEffect extends RuleEffect {
     public boolean isTextModified() { return getModText() != null; }
     public boolean isImageModified() { return getModImagePath() != null; }
 
+    /**
+     * 运行时效果相等 — 仅比较 ModifyApplier 实际消费的 mod/orig 字段。
+     * 有意排除 ruleTag（wire 序列化判别器）：仅 ruleTag 不同的两个效果在运行时不可区分，
+     * runtime diff 不会因 tag 变化触发 revoke/reapply（见 RuntimeRuleComparator 契约）。
+     */
     @Override
     public boolean equals(Object object) {
         if (this == object) return true;

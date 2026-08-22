@@ -22,6 +22,10 @@ public final class RemoveEffect extends RuleEffect {
         return toWireValues().getVisibility();
     }
 
+    /**
+     * 运行时效果相等 — visibility 是 REMOVE 效果唯一的运行时能力，故仅比较它；
+     * ruleTag 同样不参与（同 {@link ModifyEffect#equals} 的语义说明）。
+     */
     @Override
     public boolean equals(Object object) {
         return this == object || object instanceof RemoveEffect

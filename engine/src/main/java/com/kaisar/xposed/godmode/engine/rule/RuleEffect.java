@@ -102,6 +102,12 @@ public abstract class RuleEffect {
                     .origTopMargin(origTopMargin);
         }
 
+        /**
+         * wire 全等 — 全部 11 个字段（含 wire 判别器 ruleTag）参与比较，
+         * 用于序列化往返（JSON/Parcel）一致性校验。
+         * 注意与子类 equals 的语义分工：effect 层是"运行时效果相等"（不含 ruleTag），
+         * 本层是"wire 表示全等"，二者互不蕴含。
+         */
         @Override
         public boolean equals(Object object) {
             if (this == object) return true;
