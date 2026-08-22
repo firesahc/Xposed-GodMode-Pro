@@ -23,6 +23,7 @@ import androidx.preference.Preference;
 import androidx.preference.PreferenceFragmentCompat;
 
 import com.kaisar.xposed.godmode.R;
+import com.kaisar.xposed.godmode.engine.applier.SafeBitmapDecoder;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.engine.util.Preconditions;
 import com.kaisar.xposed.godmode.ipc.RuleServiceClient;
@@ -282,8 +283,8 @@ public final class RuleRecordDetailsFragment extends PreferenceFragmentCompat im
             ParcelFileDescriptor pfd = RuleServiceClient.getDefault().openImageFileDescriptor(viewRule.imagePath);
             Objects.requireNonNull(pfd, String.format("Can not open %s", viewRule.imagePath));
             try {
-                // 直接使用 decodeFileDescriptor 解码，避免 ByteArrayOutputStream 中间缓冲区
-                return BitmapFactory.decodeFileDescriptor(pfd.getFileDescriptor());
+                // 带采样上限保护的安全解码，避免大图 OOM；失败返回 null 由上层兜底
+                return SafeBitmapDecoder.decode(pfd.getFileDescriptor());
             } finally {
                 try { pfd.close(); } catch (Exception e) { /* closeSilently */ }
             }

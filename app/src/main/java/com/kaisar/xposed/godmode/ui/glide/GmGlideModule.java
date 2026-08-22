@@ -4,7 +4,6 @@ import static com.kaisar.xposed.godmode.engine.util.CommonUtils.recycleNullableB
 
 import android.content.Context;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
@@ -24,6 +23,7 @@ import com.bumptech.glide.load.model.ModelLoaderFactory;
 import com.bumptech.glide.load.model.MultiModelLoaderFactory;
 import com.bumptech.glide.module.AppGlideModule;
 import com.bumptech.glide.signature.ObjectKey;
+import com.kaisar.xposed.godmode.engine.applier.SafeBitmapDecoder;
 import com.kaisar.xposed.godmode.ipc.RuleServiceClient;
 
 import java.io.FileNotFoundException;
@@ -76,13 +76,11 @@ public class GmGlideModule extends AppGlideModule {
             ParcelFileDescriptor pfd = RuleServiceClient.getDefault().openImageFileDescriptor(mPreview.imagePath);
             if (pfd != null) {
                 try {
-                    // 直接使用 decodeFileDescriptor 解码，避免 ByteArrayOutputStream 中间缓冲区
-                    Bitmap bitmap = BitmapFactory.decodeFileDescriptor(pfd.getFileDescriptor());
-                    if (mPreview.x >= 0 && mPreview.y >= 0 && mPreview.width > 0 && mPreview.height > 0
-                            && bitmap != null
-                            && mPreview.x + mPreview.width <= bitmap.getWidth()
-                            && mPreview.y + mPreview.height <= bitmap.getHeight()) {
-                        Bitmap croppedBitmap = Bitmap.createBitmap(bitmap, mPreview.x, mPreview.y, mPreview.width, mPreview.height);
+                    // 采样解码并按原图坐标 ROI 裁剪，避免大图全量解码导致 OOM；
+                    // ROI 无效或裁剪失败时回退为带采样保护的整图解码
+                    Bitmap croppedBitmap = SafeBitmapDecoder.decodeCropped(
+                            pfd.getFileDescriptor(), mPreview.x, mPreview.y, mPreview.width, mPreview.height);
+                    if (croppedBitmap != null) {
                         Bitmap markedBitmap = Bitmap.createBitmap(croppedBitmap.getWidth(), croppedBitmap.getHeight(), Bitmap.Config.ARGB_8888);
                         Canvas canvas = new Canvas(markedBitmap);
                         canvas.drawBitmap(croppedBitmap, 0, 0, null);
@@ -92,9 +90,10 @@ public class GmGlideModule extends AppGlideModule {
                         borderPaint.setStrokeWidth(3);
                         canvas.drawRect(1, 1, markedBitmap.getWidth() - 1, markedBitmap.getHeight() - 1, borderPaint);
                         callback.onDataReady(markedBitmap);
+                        // decodeCropped 返回的是独立裁剪副本，内部中间产物已自行回收，此处不构成双重 recycle
                         recycleNullableBitmap(croppedBitmap);
                     } else {
-                        callback.onDataReady(bitmap);
+                        callback.onDataReady(SafeBitmapDecoder.decode(pfd.getFileDescriptor()));
                     }
                 } finally {
                     try { pfd.close(); } catch (IOException ignored) { }
