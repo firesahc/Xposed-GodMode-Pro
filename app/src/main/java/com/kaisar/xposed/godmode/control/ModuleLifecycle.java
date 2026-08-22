@@ -44,10 +44,6 @@ public final class ModuleLifecycle {
     private final EnumMap<Layer, String> mHealthReasons = new EnumMap<>(Layer.class);
     private final Layer[] mRequiredLayers;
 
-    public ModuleLifecycle() {
-        this(Layer.values());
-    }
-
     public ModuleLifecycle(Layer... requiredLayers) {
         mRequiredLayers = requiredLayers == null || requiredLayers.length == 0
                 ? Layer.values() : requiredLayers.clone();
@@ -134,13 +130,6 @@ public final class ModuleLifecycle {
         return mState == State.READY || mState == State.DEGRADED;
     }
 
-    /**
-     * 获取诊断信息。
-     */
-    public Diagnostics getDiagnostics() {
-        return new Diagnostics(mState, new EnumMap<>(mHealth));
-    }
-
     // ===== 内部 =====
 
     private void recomputeOverall() {
@@ -161,28 +150,10 @@ public final class ModuleLifecycle {
             if (mState != State.INIT) {
                 transition(State.DEGRADED);
             }
-        } else if (allHealthy && mState == State.LOADING) {
+        } else if (allHealthy && mState != State.READY) {
+            // 故障恢复边：ERROR/DEGRADED 层全部回到 HEALTHY 后整体回归 READY。
+            // INIT 不会进入此分支（初始层状态为 UNKNOWN，allHealthy 恒为 false）。
             transition(State.READY);
-        }
-    }
-
-    // ===== 诊断 DTO =====
-
-    /**
-     * 模块诊断信息 — 用于调试和健康检查端点。
-     */
-    public static final class Diagnostics {
-        public final State state;
-        public final EnumMap<Layer, Health> health;
-
-        Diagnostics(State state, EnumMap<Layer, Health> health) {
-            this.state = state;
-            this.health = health;
-        }
-
-        @Override
-        public String toString() {
-            return "Diagnostics{state=" + state + ", health=" + health + '}';
         }
     }
 }
