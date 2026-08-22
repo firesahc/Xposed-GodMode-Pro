@@ -51,6 +51,8 @@ public final class RuleBackupManager {
     private static final int MAX_BACKUP_RULES = 512;
     private static final int MAX_BACKUP_ENTRIES = 1 + 2 * MAX_BACKUP_RULES;
     private static final long MAX_BACKUP_UNCOMPRESSED_BYTES = 256L * 1024L * 1024L;
+    /** manifest.json 读入上限 — 512 条规则的紧凑 JSON 约 0.4MB，留 10 倍余量。 */
+    private static final int MAX_MANIFEST_BYTES = 4 * 1024 * 1024;
 
     /** 生产图片流来源 — 经服务端描述符打开规则图片；返回拥有型流，关闭即释放 pfd。 */
     private static final BackupImageOpener SERVICE_IMAGE_OPENER =
@@ -173,6 +175,10 @@ public final class RuleBackupManager {
     static List<String> writeArchive(OutputStream out, File workDir, String packageName,
                                      List<RuleRecord> rules,
                                      BackupImageOpener imageOpener) throws IOException {
+        if (rules.size() > MAX_BACKUP_RULES) {
+            // 与 restoreRules 的 manifest 数组上限对称，防止未来调用方绕过编排层直连内核
+            throw new IOException("Backup exceeds rule limit: " + rules.size());
+        }
         ArrayList<String> backupFilePathList = new ArrayList<>();
         ArrayList<RuleRecord> backupRuleRecordList = new ArrayList<>(rules.size());
         ImageEntryRegistry imageEntries = new ImageEntryRegistry();
@@ -230,7 +236,9 @@ public final class RuleBackupManager {
                 }
                 File manifestFile = new File(restoreDir, MANIFEST_FILE);
                 if (!manifestFile.exists()) throw new RestoreException("Miss manifest.json file.");
-                String json = FileUtils.readTextFile(manifestFile, 0, null);
+                // 上限读入：超限截断必然导致 JSON 解析失败而被下方 catch 拒绝，
+                // 防止恶意超大 manifest 将整个文件堆入内存（zip 总量上限内的单文件仍可接近 256MB）。
+                String json = FileUtils.readTextFile(manifestFile, MAX_MANIFEST_BYTES, null);
                 Gson gson = new GsonBuilder().create();
                 JsonObject jsonObject = gson.fromJson(json, JsonObject.class);
                 if (jsonObject == null || !jsonObject.has("version")
@@ -245,6 +253,9 @@ public final class RuleBackupManager {
                 String manifestPackageName = jsonObject.get("packageName").getAsString();
                 JsonArray jsonArray = jsonObject.getAsJsonArray("rules");
                 if (jsonArray == null) throw new RestoreException("Missing rules array");
+                if (jsonArray.size() > MAX_BACKUP_RULES) {
+                    throw new RestoreException("Backup exceeds rule limit: " + jsonArray.size());
+                }
                 Logger.d(TAG, "restoreRules manifest parsed ruleCount=" + jsonArray.size());
                 if (!RuleServiceClient.getDefault().beginRestore()) {
                     throw new RestoreException("Rule service is unavailable or another restore is active");
