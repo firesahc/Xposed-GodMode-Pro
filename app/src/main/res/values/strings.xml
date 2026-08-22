@@ -134,6 +134,7 @@
     <string name="edit_mode_update_failed">编辑状态更新失败</string>
     <string name="edit_mode_closing">编辑正在关闭，请等待当前提交完成</string>
     <string name="edit_mode_update_failed_with_reason">编辑状态更新失败：%1$s</string>
+    <string name="rule_service_reboot_required">规则服务需要重新启动，请重启系统后再试。</string>
     <string name="notification_permission_denied">通知权限被拒绝，通知栏开关将无法显示。可通过快捷磁贴控制编辑模式</string>
     <string name="welcome_title">嘿！伙计，真高兴又见到你！欢迎使用上帝模式Pro！</string>
 
@@ -231,6 +232,7 @@
     <string name="filter_dialog_title">规则筛选</string>
     <string name="pref_restore_rules">恢复规则</string>
     <string name="snack_bar_msg_restore_rules_success">已恢复 %d 条规则</string>
+    <string name="snack_bar_msg_restore_rules_failed_count">，失败 %1$d 条</string>
     <string name="snack_bar_msg_backup_rule_success">已备份 %d 条规则</string>
     <string name="snack_bar_msg_backup_all_result">保存完成: %1$d 成功, %2$d 失败</string>
 

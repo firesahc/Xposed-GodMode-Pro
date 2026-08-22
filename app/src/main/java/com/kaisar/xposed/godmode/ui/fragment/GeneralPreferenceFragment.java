@@ -188,7 +188,8 @@ public final class GeneralPreferenceFragment extends PreferenceFragmentCompat im
         String reason = RuleServiceClient.getDefault().getServiceFailureMessage();
         new AlertDialog.Builder(requireContext())
                 .setTitle(R.string.hey_guy)
-                .setMessage(reason == null ? "规则服务需要重新启动，请重启系统后再试。" : reason)
+                .setMessage(reason == null
+                        ? getString(R.string.rule_service_reboot_required) : reason)
                 .setPositiveButton(android.R.string.ok, null)
                 .show();
     }

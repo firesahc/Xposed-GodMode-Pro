@@ -137,7 +137,7 @@ public final class RuleServiceClient {
                 if (!RuleServiceContract.DESCRIPTOR.equals(descriptor)) {
                     markRebootRequired(ServiceDiagnostic.of(
                             ServiceDiagnostic.Type.DESCRIPTOR_MISMATCH,
-                            "规则服务 descriptor 不匹配: " + descriptor));
+                            String.format(DiagnosticMessages.DESCRIPTOR_MISMATCH_DETAIL, descriptor)));
                     return null;
                 }
                 IRuleService service = IRuleService.Stub.asInterface(remote);
@@ -145,14 +145,14 @@ public final class RuleServiceClient {
                 if (!isExpectedIdentity(identity)) {
                     markRebootRequired(ServiceDiagnostic.of(
                             ServiceDiagnostic.Type.CONTRACT_MISMATCH,
-                            "规则服务身份或合同指纹不匹配"));
+                            DiagnosticMessages.IDENTITY_FINGERPRINT_MISMATCH_DETAIL));
                     return null;
                 }
                 int state = identity.serviceState;
                 if (state != RuleServiceContract.READY) {
                     mServiceState = state;
                     recordDiagnostic(ServiceDiagnostic.forServiceState(state,
-                            "规则服务尚未就绪，state=" + state));
+                            String.format(DiagnosticMessages.SERVICE_NOT_READY_STATE_DETAIL, state)));
                     return null;
                 }
                 final Connection connection = new Connection(remote, service, mConnectionEpoch.incrementAndGet());
@@ -171,18 +171,18 @@ public final class RuleServiceClient {
                 if (remote.isBinderAlive()) {
                     mServiceState = RuleServiceContract.FAILED;
                     recordDiagnostic(ServiceDiagnostic.of(ServiceDiagnostic.Type.UNKNOWN,
-                            "规则服务握手失败: " + e.getMessage()));
+                            String.format(DiagnosticMessages.HANDSHAKE_FAILED_DETAIL, e.getMessage())));
                 } else {
                     mServiceState = RuleServiceContract.STARTING;
                     recordDiagnostic(ServiceDiagnostic.of(ServiceDiagnostic.Type.BINDER_DIED,
-                            "规则服务握手期间 Binder 已死亡: " + e.getMessage()));
+                            String.format(DiagnosticMessages.HANDSHAKE_BINDER_DEAD_DETAIL, e.getMessage())));
                 }
                 Logger.e(TAG, "rule service handshake failed state=" + mServiceState, e);
                 return null;
             } catch (RuntimeException e) {
                 mServiceState = RuleServiceContract.FAILED;
                 recordDiagnostic(ServiceDiagnostic.of(ServiceDiagnostic.Type.UNKNOWN,
-                        "规则服务握手异常: " + e.getMessage()));
+                        String.format(DiagnosticMessages.HANDSHAKE_UNEXPECTED_FAILURE_DETAIL, e.getMessage())));
                 Logger.e(TAG, "rule service handshake exception state=" + mServiceState, e);
                 return null;
             }
@@ -195,7 +195,7 @@ public final class RuleServiceClient {
             if (mConnection != dead) return;
             clearConnectionStateLocked(RuleServiceContract.STARTING,
                     ServiceDiagnostic.of(ServiceDiagnostic.Type.BINDER_DIED,
-                            "规则服务 Binder 已死亡，等待重新连接"));
+                            DiagnosticMessages.BINDER_DIED_AWAITING_RECONNECT_DETAIL));
             notify = true;
         }
         if (notify) {
@@ -252,14 +252,14 @@ public final class RuleServiceClient {
         XServiceManager.BridgeStatus status = XServiceManager.getRemoteBridgeStatus();
         String detail;
         if (status != null && !status.bridgeInstalled) {
-            detail = "XServiceManager 桥接未安装";
+            detail = DiagnosticMessages.BRIDGE_NOT_INSTALLED_DETAIL;
             return ServiceDiagnostic.of(ServiceDiagnostic.Type.BRIDGE_UNAVAILABLE, detail);
         } else if (status != null && !status.systemServer) {
-            detail = "XServiceManager 未运行在 system_server，注入失败";
+            detail = DiagnosticMessages.BRIDGE_NOT_IN_SYSTEM_SERVER_DETAIL;
             return ServiceDiagnostic.of(ServiceDiagnostic.Type.BRIDGE_UNAVAILABLE, detail);
         }
         detail = error == null || error.trim().isEmpty()
-                ? "桥接已就绪，规则服务尚未注册" : error;
+                ? DiagnosticMessages.BRIDGE_READY_SERVICE_UNREGISTERED_DETAIL : error;
         return status == null
                 ? ServiceDiagnostic.of(ServiceDiagnostic.Type.BRIDGE_UNAVAILABLE, detail)
                 : ServiceDiagnostic.of(ServiceDiagnostic.Type.SERVICE_STARTING, detail);
@@ -380,7 +380,7 @@ public final class RuleServiceClient {
         if (enable) {
             if (!mEditState.canRequestEnable()) {
                 recordDiagnostic(ServiceDiagnostic.of(ServiceDiagnostic.Type.OPERATION_BUSY,
-                        "编辑正在关闭，请等待当前提交完成"));
+                        DiagnosticMessages.EDIT_CLOSE_PENDING_COMMIT_DETAIL));
                 return false;
             }
             mEditState.clearStaleDisabledLease();
@@ -424,7 +424,7 @@ public final class RuleServiceClient {
             }
             if (lease == null) {
                 recordDiagnostic(ServiceDiagnostic.of(ServiceDiagnostic.Type.UNKNOWN,
-                        "规则服务未返回操作租约"));
+                        DiagnosticMessages.OPERATION_LEASE_MISSING_DETAIL));
             } else {
                 recordResultFailure(lease.status, lease.message);
             }
@@ -443,7 +443,7 @@ public final class RuleServiceClient {
             if (!closed) {
                 if (result == null) {
                     recordDiagnostic(ServiceDiagnostic.of(ServiceDiagnostic.Type.UNKNOWN,
-                            "规则服务未返回关闭结果"));
+                            DiagnosticMessages.OPERATION_CLOSE_RESULT_MISSING_DETAIL));
                 } else {
                     recordResultFailure(result.status, result.message);
                 }
@@ -655,7 +655,7 @@ public final class RuleServiceClient {
         } catch (Exception e) {
             Logger.w(TAG, "snapshot read failed scope=" + snapshot.packageName
                     + " generation=" + snapshot.generation, e);
-            throw new IllegalStateException("无法读取规则快照", e);
+            throw new IllegalStateException(DiagnosticMessages.SNAPSHOT_READ_FAILED_EXCEPTION, e);
         } finally {
             if (buffer != null) SharedMemory.unmap(buffer);
             closeSnapshotMemory(snapshot);
@@ -739,7 +739,8 @@ public final class RuleServiceClient {
                         || result.status == RuleServiceContract.RESULT_NO_CHANGE);
                 if (accepted) clearDiagnostic();
                 if (!accepted) {
-                    String mutationError = result == null ? "规则服务未返回提交结果" : result.message;
+                    String mutationError = result == null
+                            ? DiagnosticMessages.MUTATE_RESULT_MISSING_DETAIL : result.message;
                     if (result == null) {
                         recordResultFailure(RuleServiceContract.RESULT_UNCERTAIN, mutationError);
                     } else {
@@ -754,7 +755,7 @@ public final class RuleServiceClient {
             uncertain = true;
             mLastMutationStatus = RuleServiceContract.RESULT_UNCERTAIN;
             recordDiagnostic(ServiceDiagnostic.of(ServiceDiagnostic.Type.COMMIT_UNCERTAIN,
-                    "规则提交结果未知，请刷新规则后再操作 (requestId=" + requestId + ")"));
+                    String.format(DiagnosticMessages.MUTATE_UNCERTAIN_REQUEST_ID_DETAIL, requestId)));
         }
         finally {
             if (mainPipe != null) mainPipe.closeRead();
@@ -769,7 +770,8 @@ public final class RuleServiceClient {
                 if (!accepted && !uncertain) {
                     mLastMutationStatus = RuleServiceContract.RESULT_WRITE_FAILED;
                     recordDiagnostic(ServiceDiagnostic.of(ServiceDiagnostic.Type.UNKNOWN,
-                            "图片管道写入失败: " + pipeFailure.getMessage()));
+                            String.format(DiagnosticMessages.IMAGE_PIPE_WRITE_FAILED_DETAIL,
+                                    pipeFailure.getMessage())));
                 }
             }
             closePipe(mainPipe);
@@ -794,12 +796,12 @@ public final class RuleServiceClient {
             }
             if (reconciled == RuleServiceContract.RESULT_REJECTED) {
                 recordDiagnostic(ServiceDiagnostic.of(ServiceDiagnostic.Type.UNKNOWN,
-                        "规则服务读回未发现本次提交，请刷新规则后再操作"
-                                + " (requestId=" + requestId + ")"));
+                        String.format(DiagnosticMessages.MUTATE_READBACK_NOT_FOUND_REQUEST_ID_DETAIL,
+                                requestId)));
             } else {
                 recordDiagnostic(ServiceDiagnostic.of(ServiceDiagnostic.Type.COMMIT_UNCERTAIN,
-                        "规则提交状态未知，请刷新规则后再操作"
-                                + " (requestId=" + requestId + ")"));
+                        String.format(DiagnosticMessages.MUTATE_RECONCILE_UNKNOWN_REQUEST_ID_DETAIL,
+                                requestId)));
             }
             logMutationTerminal(operation, packageName, requestId, reconciled,
                     "reconciled_inconclusive");
@@ -922,7 +924,7 @@ public final class RuleServiceClient {
         if (bitmap == null) return null;
         if (bitmap.isRecycled()) {
             recordDiagnostic(ServiceDiagnostic.of(ServiceDiagnostic.Type.UNKNOWN,
-                    "图片已回收，取消规则提交"));
+                    DiagnosticMessages.IMAGE_RECYCLED_MUTATION_CANCELLED_DETAIL));
             return null;
         }
         try {
@@ -932,7 +934,7 @@ public final class RuleServiceClient {
             return asset;
         } catch (IOException e) {
             recordDiagnostic(ServiceDiagnostic.of(ServiceDiagnostic.Type.UNKNOWN,
-                    "创建图片管道失败: " + e.getMessage()));
+                    String.format(DiagnosticMessages.IMAGE_PIPE_CREATE_FAILED_DETAIL, e.getMessage())));
             Logger.w(TAG, "create image pipe failed", e);
             return null;
         }

@@ -183,7 +183,8 @@ public final class SettingsFragment extends PreferenceFragmentCompat implements
                 String message = getString(R.string.snack_bar_msg_restore_rules_success,
                         report.committed);
                 if (report.failed() > 0) {
-                    message += "，失败 " + report.failed() + " 条";
+                    message += getString(R.string.snack_bar_msg_restore_rules_failed_count,
+                            report.failed());
                 }
                 Snackbar.make(requireView(), message, Snackbar.LENGTH_LONG).show();
             }

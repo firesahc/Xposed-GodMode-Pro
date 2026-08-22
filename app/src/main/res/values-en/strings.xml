@@ -127,6 +127,7 @@
     <string name="edit_mode_update_failed">Failed to update edit mode</string>
     <string name="edit_mode_closing">Editor is closing. Wait for the current save to finish</string>
     <string name="edit_mode_update_failed_with_reason">Failed to update edit mode: %1$s</string>
+    <string name="rule_service_reboot_required">The rule service needs to be restarted. Please reboot the system and try again.</string>
     <string name="notification_permission_denied">Notification permission denied. You can still use the Quick Settings tile</string>
     <string name="welcome_title">Hey guys, Welcome!</string>
 
@@ -205,6 +206,7 @@
     <string name="save_all_rules_result">Saved: %1$d success, %2$d failed</string>
     <string name="pref_restore_rules">Restore Rules</string>
     <string name="snack_bar_msg_restore_rules_success">Restored %d rules</string>
+    <string name="snack_bar_msg_restore_rules_failed_count">, %1$d failed</string>
     <string name="snack_bar_msg_backup_rule_success">Backed up %d rules</string>
     <string name="snack_bar_msg_backup_all_result">Saved: %1$d success, %2$d failed</string>
     <!-- Injected process Toast messages (accessed via GmResources) -->

@@ -34,35 +34,33 @@ public final class ServiceDiagnostic {
     public static ServiceDiagnostic of(@NonNull Type type, @Nullable String technicalDetail) {
         switch (type) {
             case BRIDGE_UNAVAILABLE:
-                return new ServiceDiagnostic(type, "规则服务桥接不可用",
-                        "请检查 LSPosed 的 Android 系统框架作用域，然后重启系统",
-                        technicalDetail);
+                return new ServiceDiagnostic(type, DiagnosticMessages.BRIDGE_UNAVAILABLE_SUMMARY,
+                        DiagnosticMessages.BRIDGE_UNAVAILABLE_ACTION, technicalDetail);
             case SERVICE_STARTING:
-                return new ServiceDiagnostic(type, "规则服务尚未就绪",
-                        "请稍后重试；若长时间未恢复，请检查持久化日志",
-                        technicalDetail);
+                return new ServiceDiagnostic(type, DiagnosticMessages.SERVICE_STARTING_SUMMARY,
+                        DiagnosticMessages.SERVICE_STARTING_ACTION, technicalDetail);
             case BINDER_DIED:
-                return new ServiceDiagnostic(type, "规则服务连接已断开",
-                        "请退出当前编辑并重新进入", technicalDetail);
+                return new ServiceDiagnostic(type, DiagnosticMessages.BINDER_DIED_SUMMARY,
+                        DiagnosticMessages.BINDER_DIED_ACTION, technicalDetail);
             case DESCRIPTOR_MISMATCH:
-                return new ServiceDiagnostic(type, "规则服务接口版本不匹配",
-                        "请确认模块已更新，然后重启系统", technicalDetail);
+                return new ServiceDiagnostic(type, DiagnosticMessages.DESCRIPTOR_MISMATCH_SUMMARY,
+                        DiagnosticMessages.DESCRIPTOR_MISMATCH_ACTION, technicalDetail);
             case CONTRACT_MISMATCH:
-                return new ServiceDiagnostic(type, "规则服务合同不匹配",
-                        "请确认模块已完整更新，然后重启系统", technicalDetail);
+                return new ServiceDiagnostic(type, DiagnosticMessages.CONTRACT_MISMATCH_SUMMARY,
+                        DiagnosticMessages.CONTRACT_MISMATCH_ACTION, technicalDetail);
             case PERMISSION_REJECTED:
-                return new ServiceDiagnostic(type, "当前操作未获规则服务授权",
-                        "请确认目标应用和调用范围正确", technicalDetail);
+                return new ServiceDiagnostic(type, DiagnosticMessages.PERMISSION_REJECTED_SUMMARY,
+                        DiagnosticMessages.PERMISSION_REJECTED_ACTION, technicalDetail);
             case OPERATION_BUSY:
-                return new ServiceDiagnostic(type, "规则服务正在处理其他操作",
-                        "请等待当前编辑、备份或恢复完成后重试", technicalDetail);
+                return new ServiceDiagnostic(type, DiagnosticMessages.OPERATION_BUSY_SUMMARY,
+                        DiagnosticMessages.OPERATION_BUSY_ACTION, technicalDetail);
             case COMMIT_UNCERTAIN:
-                return new ServiceDiagnostic(type, "规则提交状态未知",
-                        "请刷新规则后再操作，不要重复提交", technicalDetail);
+                return new ServiceDiagnostic(type, DiagnosticMessages.COMMIT_UNCERTAIN_SUMMARY,
+                        DiagnosticMessages.COMMIT_UNCERTAIN_ACTION, technicalDetail);
             case UNKNOWN:
             default:
-                return new ServiceDiagnostic(Type.UNKNOWN, "规则服务发生未知错误",
-                        "请查看持久化日志中的详细原因", technicalDetail);
+                return new ServiceDiagnostic(Type.UNKNOWN, DiagnosticMessages.UNKNOWN_ERROR_SUMMARY,
+                        DiagnosticMessages.UNKNOWN_ERROR_ACTION, technicalDetail);
         }
     }
 
