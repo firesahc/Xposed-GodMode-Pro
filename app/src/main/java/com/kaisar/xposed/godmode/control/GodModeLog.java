@@ -32,6 +32,9 @@ public final class GodModeLog {
     private static final String LOG_FILE = GmConstants.DATA_DIR + "/godmodepro.log";
     private static final long MAX_FILE_SIZE = GmConstants.MAX_LOG_FILE_SIZE_BYTES;
     private static final int MAX_PENDING_RECORDS = 1024;
+    /** 单条消息上限 — Binder 调用方不受信，防止单条记录主导格式化与轮转开销。 */
+    private static final int MAX_MSG_CHARS = 64 * 1024;
+    private static final int MAX_TAG_CHARS = 128;
 
     private static final DateTimeFormatter sFmt =
             DateTimeFormatter.ofPattern("MM-dd HH:mm:ss.SSS", Locale.US);
@@ -77,9 +80,19 @@ public final class GodModeLog {
                 time,
                 sourcePid,
                 levelTag(level),
-                oneLine(tag, "unknown"),
+                oneLine(truncate(tag, MAX_TAG_CHARS), "unknown"),
                 oneLine(packageName, "unknown"),
-                oneLine(msg, ""));
+                oneLine(truncate(msg, MAX_MSG_CHARS), ""));
+    }
+
+    /**
+     * 防御性截断 — log() Binder 调用的 msg/tag 长度不受调用方约束，
+     * 在唯一落盘入口统一收敛单条记录的格式化与内存开销。
+     * 按 UTF-16 code unit 截断；极端情况下可能切断代理对，仅影响显示不影响解析。
+     */
+    private static String truncate(String value, int maxChars) {
+        if (value == null || value.length() <= maxChars) return value;
+        return value.substring(0, maxChars) + "…[truncated]";
     }
 
     private static String levelTag(int level) {
