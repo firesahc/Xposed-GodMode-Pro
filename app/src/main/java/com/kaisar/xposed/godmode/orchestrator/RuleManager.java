@@ -132,6 +132,20 @@ public final class RuleManager {
         return copyRules(mActRules);
     }
 
+    /**
+     * 弱一致只读视图 — 供引擎热路径（bind / onGlobalLayout 全量扫描）
+     * 零拷贝遍历。
+     * <p>
+     * 返回内部容器活引用：内容随 Binder 快照弱一致可见（与原防御性拷贝的
+     * 一致性级别持平——拷贝本身即弱一致遍历源容器的产物）。
+     * <p>
+     * 契约：调用方<b>只读</b>、栈内短命使用；不得修改返回结构，不得长期持有。
+     * 需要隔离快照或跨线程持有的场景请使用 {@link #getRules()}。
+     */
+    public ActRules viewRules() {
+        return mActRules;
+    }
+
     /** Runtime equality excludes presentation-only metadata such as label and alias. */
     static boolean runtimeContentEquals(RuleRecord left, RuleRecord right) {
         return RuntimeRuleComparator.contentEquals(left, right);

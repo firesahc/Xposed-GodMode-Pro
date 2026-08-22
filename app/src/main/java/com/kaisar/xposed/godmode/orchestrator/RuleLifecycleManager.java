@@ -202,7 +202,7 @@ public final class RuleLifecycleManager implements RecyclerAdapterHook.Delegate 
             return;
         }
 
-        ActRules currentRules = RuleManager.get().getRules();
+        ActRules currentRules = RuleManager.get().viewRules();
         RuleDiff diff = computeRuntimeDiff(currentRules, newRules);
         if (diff.isEmpty()) {
             // 展示元数据可能变化；更新快照，但不重建运行时效果。
@@ -256,7 +256,7 @@ public final class RuleLifecycleManager implements RecyclerAdapterHook.Delegate 
     @Override
     public void scheduleReapplyForActivities() {
         if (RuleManager.isInitialized()) {
-            scheduleReapplyForActivities(RuleManager.get().getRules());
+            scheduleReapplyForActivities(RuleManager.get().viewRules());
         }
     }
 
@@ -487,17 +487,8 @@ public final class RuleLifecycleManager implements RecyclerAdapterHook.Delegate 
                     resetGuards();
                     return;
                 }
-                // 每次规则匹配周期前清空 RecyclerView 收集缓存，
-                // 防止 Fragment 切换后新增的 RecyclerView 被过时缓存遗漏
-                ViewController vc = getViewController(activity);
-                if (vc != null) {
-                    Matcher m = vc.getMatcher();
-                    if (m instanceof CompositeMatcher) {
-                        ((CompositeMatcher) m).invalidateRecyclerCache();
-                    }
-                }
                 List<RuleRecord> rules = RuleManager.isInitialized()
-                        ? RuleManager.get().getRules().get(
+                        ? RuleManager.get().viewRules().get(
                                 activity.getComponentName().getClassName())
                         : null;
                 if (rules != null && !rules.isEmpty()) {
