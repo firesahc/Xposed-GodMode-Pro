@@ -43,7 +43,7 @@ public final class CompositeMatcher implements Matcher {
     // RecyclerView 收集缓存——同一 DecorView 在短时间内避免重复全树遍历。
     // WeakReference 持有 root，Activity 重建或 GC 后自动失效。
     private WeakReference<View> mCachedRoot;
-    private List<ViewGroup> mCachedRecyclerViews;
+    private final List<WeakReference<ViewGroup>> mCachedRecyclerViews = new ArrayList<>();
 
     // ---- Matcher 实现 ----
 
@@ -147,26 +147,47 @@ public final class CompositeMatcher implements Matcher {
 
     /**
      * 获取 DecorView 下的 RecyclerView 列表——同一 DecorView 复用缓存避免重复遍历。
-     * 缓存通过 WeakReference 持有 root，Activity 重建或 GC 后自动失效。
+     * 缓存条目为弱引用：已 detach 的 RecyclerView 由 GC 自然回收，无强引用泄漏；
+     * 命中时惰性剔除已回收或已脱离窗口的实例（比等待 GC 更及时，
+     * 避免 L2 扫描对 detached 视图做无效匹配）。
      */
     private List<ViewGroup> getCachedRecyclerViews(View root) {
-        if (mCachedRoot != null && mCachedRoot.get() == root && mCachedRecyclerViews != null) {
-            return mCachedRecyclerViews;
+        if (mCachedRoot != null && mCachedRoot.get() == root
+                && !mCachedRecyclerViews.isEmpty()) {
+            List<ViewGroup> live = new ArrayList<>(mCachedRecyclerViews.size());
+            boolean stale = false;
+            for (WeakReference<ViewGroup> ref : mCachedRecyclerViews) {
+                ViewGroup rv = ref.get();
+                if (rv == null || !rv.isAttachedToWindow()) {
+                    stale = true;
+                    continue;
+                }
+                live.add(rv);
+            }
+            if (stale) {
+                mCachedRecyclerViews.removeIf(ref -> ref.get() == null
+                        || !ref.get().isAttachedToWindow());
+            }
+            if (!live.isEmpty()) return live;
         }
         List<ViewGroup> result = new ArrayList<>();
         collectRecyclerViews(root, result);
         mCachedRoot = new WeakReference<>(root);
-        mCachedRecyclerViews = result;
+        mCachedRecyclerViews.clear();
+        for (ViewGroup rv : result) {
+            mCachedRecyclerViews.add(new WeakReference<>(rv));
+        }
         return result;
     }
 
     /**
      * 清除 RecyclerView 收集缓存。
-     * 应在 Activity 切换或视图树结构变更时调用。
+     * 应在 position 语义破坏型事件（Adapter 整体失效）时调用；
+     * 普通布局事件经弱引用自然容错，无需显式失效。
      */
     public void invalidateRecyclerCache() {
         mCachedRoot = null;
-        mCachedRecyclerViews = null;
+        mCachedRecyclerViews.clear();
     }
 
     /**
