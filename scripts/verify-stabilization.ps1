@@ -16,6 +16,67 @@ try {
         }
     }
 
+    function Invoke-SourceSearch {
+        param(
+            [Parameter(Mandatory)]
+            [string]$Pattern,
+            [Parameter(Mandatory)]
+            [string[]]$SearchRoots,
+            [string]$IncludeFileName,
+            [string[]]$ExcludedFileNames = @(),
+            [switch]$ExcludeBuildDirectories
+        )
+
+        $matches = [System.Collections.Generic.List[string]]::new()
+        $visitedFiles = [System.Collections.Generic.HashSet[string]]::new(
+            [System.StringComparer]::Ordinal
+        )
+        try {
+            foreach ($searchRoot in $SearchRoots) {
+                $rootItem = Get-Item -LiteralPath $searchRoot -ErrorAction Stop
+                $candidateFiles = if ($rootItem.PSIsContainer) {
+                    Get-ChildItem -LiteralPath $rootItem.FullName -Recurse -File -ErrorAction Stop
+                } else {
+                    @($rootItem)
+                }
+                foreach ($candidateFile in $candidateFiles) {
+                    if (!$visitedFiles.Add($candidateFile.FullName)) {
+                        continue
+                    }
+                    if ($IncludeFileName -and $candidateFile.Name -notlike $IncludeFileName) {
+                        continue
+                    }
+                    if ($ExcludedFileNames -contains $candidateFile.Name) {
+                        continue
+                    }
+
+                    $relativePath = [System.IO.Path]::GetRelativePath($repositoryRoot, $candidateFile.FullName)
+                    $normalizedPath = $relativePath -replace "\\", "/"
+                    if ($ExcludeBuildDirectories -and $normalizedPath -match "(^|/)build(/|$)") {
+                        continue
+                    }
+
+                    Select-String -LiteralPath $candidateFile.FullName -Pattern $Pattern -ErrorAction Stop |
+                        ForEach-Object {
+                            $matchText = "{0}:{1}:{2}" -f @($normalizedPath, $_.LineNumber, $_.Line)
+                            [void]$matches.Add($matchText)
+                        }
+                }
+            }
+            return [pscustomobject]@{
+                Succeeded = $true
+                Matches = $matches.ToArray()
+                Error = $null
+            }
+        } catch {
+            return [pscustomobject]@{
+                Succeeded = $false
+                Matches = @()
+                Error = $_.Exception.Message
+            }
+        }
+    }
+
     $ruleRecordAidl = "app/src/main/aidl/com/kaisar/xposed/godmode/rule/RuleRecord.aidl"
     Assert-GitPathUnchanged $ruleRecordAidl "RuleRecord parcel ABI"
     $legacyAidlPaths = @(
@@ -117,20 +178,27 @@ try {
         "app/src/main/java/com/kaisar/xposed/godmode/ipc",
         "app/src/main/java/com/kaisar/xposed/godmode/control"
     )
-    $bareSnapshot = rg -n --glob "*.java" "\b(public|private|protected)\s+SharedMemory\s+get[A-Za-z]+Snapshot\s*\(|readSnapshot\s*\(\s*SharedMemory" $ipcSources 2>$null
-    if ($LASTEXITCODE -eq 0) {
-        $failures.Add("Bare SharedMemory snapshot helper remains:`n$bareSnapshot")
-    } elseif ($LASTEXITCODE -ne 1) {
-        $failures.Add("Unable to scan for bare SharedMemory snapshot helpers")
+    $bareSnapshot = Invoke-SourceSearch `
+        -Pattern "\b(public|private|protected)\s+SharedMemory\s+get[A-Za-z]+Snapshot\s*\(|readSnapshot\s*\(\s*SharedMemory" `
+        -SearchRoots $ipcSources `
+        -IncludeFileName "*.java"
+    if (!$bareSnapshot.Succeeded) {
+        $failures.Add("Unable to scan for bare SharedMemory snapshot helpers: $($bareSnapshot.Error)")
+    } elseif ($bareSnapshot.Matches.Count -gt 0) {
+        $failures.Add("Bare SharedMemory snapshot helper remains:`n$($bareSnapshot.Matches -join "`n")")
     }
 
     # FileUtils exposes symbolic mode constants for callers; the gate checks usage sites,
     # not that constant declaration itself.
-    $worldWritable = rg -n --glob "*.java" --glob "!**/FileUtils.java" "0777|S_IRWXO|S_IWOTH|S_IROTH|S_IXOTH|S_IRWXU\s*\|\s*S_IRWXG\s*\|\s*S_IRWXO" app/src/main engine/src/main 2>$null
-    if ($LASTEXITCODE -eq 0) {
-        $failures.Add("World-writable permissions are forbidden in production storage code:`n$worldWritable")
-    } elseif ($LASTEXITCODE -ne 1) {
-        $failures.Add("Unable to scan production permissions")
+    $worldWritable = Invoke-SourceSearch `
+        -Pattern "0777|S_IRWXO|S_IWOTH|S_IROTH|S_IXOTH|S_IRWXU\s*\|\s*S_IRWXG\s*\|\s*S_IRWXO" `
+        -SearchRoots @("app/src/main", "engine/src/main") `
+        -IncludeFileName "*.java" `
+        -ExcludedFileNames @("FileUtils.java")
+    if (!$worldWritable.Succeeded) {
+        $failures.Add("Unable to scan production permissions: $($worldWritable.Error)")
+    } elseif ($worldWritable.Matches.Count -gt 0) {
+        $failures.Add("World-writable permissions are forbidden in production storage code:`n$($worldWritable.Matches -join "`n")")
     }
 
     $requiredDocs = @("docs/README.md", "docs/adr/0002-6-10-ipc-authority.md")
@@ -184,49 +252,59 @@ try {
         "CurrentSaveCoordinator", "RuleOperationStore",
         "RuleMapper", "RuleMatchSpec", "ActionSpec", "RuleFields"
     ) -join "|"
-    $forbidden = rg -n --glob "!**/build/**" $forbiddenPattern `
-        app/src/main engine/src/main settings.gradle 2>$null
-    if ($LASTEXITCODE -eq 0) {
-        $failures.Add("Excluded production symbols found:`n$forbidden")
-    } elseif ($LASTEXITCODE -ne 1) {
-        $failures.Add("Unable to scan for excluded production symbols")
+    $forbidden = Invoke-SourceSearch `
+        -Pattern $forbiddenPattern `
+        -SearchRoots @("app/src/main", "engine/src/main", "settings.gradle") `
+        -ExcludeBuildDirectories
+    if (!$forbidden.Succeeded) {
+        $failures.Add("Unable to scan for excluded production symbols: $($forbidden.Error)")
+    } elseif ($forbidden.Matches.Count -gt 0) {
+        $failures.Add("Excluded production symbols found:`n$($forbidden.Matches -join "`n")")
     }
 
-    $legacyReferences = rg -n --glob "!**/build/**" "IGodModeManager|IObserver|OP_ONE_SHOT|finishAssetWrite|saveImageFile|getProtocolDescriptor|getProtocolVersion|AssetWriteSession|openAssetWrite|discardAssetWrite" app/src/main engine/src/main app/src/main/aidl 2>$null
-    if ($LASTEXITCODE -eq 0) {
-        $failures.Add("Retired IPC symbols referenced by production code:`n$legacyReferences")
-    } elseif ($LASTEXITCODE -ne 1) {
-        $failures.Add("Unable to scan for retired IPC references")
+    $legacyReferences = Invoke-SourceSearch `
+        -Pattern "IGodModeManager|IObserver|OP_ONE_SHOT|finishAssetWrite|saveImageFile|getProtocolDescriptor|getProtocolVersion|AssetWriteSession|openAssetWrite|discardAssetWrite" `
+        -SearchRoots @("app/src/main", "engine/src/main", "app/src/main/aidl") `
+        -ExcludeBuildDirectories
+    if (!$legacyReferences.Succeeded) {
+        $failures.Add("Unable to scan for retired IPC references: $($legacyReferences.Error)")
+    } elseif ($legacyReferences.Matches.Count -gt 0) {
+        $failures.Add("Retired IPC symbols referenced by production code:`n$($legacyReferences.Matches -join "`n")")
     }
 
     # Logging is part of the 6.10 observability contract. Production code may use
     # android.util.Log only inside the Logger/GodModeLog adapters or the legacy
     # XServiceManager default delegate; all business paths must go through Logger.
-    $directLogMatches = rg -n --glob "*.java" --glob "!**/build/**" `
-        "android\.util\.Log|import\s+android\.util\.Log" `
-        app/src/main engine/src/main libxservicemanager/src/main 2>$null
-    if ($LASTEXITCODE -eq 0) {
-        $unexpectedDirectLogs = @($directLogMatches | Where-Object {
+    $directLogMatches = Invoke-SourceSearch `
+        -Pattern "android\.util\.Log|import\s+android\.util\.Log" `
+        -SearchRoots @("app/src/main", "engine/src/main", "libxservicemanager/src/main") `
+        -IncludeFileName "*.java" `
+        -ExcludeBuildDirectories
+    if (!$directLogMatches.Succeeded) {
+        $failures.Add("Unable to scan direct production logging calls: $($directLogMatches.Error)")
+    } elseif ($directLogMatches.Matches.Count -gt 0) {
+        $unexpectedDirectLogs = @($directLogMatches.Matches | Where-Object {
             $_ -notmatch "(engine[\\/]src[\\/]main[\\/]java[\\/]com[\\/]kaisar[\\/]xposed[\\/]godmode[\\/]engine[\\/]util[\\/]Logger\.java|app[\\/]src[\\/]main[\\/]java[\\/]com[\\/]kaisar[\\/]xposed[\\/]godmode[\\/]control[\\/]GodModeLog\.java|libxservicemanager[\\/]src[\\/]main[\\/]java[\\/]com[\\/]kaisar[\\/]xservicemanager[\\/]XServiceManager\.java)"
         })
         if ($unexpectedDirectLogs.Count -gt 0) {
             $failures.Add("Production code bypasses Logger with direct android.util.Log:`n$($unexpectedDirectLogs -join "`n")")
         }
-    } elseif ($LASTEXITCODE -ne 1) {
-        $failures.Add("Unable to scan direct production logging calls")
     }
 
-    $writerInstallations = rg -n --glob "*.java" --glob "!**/build/**" `
-        "Logger\.setWriter\(" app/src/main engine/src/main 2>$null
-    if ($LASTEXITCODE -eq 0) {
-        $unexpectedWriterInstallations = @($writerInstallations | Where-Object {
+    $writerInstallations = Invoke-SourceSearch `
+        -Pattern "Logger\.setWriter\(" `
+        -SearchRoots @("app/src/main", "engine/src/main") `
+        -IncludeFileName "*.java" `
+        -ExcludeBuildDirectories
+    if (!$writerInstallations.Succeeded) {
+        $failures.Add("Unable to scan Logger writer installations: $($writerInstallations.Error)")
+    } elseif ($writerInstallations.Matches.Count -gt 0) {
+        $unexpectedWriterInstallations = @($writerInstallations.Matches | Where-Object {
             $_ -notmatch "(RuleServiceClient\.java|RuleServiceServer\.java|ServiceBootstrapper\.java)"
         })
         if ($unexpectedWriterInstallations.Count -gt 0) {
             $failures.Add("Logger writer installed outside approved process boundaries:`n$($unexpectedWriterInstallations -join "`n")")
         }
-    } elseif ($LASTEXITCODE -ne 1) {
-        $failures.Add("Unable to scan Logger writer installations")
     }
     foreach ($requiredProcessLoggingCall in @(
         "app/src/main/java/com/kaisar/xposed/godmode/GodModeApplication.java",
@@ -237,13 +315,15 @@ try {
         }
     }
 
-    $messageOnlyThrowable = rg -n --glob "*.java" --glob "!**/build/**" `
-        "Logger\.(d|i|w|e)\([^;`r`n]*getMessage\(\)" `
-        app/src/main engine/src/main libxservicemanager/src/main 2>$null
-    if ($LASTEXITCODE -eq 0) {
-        $failures.Add("Throwable message is logged without the Throwable object:`n$messageOnlyThrowable")
-    } elseif ($LASTEXITCODE -ne 1) {
-        $failures.Add("Unable to scan Throwable logging calls")
+    $messageOnlyThrowable = Invoke-SourceSearch `
+        -Pattern "Logger\.(d|i|w|e)\([^;`r`n]*getMessage\(\)" `
+        -SearchRoots @("app/src/main", "engine/src/main", "libxservicemanager/src/main") `
+        -IncludeFileName "*.java" `
+        -ExcludeBuildDirectories
+    if (!$messageOnlyThrowable.Succeeded) {
+        $failures.Add("Unable to scan Throwable logging calls: $($messageOnlyThrowable.Error)")
+    } elseif ($messageOnlyThrowable.Matches.Count -gt 0) {
+        $failures.Add("Throwable message is logged without the Throwable object:`n$($messageOnlyThrowable.Matches -join "`n")")
     }
 
     $godModeLogSource = "app/src/main/java/com/kaisar/xposed/godmode/control/GodModeLog.java"
