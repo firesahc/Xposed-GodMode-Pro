@@ -51,8 +51,25 @@ public final class CompositeMatcher implements Matcher {
     public View matchView(View root, MatchFields spec) {
         if (root == null || spec == null) return null;
 
-        // 非 repeatable 规则必须有可靠锚定（resourceId/depth）
-        // ── 策略 1: resourceId 锚定 ──
+        // 非 repeatable 规则必须有可靠锚定（resourceId/depth）。
+        //
+        // ── 主锚定：depth 路径（每层索引链唯一确定一个节点）──
+        // 命中后以 resourceName 交叉验证，双锚一致才接受。
+        // 严格降级：depth 漂移（宿主结构变化）导致定位失败或验证不符时
+        // 返回 null——布局模板复用使同一 id 存在多实例，
+        // "首个同名 id 命中"正是稳定错配同类型首个元素缺陷的根源；
+        // 错配宿主内容的代价高于暂时漏应用，漏应用由对账与后续 bind 兜底重试。
+        if (spec.getDepth() != null && spec.getDepth().length > 0) {
+            View byDepth = ViewTraversal.findViewByDepth(root, spec.getDepth());
+            if (byDepth != null && isVisibleView(byDepth)
+                    && matchesResourceName(byDepth, spec)
+                    && isStructuralMatch(byDepth, spec, true)) {
+                return byDepth;
+            }
+            return null;
+        }
+
+        // ── 无 depth 的旧规则：保留 resourceName 单锚行为 ──
         if (!TextUtils.isEmpty(spec.getResourceName())) {
             View viewById = findByResourceId(root, spec);
             if (viewById != null && isStructuralMatch(viewById, spec, true)) {
@@ -60,16 +77,23 @@ public final class CompositeMatcher implements Matcher {
             }
         }
 
-        // ── 策略 2: depth 路径锚定 ──
-        if (spec.getDepth() != null && spec.getDepth().length > 0) {
-            View depthView = ViewTraversal.findViewByDepth(root, spec.getDepth());
-            if (depthView != null && isVisibleView(depthView)
-                    && isStructuralMatch(depthView, spec, true)) {
-                return depthView;
-            }
-        }
-
         return null;
+    }
+
+    /**
+     * 交叉验证：视图的实际资源名与规格声明一致（空规格视为通配）。
+     */
+    private static boolean matchesResourceName(View view, MatchFields spec) {
+        if (TextUtils.isEmpty(spec.getResourceName())) return true;
+        if (view.getId() == View.NO_ID) return false;
+        try {
+            return spec.getResourceName().equals(
+                    view.getResources().getResourceName(view.getId()));
+        } catch (Resources.NotFoundException e) {
+            // 动态 id（generateViewId 等）无资源条目属预期路径
+            Logger.d("CompositeMatcher", "resource name resolve failed", e);
+            return false;
+        }
     }
 
     @Override

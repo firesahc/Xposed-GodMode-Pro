@@ -14,6 +14,7 @@ import android.os.SystemClock;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
@@ -500,6 +501,85 @@ public final class CompositeMatcherInstrumentedTest {
         FeedCard(Context context) {
             super(context);
         }
+    }
+
+    // =========================================================================
+    // 非 repeatable matchView —— 双锚交叉（depth 定位 + resourceName 验证）
+    // =========================================================================
+
+    /**
+     * 布局模板复用使同一 id 存在多实例：depth 指向第二个实例时，
+     * 必须命中第二个而非遍历序第一个（"稳定错配首个元素"缺陷的回归锁定）。
+     */
+    @Test
+    public void matchViewResolvesSharedResourceIdViaDepthInsteadOfFirstHit() throws Exception {
+        withActivity(activity -> {
+            int sharedId = com.kaisar.xposed.godmode.engine.test.R.id.test_shared_icon;
+
+            FrameLayout firstCard = new FrameLayout(activity);
+            ImageView firstIcon = new ImageView(activity);
+            firstIcon.setId(sharedId);
+            firstCard.addView(firstIcon);
+
+            FrameLayout secondCard = new FrameLayout(activity);
+            ImageView target = new ImageView(activity);
+            target.setId(sharedId);
+            secondCard.addView(target);
+
+            activity.mount(firstCard);
+            activity.mount(secondCard);
+
+            View decor = activity.getWindow().getDecorView();
+            MatchSpec spec = new MatchSpec.Builder()
+                    .depth(ViewTraversal.getViewHierarchyDepth(target))
+                    .viewClass(ImageView.class.getName())
+                    .resourceName(activity.getResources().getResourceName(sharedId))
+                    .build();
+
+            assertSame(target, new CompositeMatcher().matchView(decor, spec));
+        });
+    }
+
+    /** depth 与 res_name 双锚冲突（交叉验证失败）必须拒绝，宁缺勿错。 */
+    @Test
+    public void depthAnchorCrossValidatesResourceNameAndRejectsDrift() throws Exception {
+        withActivity(activity -> {
+            FrameLayout driftHost = new FrameLayout(activity);
+            TextView wrong = new TextView(activity);
+            driftHost.addView(wrong);
+            activity.mount(driftHost);
+
+            View decor = activity.getWindow().getDecorView();
+            int sharedId = com.kaisar.xposed.godmode.engine.test.R.id.test_shared_icon;
+            MatchSpec conflicting = new MatchSpec.Builder()
+                    .depth(ViewTraversal.getViewHierarchyDepth(wrong))
+                    .viewClass(TextView.class.getName())
+                    .resourceName(activity.getResources().getResourceName(sharedId))
+                    .build();
+
+            assertNull(new CompositeMatcher().matchView(decor, conflicting));
+        });
+    }
+
+    /** 无 depth 的旧规则保留 resourceName 单锚行为（向后兼容契约）。 */
+    @Test
+    public void legacyResourceOnlySpecStillResolvesFirstVisibleHit() throws Exception {
+        withActivity(activity -> {
+            FrameLayout host = new FrameLayout(activity);
+            ImageView icon = new ImageView(activity);
+            icon.setId(com.kaisar.xposed.godmode.engine.test.R.id.test_shared_icon);
+            host.addView(icon);
+            activity.mount(host);
+
+            View decor = activity.getWindow().getDecorView();
+            MatchSpec legacy = new MatchSpec.Builder()
+                    .viewClass(ImageView.class.getName())
+                    .resourceName(activity.getResources().getResourceName(
+                            com.kaisar.xposed.godmode.engine.test.R.id.test_shared_icon))
+                    .build();
+
+            assertNotNull(new CompositeMatcher().matchView(decor, legacy));
+        });
     }
 
     private interface ActivityAssertion {

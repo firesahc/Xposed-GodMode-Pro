@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 测试专用共享 id —— 模拟宿主布局模板复用同一 id 的场景 -->
+<resources>
+    <item name="test_shared_icon" type="id" />
+</resources>
