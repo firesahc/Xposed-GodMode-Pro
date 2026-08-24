@@ -21,6 +21,9 @@ import com.kaisar.xposed.godmode.ipc.contract.RuleMutationRequest;
 import com.kaisar.xposed.godmode.ipc.contract.RuleMutationResult;
 import com.kaisar.xposed.godmode.ipc.contract.RuleSnapshotParcel;
 import com.kaisar.xposed.godmode.ipc.contract.ServiceIdentityParcel;
+import com.kaisar.xposed.godmode.ipc.contract.UndoRequestParcel;
+import com.kaisar.xposed.godmode.ipc.contract.UndoResultParcel;
+import com.kaisar.xposed.godmode.ipc.contract.UndoStateParcel;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.AppRules;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
@@ -681,6 +684,12 @@ public final class RuleServiceClient {
         return mutate(packageName, RuleServiceContract.MUTATION_WRITE, rule, snapshot,
                 modifiedSnapshot, null);
     }
+
+    public RuleMutationResult writeUndoableRule(String packageName, RuleRecord rule,
+                                                Bitmap snapshot, Bitmap modifiedSnapshot) {
+        return mutateResult(packageName, RuleServiceContract.MUTATION_WRITE, rule, snapshot,
+                modifiedSnapshot, null, true);
+    }
     public boolean updateRule(String packageName, RuleRecord rule) {
         return mutate(packageName, RuleServiceContract.MUTATION_UPDATE, rule, null, null, null);
     }
@@ -695,8 +704,98 @@ public final class RuleServiceClient {
         return mLastMutationStatus;
     }
 
+    public UndoStateParcel getUndoState(String packageName) {
+        Connection connection = ensureConnection();
+        if (connection == null) {
+            return new UndoStateParcel(RuleServiceContract.RESULT_BUSY, packageName,
+                    mEditState.revision(), 0L, 0, 0L, null,
+                    "rule service is unavailable");
+        }
+        try {
+            UndoStateParcel state = connection.service.getUndoState(packageName, mLeaseOwner);
+            if (state != null && state.status == RuleServiceContract.RESULT_COMMITTED) {
+                clearDiagnostic();
+            } else if (state != null) {
+                recordResultFailure(state.status, state.message);
+            }
+            return state;
+        } catch (RemoteException e) {
+            logError("getUndoState", connection, e);
+            return new UndoStateParcel(RuleServiceContract.RESULT_UNCERTAIN, packageName,
+                    mEditState.revision(), 0L, 0, 0L, null,
+                    "authoritative undo state is uncertain");
+        }
+    }
+
+    public UndoResultParcel undoLatest(String packageName, UndoStateParcel expected) {
+        if (packageName == null || expected == null || !packageName.equals(expected.packageName)) {
+            return localUndoResult(null, packageName, RuleServiceContract.RESULT_INVALID,
+                    expected, "valid expected undo state is required");
+        }
+        String requestId = UUID.randomUUID().toString();
+        UndoResultParcel first = executeUndo(packageName, expected, requestId);
+        if (first.status != RuleServiceContract.RESULT_UNCERTAIN) return first;
+        return executeUndo(packageName, expected, requestId);
+    }
+
+    private UndoResultParcel executeUndo(String packageName, UndoStateParcel expected,
+                                         String requestId) {
+        String lease = openLease(RuleServiceContract.OP_MUTATION, packageName);
+        if (lease == null) {
+            return localUndoResult(requestId, packageName, RuleServiceContract.RESULT_BUSY,
+                    expected, "mutation lease unavailable");
+        }
+        Connection connection = ensureConnection();
+        if (connection == null) {
+            closeLease(lease);
+            return localUndoResult(requestId, packageName, RuleServiceContract.RESULT_UNCERTAIN,
+                    expected, "rule service is unavailable");
+        }
+        UndoRequestParcel request = new UndoRequestParcel(requestId, lease, packageName,
+                expected.editRevision, expected.historyRevision, expected.topSequence);
+        try {
+            UndoResultParcel result = connection.service.undoLatest(request, mLeaseOwner);
+            if (result == null) {
+                return localUndoResult(requestId, packageName,
+                        RuleServiceContract.RESULT_UNCERTAIN, expected,
+                        "undo result is missing");
+            }
+            mLastMutationStatus = result.status;
+            if (result.status == RuleServiceContract.RESULT_COMMITTED
+                    || result.status == RuleServiceContract.RESULT_NO_CHANGE) {
+                clearDiagnostic();
+            } else {
+                recordResultFailure(result.status, result.message);
+            }
+            return result;
+        } catch (RemoteException e) {
+            logError("undoLatest", connection, e);
+            mLastMutationStatus = RuleServiceContract.RESULT_UNCERTAIN;
+            return localUndoResult(requestId, packageName,
+                    RuleServiceContract.RESULT_UNCERTAIN, expected,
+                    "undo result is uncertain");
+        } finally {
+            closeLease(lease);
+        }
+    }
+
+    private UndoResultParcel localUndoResult(String requestId, String packageName, int status,
+                                             UndoStateParcel state, String message) {
+        mLastMutationStatus = status;
+        return new UndoResultParcel(status, requestId, packageName,
+                mRuleGeneration.get(), state, message);
+    }
+
     private boolean mutate(String packageName, int operation, RuleRecord rule, Bitmap main,
                            Bitmap modified, String value) {
+        RuleMutationResult result = mutateResult(packageName, operation, rule, main, modified,
+                value, false);
+        return isAccepted(result);
+    }
+
+    private RuleMutationResult mutateResult(String packageName, int operation, RuleRecord rule,
+                                            Bitmap main, Bitmap modified, String value,
+                                            boolean captureUndo) {
         String requestId = UUID.randomUUID().toString();
         boolean temporary = false;
         String lease = mRestoreLease;
@@ -708,7 +807,8 @@ public final class RuleServiceClient {
             mLastMutationStatus = RuleServiceContract.RESULT_BUSY;
             logMutationTerminal(operation, packageName, requestId,
                     mLastMutationStatus, "lease_unavailable");
-            return false;
+            return localMutationResult(requestId, packageName, mLastMutationStatus,
+                    "mutation lease unavailable");
         }
         PipeAsset mainPipe = openPipe(main);
         PipeAsset modifiedPipe = openPipe(modified);
@@ -721,31 +821,33 @@ public final class RuleServiceClient {
             mLastMutationStatus = RuleServiceContract.RESULT_WRITE_FAILED;
             logMutationTerminal(operation, packageName, requestId,
                     mLastMutationStatus, "image_pipe_unavailable");
-            return false;
+            return localMutationResult(requestId, packageName, mLastMutationStatus,
+                    "image pipe unavailable");
         }
         RuleMutationRequest request = new RuleMutationRequest(operation, requestId, lease,
                 packageName, rule == null ? null : mGson.toJson(rule),
                 mainPipe == null ? null : mainPipe.readEnd,
-                modifiedPipe == null ? null : modifiedPipe.readEnd, value);
+                modifiedPipe == null ? null : modifiedPipe.readEnd, value, captureUndo);
         Connection c = ensureConnection();
         boolean accepted = false;
         boolean uncertain = false;
+        RuleMutationResult authoritative = null;
         try {
             if (c != null) {
-                RuleMutationResult result = c.service.mutate(request, mLeaseOwner);
-                mLastMutationStatus = result == null ? RuleServiceContract.RESULT_UNCERTAIN
-                        : result.status;
-                uncertain = result == null;
-                accepted = result != null && (result.status == RuleServiceContract.RESULT_COMMITTED
-                        || result.status == RuleServiceContract.RESULT_NO_CHANGE);
+                authoritative = c.service.mutate(request, mLeaseOwner);
+                mLastMutationStatus = authoritative == null
+                        ? RuleServiceContract.RESULT_UNCERTAIN : authoritative.status;
+                uncertain = authoritative == null;
+                accepted = isAccepted(authoritative);
                 if (accepted) clearDiagnostic();
                 if (!accepted) {
-                    String mutationError = result == null
-                            ? DiagnosticMessages.MUTATE_RESULT_MISSING_DETAIL : result.message;
-                    if (result == null) {
+                    String mutationError = authoritative == null
+                            ? DiagnosticMessages.MUTATE_RESULT_MISSING_DETAIL
+                            : authoritative.message;
+                    if (authoritative == null) {
                         recordResultFailure(RuleServiceContract.RESULT_UNCERTAIN, mutationError);
                     } else {
-                        recordResultFailure(result.status, mutationError);
+                        recordResultFailure(authoritative.status, mutationError);
                     }
                 }
             } else {
@@ -786,6 +888,23 @@ public final class RuleServiceClient {
             }
         }
         if (uncertain) {
+            if (captureUndo) {
+                UndoStateParcel state = getUndoState(packageName);
+                if (state != null && requestId.equals(state.topSourceRequestId)) {
+                    mLastMutationStatus = RuleServiceContract.RESULT_COMMITTED;
+                    clearDiagnostic();
+                    logMutationTerminal(operation, packageName, requestId,
+                            mLastMutationStatus, "undo_history_reconciled");
+                    return new RuleMutationResult(RuleServiceContract.RESULT_COMMITTED,
+                            requestId, packageName, mRuleGeneration.get(), null, state,
+                            "committed; response reconciled from undo history");
+                }
+                logMutationTerminal(operation, packageName, requestId,
+                        RuleServiceContract.RESULT_UNCERTAIN, "undo_history_inconclusive");
+                return localMutationResult(requestId, packageName,
+                        RuleServiceContract.RESULT_UNCERTAIN,
+                        "mutation result is uncertain; authoritative history did not confirm it");
+            }
             int reconciled = reconcileUncertain(packageName, operation, rule,
                     main != null, modified != null, value);
             mLastMutationStatus = reconciled;
@@ -793,7 +912,8 @@ public final class RuleServiceClient {
                 clearDiagnostic();
                 logMutationTerminal(operation, packageName, requestId, reconciled,
                         "reconciled_committed");
-                return true;
+                return localMutationResult(requestId, packageName, reconciled,
+                        "committed; response reconciled from snapshot");
             }
             if (reconciled == RuleServiceContract.RESULT_REJECTED) {
                 recordDiagnostic(ServiceDiagnostic.of(ServiceDiagnostic.Type.UNKNOWN,
@@ -806,11 +926,25 @@ public final class RuleServiceClient {
             }
             logMutationTerminal(operation, packageName, requestId, reconciled,
                     "reconciled_inconclusive");
-            return false;
+            return localMutationResult(requestId, packageName, reconciled,
+                    "mutation result remains uncertain after snapshot reconciliation");
         }
         logMutationTerminal(operation, packageName, requestId, mLastMutationStatus,
                 accepted ? "accepted" : "rejected");
-        return accepted;
+        return authoritative == null
+                ? localMutationResult(requestId, packageName, mLastMutationStatus,
+                "mutation result missing") : authoritative;
+    }
+
+    private RuleMutationResult localMutationResult(String requestId, String packageName,
+                                                    int status, String message) {
+        return new RuleMutationResult(status, requestId, packageName,
+                mRuleGeneration.get(), null, null, message);
+    }
+
+    private static boolean isAccepted(RuleMutationResult result) {
+        return result != null && (result.status == RuleServiceContract.RESULT_COMMITTED
+                || result.status == RuleServiceContract.RESULT_NO_CHANGE);
     }
 
     private void logMutationTerminal(int operation, String packageName, String requestId,
@@ -850,6 +984,10 @@ public final class RuleServiceClient {
             case RuleServiceContract.RESULT_REBOOT_REQUIRED: return "reboot_required";
             case RuleServiceContract.RESULT_INVALID: return "invalid";
             case RuleServiceContract.RESULT_UNCERTAIN: return "uncertain";
+            case RuleServiceContract.RESULT_STALE: return "stale";
+            case RuleServiceContract.RESULT_EXPIRED: return "expired";
+            case RuleServiceContract.RESULT_OWNER_MISMATCH: return "owner_mismatch";
+            case RuleServiceContract.RESULT_ALREADY_UNDONE: return "already_undone";
             default: return "unknown(" + status + ")";
         }
     }

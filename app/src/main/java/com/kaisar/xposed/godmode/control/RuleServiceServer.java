@@ -29,6 +29,9 @@ import com.kaisar.xposed.godmode.ipc.contract.RuleMutationRequest;
 import com.kaisar.xposed.godmode.ipc.contract.RuleMutationResult;
 import com.kaisar.xposed.godmode.ipc.contract.RuleSnapshotParcel;
 import com.kaisar.xposed.godmode.ipc.contract.ServiceIdentityParcel;
+import com.kaisar.xposed.godmode.ipc.contract.UndoRequestParcel;
+import com.kaisar.xposed.godmode.ipc.contract.UndoResultParcel;
+import com.kaisar.xposed.godmode.ipc.contract.UndoStateParcel;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.AppRules;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
@@ -41,8 +44,10 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /** The single system_server authority for rule, asset and toolbar mutations. */
 public final class RuleServiceServer extends IRuleService.Stub {
@@ -56,6 +61,8 @@ public final class RuleServiceServer extends IRuleService.Stub {
     private final Gson mGson = new GsonBuilder().setPrettyPrinting().create();
     private final Object mOwnerLock = new Object();
     private final Map<String, LeaseRegistration> mOwnerRegistrations = new HashMap<>();
+    private final Map<IBinder, HistoryOwnerRegistration> mHistoryOwners =
+            new IdentityHashMap<>();
     private volatile boolean mStarted;
     private volatile String mToolbarHiddenItems = "";
     private volatile boolean mToolbarConfigurationPresent;
@@ -358,13 +365,20 @@ public final class RuleServiceServer extends IRuleService.Stub {
                         RuleServiceContract.RESULT_INVALID, null,
                         "toolbar mutation cannot consume rule assets");
             }
+            if (request.captureUndo && (!access.editorMutation
+                    || (request.operation != RuleServiceContract.MUTATION_WRITE
+                    && request.operation != RuleServiceContract.MUTATION_UPDATE))) {
+                return mutationResult(request.requestId, request.packageName,
+                        RuleServiceContract.RESULT_REJECTED, null,
+                        "undo capture requires an active target editor write");
+            }
             switch (request.operation) {
                 case RuleServiceContract.MUTATION_WRITE:
-                    return mapMutationResult(request.requestId, mRepository.mutateWrite(
-                            request.packageName, rule, mainBitmap, modifiedBitmap, true));
+                    return writeRuleMutation(request, owner.asBinder(), access, rule,
+                            mainBitmap, modifiedBitmap, true);
                 case RuleServiceContract.MUTATION_UPDATE:
-                    return mapMutationResult(request.requestId, mRepository.mutateWrite(
-                            request.packageName, rule, mainBitmap, modifiedBitmap, false));
+                    return writeRuleMutation(request, owner.asBinder(), access, rule,
+                            mainBitmap, modifiedBitmap, false);
                 case RuleServiceContract.MUTATION_DELETE:
                     return mapMutationResult(request.requestId,
                             mRepository.mutateDelete(request.packageName, rule));
@@ -395,6 +409,102 @@ public final class RuleServiceServer extends IRuleService.Stub {
         } finally {
             if (mainBitmap != null && !mainBitmap.isRecycled()) mainBitmap.recycle();
             if (modifiedBitmap != null && !modifiedBitmap.isRecycled()) modifiedBitmap.recycle();
+            OperationCoordinator.CloseResult finished = mCoordinator.finishPersistence(
+                    request.leaseToken, owner.asBinder());
+            handleEditTransition(finished);
+            if (!mCoordinator.contains(request.leaseToken)) {
+                unregisterOwner(request.leaseToken, true);
+            }
+        }
+    }
+
+    @Override public UndoStateParcel getUndoState(String packageName, ILeaseOwner owner)
+            throws RemoteException {
+        if (owner == null || !PackageNameValidator.isValid(packageName)) {
+            return undoStateResult(RuleServiceContract.RESULT_INVALID, packageName, 0L,
+                    null, "valid package and owner are required");
+        }
+        int callingUid = Binder.getCallingUid();
+        if (mPermissionEnforcer.isModuleUid(callingUid)
+                || !mPermissionEnforcer.uidOwnsPackage(callingUid, packageName)) {
+            return undoStateResult(RuleServiceContract.RESULT_REJECTED, packageName, 0L,
+                    null, "undo state is available only to the target editor process");
+        }
+        if (!areRulesReady()) {
+            return undoStateResult(RuleServiceContract.RESULT_BUSY, packageName, 0L,
+                    null, "rule service is not ready");
+        }
+        OperationCoordinator.EditState editState = mCoordinator.editState();
+        if (!editState.enabled) {
+            return undoStateResult(RuleServiceContract.RESULT_EXPIRED, packageName,
+                    editState.revision, null, "editor revision is no longer active");
+        }
+        HistoryOwnerRegistration registration = ensureHistoryOwner(owner.asBinder(), callingUid);
+        if (registration == null) {
+            return undoStateResult(RuleServiceContract.RESULT_OWNER_MISMATCH, packageName,
+                    editState.revision, null, "editor history owner is unavailable");
+        }
+        synchronized (registration) {
+            if (!registration.active) {
+                return undoStateResult(RuleServiceContract.RESULT_OWNER_MISMATCH, packageName,
+                        editState.revision, null, "editor history owner died");
+            }
+            OperationCoordinator.EditState confirmed = mCoordinator.editState();
+            if (!confirmed.enabled || confirmed.revision != editState.revision) {
+                releaseHistoryOwner(registration);
+                return undoStateResult(RuleServiceContract.RESULT_EXPIRED, packageName,
+                        confirmed.revision, null, "editor revision changed");
+            }
+            RuleRepository.UndoScope scope = new RuleRepository.UndoScope(
+                    registration.ownerId, callingUid, packageName, confirmed.revision);
+            return undoStateResult(RuleServiceContract.RESULT_COMMITTED, packageName,
+                    confirmed.revision, mRepository.getUndoState(scope), "authoritative state");
+        }
+    }
+
+    @Override public UndoResultParcel undoLatest(UndoRequestParcel request, ILeaseOwner owner) {
+        if (request == null || owner == null || request.requestId == null
+                || request.requestId.isEmpty()
+                || !PackageNameValidator.isValid(request.packageName)) {
+            return undoResult(request, RuleServiceContract.RESULT_INVALID, 0L, null,
+                    "valid undo request and owner are required");
+        }
+        int callingUid = Binder.getCallingUid();
+        if (mPermissionEnforcer.isModuleUid(callingUid)
+                || !mPermissionEnforcer.uidOwnsPackage(callingUid, request.packageName)) {
+            return undoResult(request, RuleServiceContract.RESULT_REJECTED, 0L, null,
+                    "undo is available only to the target editor process");
+        }
+        OperationCoordinator.Access access = mCoordinator.beginPersistence(request.leaseToken,
+                owner.asBinder(), callingUid, request.packageName);
+        if (access == null) {
+            return undoResult(request, RuleServiceContract.RESULT_BUSY, 0L, null,
+                    "write lease is not authorized for undo");
+        }
+        try {
+            if (!access.editorMutation || access.editRevision != request.expectedEditRevision) {
+                return undoResult(request, RuleServiceContract.RESULT_EXPIRED, 0L, null,
+                        "editor revision changed");
+            }
+            HistoryOwnerRegistration registration = historyOwner(owner.asBinder(), callingUid);
+            if (registration == null) {
+                return undoResult(request, RuleServiceContract.RESULT_OWNER_MISMATCH, 0L, null,
+                        "editor history owner is unavailable");
+            }
+            synchronized (registration) {
+                if (!registration.active) {
+                    return undoResult(request, RuleServiceContract.RESULT_OWNER_MISMATCH, 0L, null,
+                            "editor history owner died");
+                }
+                RuleRepository.UndoScope scope = new RuleRepository.UndoScope(
+                        registration.ownerId, callingUid, request.packageName,
+                        access.editRevision);
+                RuleRepository.UndoResult result = mRepository.undoLatest(scope,
+                        request.requestId, request.expectedHistoryRevision,
+                        request.expectedTopSequence);
+                return mapUndoResult(request, result);
+            }
+        } finally {
             OperationCoordinator.CloseResult finished = mCoordinator.finishPersistence(
                     request.leaseToken, owner.asBinder());
             handleEditTransition(finished);
@@ -475,6 +585,7 @@ public final class RuleServiceServer extends IRuleService.Stub {
                 registration.owner.unlinkToDeath(registration.deathRecipient, 0);
             } catch (Exception ignored) { }
         }
+        clearHistoryOwners();
         cleanupStaleIncomingFiles();
         mObserverRegistry.shutdown();
         mRepository.shutdown();
@@ -537,6 +648,114 @@ public final class RuleServiceServer extends IRuleService.Stub {
         }
         if (result.releasedEditToken != null) {
             unregisterOwner(result.releasedEditToken, true);
+        }
+        if (result.editChanged && !result.editEnabled) {
+            clearHistoryOwners();
+        }
+    }
+
+    private HistoryOwnerRegistration ensureHistoryOwner(IBinder owner, int callingUid) {
+        synchronized (mOwnerLock) {
+            HistoryOwnerRegistration existing = mHistoryOwners.get(owner);
+            if (existing != null) return existing.uid == callingUid && existing.active
+                    ? existing : null;
+            HistoryOwnerRegistration registration = new HistoryOwnerRegistration(
+                    UUID.randomUUID().toString(), callingUid, owner);
+            registration.deathRecipient = () -> onHistoryOwnerDied(registration);
+            mHistoryOwners.put(owner, registration);
+            try {
+                owner.linkToDeath(registration.deathRecipient, 0);
+                return registration;
+            } catch (RemoteException e) {
+                registration.active = false;
+                mHistoryOwners.remove(owner);
+                return null;
+            }
+        }
+    }
+
+    private HistoryOwnerRegistration historyOwner(IBinder owner, int callingUid) {
+        synchronized (mOwnerLock) {
+            HistoryOwnerRegistration registration = mHistoryOwners.get(owner);
+            return registration != null && registration.uid == callingUid && registration.active
+                    ? registration : null;
+        }
+    }
+
+    private void onHistoryOwnerDied(HistoryOwnerRegistration registration) {
+        synchronized (mOwnerLock) {
+            if (mHistoryOwners.get(registration.owner) == registration) {
+                mHistoryOwners.remove(registration.owner);
+            }
+        }
+        synchronized (registration) {
+            if (!registration.active) return;
+            registration.active = false;
+            mRepository.releaseUndoOwner(registration.ownerId, registration.uid);
+        }
+        mLogger.i("editor undo history released after owner death uid=" + registration.uid);
+    }
+
+    private void releaseHistoryOwner(HistoryOwnerRegistration registration) {
+        synchronized (mOwnerLock) {
+            if (mHistoryOwners.get(registration.owner) == registration) {
+                mHistoryOwners.remove(registration.owner);
+            }
+        }
+        synchronized (registration) {
+            if (!registration.active) return;
+            registration.active = false;
+            try {
+                registration.owner.unlinkToDeath(registration.deathRecipient, 0);
+            } catch (Exception ignored) { }
+            mRepository.releaseUndoOwner(registration.ownerId, registration.uid);
+        }
+    }
+
+    private void clearHistoryOwners() {
+        List<HistoryOwnerRegistration> registrations;
+        synchronized (mOwnerLock) {
+            registrations = new ArrayList<>(mHistoryOwners.values());
+            mHistoryOwners.clear();
+        }
+        for (HistoryOwnerRegistration registration : registrations) {
+            synchronized (registration) {
+                if (!registration.active) continue;
+                registration.active = false;
+                try {
+                    registration.owner.unlinkToDeath(registration.deathRecipient, 0);
+                } catch (Exception ignored) { }
+                mRepository.releaseUndoOwner(registration.ownerId, registration.uid);
+            }
+        }
+    }
+
+    private RuleMutationResult writeRuleMutation(RuleMutationRequest request, IBinder owner,
+                                                  OperationCoordinator.Access access,
+                                                  RuleRecord rule, Bitmap mainBitmap,
+                                                  Bitmap modifiedBitmap, boolean append) {
+        if (!request.captureUndo) {
+            return mapMutationResult(request.requestId, mRepository.mutateWrite(
+                    request.packageName, rule, mainBitmap, modifiedBitmap, append));
+        }
+        HistoryOwnerRegistration registration = ensureHistoryOwner(owner, access.callingUid);
+        if (registration == null) {
+            return mutationResult(request.requestId, request.packageName,
+                    RuleServiceContract.RESULT_OWNER_MISMATCH, null,
+                    "editor history owner is unavailable");
+        }
+        synchronized (registration) {
+            if (!registration.active) {
+                return mutationResult(request.requestId, request.packageName,
+                        RuleServiceContract.RESULT_OWNER_MISMATCH, null,
+                        "editor history owner died");
+            }
+            RuleRepository.UndoScope scope = new RuleRepository.UndoScope(
+                    registration.ownerId, access.callingUid, request.packageName,
+                    access.editRevision);
+            return mapMutationResult(request.requestId, mRepository.mutateWriteUndoable(
+                    request.packageName, rule, mainBitmap, modifiedBitmap, append,
+                    scope, request.requestId));
         }
     }
 
@@ -607,9 +826,49 @@ public final class RuleServiceServer extends IRuleService.Stub {
             case REJECTED: status = RuleServiceContract.RESULT_REJECTED; break;
             default: status = RuleServiceContract.RESULT_WRITE_FAILED; break;
         }
+        UndoStateParcel undoState = mutation.undoState == null ? null
+                : undoStateResult(status, mutation.packageName,
+                mutation.undoState.editRevision, mutation.undoState,
+                mutation.replayed ? "replayed" : mutation.error);
         return new RuleMutationResult(status, requestId, mutation.packageName,
                 mutation.generation == 0L ? mRepository.getGeneration() : mutation.generation,
-                null, mutation.error);
+                null, undoState, mutation.replayed ? "replayed" : mutation.error);
+    }
+
+    private UndoResultParcel mapUndoResult(UndoRequestParcel request,
+                                           RuleRepository.UndoResult result) {
+        int status;
+        switch (result.status) {
+            case UNDONE: status = RuleServiceContract.RESULT_COMMITTED; break;
+            case EMPTY: status = RuleServiceContract.RESULT_NO_CHANGE; break;
+            case CAS_MISMATCH:
+            case STALE: status = RuleServiceContract.RESULT_STALE; break;
+            case REJECTED: status = RuleServiceContract.RESULT_REJECTED; break;
+            default: status = RuleServiceContract.RESULT_WRITE_FAILED; break;
+        }
+        String message = result.replayed ? "replayed" : result.error;
+        UndoStateParcel state = undoStateResult(status, request.packageName,
+                request.expectedEditRevision, result.undoState, message);
+        return new UndoResultParcel(status, request.requestId, request.packageName,
+                result.generation == 0L ? mRepository.getGeneration() : result.generation,
+                state, message);
+    }
+
+    private UndoResultParcel undoResult(UndoRequestParcel request, int status, long generation,
+                                        UndoStateParcel state, String message) {
+        return new UndoResultParcel(status, request == null ? null : request.requestId,
+                request == null ? null : request.packageName,
+                generation == 0L ? mRepository.getGeneration() : generation, state, message);
+    }
+
+    private UndoStateParcel undoStateResult(int status, String packageName, long editRevision,
+                                            RuleRepository.UndoState state, String message) {
+        return new UndoStateParcel(status, packageName,
+                state == null ? editRevision : state.editRevision,
+                state == null ? 0L : state.historyRevision,
+                state == null ? 0 : state.depth,
+                state == null ? 0L : state.topSequence,
+                state == null ? null : state.topSourceRequestId, message);
     }
 
     private RuleSnapshotParcel unavailableSnapshot(String packageName) {
@@ -686,6 +945,20 @@ public final class RuleServiceServer extends IRuleService.Stub {
         }
     }
 
+    private static final class HistoryOwnerRegistration {
+        final String ownerId;
+        final int uid;
+        final IBinder owner;
+        IBinder.DeathRecipient deathRecipient;
+        boolean active = true;
+
+        HistoryOwnerRegistration(String ownerId, int uid, IBinder owner) {
+            this.ownerId = ownerId;
+            this.uid = uid;
+            this.owner = owner;
+        }
+    }
+
     private static String operationName(int operation) {
         switch (operation) {
             case RuleServiceContract.OP_EDIT: return "edit";
@@ -706,6 +979,10 @@ public final class RuleServiceServer extends IRuleService.Stub {
             case RuleServiceContract.RESULT_REBOOT_REQUIRED: return "reboot_required";
             case RuleServiceContract.RESULT_INVALID: return "invalid";
             case RuleServiceContract.RESULT_UNCERTAIN: return "uncertain";
+            case RuleServiceContract.RESULT_STALE: return "stale";
+            case RuleServiceContract.RESULT_EXPIRED: return "expired";
+            case RuleServiceContract.RESULT_OWNER_MISMATCH: return "owner_mismatch";
+            case RuleServiceContract.RESULT_ALREADY_UNDONE: return "already_undone";
             default: return "unknown(" + status + ")";
         }
     }

@@ -70,12 +70,17 @@ final class OperationCoordinator {
         final String packageName;
         final int callingUid;
         final Object owner;
+        final long editRevision;
+        final boolean editorMutation;
 
-        Access(int type, String packageName, int callingUid, Object owner) {
+        Access(int type, String packageName, int callingUid, Object owner,
+               long editRevision, boolean editorMutation) {
             this.type = type;
             this.packageName = packageName;
             this.callingUid = callingUid;
             this.owner = owner;
+            this.editRevision = editRevision;
+            this.editorMutation = editorMutation;
         }
     }
 
@@ -97,10 +102,11 @@ final class OperationCoordinator {
                 return rejected(type, RuleServiceContract.RESULT_BUSY,
                         "another operation is active");
             }
-            Session session = new Session(newToken(), type, null, callingUid, owner);
+            mEditRevision++;
+            Session session = new Session(newToken(), type, null, callingUid, owner,
+                    mEditRevision, false);
             mEdit = session;
             mState = State.EDITING;
-            mEditRevision++;
             return accepted(session, true);
         }
         if (type == RuleServiceContract.OP_BACKUP
@@ -111,7 +117,8 @@ final class OperationCoordinator {
                 return rejected(type, RuleServiceContract.RESULT_BUSY,
                         "editing or another operation is active");
             }
-            Session session = new Session(newToken(), type, null, callingUid, owner);
+            Session session = new Session(newToken(), type, null, callingUid, owner,
+                    mEditRevision, false);
             mMaintenance = session;
             mState = State.MAINTENANCE;
             return accepted(session, false);
@@ -137,7 +144,9 @@ final class OperationCoordinator {
             return rejected(type, RuleServiceContract.RESULT_REJECTED,
                     "target mutation is not authorized");
         }
-        Session session = new Session(newToken(), type, packageName, callingUid, owner);
+        boolean editorMutation = !moduleCaller && mState == State.EDITING;
+        Session session = new Session(newToken(), type, packageName, callingUid, owner,
+                mEditRevision, editorMutation);
         mMutations.put(session.token, session);
         return accepted(session, false);
     }
@@ -297,7 +306,8 @@ final class OperationCoordinator {
     }
 
     private static Access access(Session session) {
-        return new Access(session.type, session.packageName, session.callingUid, session.owner);
+        return new Access(session.type, session.packageName, session.callingUid, session.owner,
+                session.editRevision, session.editorMutation);
     }
 
     private static String newToken() {
@@ -310,15 +320,20 @@ final class OperationCoordinator {
         final String packageName;
         final int callingUid;
         final Object owner;
+        final long editRevision;
+        final boolean editorMutation;
         boolean persisting;
         boolean ownerDead;
 
-        Session(String token, int type, String packageName, int callingUid, Object owner) {
+        Session(String token, int type, String packageName, int callingUid, Object owner,
+                long editRevision, boolean editorMutation) {
             this.token = token;
             this.type = type;
             this.packageName = packageName;
             this.callingUid = callingUid;
             this.owner = owner;
+            this.editRevision = editRevision;
+            this.editorMutation = editorMutation;
         }
     }
 }

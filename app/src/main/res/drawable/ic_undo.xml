@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- 注入宿主进程的面板须与主题解耦：背景硬编码白色，图标固定半透明炭黑，
+         避免深色主题下 textColorPrimary 解析为白色导致图标不可见 -->
+    <path
+        android:fillColor="#343434"
+        android:fillAlpha="0.6"
+        android:pathData="M13.728,22.128c-0.672,0 -0.672,0.96 0,0.96 4.944,0 8.832,-4.272 8.832,-9.168 0,-4.944 -3.984,-8.928 -8.928,-8.928l-3.696,0 0,-2.88c0,-1.248 -1.44,-1.584 -2.448,-0.624l-5.424,5.472c-0.816,0.816 -0.816,1.584 0,2.4l5.424,5.472c1.008,0.96 2.448,0.624 2.448,-0.624l0,-2.88 3.696,0c3.072,0 5.52,2.496 5.52,5.568 0,3.024 -2.352,5.232 -5.424,5.232z" />
+</vector>

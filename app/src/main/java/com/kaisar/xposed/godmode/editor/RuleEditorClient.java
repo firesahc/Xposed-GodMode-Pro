@@ -3,6 +3,9 @@ package com.kaisar.xposed.godmode.editor;
 import android.graphics.Bitmap;
 
 import com.kaisar.xposed.godmode.ipc.RuleServiceClient;
+import com.kaisar.xposed.godmode.ipc.contract.RuleMutationResult;
+import com.kaisar.xposed.godmode.ipc.contract.UndoResultParcel;
+import com.kaisar.xposed.godmode.ipc.contract.UndoStateParcel;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 
 /**
@@ -32,6 +35,23 @@ public final class RuleEditorClient implements IRuleEditor {
                              Bitmap modifiedSnapshot) {
         return RuleServiceClient.getDefault().writeRule(packageName, rule, snapshot,
                 modifiedSnapshot);
+    }
+
+    @Override
+    public RuleMutationResult writeUndoableRule(String packageName, RuleRecord rule,
+                                                Bitmap snapshot, Bitmap modifiedSnapshot) {
+        return RuleServiceClient.getDefault().writeUndoableRule(packageName, rule, snapshot,
+                modifiedSnapshot);
+    }
+
+    @Override
+    public UndoStateParcel getUndoState(String packageName) {
+        return RuleServiceClient.getDefault().getUndoState(packageName);
+    }
+
+    @Override
+    public UndoResultParcel undoLatest(String packageName, UndoStateParcel expected) {
+        return RuleServiceClient.getDefault().undoLatest(packageName, expected);
     }
 
     @Override

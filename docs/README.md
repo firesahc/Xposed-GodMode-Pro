@@ -9,7 +9,7 @@
   合同。system_server 是规则、图片、配置和日志的写入权威；客户端只通过
   `IRuleService` 访问它。
 - [ADR-0002：6.10 IPC 与写入权威](adr/0002-6-10-ipc-authority.md)：记录
-  descriptor 硬切、租约、快照校验、持久化顺序和恢复语义。
+  descriptor 硬切、租约、快照校验、持久化顺序、恢复语义和权威撤销账本。
 - [ADR-0001：RuleRecord 内部组件](adr/0001-rule-record-wire-components.md)：
   记录 RuleRecord 的内部拆分，但不改变 JSON、Parcelable、ZIP V1 或匹配结果。
 - [全项目设备测试规则](device-test-rules.md)：规定所有版本和测试目标的前台
@@ -45,3 +45,9 @@ libxservicemanager 子模块指针自 `abd9f62` 起恢复常规更新，门禁�
 6.10 的编辑开关是全局许可，不采用单目标会话。开启后，各注入目标只能修改调用 UID
 所拥有的自身包；管理端可以直接管理任意合法包。备份和恢复要求编辑关闭，并在维护租约
 期间阻止所有 mutation。该决定只约束授权与并发，不改变规则匹配或动作含义。
+
+注入编辑器的撤销状态由 system_server 中的有界内存账本唯一持有。客户端只投影
+`depth`、`historyRevision` 和 `topSequence`，不保存可回放规则或图片；历史绑定目标
+进程 owner、调用 UID、包名和 edit revision，编辑关闭、owner 死亡或 system_server
+重启即失效。撤销通过 Repository 的权威逆事务发布新 generation，再由既有
+`Observer -> RuleDiff -> ViewController` 链路恢复界面。

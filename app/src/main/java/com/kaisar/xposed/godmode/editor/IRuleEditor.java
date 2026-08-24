@@ -2,6 +2,9 @@ package com.kaisar.xposed.godmode.editor;
 
 import android.graphics.Bitmap;
 
+import com.kaisar.xposed.godmode.ipc.contract.RuleMutationResult;
+import com.kaisar.xposed.godmode.ipc.contract.UndoResultParcel;
+import com.kaisar.xposed.godmode.ipc.contract.UndoStateParcel;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 
 /**
@@ -28,6 +31,16 @@ public interface IRuleEditor {
                               Bitmap modifiedSnapshot) {
         return writeRule(packageName, rule, snapshot);
     }
+
+    /** Writes an editor mutation and asks system_server to capture it in its undo journal. */
+    RuleMutationResult writeUndoableRule(String packageName, RuleRecord rule, Bitmap snapshot,
+                                         Bitmap modifiedSnapshot);
+
+    /** Returns the authoritative bounded-history projection for this editor process. */
+    UndoStateParcel getUndoState(String packageName);
+
+    /** Undoes the latest entry iff {@code expected} still matches the authoritative top. */
+    UndoResultParcel undoLatest(String packageName, UndoStateParcel expected);
 
     /**
      * 删除一条规则。

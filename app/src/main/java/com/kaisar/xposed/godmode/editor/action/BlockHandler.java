@@ -7,7 +7,7 @@ import android.view.ViewGroup;
 
 import com.kaisar.xposed.godmode.editor.IRuleEditor;
 import com.kaisar.xposed.godmode.engine.util.Logger;
-import com.kaisar.xposed.godmode.orchestrator.ViewController;
+import com.kaisar.xposed.godmode.ipc.contract.UndoStateParcel;
 import com.kaisar.xposed.godmode.rule.RuleRecordFactory;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 
@@ -26,7 +26,7 @@ public final class BlockHandler {
      * 屏蔽操作回调接口。
      */
     public interface OnBlockListener {
-        void onAnimationEnd(int blockedViewIndex);
+        void onCommitted(int blockedViewIndex, UndoStateParcel undoState);
         void onError(String message);
     }
 
@@ -53,9 +53,17 @@ public final class BlockHandler {
             final RuleRecord viewRule = RuleRecordFactory.makeRemoveRule(view, infoFlowMode);
             ParticleEffectHelper.execute(activity, view, container, viewRule, snapshot,
                     activity.getPackageName(), /* maskView */ null,
-                    ruleEditor, /* onComplete */ () -> {
-                        if (listener != null) {
-                            listener.onAnimationEnd(blockedViewIndex);
+                    ruleEditor, new ParticleEffectHelper.Completion() {
+                        @Override
+                        public void onCommitted(UndoStateParcel undoState) {
+                            if (listener != null) {
+                                listener.onCommitted(blockedViewIndex, undoState);
+                            }
+                        }
+
+                        @Override
+                        public void onError(String message) {
+                            if (listener != null) listener.onError(message);
                         }
                     });
         } catch (Exception e) {

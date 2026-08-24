@@ -14,12 +14,22 @@ public final class RuleMutationRequest implements Parcelable {
     public final ParcelFileDescriptor mainImageFd;
     public final ParcelFileDescriptor modifiedImageFd;
     public final String value;
+    public final boolean captureUndo;
 
     public RuleMutationRequest(int operation, String requestId, String leaseToken,
                                String packageName, String ruleJson,
                                ParcelFileDescriptor mainImageFd,
                                ParcelFileDescriptor modifiedImageFd,
                                String value) {
+        this(operation, requestId, leaseToken, packageName, ruleJson, mainImageFd,
+                modifiedImageFd, value, false);
+    }
+
+    public RuleMutationRequest(int operation, String requestId, String leaseToken,
+                               String packageName, String ruleJson,
+                               ParcelFileDescriptor mainImageFd,
+                               ParcelFileDescriptor modifiedImageFd,
+                               String value, boolean captureUndo) {
         this.operation = operation;
         this.requestId = requestId;
         this.leaseToken = leaseToken;
@@ -28,6 +38,7 @@ public final class RuleMutationRequest implements Parcelable {
         this.mainImageFd = mainImageFd;
         this.modifiedImageFd = modifiedImageFd;
         this.value = value;
+        this.captureUndo = captureUndo;
     }
 
     private RuleMutationRequest(Parcel in) {
@@ -39,6 +50,7 @@ public final class RuleMutationRequest implements Parcelable {
         mainImageFd = in.readParcelable(ParcelFileDescriptor.class.getClassLoader());
         modifiedImageFd = in.readParcelable(ParcelFileDescriptor.class.getClassLoader());
         value = in.readString();
+        captureUndo = in.readInt() != 0;
     }
 
     @Override public void writeToParcel(Parcel dest, int flags) {
@@ -50,6 +62,7 @@ public final class RuleMutationRequest implements Parcelable {
         dest.writeParcelable(mainImageFd, flags);
         dest.writeParcelable(modifiedImageFd, flags);
         dest.writeString(value);
+        dest.writeInt(captureUndo ? 1 : 0);
     }
 
     @Override public int describeContents() {

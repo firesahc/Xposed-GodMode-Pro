@@ -109,6 +109,8 @@ try {
             "OperationLeaseParcel\s+openOperation\s*\(\s*int\s+operationType\s*,\s*String\s+packageName",
             "String\s+getToolbarHiddenItems\s*\(\s*String\s+packageName\s*\)",
             "RuleMutationResult\s+mutate\s*\(",
+            "UndoStateParcel\s+getUndoState\s*\(",
+            "UndoResultParcel\s+undoLatest\s*\(",
             "ParcelFileDescriptor\s+openImageFileDescriptor\s*\("
         )) {
             if ($serviceAidlText -notmatch $requiredServiceMethod) {
@@ -132,7 +134,7 @@ try {
         (Get-Content -Raw $contractSource) -notmatch "BUILD_VERSION_CODE\s*=\s*61000" -or
         (Get-Content -Raw $contractSource) -notmatch "OP_MUTATION\s*=\s*3" -or
         (Get-Content -Raw $contractSource) -notmatch 'CONTRACT_FINGERPRINT' -or
-        (Get-Content -Raw $contractSource) -notmatch 'iruleservice-61000-fd-mutate-v2') {
+        (Get-Content -Raw $contractSource) -notmatch 'iruleservice-61000-fd-mutate-v3') {
         $failures.Add("6.10 IPC protocol identity is missing")
     }
     $mutationRequest = "app/src/main/java/com/kaisar/xposed/godmode/ipc/contract/RuleMutationRequest.java"
@@ -144,6 +146,9 @@ try {
             if ($mutationText -notmatch [regex]::Escape($fdField)) {
                 $failures.Add("FD mutate request field is missing: $fdField")
             }
+        }
+        if ($mutationText -notmatch "boolean\s+captureUndo") {
+            $failures.Add("Undoable mutate request flag is missing")
         }
         if ($mutationText -match "AssetSessionId|PARCELABLE_WRITE_RETURN_VALUE") {
             $failures.Add("RuleMutationRequest still contains remote asset-session semantics")

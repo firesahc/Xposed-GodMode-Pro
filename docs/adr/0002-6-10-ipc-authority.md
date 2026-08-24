@@ -41,15 +41,31 @@ owner death 清理租约，但不能中断已进入持久化的提交。
 解码器验证。规则文件和正式图片仍由 Repository 先持久化再发布；只有磁盘提交成功后才
 更新内存快照、generation 和 Observer。
 
-合同指纹固定为 `iruleservice-61000-fd-mutate-v2`。旧会话合同与新合同不互操作，更新
-APK 后必须重启 system_server。Binder 回复丢失时客户端进入 `UNCERTAIN`，不重放请求；
-重连后仅通过权威快照按 `RuleSlotKey` 和内容进行只读对账。
+合同指纹固定为 `iruleservice-61000-fd-mutate-v3`。旧会话合同与新合同不互操作，更新
+APK 后必须重启 system_server。普通 mutation 的 Binder 回复丢失时客户端进入
+`UNCERTAIN`，不重放请求；启用撤销捕获的编辑器 mutation 通过服务端 requestId 结果和
+`topSourceRequestId` 对账。
+
+system_server 维护唯一的、容量为 10 的内存撤销账本，只覆盖注入编辑器产生的屏蔽和属性
+修改。账本项在 Repository 提交锁内保存槽位 before/after、完整 canonical JSON 摘要、
+lineage、原始 requestId 和必要图片引用。历史绑定服务端 ownerId、调用 UID、包名和
+edit revision；客户端只投影 depth、history revision 与 top sequence。短 mutation lease
+不承担历史生命周期，服务端为进程级 `ILeaseOwner` 独立注册死亡监听。编辑关闭在已受理
+mutation 完成后清理相应历史，owner 死亡立即清理，system_server 重启不恢复历史。
+
+撤销是带 requestId 的权威逆事务，并对 edit revision、history revision 和 top sequence
+执行 CAS。服务端保存有界幂等结果，重复请求不会撤销下一条记录。所有普通外部写入都推进
+槽位 lineage，因此即使规则内容经历 ABA，旧历史也会过期；连续撤销同一槽位时只重绑定
+下一条历史的预期 lineage。图片由 canonical 规则和 journal 引用共同保活。成功撤销发布
+generation，由现有 Observer、RuleDiff 和 ViewController 恢复运行时状态。
 
 ## 保持不变的边界
 
-本 ADR 只改变跨进程所有权、传输和生命周期协议，不改变 RuleRecord JSON、
+本 ADR 只改变跨进程所有权、传输、撤销和生命周期协议，不改变 RuleRecord JSON、
 Parcelable、ZIP V1、图片路径、matcher 或 effect 语义。不做旧规则数据迁移，
 也不引入 RuleDocument、TargetPlan、ActionPlan、RuleId 或 SemanticRevision。
+
+本期不支持 redo，不覆盖管理页操作或临时手势调整，也不把撤销事件日志持久化到磁盘。
 
 ## 失败与验收
 

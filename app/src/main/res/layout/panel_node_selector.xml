@@ -193,6 +193,17 @@
             </LinearLayout>
 
             <ImageButton
+                android:id="@+id/undo"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_gravity="center"
+                android:background="@drawable/ripple_drawable_20dp"
+                android:contentDescription="@string/accessibility_undo"
+                android:enabled="false"
+                android:src="@drawable/ic_undo"
+                android:tag="@string/tag_gm_cmp" />
+
+            <ImageButton
                 android:id="@+id/Up"
                 android:layout_width="48dp"
                 android:layout_height="48dp"

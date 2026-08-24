@@ -20,12 +20,12 @@ public final class RuleMutationRequestInstrumentedTest {
 
     @Test
     public void parcelRoundTripSupportsEmptySingleAndDoubleFd() throws Exception {
-        assertRoundTrip(null, null, 0);
+        assertRoundTrip(null, null, false, 0);
 
         ParcelFileDescriptor[] main = ParcelFileDescriptor.createPipe();
         main[1].close();
         try {
-            assertRoundTrip(main[0], null, Parcelable.CONTENTS_FILE_DESCRIPTOR);
+            assertRoundTrip(main[0], null, false, Parcelable.CONTENTS_FILE_DESCRIPTOR);
         } finally {
             main[0].close();
         }
@@ -35,7 +35,8 @@ public final class RuleMutationRequestInstrumentedTest {
         main[1].close();
         modified[1].close();
         try {
-            assertRoundTrip(main[0], modified[0], Parcelable.CONTENTS_FILE_DESCRIPTOR);
+            assertRoundTrip(main[0], modified[0], true,
+                    Parcelable.CONTENTS_FILE_DESCRIPTOR);
         } finally {
             main[0].close();
             modified[0].close();
@@ -44,10 +45,11 @@ public final class RuleMutationRequestInstrumentedTest {
 
     private static void assertRoundTrip(ParcelFileDescriptor main,
                                         ParcelFileDescriptor modified,
+                                        boolean captureUndo,
                                         int expectedContents) throws Exception {
         RuleMutationRequest source = new RuleMutationRequest(
                 RuleServiceContract.MUTATION_WRITE, "request-1", "lease-1",
-                "com.example.target", "{}", main, modified, null);
+                "com.example.target", "{}", main, modified, null, captureUndo);
         assertEquals(expectedContents, source.describeContents());
 
         Parcel parcel = Parcel.obtain();
@@ -61,6 +63,7 @@ public final class RuleMutationRequestInstrumentedTest {
             assertEquals(source.leaseToken, restored.leaseToken);
             assertEquals(source.packageName, restored.packageName);
             assertEquals(source.ruleJson, restored.ruleJson);
+            assertEquals(captureUndo, restored.captureUndo);
             if (main == null) assertNull(restored.mainImageFd);
             else assertNotNull(restored.mainImageFd);
             if (modified == null) assertNull(restored.modifiedImageFd);

@@ -165,6 +165,7 @@
     <string name="accessibility_modify">Modify properties</string>
     <string name="accessibility_modify_preview">Hide edit panel and preview</string>
     <string name="accessibility_modify_preview_exit">Exit preview and show edit panel</string>
+    <string name="accessibility_undo">Undo last edit</string>
     <string name="accessibility_up">Previous</string>
     <string name="accessibility_down">Next</string>
     <string name="mode_remove">Remove Mode</string>
@@ -179,6 +180,12 @@
     <string name="modify_cancel">Cancel</string>
     <string name="modify_save">Save</string>
     <string name="block_fail">Failed to block: %1$s</string>
+    <string name="toast_undo_succeeded">Last edit undone</string>
+    <string name="toast_undo_failed_format">Undo failed: %1$s</string>
+    <string name="toast_editor_operation_busy">Another editor operation is in progress</string>
+    <string name="toast_rule_service_rejected">The rule service rejected the save request</string>
+    <string name="toast_runtime_apply_failed">Failed to apply the rule at runtime</string>
+    <string name="toast_undo_not_completed">The rule service did not complete the undo</string>
 
     <string name="about_version">Version</string>
     <string name="about_description">An LSPosed module that can block or modify any unwanted UI elements in any app.</string>

@@ -22,6 +22,9 @@ import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.util.ModuleResources;
 import com.kaisar.xposed.godmode.editor.IRuleEditor;
+import com.kaisar.xposed.godmode.ipc.RuleServiceContract;
+import com.kaisar.xposed.godmode.ipc.contract.RuleMutationResult;
+import com.kaisar.xposed.godmode.ipc.contract.UndoStateParcel;
 import com.kaisar.xposed.godmode.rule.RuleRecordFactory;
 import com.kaisar.xposed.godmode.rule.ViewSnapshot;
 import com.kaisar.xposed.godmode.orchestrator.RuleLifecycleManager;
@@ -67,8 +70,11 @@ public class PropertyEditorPanel {
     private Bitmap mPendingImageBitmap;
     private Bitmap mInFlightImageBitmap;
     private boolean mSaving;
+    private boolean mMutationReportedInFlight;
+    private long mMutationScope = -1L;
     private long mGeneration;
     private SessionListener mSessionListener;
+    private final MutationListener mMutationListener;
     private boolean mPreviewing;
 
     // SeekBar 拖动帧级合并：避免每次 onProgressChanged 触发 setLayoutParams → requestLayout
@@ -105,6 +111,13 @@ public class PropertyEditorPanel {
         void onSessionStateChanged(boolean active, boolean previewing, boolean previewToggleEnabled);
     }
 
+    /** Bridges typed authoritative mutation state back to the editor-level undo projection. */
+    public interface MutationListener {
+        long onMutationStarted();
+        void onMutationSucceeded(long mutationScope, UndoStateParcel undoState);
+        void onMutationFailed(long mutationScope);
+    }
+
     // Saved original view state before modification — used for revert / cancel
 
     // Saved original view state before modification — used for revert / cancel
@@ -134,9 +147,15 @@ public class PropertyEditorPanel {
 
     public PropertyEditorPanel(IRuleEditor ruleEditor, SessionListener sessionListener,
             SnapshotProvider snapshotProvider) {
+        this(ruleEditor, sessionListener, snapshotProvider, null);
+    }
+
+    public PropertyEditorPanel(IRuleEditor ruleEditor, SessionListener sessionListener,
+            SnapshotProvider snapshotProvider, MutationListener mutationListener) {
         this.mRuleEditor = ruleEditor;
         this.mSessionListener = sessionListener;
         this.mSnapshotProvider = Objects.requireNonNull(snapshotProvider, "snapshotProvider");
+        this.mMutationListener = mutationListener;
     }
 
     /**
@@ -189,6 +208,7 @@ public class PropertyEditorPanel {
     /** Dismiss the property editor panel. */
     public void dismiss() {
         if (mPanelView == null) return;
+        reportMutationFailed();
         View panel = mPanelView;
         mPanelView = null;
         mTargetView = null;
@@ -513,6 +533,16 @@ public class PropertyEditorPanel {
             return;
         }
         final Bitmap snapshot = capturedSnapshot;
+        if (mMutationListener != null) {
+            mMutationScope = mMutationListener.onMutationStarted();
+            if (mMutationScope < 0L) {
+                CommonUtils.recycleNullableBitmap(snapshot);
+                finishSaveFailure(activity,
+                        GmResources.getString(R.string.toast_editor_operation_busy));
+                return;
+            }
+        }
+        mMutationReportedInFlight = mMutationListener != null;
         mInFlightImageBitmap = pendingImage;
         mSaving = true;
         setPanelControlsEnabled(false);
@@ -533,18 +563,23 @@ public class PropertyEditorPanel {
                 if (!controller.applyRule(target, draftRule)) {
                     applyDraftToView(target, draftRule);
                     mInFlightImageBitmap = null;
-                    finishSaveFailure(activity, "runtime apply failed");
+                    finishSaveFailure(activity,
+                            GmResources.getString(R.string.toast_runtime_apply_failed));
                     CommonUtils.recycleNullableBitmap(finalSnapshot);
                     return;
                 }
                 TaskExecutor.executeIo(() -> {
-                    boolean accepted;
+                    RuleMutationResult result;
                     // The modification image is sent with the rule mutation. The service
                     // publishes neither asset nor rule until both have been persisted.
-                    try { accepted = mRuleEditor.writeRule(pkg, draftRule, finalSnapshot,
-                            pendingImage); }
-                    catch (Exception e) { accepted = false; Logger.e(MODIFY_TAG, "writeRule failed", e); }
-                    final boolean finalAccepted = accepted;
+                    try {
+                        result = mRuleEditor.writeUndoableRule(pkg, draftRule, finalSnapshot,
+                                pendingImage);
+                    } catch (Exception e) {
+                        result = null;
+                        Logger.e(MODIFY_TAG, "writeUndoableRule failed", e);
+                    }
+                    final RuleMutationResult finalResult = result;
                     mainHandler.post(() -> {
                         CommonUtils.recycleNullableBitmap(finalSnapshot);
                         if (generation != mGeneration || mTargetView != target
@@ -555,16 +590,19 @@ public class PropertyEditorPanel {
                         }
                         mSaving = false;
                         releaseInFlightImage(pendingImage);
-                        if (finalAccepted) {
+                        if (isCommitted(finalResult)) {
+                            reportMutationSucceeded(finalResult.undoState);
                             Toast.makeText(activity, GmResources.getString(R.string.toast_modifications_saved), Toast.LENGTH_SHORT).show();
                             dismiss();
                         } else {
                             controller.revokeRule(target, draftRule);
                             applyDraftToView(target, draftRule);
                             mInFlightImageBitmap = null;
-                            String reason = mRuleEditor.getFailureMessage();
+                            reportMutationFailed();
+                            String reason = finalResult == null ? null : finalResult.message;
                             finishSaveFailure(activity, reason == null
-                                    ? "规则服务拒绝了保存请求" : reason);
+                                    ? GmResources.getString(R.string.toast_rule_service_rejected)
+                                    : reason);
                         }
                     });
                 });
@@ -593,6 +631,7 @@ public class PropertyEditorPanel {
 
     private void finishSaveFailure(Activity activity, String reason) {
         mSaving = false;
+        reportMutationFailed();
         setPanelControlsEnabled(true);
         notifySession();
         Toast.makeText(activity, GmResources.getString(
@@ -609,9 +648,31 @@ public class PropertyEditorPanel {
     private void abortSaveIfActive() {
         if (mPanelView != null) {
             mSaving = false;
+            reportMutationFailed();
             setPanelControlsEnabled(true);
             notifySession();
         }
+    }
+
+    private static boolean isCommitted(RuleMutationResult result) {
+        return result != null && (result.status == RuleServiceContract.RESULT_COMMITTED
+                || result.status == RuleServiceContract.RESULT_NO_CHANGE);
+    }
+
+    private void reportMutationSucceeded(UndoStateParcel undoState) {
+        if (!mMutationReportedInFlight) return;
+        mMutationReportedInFlight = false;
+        long mutationScope = mMutationScope;
+        mMutationScope = -1L;
+        mMutationListener.onMutationSucceeded(mutationScope, undoState);
+    }
+
+    private void reportMutationFailed() {
+        if (!mMutationReportedInFlight) return;
+        mMutationReportedInFlight = false;
+        long mutationScope = mMutationScope;
+        mMutationScope = -1L;
+        mMutationListener.onMutationFailed(mutationScope);
     }
 
     private void setPanelControlsEnabled(boolean enabled) {

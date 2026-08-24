@@ -176,6 +176,7 @@
     <string name="accessibility_modify">修改属性</string>
     <string name="accessibility_modify_preview">隐藏修改面板并预览</string>
     <string name="accessibility_modify_preview_exit">退出预览并显示修改面板</string>
+    <string name="accessibility_undo">撤销上一次编辑</string>
     <string name="accessibility_up">上一个</string>
     <string name="accessibility_down">下一个</string>
     <string name="mode_remove">移除模式</string>
@@ -190,6 +191,12 @@
     <string name="modify_cancel">取消</string>
     <string name="modify_save">保存</string>
     <string name="block_fail">屏蔽失败: %1$s</string>
+    <string name="toast_undo_succeeded">已撤销上一次编辑</string>
+    <string name="toast_undo_failed_format">撤销失败: %1$s</string>
+    <string name="toast_editor_operation_busy">另一项编辑操作正在进行</string>
+    <string name="toast_rule_service_rejected">规则服务拒绝了保存请求</string>
+    <string name="toast_runtime_apply_failed">运行时应用失败</string>
+    <string name="toast_undo_not_completed">规则服务未完成撤销</string>
     <string name="tag_gm_cmp" translatable="false">gm_cmp</string>
 
     <string name="about_version">版本</string>

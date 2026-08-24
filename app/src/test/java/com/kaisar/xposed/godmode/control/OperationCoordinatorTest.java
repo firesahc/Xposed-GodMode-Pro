@@ -206,4 +206,39 @@ public class OperationCoordinatorTest {
                         RuleServiceContract.GLOBAL_SCOPE, 10001,
                         true, false, new Object()).status);
     }
+
+    @Test
+    public void targetMutationAccessCapturesEditorRevisionAndSource() {
+        OperationCoordinator coordinator = new OperationCoordinator();
+        Object editOwner = new Object();
+        Object targetOwner = new Object();
+        coordinator.open(RuleServiceContract.OP_EDIT, null, 10001,
+                true, false, editOwner);
+        OperationCoordinator.OpenResult mutation = coordinator.open(
+                RuleServiceContract.OP_MUTATION, PACKAGE_A, 20001,
+                false, true, targetOwner);
+
+        OperationCoordinator.Access access = coordinator.beginPersistence(
+                mutation.token, targetOwner, 20001, PACKAGE_A);
+
+        assertNotNull(access);
+        assertEquals(1L, access.editRevision);
+        assertTrue(access.editorMutation);
+    }
+
+    @Test
+    public void managerMutationIsNotCapturedAsEditorMutation() {
+        OperationCoordinator coordinator = new OperationCoordinator();
+        Object owner = new Object();
+        OperationCoordinator.OpenResult mutation = coordinator.open(
+                RuleServiceContract.OP_MUTATION, PACKAGE_A, 10001,
+                true, false, owner);
+
+        OperationCoordinator.Access access = coordinator.beginPersistence(
+                mutation.token, owner, 10001, PACKAGE_A);
+
+        assertNotNull(access);
+        assertEquals(0L, access.editRevision);
+        assertFalse(access.editorMutation);
+    }
 }

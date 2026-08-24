@@ -8,7 +8,7 @@ public final class RuleServiceContract {
     public static final int PROTOCOL_VERSION = 61000;
     public static final int BUILD_VERSION_CODE = 61000;
     public static final String CONTRACT_FINGERPRINT =
-            "iruleservice-61000-fd-mutate-v2";
+            "iruleservice-61000-fd-mutate-v3";
     public static final String GLOBAL_SCOPE = "*";
 
     public static final int STARTING = 0;
@@ -39,6 +39,10 @@ public final class RuleServiceContract {
     public static final int RESULT_REBOOT_REQUIRED = 5;
     public static final int RESULT_INVALID = 6;
     public static final int RESULT_UNCERTAIN = 7;
+    public static final int RESULT_STALE = 8;
+    public static final int RESULT_EXPIRED = 9;
+    public static final int RESULT_OWNER_MISMATCH = 10;
+    public static final int RESULT_ALREADY_UNDONE = 11;
 
     private RuleServiceContract() {}
 }

@@ -7,17 +7,20 @@ import android.app.Activity;
 import android.graphics.Bitmap;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.Toast;
 
 import com.kaisar.xposed.godmode.R;
-import com.kaisar.xposed.godmode.util.GmResources;
+import com.kaisar.xposed.godmode.ipc.RuleServiceContract;
+import com.kaisar.xposed.godmode.ipc.contract.RuleMutationResult;
+import com.kaisar.xposed.godmode.ipc.contract.UndoStateParcel;
 import com.kaisar.xposed.godmode.engine.util.GmConstants;
 import com.kaisar.xposed.godmode.engine.util.Logger;
+import com.kaisar.xposed.godmode.orchestrator.RuleLifecycleManager;
 import com.kaisar.xposed.godmode.orchestrator.ViewController;
 import com.kaisar.xposed.godmode.editor.IRuleEditor;
 import com.kaisar.xposed.godmode.editor.overlay.MaskView;
 import com.kaisar.xposed.godmode.editor.overlay.ParticleView;
 import com.kaisar.xposed.godmode.util.BitmapUtils;
+import com.kaisar.xposed.godmode.util.GmResources;
 import com.kaisar.xposed.godmode.util.TaskExecutor;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 import com.kaisar.xposed.godmode.engine.rule.RemoveEffect;
@@ -34,6 +37,11 @@ public final class ParticleEffectHelper {
 
     private ParticleEffectHelper() {}
 
+    public interface Completion {
+        void onCommitted(UndoStateParcel undoState);
+        void onError(String message);
+    }
+
     /**
      * 执行粒子动画 + IPC 持久化的完整流程。
      *
@@ -44,7 +52,7 @@ public final class ParticleEffectHelper {
      * @param snapshot     屏蔽前的截图快照
      * @param packageName  目标应用包名
      * @param maskView     遮罩视图（动画结束后分离），可为 null
-     * @param onComplete   动画 + IPC 全部完成后的回调（在主线程执行），可为 null
+     * @param completion   权威提交完成后的主线程回调，可为 null
      */
     public static void execute(final Activity activity,
             final View targetView,
@@ -54,10 +62,13 @@ public final class ParticleEffectHelper {
             final String packageName,
             final MaskView maskView,
             final IRuleEditor ruleEditor,
-            final Runnable onComplete) {
+            final Completion completion) {
         Logger.d(TAG, "execute: starting particle animation for " + packageName);
 
         final RuleRecord ruleToWrite = viewRule.withEffect(RemoveEffect.of(View.GONE));
+        final ViewController controller = RuleLifecycleManager.getInstance()
+                .getViewController(activity);
+        final boolean[] runtimeApplied = { false };
         final ParticleView particleView = new ParticleView(activity);
         particleView.setDuration(GmConstants.PARTICLE_ANIM_DURATION_MS);
         particleView.attachToContainer(container);
@@ -65,7 +76,10 @@ public final class ParticleEffectHelper {
             @Override
             public void onAnimationStart(View animView, Animator animation) {
                 try {
-                    ViewController.getDefault().applyRule(targetView, ruleToWrite);
+                    runtimeApplied[0] = controller.applyRule(targetView, ruleToWrite);
+                    if (!runtimeApplied[0]) {
+                        Logger.w(TAG, "activity controller rejected optimistic block apply");
+                    }
                     if (snapshot != null) {
                         BitmapUtils.drawRectMask(snapshot, ruleToWrite.x, ruleToWrite.y,
                                 ruleToWrite.width, ruleToWrite.height);
@@ -85,29 +99,44 @@ public final class ParticleEffectHelper {
                 } catch (Exception e) {
                     Logger.e(TAG, "detachFromContainer fail", e);
                 }
-                // 异步 IO 线程执行 IPC 写入
-                TaskExecutor.executeIo(() -> {
-                    boolean accepted = false;
-                    try {
-                        accepted = ruleEditor.writeRule(packageName, ruleToWrite, snapshot);
-                    } catch (Exception e) {
-                        Logger.e(TAG, "writeRule fail: " + packageName, e);
-                    }
-                    if (!accepted) {
-                        String reason = ruleEditor.getFailureMessage();
-                        String message = GmResources.getString(
-                                R.string.toast_save_failed_rules_format,
-                                reason == null ? "规则服务拒绝了保存请求" : reason);
-                        activity.runOnUiThread(() -> Toast.makeText(activity, message,
-                                Toast.LENGTH_SHORT).show());
-                    }
+                if (!runtimeApplied[0]) {
                     recycleNullableBitmap(snapshot);
-                });
-                if (onComplete != null) {
-                    onComplete.run();
+                    if (completion != null) completion.onError(GmResources.getString(
+                            R.string.toast_runtime_apply_failed));
+                    return;
                 }
+                // 异步 IO 线程执行 IPC 写入；仅权威提交后才报告完成。
+                TaskExecutor.executeIo(() -> {
+                    RuleMutationResult result = null;
+                    try {
+                        result = ruleEditor.writeUndoableRule(packageName, ruleToWrite, snapshot,
+                                null);
+                    } catch (Exception e) {
+                        Logger.e(TAG, "writeUndoableRule fail: " + packageName, e);
+                    }
+                    final RuleMutationResult finalResult = result;
+                    recycleNullableBitmap(snapshot);
+                    activity.runOnUiThread(() -> {
+                        if (isCommitted(finalResult)) {
+                            if (completion != null) completion.onCommitted(finalResult.undoState);
+                            return;
+                        }
+                        controller.revokeRule(targetView, ruleToWrite);
+                        if (completion != null) {
+                            String reason = finalResult == null ? null : finalResult.message;
+                            completion.onError(reason == null
+                                    ? GmResources.getString(R.string.toast_rule_service_rejected)
+                                    : reason);
+                        }
+                    });
+                });
             }
         });
         particleView.boom(targetView);
+    }
+
+    private static boolean isCommitted(RuleMutationResult result) {
+        return result != null && (result.status == RuleServiceContract.RESULT_COMMITTED
+                || result.status == RuleServiceContract.RESULT_NO_CHANGE);
     }
 }

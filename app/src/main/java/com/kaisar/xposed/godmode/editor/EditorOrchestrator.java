@@ -30,8 +30,13 @@ import com.kaisar.xposed.godmode.editor.panel.NodeSelectorPanel;
 import com.kaisar.xposed.godmode.editor.panel.PropertyEditorPanel;
 import com.kaisar.xposed.godmode.editor.panel.SeekBarHandler;
 import com.kaisar.xposed.godmode.editor.toolbar.ToolbarVisibilityController;
+import com.kaisar.xposed.godmode.ipc.RuleServiceContract;
+import com.kaisar.xposed.godmode.ipc.contract.UndoResultParcel;
+import com.kaisar.xposed.godmode.ipc.contract.UndoStateParcel;
 import com.kaisar.xposed.godmode.util.BitmapUtils;
+import com.kaisar.xposed.godmode.engine.util.CommonUtils;
 import com.kaisar.xposed.godmode.util.GmResources;
+import com.kaisar.xposed.godmode.util.TaskExecutor;
 import com.kaisar.xposed.godmode.util.ViewUtils;
 
 import java.lang.ref.WeakReference;
@@ -71,6 +76,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     // 节点选择面板与属性编辑器    // =========================================================================
 
     private final NodeSelectorPanel mNodePanel = new NodeSelectorPanel();
+    private final EditorUndoController mUndoController = new EditorUndoController();
     final PropertyEditorPanel mPropertyEditor;
     private final SeekBarHandler mSeekBarHandler;
     private WeakReference<Activity> mCurrentActivityRef = new WeakReference<>(null);
@@ -98,6 +104,11 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
                 @Override
                 public void onModifyPreviewRequested(Activity activity) {
                     mPropertyEditor.togglePreview();
+                }
+
+                @Override
+                public void onUndoRequested(Activity activity) {
+                    requestUndo(activity);
                 }
 
                 @Override
@@ -150,9 +161,27 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
                     } else {
                         mask.updateOverlayBounds(ViewUtils.getLocationInWindow(target));
                     }
-                }, this::captureWithoutEditorOverlays);
+                }, this::captureWithoutEditorOverlays,
+                new PropertyEditorPanel.MutationListener() {
+                    @Override
+                    public long onMutationStarted() {
+                        return mUndoController.beginForwardMutation();
+                    }
+
+                    @Override
+                    public void onMutationSucceeded(long mutationScope,
+                            UndoStateParcel undoState) {
+                        mUndoController.completeForwardMutation(mutationScope, undoState);
+                    }
+
+                    @Override
+                    public void onMutationFailed(long mutationScope) {
+                        mUndoController.failForwardMutation(mutationScope);
+                    }
+                });
         this.mTouchEventHandler = new TouchEventHandler(this);
         this.mSeekBarHandler = new SeekBarHandler(mNodePanel, mPropertyEditor);
+        this.mUndoController.setListener(mNodePanel::setUndoAvailable);
     }
 
     private View getModifyTargetView() {
@@ -207,6 +236,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
             dismissNodeSelectPanel();
         }
         mCurrentActivityRef = new WeakReference<>(a);
+        mUndoController.bindPackage(a == null ? null : a.getPackageName());
     }
 
     public void setDisplay(Boolean display) {
@@ -277,6 +307,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
         ToolbarVisibilityController.apply(mNodePanel.getPanelView());
         mNodePanel.wireButtons(activity, container, mNodePanelCallbacks);
         mKeyEventHandler.updateInfoFlowModeButton();
+        refreshUndoState(activity, null);
     }
 
     private void dismissNodeSelectPanel() {
@@ -293,6 +324,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     // 屏蔽视图 — 执行视图移除/屏蔽操作，含快照和动画（BlockHandler 相关）    // =========================================================================
 
     private void performBlock(final Activity activity, final ViewGroup container) {
+        long startedMutationScope = EditorUndoController.INVALID_SCOPE;
         try {
             List<WeakReference<View>> viewNodes = mNodePanel.getViewNodes();
             if (viewNodes == null || viewNodes.isEmpty()) return;
@@ -310,26 +342,107 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
             if (snapshot == null) {
                 throw new IllegalStateException("snapshot failed");
             }
+            startedMutationScope = mUndoController.beginForwardMutation();
+            if (startedMutationScope == EditorUndoController.INVALID_SCOPE) {
+                CommonUtils.recycleNullableBitmap(snapshot);
+                Toast.makeText(activity,
+                        GmResources.getString(R.string.toast_editor_operation_busy),
+                        Toast.LENGTH_SHORT).show();
+                return;
+            }
+            final long mutationScope = startedMutationScope;
 
             BlockHandler.execute(activity, view, container, snapshot, blockedViewIndex,
                     new BlockHandler.OnBlockListener() {
                         @Override
-                        public void onAnimationEnd(int index) {
-                            mNodePanel.updateAfterRemove(index);
+                        public void onCommitted(int index, UndoStateParcel undoState) {
+                            boolean accepted = mUndoController.completeForwardMutation(
+                                    mutationScope, undoState);
+                            if (accepted && mCurrentActivityRef.get() == activity) {
+                                mNodePanel.updateAfterRemove(index);
+                            }
                         }
 
                         @Override
                         public void onError(String message) {
-                            Toast.makeText(activity,
-                                    GmResources.getString(R.string.block_fail, message),
-                                    Toast.LENGTH_SHORT).show();
+                            if (mUndoController.failForwardMutation(mutationScope)) {
+                                Toast.makeText(activity,
+                                        GmResources.getString(R.string.block_fail, message),
+                                        Toast.LENGTH_SHORT).show();
+                            }
                         }
                     }, mRuleEditor, isInfoFlowMode());
         } catch (Exception e) {
+            if (startedMutationScope != EditorUndoController.INVALID_SCOPE) {
+                mUndoController.failForwardMutation(startedMutationScope);
+            }
             Logger.e(KEY_EVENT_TAG, "block fail", e);
             Toast.makeText(activity, GmResources.getString(R.string.block_fail, e.getMessage()),
                     Toast.LENGTH_SHORT).show();
         }
+    }
+
+    private void requestUndo(Activity activity) {
+        refreshUndoState(activity, () -> {
+            EditorUndoController.UndoAttempt attempt = mUndoController.beginUndo();
+            if (attempt == null) return;
+            final String packageName = activity.getPackageName();
+            TaskExecutor.executeIo(() -> {
+                UndoResultParcel result = null;
+                try {
+                    result = mRuleEditor.undoLatest(packageName, attempt.expected);
+                } catch (Exception e) {
+                    Logger.e(TAG, "undoLatest failed for " + packageName, e);
+                }
+                final UndoResultParcel finalResult = result;
+                activity.runOnUiThread(() -> finishUndo(packageName, activity,
+                        attempt.scopeGeneration, finalResult));
+            });
+        });
+    }
+
+    private void refreshUndoState(Activity activity, Runnable onComplete) {
+        final String packageName = activity.getPackageName();
+        mUndoController.bindPackage(packageName);
+        final long refreshScope = mUndoController.beginRefresh();
+        if (refreshScope == EditorUndoController.INVALID_SCOPE) return;
+        TaskExecutor.executeIo(() -> {
+            UndoStateParcel state = null;
+            try {
+                state = mRuleEditor.getUndoState(packageName);
+            } catch (Exception e) {
+                Logger.e(TAG, "getUndoState failed for " + packageName, e);
+            }
+            final UndoStateParcel finalState = state;
+            activity.runOnUiThread(() -> {
+                if (mUndoController.completeRefresh(refreshScope, finalState)
+                        && onComplete != null) {
+                    onComplete.run();
+                }
+            });
+        });
+    }
+
+    private void finishUndo(String packageName, Activity activity, long undoScope,
+            UndoResultParcel result) {
+        if (!mUndoController.isBoundTo(packageName)) return;
+        boolean committed = result != null
+                && (result.status == RuleServiceContract.RESULT_COMMITTED
+                || result.status == RuleServiceContract.RESULT_ALREADY_UNDONE);
+        if (committed) {
+            if (!mUndoController.completeUndo(undoScope, result.undoState)) return;
+            Toast.makeText(activity, GmResources.getString(R.string.toast_undo_succeeded),
+                    Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (!mUndoController.failUndo(undoScope,
+                result == null ? null : result.undoState)) return;
+        String reason = result == null ? null : result.message;
+        Toast.makeText(activity, GmResources.getString(R.string.toast_undo_failed_format,
+                        reason == null
+                                ? GmResources.getString(R.string.toast_undo_not_completed)
+                                : reason),
+                Toast.LENGTH_SHORT).show();
     }
 
     /** Updates known editor overlays for the key-handler visibility callback. */
@@ -467,6 +580,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
         mIsInEditMode = enable;
         if (!enable) {
             mInteractionMode = EditorInteractionMode.INITIAL;
+            mUndoController.bindPackage(null);
         }
     }
 

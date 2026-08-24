@@ -9,6 +9,9 @@ import com.kaisar.xposed.godmode.ipc.contract.RuleMutationRequest;
 import com.kaisar.xposed.godmode.ipc.contract.RuleMutationResult;
 import com.kaisar.xposed.godmode.ipc.contract.RuleSnapshotParcel;
 import com.kaisar.xposed.godmode.ipc.contract.ServiceIdentityParcel;
+import com.kaisar.xposed.godmode.ipc.contract.UndoRequestParcel;
+import com.kaisar.xposed.godmode.ipc.contract.UndoResultParcel;
+import com.kaisar.xposed.godmode.ipc.contract.UndoStateParcel;
 
 /** Canonical 6.10 rule service contract. RuleRecord remains the JSON data format. */
 interface IRuleService {
@@ -25,6 +28,8 @@ interface IRuleService {
     OperationLeaseParcel closeOperation(String leaseToken, in ILeaseOwner owner);
 
     RuleMutationResult mutate(in RuleMutationRequest request, in ILeaseOwner owner);
+    UndoStateParcel getUndoState(String packageName, in ILeaseOwner owner);
+    UndoResultParcel undoLatest(in UndoRequestParcel request, in ILeaseOwner owner);
 
     ParcelFileDescriptor openImageFileDescriptor(String filePath);
     String getToolbarHiddenItems(String packageName);

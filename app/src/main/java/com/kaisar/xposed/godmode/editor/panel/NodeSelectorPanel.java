@@ -45,6 +45,7 @@ public class NodeSelectorPanel {
         void onPreviewRequested(Activity activity);
         void onModifyRequested(View selectedView, Activity activity, ViewGroup container);
         void onModifyPreviewRequested(Activity activity);
+        void onUndoRequested(Activity activity);
         void onModeChanged(int mode);
         void onInfoFlowRequested();
     }
@@ -58,6 +59,7 @@ public class NodeSelectorPanel {
     private boolean mKeySelecting;
     private boolean mModifySessionLocked;
     private boolean mModifyPreviewing;
+    private boolean mUndoAvailable;
 
     /**
      * 显示节点选择面板。
@@ -91,6 +93,7 @@ public class NodeSelectorPanel {
             mSeekBar = mPanelView.findViewById(R.id.slider);
             mSeekBar.setMax(Math.max(viewNodes.size() - 1, 0));
             mSeekBar.setOnSeekBarChangeListener(seekBarListener);
+            updateUndoButton();
             container.addView(mPanelView);
             mPanelView.setAlpha(0);
             mPanelView.post(() -> {
@@ -172,6 +175,15 @@ public class NodeSelectorPanel {
         btnModifyPreview.setOnClickListener(v -> {
             if (mModifySessionLocked) callbacks.onModifyPreviewRequested(activity);
         });
+
+        View undoButton = mPanelView.findViewById(R.id.undo);
+        CharSequence undoDescription = GmResources.getText(R.string.accessibility_undo);
+        undoButton.setContentDescription(undoDescription);
+        TooltipCompat.setTooltipText(undoButton, undoDescription);
+        undoButton.setOnClickListener(v -> {
+            if (mUndoAvailable) callbacks.onUndoRequested(activity);
+        });
+        updateUndoButton();
 
         // 模式切换
         View removeModeBtn = mPanelView.findViewById(R.id.remove_mode_btn);
@@ -292,6 +304,12 @@ public class NodeSelectorPanel {
 
     public boolean isModifyPreviewing() { return mModifyPreviewing; }
 
+    /** Applies the authoritative undo projection and in-flight state to the toolbar button. */
+    public void setUndoAvailable(boolean available) {
+        mUndoAvailable = available;
+        updateUndoButton();
+    }
+
     public void setModifyPreviewEnabled(boolean enabled) {
         if (mPanelView == null) return;
         View preview = mPanelView.findViewById(R.id.modify_preview);
@@ -334,6 +352,12 @@ public class NodeSelectorPanel {
         if (view != null) view.setEnabled(enabled);
     }
 
+    private void updateUndoButton() {
+        if (mPanelView == null) return;
+        View undo = mPanelView.findViewById(R.id.undo);
+        if (undo != null) undo.setEnabled(mUndoAvailable);
+    }
+
     // =========================================================================
     // 模块资源回退补丁 — 当 ModuleResources.injectInto() 失败时,
     // 使用 GmResources (模块自己的 Resources 实例) 手动设置 drawable/string,
@@ -374,7 +398,7 @@ public class NodeSelectorPanel {
                         R.id.exchange, R.id.info_flow_mode_btn,
                         R.id.remove_mode_btn, R.id.modify_mode_btn,
                         R.id.block, R.id.preview,
-                        R.id.modify, R.id.modify_preview,
+                        R.id.modify, R.id.modify_preview, R.id.undo,
                         R.id.Up, R.id.Down
                 };
                 for (int id : rippleViewIds) {
@@ -398,6 +422,7 @@ public class NodeSelectorPanel {
             // ── ImageButton src drawable ──
             patchImageButtonSrc(panelView, R.id.exchange, R.drawable.exchange);
             patchImageButtonSrc(panelView, R.id.block, R.drawable.ic_block);
+            patchImageButtonSrc(panelView, R.id.undo, R.drawable.ic_undo);
             patchImageButtonSrc(panelView, R.id.Up, R.drawable.up);
             patchImageButtonSrc(panelView, R.id.Down, R.drawable.down);
 
@@ -417,6 +442,13 @@ public class NodeSelectorPanel {
                 View modifyPreviewBtn = panelView.findViewById(R.id.modify_preview);
                 if (modifyPreviewBtn != null) TooltipCompat.setTooltipText(modifyPreviewBtn,
                         GmResources.getText(R.string.accessibility_modify_preview));
+                View undoBtn = panelView.findViewById(R.id.undo);
+                if (undoBtn != null) {
+                    CharSequence undoDescription = GmResources.getText(
+                            R.string.accessibility_undo);
+                    undoBtn.setContentDescription(undoDescription);
+                    TooltipCompat.setTooltipText(undoBtn, undoDescription);
+                }
             } catch (Exception e) {
                 Logger.d(TAG, "toolbar resource fallback failed", e);
             }

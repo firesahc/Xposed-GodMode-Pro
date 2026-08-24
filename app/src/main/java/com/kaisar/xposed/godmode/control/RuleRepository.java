@@ -16,6 +16,7 @@ import com.kaisar.xposed.godmode.engine.util.CommonUtils;
 import com.kaisar.xposed.godmode.engine.util.FileUtils;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.engine.util.Preconditions;
+import com.kaisar.xposed.godmode.engine.rule.RuleSlotKey;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.AppRules;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
@@ -28,8 +29,11 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
@@ -65,6 +69,7 @@ public final class RuleRepository {
     private final ObserverRegistry mObserverRegistry;
     private final Gson mGson;
     private final Logger mLogger;
+    private final AuthoritativeUndoJournal mUndoJournal;
 
     // ===== 异步处理 =====
     private final HandlerThread mWorkThread;
@@ -80,6 +85,7 @@ public final class RuleRepository {
         this.mLogger = logger;
         this.mObserverRegistry = observerRegistry;
         this.mCache = new RuleCache(gson, logger);
+        this.mUndoJournal = new AuthoritativeUndoJournal(gson);
 
         mWorkThread = new HandlerThread("rule-repository");
         mWorkThread.start();
@@ -154,34 +160,120 @@ public final class RuleRepository {
         public final long generation;
         public final ActRules rules;
         public final String error;
+        public final UndoState undoState;
+        public final boolean replayed;
 
         private MutationResult(MutationStatus status, String packageName, long generation,
-                               ActRules rules, String error) {
+                               ActRules rules, String error, UndoState undoState,
+                               boolean replayed) {
             this.status = status;
             this.packageName = packageName;
             this.generation = generation;
             this.rules = rules;
             this.error = error;
+            this.undoState = undoState;
+            this.replayed = replayed;
         }
 
         static MutationResult committed(String packageName, long generation, ActRules rules) {
-            return new MutationResult(MutationStatus.COMMITTED, packageName, generation, rules, null);
+            return committed(packageName, generation, rules, null, false);
+        }
+
+        static MutationResult committed(String packageName, long generation, ActRules rules,
+                                        UndoState undoState, boolean replayed) {
+            return new MutationResult(MutationStatus.COMMITTED, packageName, generation, rules,
+                    null, undoState, replayed);
         }
 
         static MutationResult noChange(String packageName, long generation, ActRules rules) {
-            return new MutationResult(MutationStatus.NO_CHANGE, packageName, generation, rules, null);
+            return new MutationResult(MutationStatus.NO_CHANGE, packageName, generation, rules,
+                    null, null, false);
         }
 
         static MutationResult failed(String packageName, String error) {
-            return new MutationResult(MutationStatus.WRITE_FAILED, packageName, 0L, null, error);
+            return new MutationResult(MutationStatus.WRITE_FAILED, packageName, 0L, null, error,
+                    null, false);
         }
 
         static MutationResult rejected(String packageName, String error) {
-            return new MutationResult(MutationStatus.REJECTED, packageName, 0L, null, error);
+            return new MutationResult(MutationStatus.REJECTED, packageName, 0L, null, error,
+                    null, false);
         }
 
         public boolean isCommitted() {
             return status == MutationStatus.COMMITTED;
+        }
+    }
+
+    /** Pure value scope supplied by the service after it validates the editor owner. */
+    public static final class UndoScope {
+        public final String ownerId;
+        public final int callingUid;
+        public final String packageName;
+        public final long editRevision;
+
+        public UndoScope(String ownerId, int callingUid, String packageName, long editRevision) {
+            this.ownerId = ownerId;
+            this.callingUid = callingUid;
+            this.packageName = packageName;
+            this.editRevision = editRevision;
+        }
+
+        AuthoritativeUndoJournal.Scope toJournalScope() {
+            return new AuthoritativeUndoJournal.Scope(
+                    ownerId, callingUid, packageName, editRevision);
+        }
+    }
+
+    /** Client projection of the system_server-owned history. */
+    public static final class UndoState {
+        public final long editRevision;
+        public final long historyRevision;
+        public final int depth;
+        public final long topSequence;
+        public final String topSourceRequestId;
+
+        private UndoState(long editRevision, long historyRevision, int depth,
+                          long topSequence, String topSourceRequestId) {
+            this.editRevision = editRevision;
+            this.historyRevision = historyRevision;
+            this.depth = depth;
+            this.topSequence = topSequence;
+            this.topSourceRequestId = topSourceRequestId;
+        }
+    }
+
+    public enum UndoStatus {
+        UNDONE,
+        EMPTY,
+        CAS_MISMATCH,
+        STALE,
+        WRITE_FAILED,
+        REJECTED
+    }
+
+    public static final class UndoResult {
+        public final UndoStatus status;
+        public final String packageName;
+        public final long generation;
+        public final ActRules rules;
+        public final UndoState undoState;
+        public final String error;
+        public final boolean replayed;
+
+        private UndoResult(UndoStatus status, String packageName, long generation,
+                           ActRules rules, UndoState undoState, String error, boolean replayed) {
+            this.status = status;
+            this.packageName = packageName;
+            this.generation = generation;
+            this.rules = rules;
+            this.undoState = undoState;
+            this.error = error;
+            this.replayed = replayed;
+        }
+
+        public boolean isUndone() {
+            return status == UndoStatus.UNDONE;
         }
     }
 
@@ -205,6 +297,26 @@ public final class RuleRepository {
     public MutationResult mutateWrite(String packageName, RuleRecord viewRule,
                                       Bitmap snapshot, Bitmap modifiedSnapshot,
                                       boolean append) {
+        return mutateWriteInternal(packageName, viewRule, snapshot, modifiedSnapshot,
+                append, null, null);
+    }
+
+    /** Persist-first editor write which atomically appends to the authoritative undo history. */
+    public MutationResult mutateWriteUndoable(String packageName, RuleRecord viewRule,
+                                              Bitmap snapshot, Bitmap modifiedSnapshot,
+                                              boolean append, UndoScope scope,
+                                              String requestId) {
+        if (!isValidUndoScope(scope, packageName) || requestId == null || requestId.isEmpty()) {
+            return MutationResult.rejected(packageName, "invalid undo scope or request id");
+        }
+        return mutateWriteInternal(packageName, viewRule, snapshot, modifiedSnapshot,
+                append, scope, requestId);
+    }
+
+    private MutationResult mutateWriteInternal(String packageName, RuleRecord viewRule,
+                                               Bitmap snapshot, Bitmap modifiedSnapshot,
+                                               boolean append, UndoScope scope,
+                                               String requestId) {
         if (!PackageNameValidator.isValid(packageName) || viewRule == null) {
             return MutationResult.rejected(packageName, "invalid package or rule");
         }
@@ -214,6 +326,24 @@ public final class RuleRepository {
             boolean packageDirExisted = packageDir.exists();
             try {
                 RuleRecord ownedRule = copyForPackage(packageName, viewRule);
+                AuthoritativeUndoJournal.Scope journalScope = scope != null
+                        ? scope.toJournalScope() : null;
+                String sourceFingerprint = scope != null
+                        ? mUndoJournal.fingerprint(ownedRule) + ":main=" + (snapshot != null)
+                        + ":modified=" + (modifiedSnapshot != null) : null;
+                if (journalScope != null) {
+                    AuthoritativeUndoJournal.ForwardReplay replay =
+                            mUndoJournal.findForwardReplay(journalScope, requestId,
+                                    ownedRule.slotKey(packageName), sourceFingerprint);
+                    if (replay != null) {
+                        return MutationResult.committed(packageName, replay.generation,
+                                mCache.getRules(packageName), toUndoState(replay.state), true);
+                    }
+                    if (mUndoJournal.hasForwardRequest(journalScope, requestId)) {
+                        return MutationResult.rejected(packageName,
+                                "request id was already used for another mutation");
+                    }
+                }
                 String dir = mStore.getAppDataDir(packageName);
                 if (snapshot != null) {
                     String path = mStore.saveBitmap(snapshot, dir);
@@ -241,11 +371,20 @@ public final class RuleRepository {
                     return MutationResult.failed(packageName, "rule file write failed");
                 }
                 mCache.commitApply(packageName, candidate);
+                if (journalScope != null) {
+                    mUndoJournal.recordForward(journalScope, requestId, candidate.beforeRule,
+                            candidate.appliedRule, sourceFingerprint, candidate.generation);
+                } else {
+                    mUndoJournal.recordExternalSlotMutation(
+                            candidate.appliedRule.slotKey(packageName));
+                }
                 mObserverRegistry.notifyObserverRuleChanged(packageName, candidate.generation);
                 deleteReplacedImages(candidate.oldImagePaths, candidate.snapshotRules);
+                deleteReleasedJournalImages();
                 scheduleOrphanCleanup();
                 return MutationResult.committed(packageName, candidate.generation,
-                        candidate.snapshotRules);
+                        candidate.snapshotRules, journalScope != null
+                                ? toUndoState(mUndoJournal.state(journalScope)) : null, false);
             } catch (Exception e) {
                 cleanupNewImages(newImages, packageDir, packageDirExisted);
                 mLogger.w("persist-first write failed", e);
@@ -270,8 +409,11 @@ public final class RuleRepository {
                     return MutationResult.failed(packageName, "rule file write failed");
                 }
                 mCache.commitDelete(packageName, candidate);
+                mUndoJournal.recordExternalSlotMutation(
+                        candidate.removedRule.slotKey(packageName));
                 mObserverRegistry.notifyObserverRuleChanged(packageName, candidate.generation);
                 deleteFiles(candidate.removedImagePaths);
+                deleteReleasedJournalImages();
                 scheduleOrphanCleanup();
                 return MutationResult.committed(packageName, candidate.generation,
                         candidate.snapshotRules);
@@ -299,14 +441,142 @@ public final class RuleRepository {
                 }
                 mStore.markDeleted(packageName, candidate.generation);
                 mCache.commitDeleteAll(packageName, candidate);
+                mUndoJournal.recordExternalPackageMutation(packageName);
                 mObserverRegistry.notifyObserverRuleChanged(packageName, candidate.generation);
                 deleteFiles(candidate.removedImagePaths);
+                deleteReleasedJournalImages();
                 scheduleOrphanCleanup();
                 return MutationResult.committed(packageName, candidate.generation, new ActRules());
             } catch (Exception e) {
                 mLogger.w("persist-first delete all failed", e);
                 return MutationResult.failed(packageName, e.getMessage());
             }
+        }
+    }
+
+    public UndoState getUndoState(UndoScope scope) {
+        if (!isValidUndoScope(scope, scope != null ? scope.packageName : null)) {
+            return null;
+        }
+        synchronized (mSnapshotMutationLock) {
+            return toUndoState(mUndoJournal.state(scope.toJournalScope()));
+        }
+    }
+
+    /** CAS-guarded inverse mutation of the latest authoritative editor transaction. */
+    public UndoResult undoLatest(UndoScope scope, String requestId,
+                                 long expectedHistoryRevision, long expectedTopSequence) {
+        String packageName = scope != null ? scope.packageName : null;
+        if (!isValidUndoScope(scope, packageName)
+                || requestId == null || requestId.isEmpty()) {
+            return undoResult(UndoStatus.REJECTED, packageName, 0L, null,
+                    scope != null ? getUndoState(scope) : null,
+                    "invalid undo scope or request id", false);
+        }
+        synchronized (mSnapshotMutationLock) {
+            AuthoritativeUndoJournal.Scope journalScope = scope.toJournalScope();
+            AuthoritativeUndoJournal.UndoReplay replay =
+                    mUndoJournal.findUndoReplay(journalScope, requestId);
+            if (replay != null) {
+                return undoResult(fromReplayStatus(replay.status), packageName,
+                        replay.generation, mCache.getRules(packageName),
+                        toUndoState(replay.state), null, true);
+            }
+            if (!mUndoJournal.matchesExpectedState(journalScope,
+                    expectedHistoryRevision, expectedTopSequence)) {
+                mUndoJournal.recordUndoReplay(journalScope, requestId,
+                        AuthoritativeUndoJournal.UndoReplayStatus.CAS_MISMATCH, 0L);
+                return undoResult(UndoStatus.CAS_MISMATCH, packageName,
+                        mCache.currentGeneration(), mCache.getRules(packageName),
+                        toUndoState(mUndoJournal.state(journalScope)),
+                        "undo state changed", false);
+            }
+
+            AuthoritativeUndoJournal.Entry entry = mUndoJournal.peekLatest(journalScope);
+            if (entry == null) {
+                mUndoJournal.recordUndoReplay(journalScope, requestId,
+                        AuthoritativeUndoJournal.UndoReplayStatus.EMPTY, 0L);
+                return undoResult(UndoStatus.EMPTY, packageName,
+                        mCache.currentGeneration(), mCache.getRules(packageName),
+                        toUndoState(mUndoJournal.state(journalScope)), null, false);
+            }
+            RuleRecord current = mCache.findRule(packageName, entry.after);
+            if (!mUndoJournal.matchesCurrent(entry, current)) {
+                mUndoJournal.discardStaleTop(journalScope, entry);
+                deleteReleasedJournalImages();
+                mUndoJournal.recordUndoReplay(journalScope, requestId,
+                        AuthoritativeUndoJournal.UndoReplayStatus.STALE, 0L);
+                scheduleOrphanCleanup();
+                return undoResult(UndoStatus.STALE, packageName,
+                        mCache.currentGeneration(), mCache.getRules(packageName),
+                        toUndoState(mUndoJournal.state(journalScope)),
+                        "rule lineage or content changed", false);
+            }
+
+            try {
+                long generation;
+                ActRules rules;
+                List<String> replacedImages;
+                if (entry.operation == AuthoritativeUndoJournal.Operation.CREATE) {
+                    RuleCache.DeleteResult candidate = mCache.prepareDelete(packageName, entry.after);
+                    if (candidate == null
+                            || !mStore.persistNow(packageName, candidate.json,
+                            candidate.generation)) {
+                        return undoResult(UndoStatus.WRITE_FAILED, packageName, 0L, null,
+                                toUndoState(mUndoJournal.state(journalScope)),
+                                "rule file write failed", false);
+                    }
+                    mCache.commitDelete(packageName, candidate);
+                    generation = candidate.generation;
+                    rules = candidate.snapshotRules;
+                    replacedImages = candidate.removedImagePaths;
+                } else {
+                    RuleCache.CacheResult candidate = mCache.prepareApply(
+                            packageName, entry.before, true);
+                    if (!mStore.persistNow(packageName, candidate.json, candidate.generation)) {
+                        return undoResult(UndoStatus.WRITE_FAILED, packageName, 0L, null,
+                                toUndoState(mUndoJournal.state(journalScope)),
+                                "rule file write failed", false);
+                    }
+                    mCache.commitApply(packageName, candidate);
+                    generation = candidate.generation;
+                    rules = candidate.snapshotRules;
+                    replacedImages = candidate.oldImagePaths;
+                }
+                UndoState state = toUndoState(mUndoJournal.commitUndo(journalScope, entry));
+                mUndoJournal.recordUndoReplay(journalScope, requestId,
+                        AuthoritativeUndoJournal.UndoReplayStatus.UNDONE, generation);
+                mObserverRegistry.notifyObserverRuleChanged(packageName, generation);
+                deleteReplacedImages(replacedImages, rules);
+                deleteReleasedJournalImages();
+                scheduleOrphanCleanup();
+                return undoResult(UndoStatus.UNDONE, packageName, generation,
+                        rules, state, null, false);
+            } catch (Exception e) {
+                mLogger.w("authoritative undo failed", e);
+                return undoResult(UndoStatus.WRITE_FAILED, packageName, 0L, null,
+                        toUndoState(mUndoJournal.state(journalScope)), e.getMessage(), false);
+            }
+        }
+    }
+
+    /** Releases one edit revision after the service has drained accepted mutations. */
+    public void releaseUndo(UndoScope scope) {
+        if (!isValidUndoScope(scope, scope != null ? scope.packageName : null)) return;
+        synchronized (mSnapshotMutationLock) {
+            mUndoJournal.releaseScope(scope.toJournalScope());
+            deleteReleasedJournalImages();
+            scheduleOrphanCleanup();
+        }
+    }
+
+    /** Releases all histories owned by a dead process owner. */
+    public void releaseUndoOwner(String ownerId, int callingUid) {
+        if (ownerId == null || ownerId.isEmpty()) return;
+        synchronized (mSnapshotMutationLock) {
+            mUndoJournal.releaseOwner(ownerId, callingUid);
+            deleteReleasedJournalImages();
+            scheduleOrphanCleanup();
         }
     }
 
@@ -328,6 +598,7 @@ public final class RuleRepository {
                 mStore.loadAllRules();
                 mStore.loadToolbarPrefs();
                 mDataLoaded = true;
+                scheduleOrphanCleanup();
                 int totalPackages = mCache.size();
                 int totalRules = countTotalRules();
                 mLogger.i("loaded " + totalPackages + " packages with "
@@ -389,13 +660,25 @@ public final class RuleRepository {
 
     private boolean handleMessage(Message msg) {
         if (msg.what == MSG_CLEAN_ORPHANS) {
-            mStore.cleanAllOrphanImages();
+            synchronized (mSnapshotMutationLock) {
+                mStore.cleanAllOrphanImages(mUndoJournal.protectedPaths());
+            }
             return true;
         }
         return false;
     }
 
-    private static void deleteFiles(List<String> paths) {
+    private void deleteFiles(List<String> paths) {
+        if (paths == null) return;
+        Set<String> protectedPaths = mUndoJournal.protectedPaths();
+        for (String path : paths) {
+            if (path != null && !path.isEmpty() && !protectedPaths.contains(path)) {
+                FileUtils.delete(path);
+            }
+        }
+    }
+
+    private static void deleteFilesUnconditionally(List<String> paths) {
         if (paths == null) return;
         for (String path : paths) {
             if (path != null && !path.isEmpty()) FileUtils.delete(path);
@@ -404,16 +687,45 @@ public final class RuleRepository {
 
     private static void cleanupNewImages(List<String> paths, File packageDir,
                                          boolean packageDirExisted) {
-        deleteFiles(paths);
+        deleteFilesUnconditionally(paths);
         if (!packageDirExisted && packageDir.exists()) {
             File[] children = packageDir.listFiles();
             if (children == null || children.length == 0) FileUtils.delete(packageDir);
         }
     }
 
-    private static void deleteReplacedImages(List<String> oldPaths, ActRules candidateRules) {
+    private void deleteReplacedImages(List<String> oldPaths, ActRules candidateRules) {
         if (oldPaths == null || oldPaths.isEmpty()) return;
-        java.util.Set<String> retained = new java.util.HashSet<>();
+        Set<String> retained = referencedImages(candidateRules);
+        retained.addAll(mUndoJournal.protectedPaths());
+        for (String path : oldPaths) {
+            if (path != null && !path.isEmpty() && !retained.contains(path)) {
+                FileUtils.delete(path);
+            }
+        }
+    }
+
+    private void deleteReleasedJournalImages() {
+        Set<String> released = mUndoJournal.takeReleasedPaths();
+        if (released.isEmpty()) return;
+        Set<String> retained = referencedImages(mCache.getAllRules());
+        retained.addAll(mUndoJournal.protectedPaths());
+        for (String path : released) {
+            if (path != null && !path.isEmpty() && !retained.contains(path)) {
+                FileUtils.delete(path);
+            }
+        }
+    }
+
+    private static Set<String> referencedImages(Map<String, ActRules> appRules) {
+        Set<String> retained = new HashSet<>();
+        if (appRules == null) return retained;
+        for (ActRules rules : appRules.values()) retained.addAll(referencedImages(rules));
+        return retained;
+    }
+
+    private static Set<String> referencedImages(ActRules candidateRules) {
+        Set<String> retained = new HashSet<>();
         if (candidateRules != null) {
             for (List<RuleRecord> rules : candidateRules.values()) {
                 if (rules == null) continue;
@@ -424,11 +736,35 @@ public final class RuleRepository {
                 }
             }
         }
-        for (String path : oldPaths) {
-            if (path != null && !path.isEmpty() && !retained.contains(path)) {
-                FileUtils.delete(path);
-            }
+        return retained;
+    }
+
+    private static boolean isValidUndoScope(UndoScope scope, String packageName) {
+        return scope != null && scope.toJournalScope().isValid()
+                && PackageNameValidator.isValid(packageName)
+                && Objects.equals(packageName, scope.packageName);
+    }
+
+    private static UndoState toUndoState(AuthoritativeUndoJournal.State state) {
+        return state == null ? null : new UndoState(state.editRevision, state.historyRevision,
+                state.depth, state.topSequence, state.topSourceRequestId);
+    }
+
+    private static UndoStatus fromReplayStatus(
+            AuthoritativeUndoJournal.UndoReplayStatus status) {
+        switch (status) {
+            case UNDONE: return UndoStatus.UNDONE;
+            case EMPTY: return UndoStatus.EMPTY;
+            case CAS_MISMATCH: return UndoStatus.CAS_MISMATCH;
+            case STALE: return UndoStatus.STALE;
+            default: return UndoStatus.REJECTED;
         }
+    }
+
+    private static UndoResult undoResult(UndoStatus status, String packageName,
+                                         long generation, ActRules rules, UndoState state,
+                                         String error, boolean replayed) {
+        return new UndoResult(status, packageName, generation, rules, state, error, replayed);
     }
 
     private void scheduleOrphanCleanup() {
@@ -530,6 +866,20 @@ public final class RuleRepository {
             }
         }
 
+        RuleRecord findRule(String packageName, RuleRecord target) {
+            mReadLock.lock();
+            try {
+                ActRules actRules = mData.get(packageName);
+                if (actRules == null || target == null) return null;
+                List<RuleRecord> rules = actRules.get(target.getActivityClass());
+                if (rules == null) return null;
+                int index = findRuleIndex(rules, target);
+                return index >= 0 ? rules.get(index).clone() : null;
+            } finally {
+                mReadLock.unlock();
+            }
+        }
+
         DeleteResult prepareDelete(String packageName, RuleRecord viewRule) {
             mReadLock.lock();
             try {
@@ -542,7 +892,8 @@ public final class RuleRepository {
                 if (removedRule == null) return null;
                 if (viewRules.isEmpty()) candidate.remove(viewRule.getActivityClass());
                 return new DeleteResult(mGson.toJson(candidate), snapshotActRules(candidate),
-                        imagePathsOf(removedRule), candidate, proposedGeneration());
+                        imagePathsOf(removedRule), candidate, removedRule.clone(),
+                        proposedGeneration());
             } finally {
                 mReadLock.unlock();
             }
@@ -649,8 +1000,10 @@ public final class RuleRepository {
                         viewRule.getActivityClass(), k -> new java.util.ArrayList<>());
                 int index = findRuleIndex(viewRules, viewRule);
                 List<String> oldImagePaths = new ArrayList<>();
+                RuleRecord beforeRule = null;
                 if (index >= 0) {
                     RuleRecord existing = viewRules.get(index);
+                    if (existing != null) beforeRule = existing.clone();
                     if (captureOldImagePath && existing != null) {
                         oldImagePaths.addAll(imagePathsOf(existing));
                     }
@@ -662,7 +1015,8 @@ public final class RuleRepository {
                     viewRules.add(viewRule);
                 }
                 return new CacheResult(oldImagePaths, candidate, mGson.toJson(candidate),
-                        snapshotActRules(candidate), proposedGeneration());
+                        snapshotActRules(candidate), beforeRule, viewRule.clone(),
+                        proposedGeneration());
             } finally {
                 mReadLock.unlock();
             }
@@ -699,14 +1053,19 @@ public final class RuleRepository {
             final ActRules candidateRules;
             final String json;
             final ActRules snapshotRules;
+            final RuleRecord beforeRule;
+            final RuleRecord appliedRule;
             final long generation;
 
             CacheResult(List<String> oldImagePaths, ActRules candidateRules, String json,
-                        ActRules snapshotRules, long generation) {
+                        ActRules snapshotRules, RuleRecord beforeRule, RuleRecord appliedRule,
+                        long generation) {
                 this.oldImagePaths = oldImagePaths;
                 this.candidateRules = candidateRules;
                 this.json = json;
                 this.snapshotRules = snapshotRules;
+                this.beforeRule = beforeRule;
+                this.appliedRule = appliedRule;
                 this.generation = generation;
             }
         }
@@ -716,14 +1075,16 @@ public final class RuleRepository {
             final ActRules snapshotRules;
             final List<String> removedImagePaths;
             final ActRules candidateRules;
+            final RuleRecord removedRule;
             final long generation;
 
             DeleteResult(String json, ActRules snapshotRules, List<String> removedImagePaths,
-                         ActRules candidateRules, long generation) {
+                         ActRules candidateRules, RuleRecord removedRule, long generation) {
                 this.json = json;
                 this.snapshotRules = snapshotRules;
                 this.removedImagePaths = removedImagePaths;
                 this.candidateRules = candidateRules;
+                this.removedRule = removedRule;
                 this.generation = generation;
             }
         }
@@ -894,7 +1255,7 @@ public final class RuleRepository {
             }
         }
 
-        void cleanAllOrphanImages() {
+        void cleanAllOrphanImages(Set<String> protectedPaths) {
             try {
                 File dataDir = new File(getBaseDir());
                 File[] packageDirs = dataDir.listFiles(File::isDirectory);
@@ -906,9 +1267,12 @@ public final class RuleRepository {
                             (dir, name) -> name.endsWith(IMAGE_FILE_SUFFIX));
                     if (imageFiles == null || imageFiles.length == 0) continue;
                     mCache.collectReferencedImages(packageName, (pkg, referenced) ->
-                            Arrays.stream(imageFiles)
+                            {
+                                if (protectedPaths != null) referenced.addAll(protectedPaths);
+                                Arrays.stream(imageFiles)
                                     .filter(f -> !referenced.contains(f.getAbsolutePath()))
-                                    .forEach(FileUtils::delete));
+                                    .forEach(FileUtils::delete);
+                            });
                 }
             } catch (FileNotFoundException e) {
                 mLogger.w("orphan cleanup: base dir not found", e);
