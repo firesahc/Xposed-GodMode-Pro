@@ -5,13 +5,13 @@ param(
 
 $ErrorActionPreference = "Stop"
 $logFile = "$DeviceLogRoot/godmodepro.log"
-$metadata = & $Adb shell su -c "stat -c '%a %s' $logFile" 2>&1
+$metadata = & $Adb shell su -c "stat -c %a,%s $logFile" 2>&1
 if ($LASTEXITCODE -ne 0) {
     throw "Persistent log is not readable: $logFile`n$($metadata -join [Environment]::NewLine)"
 }
 
 $metadataText = ($metadata -join " ").Trim()
-if ($metadataText -notmatch '^600\s+[1-9][0-9]*$') {
+if ($metadataText -notmatch '^600,[1-9][0-9]*$') {
     throw "Persistent log must be a non-empty owner-only 0600 file: $logFile ($metadataText)"
 }
 
