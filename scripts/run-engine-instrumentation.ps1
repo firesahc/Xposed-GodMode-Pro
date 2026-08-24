@@ -11,6 +11,7 @@ $runner = "$package/androidx.test.runner.AndroidJUnitRunner"
 $activity = "com.kaisar.xposed.godmode.engine.applier.ModifyApplierTestActivity"
 $testClass = "com.kaisar.xposed.godmode.engine.applier.ModifyApplierInstrumentedTest"
 $deviceLogRoot = "/data/misc/godmode"
+. (Join-Path $PSScriptRoot "foreground-instrumentation.ps1")
 $tests = @(
     "applyAndRevokeRestoreCapturedBaseline",
     "revokePreservesPropertiesChangedByHost",
@@ -34,23 +35,6 @@ function Assert-DeviceLogRoot {
     }
 }
 
-function Bring-TestHostToForeground([string]$packageName, [string]$activityName, [string]$test) {
-    $start = & $Adb shell su -c "am start -W -n $packageName/$activityName" 2>&1
-    $startText = $start -join [Environment]::NewLine
-    if ($LASTEXITCODE -ne 0 -or $startText -notmatch "Status: ok") {
-        throw "Unable to foreground test host for $test`n$startText"
-    }
-    for ($check = 0; $check -lt 20; $check++) {
-        $activities = ((& $Adb shell dumpsys activity activities 2>&1) -join "`n") -replace "\s+", " "
-        if ($activities -match "topResumedActivity=.*$packageName/$activityName" -or
-            $activities -match "ResumedActivity:.*$packageName/$activityName") {
-            return
-        }
-        Start-Sleep -Milliseconds 250
-    }
-    throw "Test host did not reach RESUMED for $test`n$startText"
-}
-
 Assert-DeviceLogRoot
 Write-Host "DEVICE_LOG_ROOT $deviceLogRoot"
 
@@ -68,35 +52,13 @@ foreach ($test in $tests) {
     for ($attempt = 1; $attempt -le 3 -and -not $passed; $attempt++) {
         & $Adb shell am force-stop $package | Out-Null
         Start-Sleep -Seconds 1
-        Bring-TestHostToForeground $package $activity $test
-        $arguments = @(
-            "shell", "am", "instrument", "-r", "-w", "-e", "class",
-            "$testClass#$test", $runner
-        )
-        $process = New-Object System.Diagnostics.Process
-        $process.StartInfo.FileName = $Adb
-        $process.StartInfo.Arguments = $arguments -join " "
-        $process.StartInfo.UseShellExecute = $false
-        $process.StartInfo.RedirectStandardOutput = $true
-        $process.StartInfo.RedirectStandardError = $true
-        [void]$process.Start()
-        $stdout = $process.StandardOutput.ReadToEndAsync()
-        $stderr = $process.StandardError.ReadToEndAsync()
-
-        if (-not $process.WaitForExit(30000)) {
-            $process.Kill()
-            $outputText = "Instrumentation timed out"
-        } else {
-            $outputText = ($stdout.GetAwaiter().GetResult(), $stderr.GetAwaiter().GetResult() `
-                    | Where-Object { $_ }) -join [Environment]::NewLine
-        }
-        $passed = $process.ExitCode -eq 0 `
-            -and $outputText -match "OK \(1 test\)" `
-            -and $outputText -match "INSTRUMENTATION_CODE: -1"
-        $infrastructureFailure = $outputText -match "Test host Activity was not started" `
-            -or $outputText -match "shortMsg=Process crashed" `
-            -or $outputText -match "Instrumentation timed out"
-        $process.Dispose()
+        $result = Invoke-ForegroundInstrumentationAttempt `
+            -Adb $Adb -Runner $runner -TestClass $testClass -TestName $test `
+            -ForegroundPackage $package -ActivityName $activity `
+            -CleanupPackages @($package)
+        $passed = $result.Passed
+        $outputText = $result.Output
+        $infrastructureFailure = $result.InfrastructureFailure
         if (-not $passed -and $infrastructureFailure -and $attempt -lt 3) {
             Write-Host "RETRY $test after device infrastructure interruption ($attempt/3)"
         } elseif (-not $passed) {
