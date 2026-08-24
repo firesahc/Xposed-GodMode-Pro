@@ -15,6 +15,7 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.navigation.fragment.NavHostFragment;
@@ -70,7 +71,7 @@ public final class RuleRecordDetailsContainerFragment extends Fragment {
             mSharedViewModel.backupRules(uri, viewRule.packageName, viewRules, new SharedViewModel.ResultCallback() {
                 @Override
                 public void onSuccess(int count) {
-
+                    showSnackbar(R.string.snack_bar_msg_backup_done_format, count);
                 }
 
                 @Override
@@ -169,8 +170,14 @@ public final class RuleRecordDetailsContainerFragment extends Fragment {
         if (viewRules != null && !viewRules.isEmpty() && mCurIndex < viewRules.size()) {
             RuleRecord viewRule = viewRules.get(mCurIndex);
             if (item.getItemId() == R.id.menu_delete_rule) {
-                mSharedViewModel.deleteRule(viewRule);
-                NavHostFragment.findNavController(this).popBackStack();
+                new AlertDialog.Builder(requireContext())
+                        .setTitle(R.string.hey_guy)
+                        .setMessage(R.string.album_confirm_delete_rule)
+                        .setPositiveButton(android.R.string.ok, (dialog, which) -> {
+                            mSharedViewModel.deleteRule(viewRule);
+                            NavHostFragment.findNavController(this).popBackStack();
+                        })
+                        .setNegativeButton(android.R.string.cancel, null).show();
             } else if (item.getItemId() == R.id.menu_backup_rule) {
                 try {
                     String packageName = mSharedViewModel.selectedPackage.getValue();
@@ -191,6 +198,12 @@ public final class RuleRecordDetailsContainerFragment extends Fragment {
         View view = getView();
         if (!isAdded() || view == null) return;
         Snackbar.make(view, messageResId, Snackbar.LENGTH_SHORT).show();
+    }
+
+    private void showSnackbar(int messageResId, Object... formatArgs) {
+        View view = getView();
+        if (!isAdded() || view == null) return;
+        Snackbar.make(view, getString(messageResId, formatArgs), Snackbar.LENGTH_SHORT).show();
     }
 
     static final class DetailFragmentStateAdapter extends FragmentStateAdapter {

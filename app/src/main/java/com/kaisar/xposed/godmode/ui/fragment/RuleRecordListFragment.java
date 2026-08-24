@@ -1,6 +1,7 @@
 package com.kaisar.xposed.godmode.ui.fragment;
 
 import android.content.ActivityNotFoundException;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
@@ -29,6 +30,7 @@ import androidx.core.content.res.ResourcesCompat;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.navigation.fragment.NavHostFragment;
+import androidx.preference.PreferenceManager;
 import androidx.recyclerview.widget.DiffUtil;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -107,6 +109,7 @@ public final class RuleRecordListFragment extends Fragment {
             recyclerView.setItemAnimator(null);
             recyclerView.setAdapter(new ListAdapter());
         }
+        maybeShowLongPressHint(view);
         // 使用 viewLifecycleOwner 避免视图销毁后仍收到通知
         mSharedViewModel.actRules.observe(getViewLifecycleOwner(), newData -> {
             mAllRules = newData != null ? newData : new ArrayList<>();
@@ -114,6 +117,29 @@ public final class RuleRecordListFragment extends Fragment {
                 updateFilteredList();
             }
         });
+    }
+
+    /** 长按删除的可发现性引导 —— 仅首次进入列表页时提示一次. */
+    private void maybeShowLongPressHint(View view) {
+        SharedPreferences sp = PreferenceManager.getDefaultSharedPreferences(requireContext());
+        String key = getString(R.string.pref_key_hint_longpress_delete);
+        if (sp.getBoolean(key, false)) return;
+        Snackbar.make(view, R.string.toast_hint_longpress_delete, Snackbar.LENGTH_LONG).show();
+        sp.edit().putBoolean(key, true).apply();
+    }
+
+    private void confirmDeleteRule(RuleRecord rule) {
+        new AlertDialog.Builder(requireContext())
+                .setTitle(R.string.hey_guy)
+                .setMessage(R.string.album_confirm_delete_rule)
+                .setPositiveButton(android.R.string.ok, (dialog, which) -> {
+                    if (mSharedViewModel.deleteRule(rule)) {
+                        Snackbar.make(requireView(), R.string.snack_bar_msg_deleted_rule, Snackbar.LENGTH_SHORT).show();
+                    } else {
+                        Snackbar.make(requireView(), R.string.snack_bar_msg_revert_rule_fail, Snackbar.LENGTH_SHORT).show();
+                    }
+                })
+                .setNegativeButton(android.R.string.cancel, null).show();
     }
 
     private void updateFilteredList() {
@@ -266,6 +292,10 @@ public final class RuleRecordListFragment extends Fragment {
             holder.itemView.setFocusable(true);
             holder.itemView.setClickable(true);
             holder.itemView.setOnClickListener(this);
+            holder.itemView.setOnLongClickListener(v -> {
+                confirmDeleteRule(rule);
+                return true;
+            });
         }
 
         private void bindItem(ViewHolder holder, RuleRecord rule) {
