@@ -197,7 +197,6 @@
     <string name="toast_rule_service_rejected">规则服务拒绝了保存请求</string>
     <string name="toast_runtime_apply_failed">运行时应用失败</string>
     <string name="toast_undo_not_completed">规则服务未完成撤销</string>
-    <string name="tag_gm_cmp" translatable="false">gm_cmp</string>
 
     <string name="about_version">版本</string>
     <string name="about_description">一个 LSPosed 模块，可以在任意应用中屏蔽或修改你不喜欢的 UI 元素。</string>

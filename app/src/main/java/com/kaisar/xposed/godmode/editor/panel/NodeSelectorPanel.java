@@ -2,7 +2,7 @@ package com.kaisar.xposed.godmode.editor.panel;
 
 import android.app.Activity;
 import android.graphics.drawable.Drawable;
-import android.view.Display;
+import android.util.DisplayMetrics;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -60,6 +60,16 @@ public class NodeSelectorPanel {
     private boolean mModifySessionLocked;
     private boolean mModifyPreviewing;
     private boolean mUndoAvailable;
+    /** 面板导航区是否处于展开（向左让位）状态，由 exchange 按钮切换。 */
+    private boolean mNavigationPaneExpanded;
+
+    // 面板导航区边距常量（dp），与布局初始 padding 保持一致
+    /** 基线边距，对应布局 paddingLeft/Top/Bottom。 */
+    private static final int PANEL_PADDING_DP = 4;
+    /** 收起态末端留白，对应布局初始 paddingRight。 */
+    private static final int END_PADDING_COLLAPSED_DP = 8;
+    /** 展开态末端留白占屏宽比例（右侧空出约 1/6 屏宽）。 */
+    private static final float END_PADDING_EXPANDED_FRACTION = 5f / 6f;
 
     /**
      * 显示节点选择面板。
@@ -75,6 +85,7 @@ public class NodeSelectorPanel {
         mViewNodes = viewNodes;
         mCurrentIndex = 0;
         mHasUserSelection = false;
+        mNavigationPaneExpanded = false;
         try {
             mMaskView = MaskView.makeMaskView(activity);
             mMaskView.setMaskOverlay(overlayColor);
@@ -84,6 +95,7 @@ public class NodeSelectorPanel {
             LayoutInflater inflater = LayoutInflater.from(activity);
             mPanelView = inflater.inflate(
                     GmResources.getLayout(R.layout.panel_node_selector), container, false);
+            GmResources.markAsGmComponent(mPanelView);
             // 如果注入失败（某些 APP 可能无法通过 addAssetPath 加载模块 APK），
             // 通过 GmResources（模块自己的 Resources）回退设置模块资源，
             // 否则 toolbar 的 ImageButton 无图、TextView 无字、背景透明
@@ -103,6 +115,7 @@ public class NodeSelectorPanel {
             });
             mKeySelecting = true;
         } catch (Exception e) {
+            Logger.e(TAG, "show: failed to attach node selector panel", e);
             if (mMaskView != null) { mMaskView.detachFromContainer(); mMaskView = null; }
             mKeySelecting = false;
         }
@@ -207,15 +220,17 @@ public class NodeSelectorPanel {
             callbacks.onModeChanged(wasVisible ? EditorInteractionMode.INITIAL : EditorInteractionMode.MODIFY);
         });
 
-        // 面板位置切换
+        // 面板位置切换 — 在贴边与向左让位（右侧空出约 1/6 屏宽）两种状态间切换
         View exchangeBtn = mPanelView.findViewById(R.id.exchange);
-        View topContent = mPanelView.findViewById(R.id.topcentent);
+        ViewGroup topContent = mPanelView.findViewById(R.id.top_content);
         exchangeBtn.setOnClickListener(v -> {
-            Display display = activity.getWindowManager().getDefaultDisplay();
-            int width = display.getWidth();
-            int targetWidth = width - (width / 6);
-            topContent.setPadding(4, 4,
-                    topContent.getPaddingRight() == targetWidth ? 12 : targetWidth, 4);
+            DisplayMetrics metrics = activity.getResources().getDisplayMetrics();
+            int basePx = dpToPx(metrics, PANEL_PADDING_DP);
+            int collapsedPx = dpToPx(metrics, END_PADDING_COLLAPSED_DP);
+            int expandedPx = Math.round(metrics.widthPixels * END_PADDING_EXPANDED_FRACTION);
+            int endPx = mNavigationPaneExpanded ? collapsedPx : expandedPx;
+            mNavigationPaneExpanded = !mNavigationPaneExpanded;
+            topContent.setPadding(basePx, basePx, endPx, basePx);
         });
 
         // 信息流模式
@@ -352,6 +367,10 @@ public class NodeSelectorPanel {
         if (view != null) view.setEnabled(enabled);
     }
 
+    private static int dpToPx(DisplayMetrics metrics, int dp) {
+        return Math.round(dp * metrics.density);
+    }
+
     private void updateUndoButton() {
         if (mPanelView == null) return;
         View undo = mPanelView.findViewById(R.id.undo);
@@ -372,8 +391,8 @@ public class NodeSelectorPanel {
         if (panelView == null) return;
         try {
             // ── 主工具栏背景 rounded_bg_full ──
-            // 布局: panel_view(FrameLayout) > topcentent(LinearLayout) > toolbar_column(LinearLayout 64dp)
-            View topContent = panelView.findViewById(R.id.topcentent);
+            // 布局: panel_view(FrameLayout) > top_content(LinearLayout) > toolbar_column(LinearLayout 64dp)
+            View topContent = panelView.findViewById(R.id.top_content);
             if (topContent instanceof ViewGroup) {
                 ViewGroup tc = (ViewGroup) topContent;
                 if (tc.getChildCount() > 0) {
@@ -409,22 +428,13 @@ public class NodeSelectorPanel {
                 }
             }
 
-            // ── remove_menu 背景 rounded_bg_bottom_background ──
-            View removeMenu = panelView.findViewById(R.id.remove_menu);
-            if (removeMenu != null && removeMenu.getBackground() == null) {
-                try {
-                    removeMenu.setBackground(GmResources.getDrawable(R.drawable.rounded_bg_bottom_background));
-                } catch (Exception e) {
-                    Logger.d(TAG, "toolbar resource fallback failed", e);
-                }
-            }
-
             // ── ImageButton src drawable ──
             patchImageButtonSrc(panelView, R.id.exchange, R.drawable.exchange);
             patchImageButtonSrc(panelView, R.id.block, R.drawable.ic_block);
             patchImageButtonSrc(panelView, R.id.undo, R.drawable.ic_undo);
             patchImageButtonSrc(panelView, R.id.Up, R.drawable.up);
             patchImageButtonSrc(panelView, R.id.Down, R.drawable.down);
+            patchImageButtonSrc(panelView, R.id.modify, R.drawable.ic_modify);
 
             // ── TextView text ──
             patchTextViewText(panelView, R.id.remove_mode_btn, R.string.mode_remove);

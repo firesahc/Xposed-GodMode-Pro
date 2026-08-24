@@ -182,6 +182,7 @@ public class PropertyEditorPanel {
             LayoutInflater inflater = LayoutInflater.from(activity);
             mPanelView = inflater.inflate(
                     GmResources.getLayout(R.layout.panel_modify), container, false);
+            GmResources.markAsGmComponent(mPanelView);
 
             setupSeekers(mPanelView, targetView);
             setupTextEdit(mPanelView, targetView);

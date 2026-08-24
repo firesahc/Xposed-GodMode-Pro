@@ -5,8 +5,7 @@
     android:layout_gravity="center"
     android:background="@drawable/rounded_bg_full"
     android:orientation="vertical"
-    android:padding="12dp"
-    android:tag="@string/tag_gm_cmp">
+    android:padding="12dp">
 
     <TextView
         android:layout_width="wrap_content"
@@ -16,7 +15,7 @@
         android:textSize="14sp"
         android:textStyle="bold"
         android:layout_marginBottom="8dp"
-        android:tag="@string/tag_gm_cmp" />
+        />
 
     <TextView
         android:layout_width="wrap_content"
@@ -24,13 +23,12 @@
         android:text="@string/modify_width"
         android:textColor="?android:textColorSecondary"
         android:textSize="12sp"
-        android:tag="@string/tag_gm_cmp" />
+        />
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:tag="@string/tag_gm_cmp">
+        android:orientation="horizontal">
 
         <SeekBar
             android:id="@+id/mod_width_seek"
@@ -38,7 +36,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:max="2000"
-            android:tag="@string/tag_gm_cmp" />
+            />
 
         <EditText
             android:id="@+id/mod_width_text"
@@ -46,7 +44,7 @@
             android:layout_height="wrap_content"
             android:inputType="number"
             android:textSize="12sp"
-            android:tag="@string/tag_gm_cmp" />
+            />
     </LinearLayout>
 
     <TextView
@@ -55,13 +53,12 @@
         android:text="@string/modify_height"
         android:textColor="?android:textColorSecondary"
         android:textSize="12sp"
-        android:tag="@string/tag_gm_cmp" />
+        />
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:tag="@string/tag_gm_cmp">
+        android:orientation="horizontal">
 
         <SeekBar
             android:id="@+id/mod_height_seek"
@@ -69,7 +66,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:max="2000"
-            android:tag="@string/tag_gm_cmp" />
+            />
 
         <EditText
             android:id="@+id/mod_height_text"
@@ -77,7 +74,7 @@
             android:layout_height="wrap_content"
             android:inputType="number"
             android:textSize="12sp"
-            android:tag="@string/tag_gm_cmp" />
+            />
     </LinearLayout>
 
     <TextView
@@ -86,13 +83,12 @@
         android:text="@string/modify_alpha"
         android:textColor="?android:textColorSecondary"
         android:textSize="12sp"
-        android:tag="@string/tag_gm_cmp" />
+        />
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:tag="@string/tag_gm_cmp">
+        android:orientation="horizontal">
 
         <SeekBar
             android:id="@+id/mod_alpha_seek"
@@ -100,7 +96,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:max="255"
-            android:tag="@string/tag_gm_cmp" />
+            />
 
         <EditText
             android:id="@+id/mod_alpha_text"
@@ -108,7 +104,7 @@
             android:layout_height="wrap_content"
             android:inputType="number"
             android:textSize="12sp"
-            android:tag="@string/tag_gm_cmp" />
+            />
     </LinearLayout>
 
     <TextView
@@ -117,14 +113,13 @@
         android:text="@string/modify_position"
         android:textColor="?android:textColorSecondary"
         android:textSize="12sp"
-        android:tag="@string/tag_gm_cmp" />
+        />
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center"
-        android:orientation="horizontal"
-        android:tag="@string/tag_gm_cmp">
+        android:orientation="horizontal">
 
         <Button
             android:id="@+id/mod_pos_left"
@@ -132,7 +127,7 @@
             android:layout_height="36dp"
             android:text="◀"
             android:textSize="14sp"
-            android:tag="@string/tag_gm_cmp" />
+            />
 
         <Button
             android:id="@+id/mod_pos_up"
@@ -140,7 +135,7 @@
             android:layout_height="36dp"
             android:text="▲"
             android:textSize="14sp"
-            android:tag="@string/tag_gm_cmp" />
+            />
 
         <Button
             android:id="@+id/mod_pos_down"
@@ -148,7 +143,7 @@
             android:layout_height="36dp"
             android:text="▼"
             android:textSize="14sp"
-            android:tag="@string/tag_gm_cmp" />
+            />
 
         <Button
             android:id="@+id/mod_pos_right"
@@ -156,7 +151,7 @@
             android:layout_height="36dp"
             android:text="▶"
             android:textSize="14sp"
-            android:tag="@string/tag_gm_cmp" />
+            />
     </LinearLayout>
 
     <LinearLayout
@@ -164,8 +159,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:visibility="gone"
-        android:tag="@string/tag_gm_cmp">
+        android:visibility="gone">
 
         <TextView
             android:layout_width="wrap_content"
@@ -173,7 +167,7 @@
             android:text="@string/modify_text"
             android:textColor="?android:textColorSecondary"
             android:textSize="12sp"
-            android:tag="@string/tag_gm_cmp" />
+            />
 
         <EditText
             android:id="@+id/mod_text_input"
@@ -181,7 +175,7 @@
             android:layout_height="wrap_content"
             android:maxLines="3"
             android:textSize="12sp"
-            android:tag="@string/tag_gm_cmp" />
+            />
     </LinearLayout>
 
     <LinearLayout
@@ -189,8 +183,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:visibility="gone"
-        android:tag="@string/tag_gm_cmp">
+        android:visibility="gone">
 
         <Button
             android:id="@+id/mod_image_pick"
@@ -198,7 +191,7 @@
             android:layout_height="wrap_content"
             android:text="@string/modify_image_pick"
             android:textSize="12sp"
-            android:tag="@string/tag_gm_cmp" />
+            />
     </LinearLayout>
 
     <LinearLayout
@@ -206,8 +199,7 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="12dp"
         android:gravity="end"
-        android:orientation="horizontal"
-        android:tag="@string/tag_gm_cmp">
+        android:orientation="horizontal">
 
         <Button
             android:id="@+id/mod_cancel"
@@ -216,7 +208,7 @@
             android:layout_weight="1"
             android:text="@string/modify_cancel"
             android:textSize="12sp"
-            android:tag="@string/tag_gm_cmp" />
+            />
 
         <Button
             android:id="@+id/mod_save"
@@ -225,7 +217,7 @@
             android:layout_weight="1"
             android:text="@string/modify_save"
             android:textSize="12sp"
-            android:tag="@string/tag_gm_cmp" />
+            />
     </LinearLayout>
 
 </LinearLayout>

@@ -3,23 +3,20 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@android:color/transparent"
-    android:gravity="left"
-    android:tag="@string/tag_gm_cmp">
+    android:background="@android:color/transparent">
 
     <LinearLayout
-        android:id="@+id/topcentent"
+        android:id="@+id/top_content"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_gravity="center|right|center_horizontal"
+        android:layout_gravity="right|center_vertical"
         android:background="@android:color/transparent"
         android:clipToPadding="false"
         android:orientation="vertical"
         android:paddingLeft="4dp"
         android:paddingTop="4dp"
         android:paddingRight="8dp"
-        android:paddingBottom="4dp"
-        android:tag="@string/tag_gm_cmp">
+        android:paddingBottom="4dp">
 
         <LinearLayout
             android:layout_width="64dp"
@@ -31,7 +28,6 @@
             android:clipChildren="false"
             android:clipToPadding="false"
             android:orientation="vertical"
-            android:tag="@string/tag_gm_cmp"
             android:translationZ="9dp"
             tools:gravity="right">
 
@@ -39,8 +35,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="160dp"
                 android:layout_marginTop="10dp"
-                android:layout_marginBottom="10dp"
-                android:tag="@string/tag_gm_cmp">
+                android:layout_marginBottom="10dp">
 
                 <SeekBar
                     android:id="@+id/slider"
@@ -49,7 +44,7 @@
                     android:layout_gravity="center"
                     android:clickable="true"
                     android:rotation="90"
-                    android:tag="@string/tag_gm_cmp" />
+                    />
 
             </FrameLayout>
 
@@ -61,14 +56,13 @@
                 android:background="@drawable/ripple_drawable_20dp"
                 android:contentDescription="@string/accessibility_exchange"
                 android:src="@drawable/exchange"
-                android:tag="@string/tag_gm_cmp" />
+                />
 
             <FrameLayout
                 android:id="@+id/info_flow_mode_toggle"
                 android:layout_width="match_parent"
                 android:layout_height="48dp"
-                android:layout_marginTop="4dp"
-                android:tag="@string/tag_gm_cmp">
+                android:layout_marginTop="4dp">
                 <TextView
                     android:id="@+id/info_flow_mode_btn"
                     android:layout_width="match_parent"
@@ -79,15 +73,14 @@
                     android:text="@string/mode_info_flow_off"
                     android:textColor="@color/info_flow_btn_text"
                     android:textSize="11sp"
-                    android:tag="@string/tag_gm_cmp" />
+                    />
             </FrameLayout>
 
             <FrameLayout
                 android:id="@+id/remove_mode_toggle"
                 android:layout_width="match_parent"
                 android:layout_height="48dp"
-                android:layout_marginTop="4dp"
-                android:tag="@string/tag_gm_cmp">
+                android:layout_marginTop="4dp">
 
                 <TextView
                     android:id="@+id/remove_mode_btn"
@@ -99,7 +92,7 @@
                     android:text="@string/mode_remove"
                     android:textColor="?android:textColorPrimary"
                     android:textSize="11sp"
-                    android:tag="@string/tag_gm_cmp" />
+                    />
 
             </FrameLayout>
 
@@ -108,26 +101,16 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:visibility="gone"
-                android:tag="@string/tag_gm_cmp">
+                android:visibility="gone">
 
-                <FrameLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="49dp"
-                    android:background="@drawable/rounded_bg_bottom_background"
-                    android:tag="@string/tag_gm_cmp">
-
-                    <ImageButton
-                        android:id="@+id/block"
-                        android:layout_width="48dp"
-                        android:layout_height="53dp"
-                        android:layout_gravity="center"
-                        android:background="@drawable/ripple_drawable_20dp"
-                        android:contentDescription="@string/accessibility_block"
-                        android:src="@drawable/ic_block"
-                        android:tag="@string/tag_gm_cmp" />
-
-                </FrameLayout>
+                <ImageButton
+                    android:id="@+id/block"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_gravity="center"
+                    android:background="@drawable/ripple_drawable_20dp"
+                    android:contentDescription="@string/accessibility_block"
+                    android:src="@drawable/ic_block" />
 
                 <ImageButton
                     android:id="@+id/preview"
@@ -136,8 +119,7 @@
                     android:layout_gravity="center"
                     android:background="@drawable/ripple_drawable_20dp"
                     android:contentDescription="@string/accessibility_preview"
-                    android:src="@android:drawable/ic_menu_view"
-                    android:tag="@string/tag_gm_cmp" />
+                    android:src="@android:drawable/ic_menu_view" />
 
             </LinearLayout>
 
@@ -145,8 +127,7 @@
                 android:id="@+id/modify_mode_toggle"
                 android:layout_width="match_parent"
                 android:layout_height="48dp"
-                android:layout_marginTop="4dp"
-                android:tag="@string/tag_gm_cmp">
+                android:layout_marginTop="4dp">
 
                 <TextView
                     android:id="@+id/modify_mode_btn"
@@ -158,7 +139,7 @@
                     android:text="@string/mode_modify"
                     android:textColor="?android:textColorPrimary"
                     android:textSize="11sp"
-                    android:tag="@string/tag_gm_cmp" />
+                    />
 
             </FrameLayout>
 
@@ -167,8 +148,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:visibility="gone"
-                android:tag="@string/tag_gm_cmp">
+                android:visibility="gone">
 
                 <ImageButton
                     android:id="@+id/modify"
@@ -177,8 +157,7 @@
                     android:layout_gravity="center"
                     android:background="@drawable/ripple_drawable_20dp"
                     android:contentDescription="@string/accessibility_modify"
-                    android:src="@android:drawable/ic_menu_edit"
-                    android:tag="@string/tag_gm_cmp" />
+                    android:src="@drawable/ic_modify" />
 
                 <ImageButton
                     android:id="@+id/modify_preview"
@@ -187,8 +166,7 @@
                     android:layout_gravity="center"
                     android:background="@drawable/ripple_drawable_20dp"
                     android:contentDescription="@string/accessibility_modify_preview"
-                    android:src="@android:drawable/ic_menu_view"
-                    android:tag="@string/tag_gm_cmp" />
+                    android:src="@android:drawable/ic_menu_view" />
 
             </LinearLayout>
 
@@ -201,7 +179,7 @@
                 android:contentDescription="@string/accessibility_undo"
                 android:enabled="false"
                 android:src="@drawable/ic_undo"
-                android:tag="@string/tag_gm_cmp" />
+                />
 
             <ImageButton
                 android:id="@+id/Up"
@@ -211,7 +189,7 @@
                 android:background="@drawable/ripple_drawable_20dp"
                 android:contentDescription="@string/accessibility_up"
                 android:src="@drawable/up"
-                android:tag="@string/tag_gm_cmp" />
+                />
 
             <ImageButton
                 android:id="@+id/Down"
@@ -221,7 +199,7 @@
                 android:background="@drawable/ripple_drawable_20dp"
                 android:contentDescription="@string/accessibility_down"
                 android:src="@drawable/down"
-                android:tag="@string/tag_gm_cmp" />
+                />
 
         </LinearLayout>
 
