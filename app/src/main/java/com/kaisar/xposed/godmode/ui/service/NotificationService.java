@@ -7,15 +7,14 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.graphics.BitmapFactory;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
 import android.text.TextUtils;
 import android.widget.Toast;
-
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
+import androidx.core.content.res.ResourcesCompat;
 import androidx.preference.PreferenceManager;
 
 import com.kaisar.xposed.godmode.R;
@@ -23,6 +22,7 @@ import com.kaisar.xposed.godmode.engine.core.PlatformCapabilities;
 import com.kaisar.xposed.godmode.ipc.RuleServiceClient;
 import com.kaisar.xposed.godmode.ui.EditModeController;
 import com.kaisar.xposed.godmode.ui.SettingsActivity;
+import com.kaisar.xposed.godmode.util.BitmapUtils;
 import com.kaisar.xposed.godmode.util.TaskExecutor;
 
 public final class NotificationService extends Service implements SharedPreferences.OnSharedPreferenceChangeListener {
@@ -138,7 +138,9 @@ public final class NotificationService extends Service implements SharedPreferen
                 PendingIntent.FLAG_IMMUTABLE);
         return new NotificationCompat.Builder(this, TAG)
                 .setSmallIcon(R.drawable.ic_angel_small)
-                .setLargeIcon(BitmapFactory.decodeResource(getResources(), R.drawable.ic_angel_normal))
+                // VectorDrawable 无法经 BitmapFactory 解码（返回 null），须经 BitmapUtils 渲染为位图
+                .setLargeIcon(BitmapUtils.drawableToBitmap(ResourcesCompat.getDrawable(
+                        getResources(), R.drawable.ic_angel_normal, getTheme())))
                 .setContentTitle(getText(R.string.app_name))
                 .setContentText(EditModeController.isEditModeClosing(this)
                         ? getString(R.string.edit_mode_closing)

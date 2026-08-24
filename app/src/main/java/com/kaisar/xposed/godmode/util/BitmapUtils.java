@@ -5,6 +5,7 @@ import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.graphics.drawable.Drawable;
 import android.view.View;
 
 import com.kaisar.xposed.godmode.engine.util.Logger;
@@ -44,6 +45,26 @@ public final class BitmapUtils {
                     + " view=" + view.getClass().getName(), e);
             b.eraseColor(Color.TRANSPARENT);
         }
+        return b;
+    }
+
+    /**
+     * 将任意 Drawable（含 VectorDrawable）渲染为等尺寸 ARGB_8888 位图。
+     * <p>
+     * {@link android.graphics.BitmapFactory} 无法解码矢量资源（返回 null），
+     * 通知 largeIcon 等要求 Bitmap 参数的场景须先经此方法转换。
+     *
+     * @param drawable 源 Drawable
+     * @return 渲染结果；drawable 无效或无内在尺寸时返回 null
+     */
+    public static Bitmap drawableToBitmap(Drawable drawable) {
+        if (drawable == null || drawable.getIntrinsicWidth() <= 0
+                || drawable.getIntrinsicHeight() <= 0) return null;
+        Bitmap b = Bitmap.createBitmap(drawable.getIntrinsicWidth(),
+                drawable.getIntrinsicHeight(), Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(b);
+        drawable.setBounds(0, 0, canvas.getWidth(), canvas.getHeight());
+        drawable.draw(canvas);
         return b;
     }
 
