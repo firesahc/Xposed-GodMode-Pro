@@ -139,6 +139,14 @@
     <string name="snack_bar_msg_backup_rule_fail">备份规则失败</string>
     <string name="snack_bar_msg_restore_rules_fail">恢复规则失败</string>
     <string name="snack_bar_msg_save_toolbar_fail">工具栏设置保存失败</string>
+    <string name="snack_bar_msg_deleted_rule">已删除 1 条规则</string>
+    <string name="snack_bar_msg_deleted_app_format">已删除 %1$s 的 %2$d 条规则</string>
+    <string name="snack_bar_msg_backup_done_format">已备份 %d 条规则</string>
+    <string name="album_confirm_delete_rule">确认删除这条规则？</string>
+    <string name="album_section_count_format">%1$d 个</string>
+    <string name="pref_key_hint_longpress_delete" translatable="false">pref_key_hint_longpress_delete</string>
+    <string name="accessibility_album_thumb">规则截图缩略图</string>
+    <string name="toast_hint_longpress_delete">长按条目可快速删除</string>
     <string name="confirm_delete_rules">确认删除 %d 条规则？</string>
     <string name="dialog_btn_copy">复制给我的老伙计</string>
     <string name="crash_tip">我想你应该遇了些麻烦，天知道这该死的程序都干了些什么。把下面这些奇奇怪怪的日志复制给老伙计吧，也许有用。\n\n</string>

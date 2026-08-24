@@ -132,6 +132,13 @@
     <string name="snack_bar_msg_backup_rule_fail">Backup rules failed</string>
     <string name="snack_bar_msg_restore_rules_fail">Restore rules failed</string>
     <string name="snack_bar_msg_save_toolbar_fail">Failed to save toolbar settings</string>
+    <string name="snack_bar_msg_deleted_rule">1 rule deleted</string>
+    <string name="snack_bar_msg_deleted_app_format">Deleted %2$d rules of %1$s</string>
+    <string name="snack_bar_msg_backup_done_format">Backed up %d rules</string>
+    <string name="album_confirm_delete_rule">Delete this rule?</string>
+    <string name="album_section_count_format">%1$d rules</string>
+    <string name="accessibility_album_thumb">Rule screenshot thumbnail</string>
+    <string name="toast_hint_longpress_delete">Long-press an item to delete quickly</string>
     <string name="confirm_delete_rules">Confirm delete %d rules?</string>
     <string name="dialog_btn_copy">COPY</string>
     <string name="crash_tip">Crash detected. Copy the log below for feedback.\n\n</string>

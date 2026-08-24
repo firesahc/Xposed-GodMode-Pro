@@ -36,6 +36,17 @@
                 app:exitAnim="@anim/fragment_exit"
                 app:popEnterAnim="@anim/fragment_enter_pop"
                 app:popExitAnim="@anim/fragment_exit_pop" />
+        <action
+                android:id="@+id/action_generalPreferenceFragment_to_viewRuleDetailsContainerFragment"
+                app:destination="@id/viewRuleDetailsContainerFragment"
+                app:enterAnim="@anim/fragment_enter"
+                app:exitAnim="@anim/fragment_exit"
+                app:popEnterAnim="@anim/fragment_enter_pop"
+                app:popExitAnim="@anim/fragment_exit_pop">
+            <argument
+                    android:name="curIndex"
+                    app:argType="integer" />
+        </action>
     </fragment>
     <fragment
             android:id="@+id/guideFragment"

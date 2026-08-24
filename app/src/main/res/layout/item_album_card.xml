@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content"
+    android:layout_height="64dp"
+    android:layout_marginEnd="5dp"
+    android:background="@drawable/album_card_bg">
+
+    <ImageView
+        android:id="@+id/album_card_image"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:contentDescription="@string/accessibility_album_thumb"
+        android:scaleType="fitCenter" />
+</FrameLayout>
