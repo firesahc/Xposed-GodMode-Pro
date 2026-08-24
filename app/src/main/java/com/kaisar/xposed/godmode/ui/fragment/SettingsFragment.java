@@ -14,6 +14,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.preference.Preference;
+import androidx.preference.PreferenceCategory;
 import androidx.preference.PreferenceFragmentCompat;
 import androidx.preference.SwitchPreferenceCompat;
 
@@ -72,6 +73,7 @@ public final class SettingsFragment extends PreferenceFragmentCompat implements
     @Override
     public void onCreatePreferences(@Nullable Bundle savedInstanceState, @Nullable String rootKey) {
         setPreferencesFromResource(R.xml.pref_settings, rootKey);
+        applyCategoryTitleLayout();
 
         // Group A: Restore Rules
         Preference restoreRules = findPreference(getString(R.string.pref_restore_rules));
@@ -107,6 +109,15 @@ public final class SettingsFragment extends PreferenceFragmentCompat implements
                 pref.setOnPreferenceChangeListener(this);
             }
         }
+    }
+
+    /** 分类标题统一使用自定义布局: 去除框架 image_frame 空占位, accent 蓝色标题与卡片内容 20dp 对齐. */
+    private void applyCategoryTitleLayout() {
+        int layoutResId = R.layout.item_category_title;
+        PreferenceCategory featuresCategory = findPreference(getString(R.string.pref_key_category_features));
+        if (featuresCategory != null) featuresCategory.setLayoutResource(layoutResId);
+        PreferenceCategory toolbarCategory = findPreference(getString(R.string.pref_key_category_toolbar));
+        if (toolbarCategory != null) toolbarCategory.setLayoutResource(layoutResId);
     }
 
     @Override

@@ -2,10 +2,12 @@
 
     <com.kaisar.xposed.godmode.ui.preference.ProgressPreference android:key="@string/pref_key_progress_indicator" />
 
-    <PreferenceCategory android:title="@string/pref_header_general">
+    <PreferenceCategory
+            android:key="@string/pref_key_category_general"
+            android:title="@string/pref_header_general">
         <SwitchPreferenceCompat
                 android:defaultValue="false"
-                android:icon="@drawable/ic_puzzle"
+                android:icon="@drawable/ic_puzzle_centered"
                 android:key="@string/pref_key_master"
                 android:summary="@string/pref_description_god_mode"
                 android:title="@string/pref_title_god_mode" />

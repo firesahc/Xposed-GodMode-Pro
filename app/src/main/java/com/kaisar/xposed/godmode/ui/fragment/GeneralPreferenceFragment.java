@@ -91,6 +91,15 @@ public final class GeneralPreferenceFragment extends PreferenceFragmentCompat im
         }
     }
 
+    /** 分类标题统一使用自定义布局: 去除框架 image_frame 空占位, accent 竖条锚点与卡片内容 20dp 对齐. */
+    private void applyCategoryTitleLayout() {
+        int layoutResId = R.layout.item_category_title;
+        PreferenceCategory generalCategory = findPreference(getString(R.string.pref_key_category_general));
+        if (generalCategory != null) generalCategory.setLayoutResource(layoutResId);
+        PreferenceCategory appRulesCategory = findPreference(getString(R.string.pref_key_app_rules));
+        if (appRulesCategory != null) appRulesCategory.setLayoutResource(layoutResId);
+    }
+
     private boolean checkCrash() {
         String crashInfo = CrashHandler.getLastCrashInfo(GodModeApplication.getApplication());
         if (crashInfo != null) {
@@ -257,6 +266,7 @@ public final class GeneralPreferenceFragment extends PreferenceFragmentCompat im
     @Override
     public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
         setPreferencesFromResource(R.xml.pref_general, rootKey);
+        applyCategoryTitleLayout();
         mProgressPreference = (ProgressPreference) findPreference(getString(R.string.pref_key_progress_indicator));
         mProgressPreference.setVisible(false);
         mEditorSwitchPreference = (SwitchPreferenceCompat) findPreference(getString(R.string.pref_key_master));

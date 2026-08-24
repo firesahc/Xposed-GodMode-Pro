@@ -145,6 +145,9 @@
     <string name="album_confirm_delete_rule">确认删除这条规则？</string>
     <string name="album_section_count_format">%1$d 个</string>
     <string name="pref_key_hint_longpress_delete" translatable="false">pref_key_hint_longpress_delete</string>
+    <string name="pref_key_category_general" translatable="false">pref_key_category_general</string>
+    <string name="pref_key_category_features" translatable="false">pref_key_category_features</string>
+    <string name="pref_key_category_toolbar" translatable="false">pref_key_category_toolbar</string>
     <string name="accessibility_album_thumb">规则截图缩略图</string>
     <string name="toast_hint_longpress_delete">长按条目可快速删除</string>
     <string name="confirm_delete_rules">确认删除 %d 条规则？</string>

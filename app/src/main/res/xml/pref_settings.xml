@@ -1,6 +1,8 @@
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <PreferenceCategory android:title="@string/settings_category_features">
+    <PreferenceCategory
+            android:key="@string/pref_key_category_features"
+            android:title="@string/settings_category_features">
         <Preference
             android:key="@string/pref_restore_rules"
             android:title="@string/pref_restore_rules" />
@@ -14,7 +16,9 @@
             android:defaultValue="false" />
     </PreferenceCategory>
 
-    <PreferenceCategory android:title="@string/settings_customize_toolbar">
+    <PreferenceCategory
+            android:key="@string/pref_key_category_toolbar"
+            android:title="@string/settings_customize_toolbar">
         <SwitchPreferenceCompat
             android:key="@string/pref_key_show_info_flow_mode"
             android:title="@string/toolbar_info_flow_mode"
