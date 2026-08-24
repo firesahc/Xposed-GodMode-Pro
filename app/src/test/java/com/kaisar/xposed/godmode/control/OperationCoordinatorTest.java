@@ -105,6 +105,7 @@ public class OperationCoordinatorTest {
                 10001, 0L);
         assertFalse(timedOut.closed);
         assertEquals(OperationCoordinator.State.CLOSING, coordinator.state());
+        assertEquals(OperationCoordinator.State.CLOSING, coordinator.editState().state);
         assertEquals(RuleServiceContract.RESULT_BUSY,
                 coordinator.open(RuleServiceContract.OP_MUTATION, PACKAGE_B, 20002,
                         false, true, new Object()).status);
@@ -116,7 +117,9 @@ public class OperationCoordinatorTest {
         assertTrue(finished.closed);
         assertTrue(finished.editChanged);
         assertFalse(finished.editEnabled);
+        assertEquals(1L, finished.closedEditRevision);
         assertEquals(OperationCoordinator.State.IDLE, coordinator.state());
+        assertEquals(OperationCoordinator.State.IDLE, coordinator.editState().state);
         assertEquals(2L, coordinator.editState().revision);
     }
 
@@ -139,6 +142,7 @@ public class OperationCoordinatorTest {
         OperationCoordinator.CloseResult persisted = coordinator.finishPersistence(
                 mutation.token, targetOwner);
         assertTrue(persisted.editChanged);
+        assertEquals(1L, persisted.closedEditRevision);
         assertEquals(OperationCoordinator.State.IDLE, coordinator.state());
     }
 
@@ -173,6 +177,7 @@ public class OperationCoordinatorTest {
 
         assertTrue(mutationClose.editChanged);
         assertEquals(edit.token, mutationClose.releasedEditToken);
+        assertEquals(1L, mutationClose.closedEditRevision);
         assertNotNull(editClose.get());
         assertTrue(editClose.get().closed);
         assertFalse(editClose.get().editChanged);

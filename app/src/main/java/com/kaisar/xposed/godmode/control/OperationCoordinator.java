@@ -43,14 +43,16 @@ final class OperationCoordinator {
         final boolean editChanged;
         final boolean editEnabled;
         final long editRevision;
+        final long closedEditRevision;
         final String releasedEditToken;
 
         CloseResult(boolean closed, boolean editChanged, boolean editEnabled, long editRevision,
-                    String releasedEditToken) {
+                    long closedEditRevision, String releasedEditToken) {
             this.closed = closed;
             this.editChanged = editChanged;
             this.editEnabled = editEnabled;
             this.editRevision = editRevision;
+            this.closedEditRevision = closedEditRevision;
             this.releasedEditToken = releasedEditToken;
         }
     }
@@ -58,10 +60,12 @@ final class OperationCoordinator {
     static final class EditState {
         final boolean enabled;
         final long revision;
+        final State state;
 
-        EditState(boolean enabled, long revision) {
+        EditState(boolean enabled, long revision, State state) {
             this.enabled = enabled;
             this.revision = revision;
+            this.state = state;
         }
     }
 
@@ -178,7 +182,7 @@ final class OperationCoordinator {
         CloseResult result = finishClosingIfIdleLocked();
         notifyAll();
         return new CloseResult(true, result.editChanged, result.editEnabled,
-                result.editRevision, result.releasedEditToken);
+                result.editRevision, result.closedEditRevision, result.releasedEditToken);
     }
 
     synchronized CloseResult ownerDied(String token, Object owner) {
@@ -203,7 +207,7 @@ final class OperationCoordinator {
             CloseResult result = finishClosingIfIdleLocked();
             notifyAll();
             return new CloseResult(true, result.editChanged, result.editEnabled,
-                    result.editRevision, result.releasedEditToken);
+                    result.editRevision, result.closedEditRevision, result.releasedEditToken);
         }
         return unchanged(false);
     }
@@ -232,7 +236,7 @@ final class OperationCoordinator {
             CloseResult result = finishClosingIfIdleLocked();
             notifyAll();
             return new CloseResult(true, result.editChanged, result.editEnabled,
-                    result.editRevision, result.releasedEditToken);
+                    result.editRevision, result.closedEditRevision, result.releasedEditToken);
         }
         if (session.ownerDead) {
             mMaintenance = null;
@@ -245,7 +249,8 @@ final class OperationCoordinator {
     }
 
     synchronized EditState editState() {
-        return new EditState(mState == State.EDITING || mState == State.CLOSING, mEditRevision);
+        return new EditState(mState == State.EDITING || mState == State.CLOSING,
+                mEditRevision, mState);
     }
 
     synchronized State state() {
@@ -283,11 +288,13 @@ final class OperationCoordinator {
 
     private CloseResult finishEditLocked() {
         String releasedToken = mEdit == null ? null : mEdit.token;
+        long closedEditRevision = mEdit == null ? 0L : mEdit.editRevision;
         mEdit = null;
         mState = State.IDLE;
         mEditRevision++;
         notifyAll();
-        return new CloseResult(true, true, false, mEditRevision, releasedToken);
+        return new CloseResult(true, true, false, mEditRevision, closedEditRevision,
+                releasedToken);
     }
 
     private OpenResult accepted(Session session, boolean editChanged) {
@@ -302,7 +309,7 @@ final class OperationCoordinator {
 
     private CloseResult unchanged(boolean closed) {
         return new CloseResult(closed, false,
-                mState == State.EDITING || mState == State.CLOSING, mEditRevision, null);
+                mState == State.EDITING || mState == State.CLOSING, mEditRevision, 0L, null);
     }
 
     private static Access access(Session session) {

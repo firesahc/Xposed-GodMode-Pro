@@ -42,27 +42,18 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.IdentityHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
 
 /** The single system_server authority for rule, asset and toolbar mutations. */
 public final class RuleServiceServer extends IRuleService.Stub {
     private final PermissionEnforcer mPermissionEnforcer;
     private final RuleRepository mRepository;
     private final ObserverRegistry mObserverRegistry;
-    private final OperationCoordinator mCoordinator = new OperationCoordinator();
+    private final OperationLeaseController mOperationLeases;
+    private final EditorHistoryOwnerRegistry mHistoryOwners;
     private final ModuleLifecycle mLifecycle;
     private final Logger mLogger;
     private final IncomingImageReader mIncomingImageReader;
     private final Gson mGson = new GsonBuilder().setPrettyPrinting().create();
-    private final Object mOwnerLock = new Object();
-    private final Map<String, LeaseRegistration> mOwnerRegistrations = new HashMap<>();
-    private final Map<IBinder, HistoryOwnerRegistration> mHistoryOwners =
-            new IdentityHashMap<>();
     private volatile boolean mStarted;
     private volatile String mToolbarHiddenItems = "";
     private volatile boolean mToolbarConfigurationPresent;
@@ -78,6 +69,37 @@ public final class RuleServiceServer extends IRuleService.Stub {
         mLifecycle.transition(ModuleLifecycle.State.LOADING);
         mRepository = new RuleRepository(mGson, Logger.getLogger("RuleRepository"),
                 mObserverRegistry);
+        BinderOwnerDeathMonitor ownerDeaths = new BinderOwnerDeathMonitor();
+        mHistoryOwners = new EditorHistoryOwnerRegistry(ownerDeaths,
+                new EditorHistoryOwnerRegistry.ReleaseSink() {
+                    @Override public void releaseScope(RuleRepository.UndoScope scope) {
+                        mRepository.releaseUndo(scope);
+                    }
+
+                    @Override public void releaseOwner(String ownerId, int callingUid) {
+                        mRepository.releaseUndoOwner(ownerId, callingUid);
+                        mLogger.i("editor undo history released after owner death uid="
+                                + callingUid);
+                    }
+                });
+        mOperationLeases = new OperationLeaseController(ownerDeaths,
+                new OperationLeaseController.Listener() {
+                    @Override public void onEditRevisionClosed(long editRevision) {
+                        mHistoryOwners.closeRevision(editRevision);
+                    }
+
+                    @Override public void onEditTransition(
+                            OperationLeaseController.EditTransition transition) {
+                        mObserverRegistry.notifyObserverEditModeChanged(
+                                transition.enabled, transition.revision);
+                    }
+
+                    @Override public void onOwnerDied(OperationLeaseController.LeaseInfo lease) {
+                        mLogger.w("operation owner died type=" + operationName(lease.type)
+                                + " package=" + lease.packageName
+                                + " uid=" + lease.callingUid);
+                    }
+                });
         cleanupStaleIncomingFiles();
         mRepository.loadAll(
                 () -> {
@@ -128,7 +150,7 @@ public final class RuleServiceServer extends IRuleService.Stub {
         boolean moduleCaller = mPermissionEnforcer.isModuleUid(callingUid);
         boolean ownsPackage = PackageNameValidator.isValid(packageName)
                 && mPermissionEnforcer.uidOwnsPackage(callingUid, packageName);
-        OperationCoordinator.OpenResult opened = mCoordinator.open(operationType, packageName,
+        OperationCoordinator.OpenResult opened = mOperationLeases.open(operationType, packageName,
                 callingUid, moduleCaller, ownsPackage, owner.asBinder());
         if (opened.status != RuleServiceContract.RESULT_COMMITTED) {
             mLogger.w("operation rejected type=" + operationName(operationType)
@@ -136,21 +158,6 @@ public final class RuleServiceServer extends IRuleService.Stub {
                     + " status=" + resultName(opened.status)
                     + " reason=" + opened.message);
             return leaseResult(operationType, opened.status, opened.message);
-        }
-        if (!registerOwner(opened.token, operationType, packageName, callingUid,
-                owner.asBinder())) {
-            OperationCoordinator.CloseResult closed = mCoordinator.ownerDied(opened.token,
-                    owner.asBinder());
-            handleEditTransition(closed);
-            mLogger.w("operation owner died before registration type="
-                    + operationName(operationType) + " package=" + packageName
-                    + " uid=" + callingUid);
-            return leaseResult(operationType, RuleServiceContract.RESULT_BUSY,
-                    "operation owner already died");
-        }
-        if (opened.editChanged) {
-            mObserverRegistry.notifyObserverEditModeChanged(opened.editEnabled,
-                    opened.editRevision);
         }
         mLogger.i("operation opened type=" + operationName(operationType)
                 + " package=" + packageName + " uid=" + callingUid
@@ -166,35 +173,33 @@ public final class RuleServiceServer extends IRuleService.Stub {
             return leaseResult(0,
                     RuleServiceContract.RESULT_INVALID, "operation owner and token are required");
         }
-        LeaseRegistration registration = ownerRegistration(leaseToken);
-        if (registration == null) {
+        OperationLeaseController.LeaseInfo lease = mOperationLeases.leaseInfo(leaseToken);
+        if (lease == null) {
             mLogger.d("operation close ignored: lease already released");
             return new OperationLeaseParcel(RuleServiceContract.RESULT_NO_CHANGE, 0, null,
                     "lease already released");
         }
-        int type = registration.type;
+        int type = lease.type;
         try {
-            OperationCoordinator.CloseResult closed = mCoordinator.close(leaseToken,
+            OperationLeaseController.CloseOutcome outcome = mOperationLeases.close(leaseToken,
                     owner.asBinder(), Binder.getCallingUid(), OperationCoordinator.CLOSE_TIMEOUT_MS);
-            handleEditTransition(closed);
-            if (!closed.closed) {
+            if (!outcome.result.closed) {
                 mLogger.w("operation close busy type=" + operationName(type)
-                        + " package=" + registration.packageName
-                        + " uid=" + registration.uid);
+                        + " package=" + lease.packageName
+                        + " uid=" + lease.callingUid);
                 return leaseResult(type, RuleServiceContract.RESULT_BUSY,
                         "operation is still active");
             }
-            unregisterOwner(leaseToken, true);
             mLogger.i("operation closed type=" + operationName(type)
-                    + " package=" + registration.packageName
-                    + " uid=" + registration.uid);
+                    + " package=" + lease.packageName
+                    + " uid=" + lease.callingUid);
             return new OperationLeaseParcel(RuleServiceContract.RESULT_COMMITTED, type, null,
                     "lease released");
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             mLogger.w("operation close interrupted type=" + operationName(type)
-                    + " package=" + registration.packageName
-                    + " uid=" + registration.uid, e);
+                    + " package=" + lease.packageName
+                    + " uid=" + lease.callingUid, e);
             return leaseResult(type, RuleServiceContract.RESULT_BUSY,
                     "interrupted while closing operation");
         }
@@ -212,7 +217,7 @@ public final class RuleServiceServer extends IRuleService.Stub {
                     "rule service is not ready");
         }
         boolean registered = mObserverRegistry.addObserver(packageName, observer);
-        OperationCoordinator.EditState state = mCoordinator.editState();
+        OperationCoordinator.EditState state = mOperationLeases.editState();
         mLogger.d("observer " + (registered ? "registered" : "already registered")
                 + " package=" + packageName + " generation=" + mRepository.getGeneration());
         return new ObserverRegistrationParcel(registered
@@ -334,11 +339,13 @@ public final class RuleServiceServer extends IRuleService.Stub {
                     RuleServiceContract.RESULT_INVALID, null, "mutation requires a rule");
         }
 
-        OperationCoordinator.Access access = mCoordinator.beginPersistence(request.leaseToken,
+        OperationLeaseController.PersistencePermit permit = mOperationLeases.acquirePersistence(
+                request.leaseToken,
                 owner.asBinder(), callingUid, request.packageName);
-        if (access == null) return mutationResult(request.requestId, request.packageName,
+        if (permit == null) return mutationResult(request.requestId, request.packageName,
                 RuleServiceContract.RESULT_BUSY, null,
                 "write lease is not authorized for this mutation");
+        OperationCoordinator.Access access = permit.access();
 
         mLogger.d("fd mutate begin requestId=" + request.requestId
                 + " package=" + request.packageName + " uid=" + callingUid
@@ -409,12 +416,7 @@ public final class RuleServiceServer extends IRuleService.Stub {
         } finally {
             if (mainBitmap != null && !mainBitmap.isRecycled()) mainBitmap.recycle();
             if (modifiedBitmap != null && !modifiedBitmap.isRecycled()) modifiedBitmap.recycle();
-            OperationCoordinator.CloseResult finished = mCoordinator.finishPersistence(
-                    request.leaseToken, owner.asBinder());
-            handleEditTransition(finished);
-            if (!mCoordinator.contains(request.leaseToken)) {
-                unregisterOwner(request.leaseToken, true);
-            }
+            permit.close();
         }
     }
 
@@ -434,31 +436,40 @@ public final class RuleServiceServer extends IRuleService.Stub {
             return undoStateResult(RuleServiceContract.RESULT_BUSY, packageName, 0L,
                     null, "rule service is not ready");
         }
-        OperationCoordinator.EditState editState = mCoordinator.editState();
-        if (!editState.enabled) {
+        OperationCoordinator.EditState editState = mOperationLeases.editState();
+        if (editState.state != OperationCoordinator.State.EDITING
+                && editState.state != OperationCoordinator.State.CLOSING) {
             return undoStateResult(RuleServiceContract.RESULT_EXPIRED, packageName,
                     editState.revision, null, "editor revision is no longer active");
         }
-        HistoryOwnerRegistration registration = ensureHistoryOwner(owner.asBinder(), callingUid);
-        if (registration == null) {
-            return undoStateResult(RuleServiceContract.RESULT_OWNER_MISMATCH, packageName,
-                    editState.revision, null, "editor history owner is unavailable");
-        }
-        synchronized (registration) {
-            if (!registration.active) {
-                return undoStateResult(RuleServiceContract.RESULT_OWNER_MISMATCH, packageName,
-                        editState.revision, null, "editor history owner died");
-            }
-            OperationCoordinator.EditState confirmed = mCoordinator.editState();
-            if (!confirmed.enabled || confirmed.revision != editState.revision) {
-                releaseHistoryOwner(registration);
+        EditorHistoryOwnerRegistry.OwnerLease historyLease =
+                editState.state == OperationCoordinator.State.EDITING
+                        ? mHistoryOwners.acquireOrCreate(owner.asBinder(), callingUid,
+                        packageName, editState.revision)
+                        : mHistoryOwners.acquireExisting(owner.asBinder(), callingUid,
+                        packageName, editState.revision);
+        if (historyLease == null) {
+            OperationCoordinator.EditState confirmed = mOperationLeases.editState();
+            if (confirmed.revision != editState.revision
+                    || confirmed.state != editState.state) {
                 return undoStateResult(RuleServiceContract.RESULT_EXPIRED, packageName,
                         confirmed.revision, null, "editor revision changed");
             }
-            RuleRepository.UndoScope scope = new RuleRepository.UndoScope(
-                    registration.ownerId, callingUid, packageName, confirmed.revision);
+            return undoStateResult(RuleServiceContract.RESULT_OWNER_MISMATCH, packageName,
+                    editState.revision, null, "editor history owner is unavailable");
+        }
+        try {
+            RuleRepository.UndoState state = mRepository.getUndoState(historyLease.scope());
+            OperationCoordinator.EditState confirmed = mOperationLeases.editState();
+            if (!historyLease.isActive() || confirmed.revision != editState.revision
+                    || confirmed.state != editState.state) {
+                return undoStateResult(RuleServiceContract.RESULT_EXPIRED, packageName,
+                        confirmed.revision, null, "editor revision changed");
+            }
             return undoStateResult(RuleServiceContract.RESULT_COMMITTED, packageName,
-                    confirmed.revision, mRepository.getUndoState(scope), "authoritative state");
+                    confirmed.revision, state, "authoritative state");
+        } finally {
+            historyLease.close();
         }
     }
 
@@ -475,42 +486,39 @@ public final class RuleServiceServer extends IRuleService.Stub {
             return undoResult(request, RuleServiceContract.RESULT_REJECTED, 0L, null,
                     "undo is available only to the target editor process");
         }
-        OperationCoordinator.Access access = mCoordinator.beginPersistence(request.leaseToken,
+        OperationLeaseController.PersistencePermit permit = mOperationLeases.acquirePersistence(
+                request.leaseToken,
                 owner.asBinder(), callingUid, request.packageName);
-        if (access == null) {
+        if (permit == null) {
             return undoResult(request, RuleServiceContract.RESULT_BUSY, 0L, null,
                     "write lease is not authorized for undo");
         }
+        OperationCoordinator.Access access = permit.access();
         try {
             if (!access.editorMutation || access.editRevision != request.expectedEditRevision) {
                 return undoResult(request, RuleServiceContract.RESULT_EXPIRED, 0L, null,
                         "editor revision changed");
             }
-            HistoryOwnerRegistration registration = historyOwner(owner.asBinder(), callingUid);
-            if (registration == null) {
+            EditorHistoryOwnerRegistry.OwnerLease historyLease = mHistoryOwners.acquireExisting(
+                    owner.asBinder(), callingUid, request.packageName, access.editRevision);
+            if (historyLease == null) {
                 return undoResult(request, RuleServiceContract.RESULT_OWNER_MISMATCH, 0L, null,
                         "editor history owner is unavailable");
             }
-            synchronized (registration) {
-                if (!registration.active) {
+            try {
+                if (!historyLease.isActive()) {
                     return undoResult(request, RuleServiceContract.RESULT_OWNER_MISMATCH, 0L, null,
                             "editor history owner died");
                 }
-                RuleRepository.UndoScope scope = new RuleRepository.UndoScope(
-                        registration.ownerId, callingUid, request.packageName,
-                        access.editRevision);
-                RuleRepository.UndoResult result = mRepository.undoLatest(scope,
+                RuleRepository.UndoResult result = mRepository.undoLatest(historyLease.scope(),
                         request.requestId, request.expectedHistoryRevision,
                         request.expectedTopSequence);
                 return mapUndoResult(request, result);
+            } finally {
+                historyLease.close();
             }
         } finally {
-            OperationCoordinator.CloseResult finished = mCoordinator.finishPersistence(
-                    request.leaseToken, owner.asBinder());
-            handleEditTransition(finished);
-            if (!mCoordinator.contains(request.leaseToken)) {
-                unregisterOwner(request.leaseToken, true);
-            }
+            permit.close();
         }
     }
 
@@ -574,160 +582,11 @@ public final class RuleServiceServer extends IRuleService.Stub {
 
     public void shutdown() {
         mStarted = false;
-        mCoordinator.shutdown();
-        List<LeaseRegistration> registrations;
-        synchronized (mOwnerLock) {
-            registrations = new ArrayList<>(mOwnerRegistrations.values());
-            mOwnerRegistrations.clear();
-        }
-        for (LeaseRegistration registration : registrations) {
-            try {
-                registration.owner.unlinkToDeath(registration.deathRecipient, 0);
-            } catch (Exception ignored) { }
-        }
-        clearHistoryOwners();
+        mOperationLeases.shutdownAndDrain();
+        mHistoryOwners.shutdownAndDrain();
         cleanupStaleIncomingFiles();
         mObserverRegistry.shutdown();
         mRepository.shutdown();
-    }
-
-    private boolean registerOwner(String token, int type, String packageName, int uid,
-                                  IBinder owner) {
-        IBinder.DeathRecipient deathRecipient = () -> onOwnerDied(token, owner);
-        LeaseRegistration registration = new LeaseRegistration(type, packageName, uid, owner,
-                deathRecipient);
-        synchronized (mOwnerLock) {
-            mOwnerRegistrations.put(token, registration);
-        }
-        try {
-            owner.linkToDeath(deathRecipient, 0);
-            return true;
-        } catch (RemoteException e) {
-            synchronized (mOwnerLock) {
-                mOwnerRegistrations.remove(token);
-            }
-            return false;
-        }
-    }
-
-    private void onOwnerDied(String token, IBinder owner) {
-        LeaseRegistration registration;
-        synchronized (mOwnerLock) {
-            registration = mOwnerRegistrations.remove(token);
-        }
-        OperationCoordinator.CloseResult closed = mCoordinator.ownerDied(token, owner);
-        handleEditTransition(closed);
-        if (registration != null) {
-            mLogger.w("operation owner died type=" + operationName(registration.type)
-                    + " package=" + registration.packageName + " uid=" + registration.uid);
-        }
-    }
-
-    private LeaseRegistration ownerRegistration(String token) {
-        synchronized (mOwnerLock) {
-            return mOwnerRegistrations.get(token);
-        }
-    }
-
-    private void unregisterOwner(String token, boolean unlink) {
-        LeaseRegistration registration;
-        synchronized (mOwnerLock) {
-            registration = mOwnerRegistrations.remove(token);
-        }
-        if (unlink && registration != null) {
-            try {
-                registration.owner.unlinkToDeath(registration.deathRecipient, 0);
-            } catch (Exception ignored) { }
-        }
-    }
-
-    private void handleEditTransition(OperationCoordinator.CloseResult result) {
-        if (result.editChanged) {
-            mObserverRegistry.notifyObserverEditModeChanged(result.editEnabled,
-                    result.editRevision);
-        }
-        if (result.releasedEditToken != null) {
-            unregisterOwner(result.releasedEditToken, true);
-        }
-        if (result.editChanged && !result.editEnabled) {
-            clearHistoryOwners();
-        }
-    }
-
-    private HistoryOwnerRegistration ensureHistoryOwner(IBinder owner, int callingUid) {
-        synchronized (mOwnerLock) {
-            HistoryOwnerRegistration existing = mHistoryOwners.get(owner);
-            if (existing != null) return existing.uid == callingUid && existing.active
-                    ? existing : null;
-            HistoryOwnerRegistration registration = new HistoryOwnerRegistration(
-                    UUID.randomUUID().toString(), callingUid, owner);
-            registration.deathRecipient = () -> onHistoryOwnerDied(registration);
-            mHistoryOwners.put(owner, registration);
-            try {
-                owner.linkToDeath(registration.deathRecipient, 0);
-                return registration;
-            } catch (RemoteException e) {
-                registration.active = false;
-                mHistoryOwners.remove(owner);
-                return null;
-            }
-        }
-    }
-
-    private HistoryOwnerRegistration historyOwner(IBinder owner, int callingUid) {
-        synchronized (mOwnerLock) {
-            HistoryOwnerRegistration registration = mHistoryOwners.get(owner);
-            return registration != null && registration.uid == callingUid && registration.active
-                    ? registration : null;
-        }
-    }
-
-    private void onHistoryOwnerDied(HistoryOwnerRegistration registration) {
-        synchronized (mOwnerLock) {
-            if (mHistoryOwners.get(registration.owner) == registration) {
-                mHistoryOwners.remove(registration.owner);
-            }
-        }
-        synchronized (registration) {
-            if (!registration.active) return;
-            registration.active = false;
-            mRepository.releaseUndoOwner(registration.ownerId, registration.uid);
-        }
-        mLogger.i("editor undo history released after owner death uid=" + registration.uid);
-    }
-
-    private void releaseHistoryOwner(HistoryOwnerRegistration registration) {
-        synchronized (mOwnerLock) {
-            if (mHistoryOwners.get(registration.owner) == registration) {
-                mHistoryOwners.remove(registration.owner);
-            }
-        }
-        synchronized (registration) {
-            if (!registration.active) return;
-            registration.active = false;
-            try {
-                registration.owner.unlinkToDeath(registration.deathRecipient, 0);
-            } catch (Exception ignored) { }
-            mRepository.releaseUndoOwner(registration.ownerId, registration.uid);
-        }
-    }
-
-    private void clearHistoryOwners() {
-        List<HistoryOwnerRegistration> registrations;
-        synchronized (mOwnerLock) {
-            registrations = new ArrayList<>(mHistoryOwners.values());
-            mHistoryOwners.clear();
-        }
-        for (HistoryOwnerRegistration registration : registrations) {
-            synchronized (registration) {
-                if (!registration.active) continue;
-                registration.active = false;
-                try {
-                    registration.owner.unlinkToDeath(registration.deathRecipient, 0);
-                } catch (Exception ignored) { }
-                mRepository.releaseUndoOwner(registration.ownerId, registration.uid);
-            }
-        }
     }
 
     private RuleMutationResult writeRuleMutation(RuleMutationRequest request, IBinder owner,
@@ -738,24 +597,24 @@ public final class RuleServiceServer extends IRuleService.Stub {
             return mapMutationResult(request.requestId, mRepository.mutateWrite(
                     request.packageName, rule, mainBitmap, modifiedBitmap, append));
         }
-        HistoryOwnerRegistration registration = ensureHistoryOwner(owner, access.callingUid);
-        if (registration == null) {
+        EditorHistoryOwnerRegistry.OwnerLease historyLease = mHistoryOwners.acquireOrCreate(
+                owner, access.callingUid, request.packageName, access.editRevision);
+        if (historyLease == null) {
             return mutationResult(request.requestId, request.packageName,
                     RuleServiceContract.RESULT_OWNER_MISMATCH, null,
                     "editor history owner is unavailable");
         }
-        synchronized (registration) {
-            if (!registration.active) {
+        try {
+            if (!historyLease.isActive()) {
                 return mutationResult(request.requestId, request.packageName,
                         RuleServiceContract.RESULT_OWNER_MISMATCH, null,
                         "editor history owner died");
             }
-            RuleRepository.UndoScope scope = new RuleRepository.UndoScope(
-                    registration.ownerId, access.callingUid, request.packageName,
-                    access.editRevision);
             return mapMutationResult(request.requestId, mRepository.mutateWriteUndoable(
                     request.packageName, rule, mainBitmap, modifiedBitmap, append,
-                    scope, request.requestId));
+                    historyLease.scope(), request.requestId));
+        } finally {
+            historyLease.close();
         }
     }
 
@@ -925,37 +784,6 @@ public final class RuleServiceServer extends IRuleService.Stub {
             RemoteException remote = new RemoteException("sha256 unavailable");
             remote.initCause(e);
             throw remote;
-        }
-    }
-
-    private static final class LeaseRegistration {
-        final int type;
-        final String packageName;
-        final int uid;
-        final IBinder owner;
-        final IBinder.DeathRecipient deathRecipient;
-
-        LeaseRegistration(int type, String packageName, int uid, IBinder owner,
-                          IBinder.DeathRecipient deathRecipient) {
-            this.type = type;
-            this.packageName = packageName;
-            this.uid = uid;
-            this.owner = owner;
-            this.deathRecipient = deathRecipient;
-        }
-    }
-
-    private static final class HistoryOwnerRegistration {
-        final String ownerId;
-        final int uid;
-        final IBinder owner;
-        IBinder.DeathRecipient deathRecipient;
-        boolean active = true;
-
-        HistoryOwnerRegistration(String ownerId, int uid, IBinder owner) {
-            this.ownerId = ownerId;
-            this.uid = uid;
-            this.owner = owner;
         }
     }
 
