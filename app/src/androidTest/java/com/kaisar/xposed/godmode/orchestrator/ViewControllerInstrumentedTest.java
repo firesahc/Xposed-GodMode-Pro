@@ -7,6 +7,7 @@ import static org.junit.Assert.assertTrue;
 
 import android.app.Instrumentation;
 import android.app.Activity;
+import android.content.Intent;
 import android.os.SystemClock;
 import android.view.View;
 import android.widget.FrameLayout;
@@ -21,15 +22,50 @@ import com.kaisar.xposed.godmode.engine.matcher.ViewTraversal;
 import com.kaisar.xposed.godmode.engine.rule.ModifyEffect;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 
+import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Collection;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 @RunWith(AndroidJUnit4.class)
 public final class ViewControllerInstrumentedTest {
+
+    @Before
+    public void startTestHost() {
+        Instrumentation instrumentation = InstrumentationRegistry.getInstrumentation();
+        if (findResumedTestHost(null) != null) {
+            return;
+        }
+        Intent intent = new Intent(instrumentation.getTargetContext(),
+                ViewControllerTestActivity.class).addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        Activity activity = instrumentation.startActivitySync(intent);
+        if (!(activity instanceof ViewControllerTestActivity)) {
+            throw new AssertionError("Unexpected test host Activity: " + activity);
+        }
+    }
+
+    @After
+    public void finishTestHost() {
+        Instrumentation instrumentation = InstrumentationRegistry.getInstrumentation();
+        instrumentation.runOnMainSync(() -> {
+            Collection<Activity> resumed = ActivityLifecycleMonitorRegistry.getInstance()
+                    .getActivitiesInStage(Stage.RESUMED);
+            List<Activity> activities = new ArrayList<>(resumed);
+            for (Activity activity : activities) {
+                if (activity instanceof ViewControllerTestActivity) {
+                    activity.finish();
+                }
+            }
+        });
+        instrumentation.waitForIdleSync();
+    }
 
     @Test
     public void deletingVisibleModifyRuleRestoresOwnedProperties() throws Exception {
@@ -190,23 +226,29 @@ public final class ViewControllerInstrumentedTest {
             ViewControllerTestActivity previous, long timeoutMillis) {
         long deadline = SystemClock.uptimeMillis() + timeoutMillis;
         while (SystemClock.uptimeMillis() < deadline) {
-            AtomicReference<ViewControllerTestActivity> found = new AtomicReference<>();
-            InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
-                Collection<Activity> resumed = ActivityLifecycleMonitorRegistry.getInstance()
-                        .getActivitiesInStage(Stage.RESUMED);
-                for (Activity activity : resumed) {
-                    if (activity instanceof ViewControllerTestActivity && activity != previous) {
-                        found.set((ViewControllerTestActivity) activity);
-                        break;
-                    }
-                }
-            });
-            if (found.get() != null) {
-                return found.get();
+            ViewControllerTestActivity found = findResumedTestHost(previous);
+            if (found != null) {
+                return found;
             }
             SystemClock.sleep(50L);
         }
         return null;
+    }
+
+    private static ViewControllerTestActivity findResumedTestHost(
+            ViewControllerTestActivity previous) {
+        AtomicReference<ViewControllerTestActivity> found = new AtomicReference<>();
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+            Collection<Activity> resumed = ActivityLifecycleMonitorRegistry.getInstance()
+                    .getActivitiesInStage(Stage.RESUMED);
+            for (Activity activity : resumed) {
+                if (activity instanceof ViewControllerTestActivity && activity != previous) {
+                    found.set((ViewControllerTestActivity) activity);
+                    break;
+                }
+            }
+        });
+        return found.get();
     }
 
     private static void runOnMain(ViewControllerTestActivity activity,

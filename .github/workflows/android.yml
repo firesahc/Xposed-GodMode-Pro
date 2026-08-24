@@ -87,12 +87,16 @@ jobs:
         arch: x86_64
         profile: pixel_6
         disable-animations: true
-        script: |
-          ./gradlew :app:connectedDebugAndroidTest :engine:connectedDebugAndroidTest
-          skipped=$(grep -h -o '<skipped' \
-            app/build/outputs/androidTest-results/connected/*.xml \
-            engine/build/outputs/androidTest-results/connected/*.xml 2>/dev/null | wc -l)
-          echo "Assume-skipped instrumentation cases: $skipped"
-          if [ "$skipped" -gt 0 ]; then
-            echo "::warning::${skipped} instrumentation case(s) were assumption-skipped; IPC bridge paths are NOT verified on CI"
-          fi
+        script: sh scripts/run-connected-instrumentation.sh
+    - name: Upload instrumentation diagnostics
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: instrumentation-diagnostics
+        path: |
+          instrumentation-logcat.txt
+          app/build/outputs/androidTest-results/connected/
+          app/build/reports/androidTests/connected/
+          engine/build/outputs/androidTest-results/connected/
+          engine/build/reports/androidTests/connected/
+        if-no-files-found: warn

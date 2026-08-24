@@ -75,6 +75,7 @@ foreach ($test in $tests) {
         & $Adb shell am force-stop $targetPackage | Out-Null
         & $Adb shell am force-stop $testPackage | Out-Null
         Start-Sleep -Seconds 1
+        Bring-TestHostToForeground $targetPackage $activity $test
 
         $arguments = @(
             "shell", "am", "instrument", "-r", "-w", "-e", "class",
@@ -89,9 +90,6 @@ foreach ($test in $tests) {
         [void]$process.Start()
         $stdout = $process.StandardOutput.ReadToEndAsync()
         $stderr = $process.StandardError.ReadToEndAsync()
-
-        Start-Sleep -Seconds 3
-        Bring-TestHostToForeground $targetPackage $activity $test
 
         if (-not $process.WaitForExit(30000)) {
             $process.Kill()

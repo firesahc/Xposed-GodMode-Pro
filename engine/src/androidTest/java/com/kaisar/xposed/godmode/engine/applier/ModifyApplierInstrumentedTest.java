@@ -28,7 +28,10 @@ import androidx.test.runner.lifecycle.Stage;
 
 import com.kaisar.xposed.godmode.engine.rule.ModifyEffect;
 import com.kaisar.xposed.godmode.engine.rule.RemoveEffect;
+import com.kaisar.xposed.godmode.engine.testing.ActivityTestHost;
 
+import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -43,6 +46,16 @@ import java.util.concurrent.atomic.AtomicReference;
 
 @RunWith(AndroidJUnit4.class)
 public final class ModifyApplierInstrumentedTest {
+
+    @Before
+    public void startTestHost() {
+        ActivityTestHost.requireResumed(ModifyApplierTestActivity.class);
+    }
+
+    @After
+    public void finishTestHost() {
+        ActivityTestHost.finishResumed(ModifyApplierTestActivity.class);
+    }
 
     @Test
     public void removeGoneDoesNotOwnLayoutParams() throws Exception {

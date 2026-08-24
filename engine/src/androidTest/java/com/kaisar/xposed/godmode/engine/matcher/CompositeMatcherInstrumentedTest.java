@@ -24,8 +24,11 @@ import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry;
 import androidx.test.runner.lifecycle.Stage;
 
 import com.kaisar.xposed.godmode.engine.rule.MatchSpec;
+import com.kaisar.xposed.godmode.engine.testing.ActivityTestHost;
 import com.kaisar.xposed.godmode.engine.util.GmConstants;
 
+import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -43,7 +46,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * <p>
  * 覆盖矩阵（每条匹配语义一正一反）：
  * <ul>
- *   <li>resourceId 锚定命中/未命中（framework id "content" → android.R.id.content）</li>
+ *   <li>resourceId 锚定命中/未命中（framework id "android:id/content"）</li>
  *   <li>depth 路径锚定（真实 {@link ViewTraversal#getViewHierarchyDepth} 链）</li>
  *   <li>{@link CompositeMatcher#isStructuralMatch} 全字段 AND（strictParent 双模式）</li>
  *   <li>structuralRepeatable：repeatable + 有效 itemPath 跳过 text/description 检查</li>
@@ -58,13 +61,25 @@ import java.util.concurrent.atomic.AtomicReference;
 @RunWith(AndroidJUnit4.class)
 public final class CompositeMatcherInstrumentedTest {
 
+    @Before
+    public void startTestHost() {
+        ActivityTestHost.requireResumed(CompositeMatcherTestActivity.class);
+    }
+
+    @After
+    public void finishTestHost() {
+        ActivityTestHost.finishResumed(CompositeMatcherTestActivity.class);
+    }
+
     @Test
     public void resourceIdAnchorFindsFrameworkContentViewById() throws Exception {
         withActivity(activity -> {
                 resetHostTree(activity);
                 View decor = activity.getWindow().getDecorView();
 
-                MatchSpec hit = new MatchSpec.Builder().resourceName("content").build();
+                MatchSpec hit = new MatchSpec.Builder()
+                        .resourceName(activity.getResources().getResourceName(android.R.id.content))
+                        .build();
                 assertSame(decor.findViewById(android.R.id.content),
                         new CompositeMatcher().matchView(decor, hit));
 
@@ -75,6 +90,11 @@ public final class CompositeMatcherInstrumentedTest {
                 // Unknown resource name resolves to 0 and yields no anchor.
                 assertNull(new CompositeMatcher().matchView(decor,
                         new MatchSpec.Builder().resourceName("gm_no_such_resource").build()));
+
+                // Rules persist canonical package:type/name resource identifiers;
+                // a bare framework entry name is not an unambiguous anchor.
+                assertNull(new CompositeMatcher().matchView(decor,
+                        new MatchSpec.Builder().resourceName("content").build()));
         });
     }
 
