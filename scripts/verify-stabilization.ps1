@@ -154,8 +154,18 @@ try {
             $failures.Add("RuleMutationRequest still contains remote asset-session semantics")
         }
     }
-    if ((Get-Content -Raw "app/build.gradle") -notmatch "versionCode\s+61000") {
-        $failures.Add("App versionCode no longer matches the 6.10 service identity")
+    # Build identity contract: versionCode must stay derived from the git commit
+    # counter; release naming is gated on an exact v* tag over a clean worktree,
+    # and the in-tree versionName stays a baseline-plus-dev-suffix composition.
+    $buildGradleText = Get-Content -Raw "app/build.gradle"
+    if ($buildGradleText -notmatch "gitCapture\(\['rev-list',\s*'--count'") {
+        $failures.Add("App versionCode must be derived from the git commit count (rev-list --count)")
+    }
+    if ($buildGradleText -notmatch [regex]::Escape("describe', '--exact-match', '--tags', '--match', 'v*")) {
+        $failures.Add("Release builds must be gated on an exact v* tag (git describe --exact-match --tags)")
+    }
+    if ($buildGradleText -notmatch 'versionName\s+"\$\{versionBaseline\}\$\{devSuffix\}"') {
+        $failures.Add("App versionName must stay composed as baseline plus dev suffix slot")
     }
     $snapshotParcel = "app/src/main/java/com/kaisar/xposed/godmode/ipc/contract/RuleSnapshotParcel.java"
     if (!(Test-Path $snapshotParcel)) {

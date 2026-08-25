@@ -3,6 +3,46 @@ plugins {
     alias libs.plugins.navigation.safe.args
 }
 
+// versionCode 与 versionName 职责解耦：前者取全仓库提交计数保证单调递增（免手工维护，
+// 永不与门禁断言脱节）；后者承载发行版语义——HEAD 恰好落在 v* 标签且工作区干净时
+// 视为发行构建（纯净基线），其余一律自动追加 -dev-<时间戳> 标记。
+def gitCapture = { List<String> args ->
+    def output = providers.exec {
+        commandLine('git', *args)
+        ignoreExitValue = true
+    }
+    if (output.result.get().exitValue != 0) {
+        return null
+    }
+    output.standardOutput.asText.get().trim()
+}
+
+def commitCount = gitCapture(['rev-list', '--count', 'HEAD'])?.toInteger()
+if (commitCount == null) {
+    throw new GradleException("Unable to resolve git commit count; build from a full git checkout.")
+}
+
+def versionBaseline = '6.10.0'
+
+def releaseTag = null
+def exactTag = gitCapture(['describe', '--exact-match', '--tags', '--match', 'v*', 'HEAD'])
+if (exactTag != null) {
+    def dirty = gitCapture(['status', '--porcelain'])
+    if (dirty != null && dirty.isEmpty()) {
+        releaseTag = exactTag
+    }
+}
+
+def devSuffix
+if (releaseTag != null) {
+    if (releaseTag != "v${versionBaseline}") {
+        throw new GradleException("Release tag ${releaseTag} does not match in-tree baseline v${versionBaseline}; bump versionName or re-tag.")
+    }
+    devSuffix = ''
+} else {
+    devSuffix = '-dev-' + new Date().format('yyyyMMdd.HHmm')
+}
+
 android {
     namespace 'com.kaisar.xposed.godmode'
     compileSdk 35
@@ -16,8 +56,8 @@ android {
         applicationId "com.viewblocker.jrsen"
         minSdkVersion 29
         targetSdkVersion 35
-        versionCode 61000
-        versionName "6.10.0"
+        versionCode commitCount
+        versionName "${versionBaseline}${devSuffix}"
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
         vectorDrawables.useSupportLibrary = true
     }
