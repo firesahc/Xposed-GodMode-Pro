@@ -65,6 +65,11 @@ android {
         buildConfig = true
         aidl = true
     }
+    applicationVariants.all { variant ->
+        variant.outputs.all { output ->
+            output.outputFileName = "GodMode-Pro-v${variant.versionName}-${variant.buildType.name}.apk"
+        }
+    }
     androidResources {
         additionalParameters("--allow-reserved-package-id", "--package-id", "0x95")
     }

@@ -5,7 +5,12 @@ param(
 
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
-$appApk = Join-Path $root "app/build/outputs/apk/debug/app-debug.apk"
+$debugApkDir = Join-Path $root "app/build/outputs/apk/debug"
+$appApk = Get-ChildItem -LiteralPath $debugApkDir -Filter *.apk |
+    Select-Object -First 1 -ExpandProperty FullName
+if (-not $appApk) {
+    throw "Debug APK not found under $debugApkDir; assemble the app first."
+}
 $testApk = Join-Path $root "app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
 $targetPackage = "com.viewblocker.jrsen"
 $testPackage = "com.viewblocker.jrsen.test"

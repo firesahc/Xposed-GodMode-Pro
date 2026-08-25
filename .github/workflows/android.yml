@@ -43,8 +43,8 @@ jobs:
       run: |
         set -euo pipefail
         apks=(
-          app/build/outputs/apk/debug/app-debug.apk
-          app/build/outputs/apk/release/app-release-unsigned.apk
+          app/build/outputs/apk/debug/GodMode-Pro-v*-debug.apk
+          app/build/outputs/apk/release/GodMode-Pro-*-release*.apk
           app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
           engine/build/outputs/apk/androidTest/debug/engine-debug-androidTest.apk
         )
