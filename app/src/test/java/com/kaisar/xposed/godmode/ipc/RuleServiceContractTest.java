@@ -4,6 +4,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import com.kaisar.xposed.godmode.BuildConfig;
 import com.kaisar.xposed.godmode.ipc.contract.ServiceIdentityParcel;
 
 import org.junit.Test;
@@ -17,7 +18,8 @@ public final class RuleServiceContractTest {
                 "com.kaisar.xposed.godmode.ipc.contract.IRuleService",
                 RuleServiceContract.DESCRIPTOR);
         assertEquals(61000, RuleServiceContract.PROTOCOL_VERSION);
-        assertEquals(61000, RuleServiceContract.BUILD_VERSION_CODE);
+        // 构建身份必须与本构建的 versionCode 动态同源，禁止回退为硬编码常量。
+        assertEquals(BuildConfig.VERSION_CODE, RuleServiceContract.BUILD_VERSION_CODE);
         assertEquals("iruleservice-61000-fd-mutate-v3",
                 RuleServiceContract.CONTRACT_FINGERPRINT);
     }
@@ -25,10 +27,18 @@ public final class RuleServiceContractTest {
     @Test
     public void mixedFdMutateContractIsRejectedBeforeUse() {
         assertTrue(RuleServiceClient.isExpectedIdentity(new ServiceIdentityParcel(
-                61000, 61000, "iruleservice-61000-fd-mutate-v3",
+                61000, BuildConfig.VERSION_CODE, "iruleservice-61000-fd-mutate-v3",
                 RuleServiceContract.READY)));
         assertFalse(RuleServiceClient.isExpectedIdentity(new ServiceIdentityParcel(
-                61000, 61000, "iruleservice-61000-fd-mutate-v2",
+                61000, BuildConfig.VERSION_CODE, "iruleservice-61000-fd-mutate-v2",
+                RuleServiceContract.READY)));
+    }
+
+    @Test
+    public void staleBuildVersionCodeIsRejected() {
+        // system_server 驻留旧版 APK 的服务时，buildVersionCode 必然不等。
+        assertFalse(RuleServiceClient.isExpectedIdentity(new ServiceIdentityParcel(
+                61000, BuildConfig.VERSION_CODE - 1, "iruleservice-61000-fd-mutate-v3",
                 RuleServiceContract.READY)));
     }
 

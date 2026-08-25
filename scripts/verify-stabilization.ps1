@@ -131,7 +131,7 @@ try {
     $contractSource = "app/src/main/java/com/kaisar/xposed/godmode/ipc/RuleServiceContract.java"
     if (!(Test-Path $contractSource) -or
         (Get-Content -Raw $contractSource) -notmatch "PROTOCOL_VERSION\s*=\s*61000" -or
-        (Get-Content -Raw $contractSource) -notmatch "BUILD_VERSION_CODE\s*=\s*61000" -or
+        (Get-Content -Raw $contractSource) -notmatch [regex]::Escape("BUILD_VERSION_CODE = BuildConfig.VERSION_CODE") -or
         (Get-Content -Raw $contractSource) -notmatch "OP_MUTATION\s*=\s*3" -or
         (Get-Content -Raw $contractSource) -notmatch 'CONTRACT_FINGERPRINT' -or
         (Get-Content -Raw $contractSource) -notmatch 'iruleservice-61000-fd-mutate-v3') {

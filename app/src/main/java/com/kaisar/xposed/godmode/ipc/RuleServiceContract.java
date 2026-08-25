@@ -1,12 +1,16 @@
 package com.kaisar.xposed.godmode.ipc;
 
+import com.kaisar.xposed.godmode.BuildConfig;
+
 /** Constants shared by the 6.10 Binder client and system_server service. */
 public final class RuleServiceContract {
     public static final String SERVICE_NAME = "godmode";
     public static final String DESCRIPTOR =
             "com.kaisar.xposed.godmode.ipc.contract.IRuleService";
     public static final int PROTOCOL_VERSION = 61000;
-    public static final int BUILD_VERSION_CODE = 61000;
+    // 构建身份随构建自动取值：客户端与服务端同源同值；仅当 system_server
+    // 驻留旧版 APK 的服务时才会不等，从而正确触发"更新并重启"提示。
+    public static final int BUILD_VERSION_CODE = BuildConfig.VERSION_CODE;
     public static final String CONTRACT_FINGERPRINT =
             "iruleservice-61000-fd-mutate-v3";
     public static final String GLOBAL_SCOPE = "*";
