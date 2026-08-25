@@ -22,7 +22,7 @@ if (commitCount == null) {
     throw new GradleException("Unable to resolve git commit count; build from a full git checkout.")
 }
 
-def versionBaseline = '6.10.0'
+def versionBaseline = '6.10.1'
 
 def releaseTag = null
 def exactTag = gitCapture(['describe', '--exact-match', '--tags', '--match', 'v*', 'HEAD'])
