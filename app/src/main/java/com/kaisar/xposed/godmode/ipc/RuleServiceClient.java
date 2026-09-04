@@ -11,6 +11,7 @@ import android.os.SharedMemory;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.kaisar.xposed.godmode.engine.util.Closeables;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.ipc.contract.ILeaseOwner;
 import com.kaisar.xposed.godmode.ipc.contract.IRuleObserver;
@@ -1138,13 +1139,13 @@ public final class RuleServiceClient {
         }
 
         void closeRead() {
-            try { if (readEnd != null) readEnd.close(); } catch (IOException ignored) { }
+            Closeables.closeQuietly(readEnd);
         }
 
         void closeWrite() {
             ParcelFileDescriptor current = writeEnd;
             writeEnd = null;
-            try { if (current != null) current.close(); } catch (IOException ignored) { }
+            Closeables.closeQuietly(current);
         }
     }
 

@@ -1,5 +1,6 @@
 package com.kaisar.xposed.godmode.ui.glide;
 
+import static com.kaisar.xposed.godmode.engine.util.Closeables.closeQuietly;
 import static com.kaisar.xposed.godmode.engine.util.CommonUtils.recycleNullableBitmap;
 
 import android.content.Context;
@@ -27,7 +28,6 @@ import com.kaisar.xposed.godmode.engine.applier.SafeBitmapDecoder;
 import com.kaisar.xposed.godmode.ipc.RuleServiceClient;
 
 import java.io.FileNotFoundException;
-import java.io.IOException;
 
 @GlideModule
 public class GmGlideModule extends AppGlideModule {
@@ -96,7 +96,7 @@ public class GmGlideModule extends AppGlideModule {
                         callback.onDataReady(SafeBitmapDecoder.decode(pfd.getFileDescriptor()));
                     }
                 } finally {
-                    try { pfd.close(); } catch (IOException ignored) { }
+                    closeQuietly(pfd);
                 }
             } else {
                 callback.onLoadFailed(new FileNotFoundException(mPreview.imagePath));

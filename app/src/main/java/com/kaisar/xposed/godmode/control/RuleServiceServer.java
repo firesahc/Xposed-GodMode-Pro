@@ -16,6 +16,7 @@ import android.system.StructStat;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.kaisar.xposed.godmode.BuildConfig;
+import com.kaisar.xposed.godmode.engine.util.Closeables;
 import com.kaisar.xposed.godmode.engine.util.FileUtils;
 import com.kaisar.xposed.godmode.engine.util.GmConstants;
 import com.kaisar.xposed.godmode.engine.util.Logger;
@@ -557,8 +558,10 @@ public final class RuleServiceServer extends IRuleService.Stub {
             dirFd = null;
             return result;
         } catch (Exception e) {
-            if (fd != null) try { Os.close(fd); } catch (Exception ignored) { }
-            if (dirFd != null) try { Os.close(dirFd); } catch (Exception ignored) { }
+            Closeables.closeQuietly(fd);
+            fd = null;
+            Closeables.closeQuietly(dirFd);
+            dirFd = null;
             mLogger.w("open image failed package=" + packageName
                     + " file=" + file.getName(), e);
             if (e instanceof RemoteException) throw (RemoteException) e;
@@ -626,7 +629,7 @@ public final class RuleServiceServer extends IRuleService.Stub {
                     new File(mRepository.getAppDataDir(packageName)), requestId,
                     packageName, label);
         } catch (Exception e) {
-            closeQuietly(descriptor);
+            Closeables.closeQuietly(descriptor);
             mLogger.w("fd mutate cannot resolve package directory requestId=" + requestId
                     + " package=" + packageName + " image=" + label, e);
             return IncomingImageReader.ReadResult.invalid();
@@ -635,13 +638,8 @@ public final class RuleServiceServer extends IRuleService.Stub {
 
     private static void closeInputFds(RuleMutationRequest request) {
         if (request == null) return;
-        closeQuietly(request.mainImageFd);
-        closeQuietly(request.modifiedImageFd);
-    }
-
-    private static void closeQuietly(ParcelFileDescriptor descriptor) {
-        if (descriptor == null) return;
-        try { descriptor.close(); } catch (IOException ignored) { }
+        Closeables.closeQuietly(request.mainImageFd);
+        Closeables.closeQuietly(request.modifiedImageFd);
     }
 
     private void cleanupStaleIncomingFiles() {
