@@ -1,21 +1,23 @@
 package com.kaisar.xposed.godmode.rule;
 
-import android.os.Parcel;
-import android.os.Parcelable;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 
 import androidx.annotation.Keep;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Created by jrsen on 17-10-14.
+ * <p>
+ * Wire 说明：本类是内存 Map 容器，wire 格式只有扁平 JSON（见
+ * {@code RuleRecordTypeAdapter}），故意不实现 Parcelable——6.10 跨进程读写
+ * 全走只读 SharedMemory 快照 + JSON，不再有 AppRules / ActRules 的 parcel 通道
+ *（旧 AIDL 已删除）。DO NOT 加回 Parcelable 实现。
  */
 @Keep
-public final class ActRules extends ConcurrentHashMap<String, List<RuleRecord>> implements Parcelable {
+public final class ActRules extends ConcurrentHashMap<String, List<RuleRecord>> {
 
     private static final String TAG = "ActRules";
 
@@ -48,39 +50,5 @@ public final class ActRules extends ConcurrentHashMap<String, List<RuleRecord>> 
             put(entry.getKey(), entry.getValue());
         }
     }
-
-    protected ActRules(Parcel in) {
-        HashMap<String, List<RuleRecord>> temp = new HashMap<>();
-        in.readMap(temp, ActRules.class.getClassLoader());
-        for (Map.Entry<String, List<RuleRecord>> entry : temp.entrySet()) {
-            if (entry.getKey() != null && entry.getValue() != null) {
-                super.put(entry.getKey(), entry.getValue());
-            } else {
-                Logger.w(TAG, "Skipping null entry during Parcel deserialization");
-            }
-        }
-    }
-
-    @Override
-    public void writeToParcel(Parcel dest, int flags) {
-        dest.writeMap(this);
-    }
-
-    @Override
-    public int describeContents() {
-        return 0;
-    }
-
-    public static final Creator<ActRules> CREATOR = new Creator<ActRules>() {
-        @Override
-        public ActRules createFromParcel(Parcel in) {
-            return new ActRules(in);
-        }
-
-        @Override
-        public ActRules[] newArray(int size) {
-            return new ActRules[size];
-        }
-    };
 
 }

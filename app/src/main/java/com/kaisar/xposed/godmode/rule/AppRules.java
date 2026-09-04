@@ -1,54 +1,20 @@
 package com.kaisar.xposed.godmode.rule;
 
-import android.os.Parcel;
-import android.os.Parcelable;
-
 import androidx.annotation.Keep;
 
 import java.util.HashMap;
-import java.util.List;
 
 /**
  * Created by jrsen on 17-10-14.
+ * <p>
+ * Wire 说明：本类是内存 Map 容器，wire 格式只有扁平 JSON（见
+ * {@code RuleRecordTypeAdapter}），故意不实现 Parcelable——6.10 跨进程读写
+ * 全走只读 SharedMemory 快照 + JSON，不再有 AppRules / ActRules 的 parcel 通道
+ *（旧 AIDL 已删除）。DO NOT 加回 Parcelable 实现。
  */
 @Keep
-public final class AppRules extends HashMap<String, ActRules> implements Parcelable {
+public final class AppRules extends HashMap<String, ActRules> {
 
     public AppRules() {
     }
-
-
-    protected AppRules(Parcel in) {
-        HashMap<?, ?> hashMap = in.readHashMap(getClass().getClassLoader());
-        for (Entry<?, ?> entry : hashMap.entrySet()) {
-            String key = (String) entry.getKey();
-            // Parcel.readHashMap 返回原始类型，类型擦除导致 unchecked cast
-            @SuppressWarnings("unchecked") HashMap<String, List<RuleRecord>> value = (HashMap<String, List<RuleRecord>>) entry.getValue();
-            ActRules actRules = new ActRules(value.size());
-            actRules.putAll(value);
-            put(key, actRules);
-        }
-    }
-
-    @Override
-    public void writeToParcel(Parcel dest, int flags) {
-        dest.writeMap(this);
-    }
-
-    @Override
-    public int describeContents() {
-        return 0;
-    }
-
-    public static final Creator<AppRules> CREATOR = new Creator<AppRules>() {
-        @Override
-        public AppRules createFromParcel(Parcel in) {
-            return new AppRules(in);
-        }
-
-        @Override
-        public AppRules[] newArray(int size) {
-            return new AppRules[size];
-        }
-    };
 }
