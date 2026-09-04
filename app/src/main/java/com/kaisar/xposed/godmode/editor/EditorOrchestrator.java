@@ -80,6 +80,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     final PropertyEditorPanel mPropertyEditor;
     private final SeekBarHandler mSeekBarHandler;
     private WeakReference<Activity> mCurrentActivityRef = new WeakReference<>(null);
+    private long mSessionGeneration;
 
     // =========================================================================
     // 节点选择面板回调（NodeSelectorPanel.Callbacks）    // =========================================================================
@@ -231,12 +232,23 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
 
     public void setActivity(final Activity a) {
         Activity current = mCurrentActivityRef.get();
-        if (current != null && current != a && mNodePanel.isKeySelecting()) {
+        if (current != a) {
+            mSessionGeneration++;
+        }
+        if (current != null && current != a) {
             mPropertyEditor.abandon();
             dismissNodeSelectPanel();
         }
         mCurrentActivityRef = new WeakReference<>(a);
         mUndoController.bindPackage(a == null ? null : a.getPackageName());
+    }
+
+    private boolean isCurrentActivitySession(Activity activity, long sessionGeneration) {
+        return activity != null
+                && mCurrentActivityRef.get() == activity
+                && mSessionGeneration == sessionGeneration
+                && !activity.isFinishing()
+                && !activity.isDestroyed();
     }
 
     public void setDisplay(Boolean display) {
@@ -257,6 +269,18 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
         } else {
             dismissNodeSelectPanel();
         }
+    }
+
+    /** Shows or hides the editor only when the posted callback still belongs to this Activity. */
+    public void setDisplayForActivity(Activity activity, Boolean display) {
+        if (activity == null || activity.isFinishing() || activity.isDestroyed()) return;
+        Activity current = mCurrentActivityRef.get();
+        if (current == null) {
+            setActivity(activity);
+        } else if (current != activity) {
+            return;
+        }
+        setDisplay(display);
     }
 
     // =========================================================================
@@ -312,12 +336,19 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
 
     private void dismissNodeSelectPanel() {
         Logger.i(KEY_EVENT_TAG, "dismissNodeSelectPanel");
-        if (mPropertyEditor.isSaving()) return;
         mPropertyEditor.cancel();
+        if (mPropertyEditor.isSaving()) return;
         mPreviewHandler.restorePreview(null, null, null);
         mInteractionMode = EditorInteractionMode.INITIAL;
         mNodePanel.setModifySessionLocked(false);
         mNodePanel.dismiss();
+    }
+
+    /** Invalidates pending editor work when the tracked Activity is destroyed. */
+    public void onActivityDestroyed(Activity activity) {
+        if (activity != null && mCurrentActivityRef.get() == activity) {
+            setActivity(null);
+        }
     }
 
     // =========================================================================
@@ -351,6 +382,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
                 return;
             }
             final long mutationScope = startedMutationScope;
+            final long sessionGeneration = mSessionGeneration;
 
             BlockHandler.execute(activity, view, container, snapshot, blockedViewIndex,
                     new BlockHandler.OnBlockListener() {
@@ -358,14 +390,15 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
                         public void onCommitted(int index, UndoStateParcel undoState) {
                             boolean accepted = mUndoController.completeForwardMutation(
                                     mutationScope, undoState);
-                            if (accepted && mCurrentActivityRef.get() == activity) {
+                            if (accepted && isCurrentActivitySession(activity, sessionGeneration)) {
                                 mNodePanel.updateAfterRemove(index);
                             }
                         }
 
                         @Override
                         public void onError(String message) {
-                            if (mUndoController.failForwardMutation(mutationScope)) {
+                            if (mUndoController.failForwardMutation(mutationScope)
+                                    && isCurrentActivitySession(activity, sessionGeneration)) {
                                 Toast.makeText(activity,
                                         GmResources.getString(R.string.block_fail, message),
                                         Toast.LENGTH_SHORT).show();
@@ -383,7 +416,9 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     }
 
     private void requestUndo(Activity activity) {
+        final long sessionGeneration = mSessionGeneration;
         refreshUndoState(activity, () -> {
+            if (!isCurrentActivitySession(activity, sessionGeneration)) return;
             EditorUndoController.UndoAttempt attempt = mUndoController.beginUndo();
             if (attempt == null) return;
             final String packageName = activity.getPackageName();
@@ -396,12 +431,13 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
                 }
                 final UndoResultParcel finalResult = result;
                 activity.runOnUiThread(() -> finishUndo(packageName, activity,
-                        attempt.scopeGeneration, finalResult));
+                        sessionGeneration, attempt.scopeGeneration, finalResult));
             });
         });
     }
 
     private void refreshUndoState(Activity activity, Runnable onComplete) {
+        final long sessionGeneration = mSessionGeneration;
         final String packageName = activity.getPackageName();
         mUndoController.bindPackage(packageName);
         final long refreshScope = mUndoController.beginRefresh();
@@ -415,28 +451,31 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
             }
             final UndoStateParcel finalState = state;
             activity.runOnUiThread(() -> {
-                if (mUndoController.completeRefresh(refreshScope, finalState)
-                        && onComplete != null) {
+                boolean accepted = mUndoController.completeRefresh(refreshScope, finalState);
+                if (accepted && onComplete != null
+                        && isCurrentActivitySession(activity, sessionGeneration)) {
                     onComplete.run();
                 }
             });
         });
     }
 
-    private void finishUndo(String packageName, Activity activity, long undoScope,
-            UndoResultParcel result) {
+    private void finishUndo(String packageName, Activity activity, long sessionGeneration,
+            long undoScope, UndoResultParcel result) {
         if (!mUndoController.isBoundTo(packageName)) return;
         boolean committed = result != null
                 && (result.status == RuleServiceContract.RESULT_COMMITTED
                 || result.status == RuleServiceContract.RESULT_ALREADY_UNDONE);
         if (committed) {
             if (!mUndoController.completeUndo(undoScope, result.undoState)) return;
+            if (!isCurrentActivitySession(activity, sessionGeneration)) return;
             Toast.makeText(activity, GmResources.getString(R.string.toast_undo_succeeded),
                     Toast.LENGTH_SHORT).show();
             return;
         }
         if (!mUndoController.failUndo(undoScope,
                 result == null ? null : result.undoState)) return;
+        if (!isCurrentActivitySession(activity, sessionGeneration)) return;
         String reason = result == null ? null : result.message;
         Toast.makeText(activity, GmResources.getString(R.string.toast_undo_failed_format,
                         reason == null

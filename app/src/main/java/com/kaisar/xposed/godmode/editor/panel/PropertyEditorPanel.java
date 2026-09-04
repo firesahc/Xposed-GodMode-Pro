@@ -70,6 +70,7 @@ public class PropertyEditorPanel {
     private Bitmap mPendingImageBitmap;
     private Bitmap mInFlightImageBitmap;
     private boolean mSaving;
+    private boolean mDismissPending;
     private boolean mMutationReportedInFlight;
     private long mMutationScope = -1L;
     private long mGeneration;
@@ -137,6 +138,7 @@ public class PropertyEditorPanel {
 
     private boolean mActivityResultHooked;
     private WeakReference<Activity> mEditingActivity = new WeakReference<>(null);
+    private WeakReference<View> mEditingRoot = new WeakReference<>(null);
     private long mImageRequestGeneration = -1L;
     private final IRuleEditor mRuleEditor;
     private final SnapshotProvider mSnapshotProvider;
@@ -174,9 +176,12 @@ public class PropertyEditorPanel {
             mOriginalRule = RuleRecordFactory.makeModifyRule(targetView, mSnapshot,
                     infoFlowMode);
             mSaving = false;
+            mDismissPending = false;
             mPreviewing = false;
             mGeneration++;
             mEditingActivity = new WeakReference<>(activity);
+            mEditingRoot = new WeakReference<>(activity.getWindow() == null
+                    ? null : activity.getWindow().getDecorView());
 
             ModuleResources.injectInto(activity.getResources());
             LayoutInflater inflater = LayoutInflater.from(activity);
@@ -198,6 +203,8 @@ public class PropertyEditorPanel {
             Logger.e(MODIFY_TAG, "showModifyPanel fail", e);
             mPanelView = null;
             mTargetView = null;
+            mEditingActivity = new WeakReference<>(null);
+            mEditingRoot = new WeakReference<>(null);
             mOriginalRule = null;
             mSnapshot = null;
             mGeneration++;
@@ -208,6 +215,10 @@ public class PropertyEditorPanel {
 
     /** Dismiss the property editor panel. */
     public void dismiss() {
+        if (mSaving) {
+            mDismissPending = true;
+            return;
+        }
         if (mPanelView == null) return;
         reportMutationFailed();
         View panel = mPanelView;
@@ -215,12 +226,14 @@ public class PropertyEditorPanel {
         mTargetView = null;
         mPendingImageView = null;
         mEditingActivity = new WeakReference<>(null);
+        mEditingRoot = new WeakReference<>(null);
         mOriginalImageBitmap = null;
         mModifyingViewDepth = null;
         mModifyingViewActClass = null;
         mSnapshot = null;
         mOriginalRule = null;
         mSaving = false;
+        mDismissPending = false;
         mPreviewing = false;
         mGeneration++;
         mSeekLayoutPending = false;
@@ -239,7 +252,10 @@ public class PropertyEditorPanel {
 
     /** Handle Activity onActivityResult for image picker callback. */
     public void cancel() {
-        if (mSaving) return;
+        if (mSaving) {
+            mDismissPending = true;
+            return;
+        }
         revertViewState();
         CommonUtils.recycleNullableBitmap(mPendingImageBitmap);
         mPendingImageBitmap = null;
@@ -250,6 +266,7 @@ public class PropertyEditorPanel {
     public void abandon() {
         mGeneration++;
         mSaving = false;
+        mDismissPending = false;
         dismiss();
     }
 
@@ -472,9 +489,14 @@ public class PropertyEditorPanel {
     /** 验证目标视图是否仍然是修改时选中的那个视图（通过层级深度和 Activity 身份校验）*/
     private boolean verifyViewIdentity(View view) {
         if (!view.isAttachedToWindow()) return false;
+        Activity editingActivity = mEditingActivity.get();
+        View editingRoot = mEditingRoot.get();
+        if (editingActivity == null || editingActivity.isFinishing()
+                || editingActivity.isDestroyed() || editingRoot == null
+                || view.getRootView() != editingRoot) return false;
         if (mModifyingViewDepth == null || mModifyingViewActClass == null) return true;
         Activity currentAct = ViewUtils.getAttachedActivityFromView(view);
-        if (currentAct == null) return false;
+        if (currentAct == null || currentAct != editingActivity) return false;
         if (!mModifyingViewActClass.equals(currentAct.getComponentName().getClassName())) return false;
         int[] currentDepth = ViewUtils.getViewHierarchyDepth(view);
         return java.util.Arrays.equals(mModifyingViewDepth, currentDepth);
@@ -637,6 +659,7 @@ public class PropertyEditorPanel {
         notifySession();
         Toast.makeText(activity, GmResources.getString(
                 R.string.toast_modifications_save_failed_format, reason), Toast.LENGTH_SHORT).show();
+        if (mDismissPending) dismiss();
     }
 
     private void releaseInFlightImage(Bitmap image) {
@@ -652,6 +675,7 @@ public class PropertyEditorPanel {
             reportMutationFailed();
             setPanelControlsEnabled(true);
             notifySession();
+            if (mDismissPending) dismiss();
         }
     }
 
