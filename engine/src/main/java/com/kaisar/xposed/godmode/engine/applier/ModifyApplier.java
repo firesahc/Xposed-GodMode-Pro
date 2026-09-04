@@ -233,6 +233,14 @@ public final class ModifyApplier implements RuleApplier<ModifyEffect> {
         }
     }
 
+    /**
+     * Modify 效果的运行时基线权威 — 接管前宿主属性快照 + 已写入值 + 绑定代次，
+     * 撤销时按属性 compare-before-restore。
+     * <p>
+     * 与 {@code RemoveApplier} 的极简基线各管一类效果，与
+     * {@code ViewController.AppliedTarget}（仅 WeakReference 调度索引）正交。
+     * DO NOT 合并三者；DO NOT 把本类当 UI 展示快照（那是 {@code ViewSnapshot}）。
+     */
     private static final class AppliedState {
         final ActionSnapshot action;
         final long bindingEpoch;

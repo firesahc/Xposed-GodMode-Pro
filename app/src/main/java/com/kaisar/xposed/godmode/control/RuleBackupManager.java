@@ -371,7 +371,9 @@ public final class RuleBackupManager {
             return null;
         }
         try {
-            return SafeBitmapDecoder.decodeFile(file.getPath());
+            // 与 IPC 写入口（IncomingImageReader）同标准：超限拒绝而非降采样放行；
+            // 失败返回 null，调用方按既有按条目拒绝通道处理。
+            return SafeBitmapDecoder.decodeFileStrict(file.getPath());
         } catch (RuntimeException e) {
             return null;
         }
