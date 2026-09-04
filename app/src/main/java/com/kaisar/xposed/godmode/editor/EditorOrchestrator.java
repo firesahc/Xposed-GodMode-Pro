@@ -81,6 +81,8 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     private final SeekBarHandler mSeekBarHandler;
     private WeakReference<Activity> mCurrentActivityRef = new WeakReference<>(null);
     private long mSessionGeneration;
+    /** A whole-editor close requested while the property editor is saving. */
+    private boolean mNodePanelDismissPending;
 
     // =========================================================================
     // 节点选择面板回调（NodeSelectorPanel.Callbacks）    // =========================================================================
@@ -152,8 +154,12 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
         this.mPropertyEditor = new PropertyEditorPanel(ruleEditor,
                 (active, previewing, previewToggleEnabled) -> {
                     mNodePanel.setModifySessionLocked(active);
+                    if (!active) {
+                        onPropertyEditorSessionClosed();
+                    }
                     mNodePanel.setModifyPreviewing(previewing);
                     mNodePanel.setModifyPreviewEnabled(previewToggleEnabled);
+                    if (!active) return;
                     MaskView mask = mNodePanel.getMaskView();
                     if (mask == null) return;
                     View target = getModifyTargetView();
@@ -337,7 +343,29 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     private void dismissNodeSelectPanel() {
         Logger.i(KEY_EVENT_TAG, "dismissNodeSelectPanel");
         mPropertyEditor.cancel();
-        if (mPropertyEditor.isSaving()) return;
+        if (mPropertyEditor.isSaving()) {
+            mNodePanelDismissPending = true;
+            return;
+        }
+        mNodePanelDismissPending = false;
+        dismissNodePanelNow();
+    }
+
+    private void onPropertyEditorSessionClosed() {
+        if (mNodePanelDismissPending) {
+            mNodePanelDismissPending = false;
+            dismissNodePanelNow();
+            return;
+        }
+        mInteractionMode = EditorInteractionMode.MODIFY;
+        mNodePanel.restoreModifyMode();
+        mNodePanel.setModifySessionLocked(false);
+        mNodePanel.setModifyPreviewing(false);
+        mNodePanel.setModifyPreviewEnabled(false);
+        mNodePanel.refreshMaskToSelection();
+    }
+
+    private void dismissNodePanelNow() {
         mPreviewHandler.restorePreview(null, null, null);
         mInteractionMode = EditorInteractionMode.INITIAL;
         mNodePanel.setModifySessionLocked(false);
@@ -369,6 +397,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
             if (maskView != null) maskView.updateOverlayBounds(new Rect());
 
             final int blockedViewIndex = mNodePanel.getCurrentIndex();
+            final long selectionRevision = mNodePanel.getSelectionRevision();
             final Bitmap snapshot = captureWithoutEditorOverlays(view);
             if (snapshot == null) {
                 throw new IllegalStateException("snapshot failed");
@@ -391,7 +420,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
                             boolean accepted = mUndoController.completeForwardMutation(
                                     mutationScope, undoState);
                             if (accepted && isCurrentActivitySession(activity, sessionGeneration)) {
-                                mNodePanel.updateAfterRemove(index);
+                                mNodePanel.applyRemoveProjection(view, index, selectionRevision);
                             }
                         }
 

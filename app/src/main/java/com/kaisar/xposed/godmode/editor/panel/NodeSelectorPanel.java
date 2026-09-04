@@ -1,6 +1,7 @@
 package com.kaisar.xposed.godmode.editor.panel;
 
 import android.app.Activity;
+import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
 import android.util.DisplayMetrics;
 import android.view.LayoutInflater;
@@ -19,6 +20,7 @@ import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.util.ModuleResources;
 import com.kaisar.xposed.godmode.editor.overlay.MaskView;
 import com.kaisar.xposed.godmode.util.GmResources;
+import com.kaisar.xposed.godmode.util.ViewUtils;
 
 import java.lang.ref.WeakReference;
 import java.util.List;
@@ -52,6 +54,8 @@ public class NodeSelectorPanel {
 
     private View mPanelView;
     private int mCurrentIndex;
+    /** Monotonic revision of explicit user selection changes in this panel. */
+    private long mSelectionRevision;
     private List<WeakReference<View>> mViewNodes;
     private SeekBar mSeekBar;
     private MaskView mMaskView;
@@ -84,6 +88,7 @@ public class NodeSelectorPanel {
             SeekBar.OnSeekBarChangeListener seekBarListener) {
         mViewNodes = viewNodes;
         mCurrentIndex = 0;
+        mSelectionRevision = 0L;
         mHasUserSelection = false;
         mNavigationPaneExpanded = false;
         try {
@@ -207,7 +212,7 @@ public class NodeSelectorPanel {
             boolean wasVisible = removeMenu.getVisibility() == View.VISIBLE;
             removeMenu.setVisibility(wasVisible ? View.GONE : View.VISIBLE);
             modifyMenu.setVisibility(View.GONE);
-            modifyModeBtn.setEnabled(wasVisible);
+            syncModeControls();
             callbacks.onModeChanged(wasVisible ? EditorInteractionMode.INITIAL : EditorInteractionMode.REMOVE);
         });
 
@@ -216,9 +221,11 @@ public class NodeSelectorPanel {
             boolean wasVisible = modifyMenu.getVisibility() == View.VISIBLE;
             modifyMenu.setVisibility(wasVisible ? View.GONE : View.VISIBLE);
             removeMenu.setVisibility(View.GONE);
-            removeModeBtn.setEnabled(wasVisible);
+            syncModeControls();
             callbacks.onModeChanged(wasVisible ? EditorInteractionMode.INITIAL : EditorInteractionMode.MODIFY);
         });
+
+        syncModeControls();
 
         // 面板位置切换 — 在贴边与向左让位（右侧空出约 1/6 屏宽）两种状态间切换
         View exchangeBtn = mPanelView.findViewById(R.id.exchange);
@@ -264,6 +271,7 @@ public class NodeSelectorPanel {
 
     public void setCurrentIndex(int index) {
         if (mViewNodes != null && index >= 0 && index < mViewNodes.size()) {
+            if (mCurrentIndex != index) mSelectionRevision++;
             mCurrentIndex = index;
             mSeekBar.setProgress(index);
         }
@@ -277,6 +285,7 @@ public class NodeSelectorPanel {
     }
 
     public int getCurrentIndex() { return mCurrentIndex; }
+    public long getSelectionRevision() { return mSelectionRevision; }
     public boolean isShowing() { return mPanelView != null; }
 
     /** Lock target navigation and non-edit actions while a property edit is active. */
@@ -294,6 +303,34 @@ public class NodeSelectorPanel {
         setEnabled(R.id.modify_preview, locked);
         mSeekBar.setEnabled(!locked);
         setEnabled(R.id.info_flow_mode_btn, !locked);
+        syncModeControls();
+    }
+
+    /**
+     * Restores the modify-mode toolbar after the property editor session ends.
+     * The global editor mode and orchestrator state are owned by EditorOrchestrator;
+     * this method only restores this panel's menu and control presentation to MODIFY
+     * (modify expanded, remove collapsed) so save/cancel keeps the modify mode.
+     */
+    public void restoreModifyMode() {
+        mModifyPreviewing = false;
+        if (mPanelView == null) return;
+        View removeMenu = mPanelView.findViewById(R.id.remove_menu);
+        View modifyMenu = mPanelView.findViewById(R.id.modify_menu);
+        if (removeMenu != null) removeMenu.setVisibility(View.GONE);
+        if (modifyMenu != null) modifyMenu.setVisibility(View.VISIBLE);
+        syncModeControls();
+    }
+
+    /** Re-highlights the currently selected view. No-op when detached. */
+    public void refreshMaskToSelection() {
+        if (mPanelView == null || mMaskView == null) return;
+        View selected = getSelectedView();
+        if (selected == null || !selected.isAttachedToWindow()) {
+            mMaskView.updateOverlayBounds(new Rect());
+            return;
+        }
+        mMaskView.updateOverlayBounds(ViewUtils.getLocationInWindow(selected));
     }
 
     public boolean isModifySessionLocked() { return mModifySessionLocked; }
@@ -341,6 +378,7 @@ public class NodeSelectorPanel {
         if (mViewNodes == null || mSeekBar == null) return;
         int next = mCurrentIndex + delta;
         if (next < 0 || next >= mViewNodes.size()) return;
+        if (mCurrentIndex != next) mSelectionRevision++;
         mCurrentIndex = next;
         mSeekBar.setProgress(next);
     }
@@ -348,23 +386,93 @@ public class NodeSelectorPanel {
     public void navigateNext() { navigate(+1); }
     public void navigatePrevious() { navigate(-1); }
 
-    /** 移除后更新节点列表和 SeekBar。 */
-    public void updateAfterRemove(int removedIndex) {
+    /** Records a user-driven SeekBar selection after the silent index update. */
+    public void markUserSelectionChanged() {
+        mSelectionRevision++;
+    }
+
+    /**
+     * Projects a committed removal onto the node list without overwriting a newer user
+     * selection made while the animation/IPC transaction was in flight.
+     */
+    public void applyRemoveProjection(View removedView, int fallbackIndex,
+            long expectedSelectionRevision) {
         if (mModifySessionLocked) return;
         if (mViewNodes == null || mSeekBar == null) return;
-        if (removedIndex >= 0 && removedIndex < mViewNodes.size()) {
+
+        View selectedBefore = getSelectedView();
+        int removedIndex = findViewIndex(removedView);
+        if (removedIndex < 0 && removedView == null
+                && fallbackIndex >= 0 && fallbackIndex < mViewNodes.size()) {
+            removedIndex = fallbackIndex;
+        }
+        if (removedIndex >= 0) {
             mViewNodes.remove(removedIndex);
         }
         mSeekBar.setMax(Math.max(mViewNodes.size() - 1, 0));
-        mCurrentIndex = Math.min(removedIndex, Math.max(mViewNodes.size() - 1, 0));
-        if (mCurrentIndex >= 0) {
-            mSeekBar.setProgress(mCurrentIndex);
+
+        if (mViewNodes.isEmpty()) {
+            mCurrentIndex = 0;
+            return;
         }
+
+        boolean shouldMoveSelection = removedIndex >= 0
+                && (selectedBefore == removedView
+                || mSelectionRevision == expectedSelectionRevision);
+        if (shouldMoveSelection) {
+            int nextIndex = removedIndex >= 0
+                    ? Math.min(removedIndex, mViewNodes.size() - 1)
+                    : Math.min(mCurrentIndex, mViewNodes.size() - 1);
+            mCurrentIndex = Math.max(nextIndex, 0);
+            mSeekBar.setProgress(mCurrentIndex);
+            return;
+        }
+
+        // Preserve a newer user selection by its object identity. Never reuse the stale index.
+        int preservedIndex = findViewIndex(selectedBefore);
+        if (preservedIndex >= 0) {
+            mCurrentIndex = preservedIndex;
+            // Keep the SeekBar value in sync without generating a redundant mask update.
+            if (mSeekBar.getProgress() != preservedIndex) {
+                mSeekBar.setProgress(preservedIndex);
+            }
+        } else {
+            // The selected View was already detached/collected. Do not guess a replacement.
+            mCurrentIndex = Math.min(mCurrentIndex, mViewNodes.size() - 1);
+        }
+    }
+
+    private int findViewIndex(View target) {
+        if (target == null || mViewNodes == null) return -1;
+        for (int i = 0; i < mViewNodes.size(); i++) {
+            WeakReference<View> ref = mViewNodes.get(i);
+            if (ref != null && ref.get() == target) return i;
+        }
+        return -1;
     }
 
     private void setEnabled(int id, boolean enabled) {
         View view = mPanelView.findViewById(id);
         if (view != null) view.setEnabled(enabled);
+    }
+
+    /** Keeps operation-mode buttons consistent with menu visibility and session lock. */
+    private void syncModeControls() {
+        if (mPanelView == null) return;
+        View removeMenu = mPanelView.findViewById(R.id.remove_menu);
+        View modifyMenu = mPanelView.findViewById(R.id.modify_menu);
+        View removeModeBtn = mPanelView.findViewById(R.id.remove_mode_btn);
+        View modifyModeBtn = mPanelView.findViewById(R.id.modify_mode_btn);
+        if (removeModeBtn == null || modifyModeBtn == null) return;
+        if (mModifySessionLocked) {
+            removeModeBtn.setEnabled(false);
+            modifyModeBtn.setEnabled(false);
+            return;
+        }
+        boolean removeVisible = removeMenu != null && removeMenu.getVisibility() == View.VISIBLE;
+        boolean modifyVisible = modifyMenu != null && modifyMenu.getVisibility() == View.VISIBLE;
+        removeModeBtn.setEnabled(!modifyVisible);
+        modifyModeBtn.setEnabled(!removeVisible);
     }
 
     private static int dpToPx(DisplayMetrics metrics, int dp) {

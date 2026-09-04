@@ -36,7 +36,10 @@ public final class SeekBarHandler implements SeekBar.OnSeekBarChangeListener {
         MaskView maskView = mNodePanel.getMaskView();
         if (viewNodes != null && progress < viewNodes.size()) {
             mNodePanel.setCurrentIndexSilent(progress);
-            if (fromUser) mNodePanel.setHasUserSelection(true);
+            if (fromUser) {
+                mNodePanel.setHasUserSelection(true);
+                mNodePanel.markUserSelectionChanged();
+            }
             View view = viewNodes.get(mNodePanel.getCurrentIndex()).get();
             if (view != null && maskView != null) {
                 if (ViewTraversal.isInRecyclerView(view)) {
