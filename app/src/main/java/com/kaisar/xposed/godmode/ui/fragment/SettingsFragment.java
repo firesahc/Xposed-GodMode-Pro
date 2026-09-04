@@ -20,6 +20,7 @@ import androidx.preference.SwitchPreferenceCompat;
 
 import com.google.android.material.snackbar.Snackbar;
 import com.kaisar.xposed.godmode.R;
+import com.kaisar.xposed.godmode.editor.toolbar.ToolbarPrefsManager;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.ipc.RuleServiceClient;
 import com.kaisar.xposed.godmode.ipc.RuleServiceContract;
@@ -30,7 +31,6 @@ import com.kaisar.xposed.godmode.rule.RuleRecord;
 import com.kaisar.xposed.godmode.util.AppInfoHelper;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -326,7 +326,7 @@ public final class SettingsFragment extends PreferenceFragmentCompat implements
         String current = RuleServiceClient.getDefault().getToolbarHiddenItems(
                 RuleServiceContract.GLOBAL_SCOPE);
         if (current == null) current = "";
-        Set<String> hidden = parseHiddenItems(current);
+        Set<String> hidden = ToolbarPrefsManager.parseHiddenItems(current);
         if (!enabled) {
             hidden.add(key);
         } else {
@@ -358,7 +358,7 @@ public final class SettingsFragment extends PreferenceFragmentCompat implements
         } else if (authoritative != null) {
             legacy.edit().clear().apply();
         }
-        return parseHiddenItems(authoritative);
+        return ToolbarPrefsManager.parseHiddenItems(authoritative);
     }
 
     private static String readLegacyToolbarValue(SharedPreferences sp) {
@@ -372,16 +372,6 @@ public final class SettingsFragment extends PreferenceFragmentCompat implements
             return (String) raw;
         }
         return "";
-    }
-
-    private static Set<String> parseHiddenItems(String value) {
-        Set<String> result = new HashSet<>();
-        if (!TextUtils.isEmpty(value)) {
-            for (String item : value.split(",")) {
-                if (!TextUtils.isEmpty(item)) result.add(item);
-            }
-        }
-        return result;
     }
 
     private void showProgressSnackbar(String message) {
