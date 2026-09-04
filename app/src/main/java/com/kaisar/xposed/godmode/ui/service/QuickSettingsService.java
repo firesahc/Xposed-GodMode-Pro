@@ -14,6 +14,7 @@ import androidx.preference.PreferenceManager;
 import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.ipc.RuleServiceClient;
 import com.kaisar.xposed.godmode.ui.EditModeController;
+import com.kaisar.xposed.godmode.ui.EditModeSnapshot;
 import com.kaisar.xposed.godmode.util.TaskExecutor;
 
 public final class QuickSettingsService extends TileService implements SharedPreferences.OnSharedPreferenceChangeListener {
@@ -55,15 +56,16 @@ public final class QuickSettingsService extends TileService implements SharedPre
 
     @Override
     public void onClick() {
-        if (!EditModeController.isMasterEnabled(this, R.string.pref_key_master)) {
+        EditModeSnapshot snapshot = EditModeSnapshot.capture(this);
+        if (!snapshot.master()) {
             Toast.makeText(this, R.string.master_not_enabled, Toast.LENGTH_SHORT).show();
             return;
         }
-        if (EditModeController.isEditModeClosing(this)) {
+        if (snapshot.closing()) {
             Toast.makeText(this, R.string.edit_mode_closing, Toast.LENGTH_SHORT).show();
             return;
         }
-        boolean current = EditModeController.isEditModeEnabled(this);
+        boolean current = snapshot.enabled();
         TaskExecutor.executeIo(() -> {
             boolean committed = EditModeController.setEditModeEnabled(this, !current);
             mMainHandler.post(() -> {
@@ -82,11 +84,9 @@ public final class QuickSettingsService extends TileService implements SharedPre
     private void updateTile() {
         Tile tile = getQsTile();
         if (tile == null) return;
-        RuleServiceClient client = RuleServiceClient.getDefault();
-        boolean available = EditModeController.isMasterEnabled(this, R.string.pref_key_master)
-                && client.hasReadyConnection() && client.isEditStateKnown()
-                && !client.isEditModeClosing();
-        boolean active = available && EditModeController.isEditModeEnabled(this);
+        EditModeSnapshot snapshot = EditModeSnapshot.capture(this);
+        boolean available = snapshot.available();
+        boolean active = snapshot.active();
         int iconRes = active ? R.drawable.ic_angel_normal : R.drawable.ic_angel_disable;
         tile.setIcon(Icon.createWithResource(this, iconRes));
         tile.setState(!available ? Tile.STATE_UNAVAILABLE

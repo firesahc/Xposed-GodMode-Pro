@@ -21,6 +21,7 @@ import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.engine.core.PlatformCapabilities;
 import com.kaisar.xposed.godmode.ipc.RuleServiceClient;
 import com.kaisar.xposed.godmode.ui.EditModeController;
+import com.kaisar.xposed.godmode.ui.EditModeSnapshot;
 import com.kaisar.xposed.godmode.ui.SettingsActivity;
 import com.kaisar.xposed.godmode.util.BitmapUtils;
 import com.kaisar.xposed.godmode.util.TaskExecutor;
@@ -35,7 +36,7 @@ public final class NotificationService extends Service implements SharedPreferen
                                                         long connectionEpoch) {
                     mMainHandler.post(() -> {
                         RuleServiceClient client = RuleServiceClient.getDefault();
-                        if (isMasterEnabled()
+                        if (EditModeSnapshot.capture(NotificationService.this).master()
                                 && client.isCurrentEditEvent(connectionEpoch, editRevision)) {
                             showNotification(enabled);
                         }
@@ -47,7 +48,7 @@ public final class NotificationService extends Service implements SharedPreferen
             };
     private final Runnable mBinderDeathListener = () ->
             mMainHandler.post(() -> {
-                if (isMasterEnabled()) showNotification(false);
+                if (EditModeSnapshot.capture(this).master()) showNotification(false);
             });
 
     @Override
@@ -62,7 +63,7 @@ public final class NotificationService extends Service implements SharedPreferen
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        if (isMasterEnabled()) {
+        if (EditModeSnapshot.capture(this).master()) {
             handleEditToggle(intent);
         } else {
             showNotification(false);
@@ -75,11 +76,12 @@ public final class NotificationService extends Service implements SharedPreferen
     }
 
     private void handleEditToggle(Intent intent) {
-        if (EditModeController.isEditModeClosing(this)) {
+        EditModeSnapshot snapshot = EditModeSnapshot.capture(this);
+        if (snapshot.closing()) {
             showNotification(true);
             return;
         }
-        boolean editMode = EditModeController.isEditModeEnabled(this);
+        boolean editMode = snapshot.enabled();
         if (intent != null && TextUtils.equals(intent.getAction(), Intent.ACTION_EDIT)) {
             RuleServiceClient client = RuleServiceClient.getDefault();
             if (!client.hasLight()) {
@@ -95,8 +97,9 @@ public final class NotificationService extends Service implements SharedPreferen
                 boolean committed = EditModeController.setEditModeEnabled(this, requested);
                 mMainHandler.post(() -> {
                     if (!committed) showToggleFailure();
-                    if (isMasterEnabled()) {
-                        showNotification(EditModeController.isEditModeEnabled(this));
+                    EditModeSnapshot settled = EditModeSnapshot.capture(this);
+                    if (settled.master()) {
+                        showNotification(settled.enabled());
                     }
                 });
             });
