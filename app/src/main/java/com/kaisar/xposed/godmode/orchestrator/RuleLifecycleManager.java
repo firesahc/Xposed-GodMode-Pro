@@ -16,6 +16,7 @@ import com.kaisar.xposed.godmode.engine.matcher.CompositeMatcher;
 import com.kaisar.xposed.godmode.engine.matcher.Matcher;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.engine.util.Preconditions;
+import com.kaisar.xposed.godmode.inject.HookRegistry;
 import com.kaisar.xposed.godmode.orchestrator.ViewController;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
@@ -119,6 +120,7 @@ public final class RuleLifecycleManager implements RecyclerAdapterHook.Delegate 
 
     private void onActivityResume(Activity activity) {
         if (activity == null || activity.isFinishing()) return;
+        refreshRepeatableRulesGate();
         ViewGroup decorView = getDecorView(activity);
         if (decorView == null) return;
 
@@ -207,6 +209,7 @@ public final class RuleLifecycleManager implements RecyclerAdapterHook.Delegate 
         if (diff.isEmpty()) {
             // 展示元数据可能变化；更新快照，但不重建运行时效果。
             RuleManager.get().replaceRules(newRules);
+            refreshRepeatableRulesGate(newRules);
             return;
         }
 
@@ -220,6 +223,7 @@ public final class RuleLifecycleManager implements RecyclerAdapterHook.Delegate 
 
         // Step 3: 替换规则集并应用新规则
         RuleManager.get().replaceRules(newRules);
+        refreshRepeatableRulesGate(newRules);
         if (!diff.toApply.isEmpty()) {
             applyRulesForActivities(mapToActRules(diff.toApply));
         }
@@ -258,6 +262,28 @@ public final class RuleLifecycleManager implements RecyclerAdapterHook.Delegate 
         if (RuleManager.isInitialized()) {
             scheduleReapplyForActivities(RuleManager.get().viewRules());
         }
+    }
+
+    private void refreshRepeatableRulesGate() {
+        refreshRepeatableRulesGate(RuleManager.isInitialized()
+                ? RuleManager.get().viewRules() : null);
+    }
+
+    private void refreshRepeatableRulesGate(ActRules rules) {
+        boolean enabled = false;
+        if (rules != null) {
+            for (List<RuleRecord> activityRules : rules.values()) {
+                if (activityRules == null) continue;
+                for (RuleRecord rule : activityRules) {
+                    if (rule != null && rule.isRepeatable()) {
+                        enabled = true;
+                        break;
+                    }
+                }
+                if (enabled) break;
+            }
+        }
+        HookRegistry.setRepeatableRulesEnabled(enabled);
     }
 
     // ===================================================================
@@ -447,10 +473,10 @@ public final class RuleLifecycleManager implements RecyclerAdapterHook.Delegate 
         private volatile boolean mDisposed;
 
         /**
-         * 异步守卫：规则应用修改 View 属性后触发 requestLayout → onGlobalLayout，
+         * 异步守卫：规则应用实际修改 View 属性后触发 requestLayout → onGlobalLayout，
          * 设置此标志使下一次回调跳过，阻断跨帧反馈循环。
          * <p>
-         * 由 {@link #onRuleApplied()} 设置，由 {@link #onGlobalLayout()} 检测并清除。
+         * 只有 ViewController 确认物理写入成功时才会调用 {@link #onRuleApplied()}。
          */
         volatile boolean mSelfTriggeredLayout;
 
@@ -469,7 +495,7 @@ public final class RuleLifecycleManager implements RecyclerAdapterHook.Delegate 
             applyRuleIfMatchCondition();
         }
 
-        /** 任何规则应用路径（bindViewHolder / applyRuleBatch）调用后标记。 */
+        /** 由 ViewController 的物理写入回调设置。 */
         void onRuleApplied() {
             if (mDisposed) return;
             mSelfTriggeredLayout = true;
@@ -479,7 +505,6 @@ public final class RuleLifecycleManager implements RecyclerAdapterHook.Delegate 
         void applyRuleIfMatchCondition() {
             if (mDisposed || mApplying) return;
             mApplying = true;
-            mSelfTriggeredLayout = true;
             try {
                 Activity activity = Preconditions.checkNotNull(activityReference.get());
                 if (mDisposed || activity.isFinishing()
@@ -493,13 +518,18 @@ public final class RuleLifecycleManager implements RecyclerAdapterHook.Delegate 
                         : null;
                 if (rules != null && !rules.isEmpty()) {
                     getViewController(activity).applyRuleBatch(activity, rules,
-                            () -> mApplying = false);
+                            () -> mApplying = false,
+                            this::onRuleApplied);
                 } else {
                     resetGuards();
                 }
-            } catch (Exception e) {
+            } catch (Throwable e) {
                 Logger.w(TAG, "applyRuleIfMatchCondition failed", e);
                 resetGuards();
+            } finally {
+                // The completion callback is synchronous today, but this guard also
+                // protects the listener if a future batch implementation exits early.
+                mApplying = false;
             }
         }
 

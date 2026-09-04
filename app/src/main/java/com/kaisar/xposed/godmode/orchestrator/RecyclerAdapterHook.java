@@ -9,6 +9,7 @@ import com.kaisar.xposed.godmode.engine.matcher.ViewTraversal;
 import com.kaisar.xposed.godmode.engine.rule.MatchFields;
 import com.kaisar.xposed.godmode.engine.rule.MatchSpec;
 import com.kaisar.xposed.godmode.engine.util.Logger;
+import com.kaisar.xposed.godmode.inject.HookRegistry;
 import com.kaisar.xposed.godmode.util.ViewUtils;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
@@ -38,11 +39,10 @@ public final class RecyclerAdapterHook {
 
     private static final String TAG = "RecyclerAdapterHook";
 
-    /** 确保每个进程只安装一次钩子 */
+    /** Physical hook state is isolated by target ClassLoader. */
+    private static final Map<ClassLoader, HookFamilyState> sHookStates = new WeakHashMap<>();
+    /** Aggregate flags retained for the existing public diagnostics API. */
     private static volatile boolean sHooksInstalled;
-    private static volatile boolean sNotifyDataSetChangedHookInstalled;
-    private static volatile boolean sBindViewHolderHookInstalled;
-    private static volatile boolean sRecycleHookInstalled;
     /** Per-item execution is enabled only when bind and recycle are both hooked. */
     private static volatile boolean sItemHooksEnabled;
 
@@ -63,7 +63,29 @@ public final class RecyclerAdapterHook {
 
     /** Whether the bind/recycle pair is complete enough for per-item rules. */
     public static boolean isItemHooksEnabled() {
-        return sItemHooksEnabled;
+        return sItemHooksEnabled && HookRegistry.isRepeatableRulesEnabled();
+    }
+
+    private static boolean isItemHooksEnabled(HookFamilyState family) {
+        return family != null && family.itemHooksEnabled()
+                && HookRegistry.isRepeatableRulesEnabled();
+    }
+
+    private static synchronized void recomputeAggregateState() {
+        boolean installed = false;
+        boolean itemEnabled = false;
+        for (HookFamilyState family : sHookStates.values()) {
+            if (family == null) continue;
+            installed |= family.itemHooksEnabled();
+            itemEnabled |= family.itemHooksEnabled();
+        }
+        sHooksInstalled = installed;
+        sItemHooksEnabled = itemEnabled;
+    }
+
+    /** Changes the repeatable-rule gate without installing or removing hooks. */
+    public static void setRepeatableRulesEnabled(boolean enabled) {
+        HookRegistry.setRepeatableRulesEnabled(enabled);
     }
 
     /**
@@ -75,33 +97,44 @@ public final class RecyclerAdapterHook {
      * @param delegate 缓存清理和重应用调度回调（通常由 RuleLifecycleManager 实现）
      */
     public static synchronized void install(Activity activity, Delegate delegate) {
-        if (sHooksInstalled) return;
         if (activity == null || delegate == null) return;
         if (!PlatformCapabilities.supportsRecyclerViewHook()) return;
 
+        ClassLoader cl = activity.getClassLoader();
+        if (cl == null) return;
+        HookFamilyState family = sHookStates.get(cl);
+        if (family == null) {
+            family = new HookFamilyState();
+            sHookStates.put(cl, family);
+        }
+        final HookFamilyState hookFamily = family;
         Class<?> adapterClass;
         Class<?> viewHolderClass = null;
         try {
-            ClassLoader cl = activity.getClassLoader();
-            adapterClass = XposedHelpers.findClass(
+            adapterClass = family.adapterClass != null ? family.adapterClass
+                    : XposedHelpers.findClass(
                     "androidx.recyclerview.widget.RecyclerView$Adapter", cl);
+            family.adapterClass = adapterClass;
             try {
-                viewHolderClass = XposedHelpers.findClass(
-                    "androidx.recyclerview.widget.RecyclerView$ViewHolder", cl);
+                viewHolderClass = family.viewHolderClass != null ? family.viewHolderClass
+                        : XposedHelpers.findClass(
+                        "androidx.recyclerview.widget.RecyclerView$ViewHolder", cl);
+                family.viewHolderClass = viewHolderClass;
             } catch (Throwable missingViewHolder) {
                 Logger.d(TAG, "RecyclerView ViewHolder class unavailable", missingViewHolder);
             }
 
             // Install each hook independently. A ROM may expose only part of the
             // adapter API; successful hooks must not be installed twice on retry.
-            if (!sNotifyDataSetChangedHookInstalled) {
+            if (!hookFamily.notifyInstalled) {
                 try {
                     XposedHelpers.findAndHookMethod(adapterClass, "notifyDataSetChanged",
                             new XC_MethodHook() {
                                 @Override
                                 protected void afterHookedMethod(MethodHookParam param) {
                                     try {
-                                        if (!RuleManager.isInitialized()
+                                        if (!HookRegistry.isRepeatableRulesEnabled()
+                                                || !RuleManager.isInitialized()
                                                 || !RuleManager.get().hasRules()) return;
                                         delegate.invalidateMatcherCaches();
                                         delegate.scheduleReapplyForActivities();
@@ -110,20 +143,20 @@ public final class RecyclerAdapterHook {
                                     }
                                 }
                             });
-                    sNotifyDataSetChangedHookInstalled = true;
+                    hookFamily.notifyInstalled = true;
                 } catch (Throwable failure) {
                     Logger.d(TAG, "notifyDataSetChanged hook unavailable", failure);
                 }
             }
 
-            if (viewHolderClass != null && !sBindViewHolderHookInstalled) {
+            if (viewHolderClass != null && !hookFamily.bindInstalled) {
                 try {
                     XposedHelpers.findAndHookMethod(adapterClass, "bindViewHolder",
                             viewHolderClass, int.class, new XC_MethodHook() {
                         @Override
                         protected void beforeHookedMethod(MethodHookParam param) {
                             try {
-                                if (!sItemHooksEnabled) return;
+                                if (!isItemHooksEnabled(hookFamily)) return;
                                 Object holder = param.args[0];
                                 View itemView = getItemView(holder);
                                 if (holder == null || itemView == null) return;
@@ -139,6 +172,7 @@ public final class RecyclerAdapterHook {
                                 BindingToken token = new BindingToken(
                                         adapter, holder, itemView,
                                         resolveViewType(adapter, position),
+                                        hookFamily,
                                         sBindingEpoch.incrementAndGet());
                                 synchronized (sBindings) {
                                     sBindings.put(holder, token);
@@ -151,7 +185,7 @@ public final class RecyclerAdapterHook {
                         @Override
                         protected void afterHookedMethod(MethodHookParam param) {
                             try {
-                                if (!sItemHooksEnabled) return;
+                                if (!isItemHooksEnabled(hookFamily)) return;
                                 if (!RuleManager.isInitialized()
                                         || !RuleManager.get().hasRules()) return;
                                 Object holder = param.args[0];
@@ -167,13 +201,13 @@ public final class RecyclerAdapterHook {
                             }
                         }
                     });
-                    sBindViewHolderHookInstalled = true;
+                    hookFamily.bindInstalled = true;
                 } catch (Throwable failure) {
                     Logger.d(TAG, "bindViewHolder hook unavailable", failure);
                 }
             }
 
-            if (viewHolderClass != null && !sRecycleHookInstalled) {
+            if (viewHolderClass != null && !hookFamily.recycleInstalled) {
                 try {
                     // Hook 3: onViewRecycled → 递归撤销 itemView 子树中所有已应用的规则
                     XposedHelpers.findAndHookMethod(adapterClass, "onViewRecycled",
@@ -181,7 +215,9 @@ public final class RecyclerAdapterHook {
                         @Override
                         protected void beforeHookedMethod(MethodHookParam param) {
                             try {
-                                if (!sItemHooksEnabled) return;
+                                // Recycle remains active after the logical gate closes so
+                                // effects from the previous binding are still released.
+                                if (!hookFamily.itemHooksEnabled()) return;
                                 Object holder = param.args[0];
                                 View itemView = getItemView(holder);
                                 if (itemView == null) return;
@@ -212,7 +248,7 @@ public final class RecyclerAdapterHook {
                             }
                         }
                     });
-                    sRecycleHookInstalled = true;
+                    hookFamily.recycleInstalled = true;
                 } catch (Throwable failure) {
                     Logger.d(TAG, "onViewRecycled hook unavailable", failure);
                 }
@@ -220,10 +256,9 @@ public final class RecyclerAdapterHook {
 
             // notifyDataSetChanged is an optional cache-invalidation aid. The
             // per-item path is safe only when bind and recycle are paired.
-            sItemHooksEnabled = sBindViewHolderHookInstalled && sRecycleHookInstalled;
-            sHooksInstalled = sItemHooksEnabled;
-            Logger.i(TAG, sItemHooksEnabled
-                    ? (sNotifyDataSetChangedHookInstalled
+            recomputeAggregateState();
+            Logger.i(TAG, hookFamily.itemHooksEnabled()
+                    ? (hookFamily.notifyInstalled
                     ? "RecyclerView adapter hooks installed"
                     : "RecyclerView bind/recycle hooks installed; notify hook unavailable")
                     : "RecyclerView adapter hooks partially installed");
@@ -276,7 +311,7 @@ public final class RecyclerAdapterHook {
 
     private static void applyToken(BindingToken token, Delegate delegate) {
         View itemView = token.itemRoot.get();
-        if (itemView == null || !isCurrent(token)) return;
+        if (itemView == null || !isCurrent(token) || !isItemHooksEnabled(token.family)) return;
         ViewController owner = applyRepeatableRulesToBoundItem(
                 itemView, token.bindingEpoch, token.viewType, delegate);
         if (owner != null) {
@@ -292,7 +327,8 @@ public final class RecyclerAdapterHook {
         View.OnAttachStateChangeListener listener = new View.OnAttachStateChangeListener() {
             @Override
             public void onViewAttachedToWindow(View view) {
-                if (!isCurrent(token) || !token.active) return;
+                if (!isCurrent(token) || !token.active
+                        || !isItemHooksEnabled(token.family)) return;
                 // cached-view 免 rebind 复用时此处是规则唯一恢复入口。
                 // 原 view.post 会先渲染一帧宿主原始内容全高可见（GONE 规则下
                 // 表现为下拉回看时列表突然向上弹跳）；attach 回调先于本帧
@@ -432,18 +468,20 @@ public final class RecyclerAdapterHook {
         final WeakReference<View> itemRoot;
         final WeakReference<Activity> activity;
         final int viewType;
+        final HookFamilyState family;
         final long bindingEpoch;
         volatile ViewController controller;
         volatile boolean active = true;
         volatile View.OnAttachStateChangeListener lifecycleListener;
 
         BindingToken(Object adapter, Object holder, View itemRoot,
-                int viewType, long bindingEpoch) {
+                int viewType, HookFamilyState family, long bindingEpoch) {
             this.adapter = new WeakReference<>(adapter);
             this.holder = new WeakReference<>(holder);
             this.itemRoot = new WeakReference<>(itemRoot);
             this.activity = new WeakReference<>(ViewUtils.getAttachedActivityFromView(itemRoot));
             this.viewType = viewType;
+            this.family = family;
             this.bindingEpoch = bindingEpoch;
         }
 
@@ -454,6 +492,19 @@ public final class RecyclerAdapterHook {
                     && itemRoot.get() == currentItemRoot
                     && viewType == currentViewType
                     && active;
+        }
+    }
+
+    /** Hook family state for one target ClassLoader. */
+    private static final class HookFamilyState {
+        Class<?> adapterClass;
+        Class<?> viewHolderClass;
+        boolean notifyInstalled;
+        boolean bindInstalled;
+        boolean recycleInstalled;
+
+        boolean itemHooksEnabled() {
+            return bindInstalled && recycleInstalled;
         }
     }
 
