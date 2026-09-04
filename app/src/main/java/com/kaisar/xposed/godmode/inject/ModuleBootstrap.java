@@ -159,6 +159,7 @@ public final class ModuleBootstrap implements IXposedHookLoadPackage, IXposedHoo
         if (sState == State.ALLOWED) {
             switchProp.set(enable);
         }
+        HookRegistry.setEditorEnabled(sState == State.ALLOWED && enable);
         sEditorOrchestrator.setDisplay(enable);
     }
 

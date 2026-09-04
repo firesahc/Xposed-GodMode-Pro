@@ -4,9 +4,11 @@ import android.app.Activity;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
+import android.os.SystemClock;
 
-import com.kaisar.xposed.godmode.inject.ModuleBootstrap;
+import com.kaisar.xposed.godmode.inject.HookRegistry;
 import com.kaisar.xposed.godmode.editor.EditorOrchestrator;
+import com.kaisar.xposed.godmode.engine.util.Logger;
 
 import de.robv.android.xposed.XC_MethodHook;
 
@@ -36,11 +38,23 @@ public final class InteractionHooks {
         }
 
         @Override
-        protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-            View view = (View) param.thisObject;
-            MotionEvent event = (MotionEvent) param.args[0];
-            boolean handled = mOrchestrator.onTouchEvent(view, event);
-            if (handled) param.setResult(true);
+        protected void beforeHookedMethod(MethodHookParam param) {
+            if (!HookRegistry.isEditorEnabled()) return;
+            if (!(param.thisObject instanceof View)
+                    || param.args == null || param.args.length == 0
+                    || !(param.args[0] instanceof MotionEvent)
+                    || mOrchestrator == null) {
+                return;
+            }
+            try {
+                View view = (View) param.thisObject;
+                MotionEvent event = (MotionEvent) param.args[0];
+                if (mOrchestrator.onTouchEvent(view, event)) {
+                    param.setResult(true);
+                }
+            } catch (Throwable failure) {
+                Logger.w("InteractionHooks", "touch hook failed; keeping host behavior", failure);
+            }
         }
     }
 
@@ -74,38 +88,55 @@ public final class InteractionHooks {
         }
 
         @Override
-        protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-            if (!ModuleBootstrap.isSwitchEnabled()) return;
+        protected void beforeHookedMethod(MethodHookParam param) {
+            if (!HookRegistry.isEditorEnabled()) return;
+            if (!(param.thisObject instanceof Activity)
+                    || param.args == null || param.args.length == 0
+                    || !(param.args[0] instanceof KeyEvent)
+                    || mOrchestrator == null) {
+                return;
+            }
+
             Activity activity = (Activity) param.thisObject;
             KeyEvent event = (KeyEvent) param.args[0];
             int action = event.getAction();
             int keyCode = event.getKeyCode();
+            if (keyCode != KeyEvent.KEYCODE_VOLUME_UP
+                    && keyCode != KeyEvent.KEYCODE_VOLUME_DOWN) {
+                return;
+            }
 
-            if (keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
+            boolean handled = false;
+            try {
                 if (action == KeyEvent.ACTION_UP) {
-                    long now = System.currentTimeMillis();
-                    long lastTime = (keyCode == KeyEvent.KEYCODE_VOLUME_UP)
+                    long now = SystemClock.uptimeMillis();
+                    long lastTime = keyCode == KeyEvent.KEYCODE_VOLUME_UP
                             ? mLastVolumeUpTime : mLastVolumeDownTime;
-
                     if (now - lastTime > 0 && now - lastTime < DOUBLE_CLICK_INTERVAL) {
                         mOrchestrator.onVolumeKeyToggle(activity);
                         if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) {
-                            mLastVolumeUpTime = 0;
+                            mLastVolumeUpTime = 0L;
                         } else {
-                            mLastVolumeDownTime = 0;
+                            mLastVolumeDownTime = 0L;
                         }
+                    } else if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) {
+                        mLastVolumeUpTime = now;
                     } else {
-                        if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) {
-                            mLastVolumeUpTime = now;
-                        } else {
-                            mLastVolumeDownTime = now;
-                        }
+                        mLastVolumeDownTime = now;
                     }
-                } else if (action == KeyEvent.ACTION_DOWN && mOrchestrator.isKeySelecting()) {
-                    mOrchestrator.onVolumeKeyNavigate(keyCode);
+                    // Volume events are intentionally consumed while editor mode is on.
+                    handled = true;
+                } else if (action == KeyEvent.ACTION_DOWN) {
+                    if (mOrchestrator.isKeySelecting()) {
+                        mOrchestrator.onVolumeKeyNavigate(keyCode);
+                    }
+                    handled = true;
                 }
-                param.setResult(true);
+            } catch (Throwable failure) {
+                Logger.w("InteractionHooks", "key hook failed; keeping host behavior", failure);
+                handled = false;
             }
+            if (handled) param.setResult(true);
         }
     }
 }

@@ -31,31 +31,38 @@ public final class HookRegistry {
     private static volatile boolean sTouchHookInstalled;
     private static volatile boolean sKeyHookInstalled;
     private static volatile boolean sEventBusRegistered;
+    private static volatile boolean sEditorEnabled;
+    private static volatile boolean sRepeatableRulesEnabled;
 
     private HookRegistry() {}
 
     /**
-     * 注册所有 Hook（仅执行一次）。
-     * <p>
-     * 注册顺序保持与重构前一致：onResume → onCreate → hooks → observer
+     * Registers all hooks independently. A failed optional hook can be retried
+     * without reinstalling hooks that already succeeded.
      */
     public static synchronized HookInstallReport registerAll(Property<Boolean> switchProp) {
-        if (sHooksRegistered) {
-            return new HookInstallReport(true, sTouchHookInstalled, sKeyHookInstalled, true);
+        if (switchProp != null) sEditorEnabled = switchProp.get();
+
+        if (!sResumeHookInstalled) {
+            sResumeHookInstalled = install("Activity.onResume", () ->
+                    XposedHelpers.findAndHookMethod(Activity.class, "onResume",
+                            new LifecycleHooks.ActivityResumeHook()));
+        }
+        if (!sCreateHookInstalled) {
+            sCreateHookInstalled = install("Activity.onCreate", () ->
+                    XposedHelpers.findAndHookMethod(Activity.class, "onCreate", Bundle.class,
+                            new LifecycleHooks.ActivityCreateHook(switchProp)));
         }
 
-        sResumeHookInstalled |= install("Activity.onResume", () ->
-                XposedHelpers.findAndHookMethod(Activity.class, "onResume",
-                        new LifecycleHooks.ActivityResumeHook()));
-        sCreateHookInstalled |= install("Activity.onCreate", () ->
-                XposedHelpers.findAndHookMethod(Activity.class, "onCreate", Bundle.class,
-                        new LifecycleHooks.ActivityCreateHook(switchProp)));
-
         LifecycleHooks lifecycleHooks = new LifecycleHooks();
-        sPostResumeHookInstalled |= install("Activity.onPostResume", () ->
-                XposedHelpers.findAndHookMethod(Activity.class, "onPostResume", lifecycleHooks));
-        sDestroyHookInstalled |= install("Activity.onDestroy", () ->
-                XposedHelpers.findAndHookMethod(Activity.class, "onDestroy", lifecycleHooks));
+        if (!sPostResumeHookInstalled) {
+            sPostResumeHookInstalled = install("Activity.onPostResume", () ->
+                    XposedHelpers.findAndHookMethod(Activity.class, "onPostResume", lifecycleHooks));
+        }
+        if (!sDestroyHookInstalled) {
+            sDestroyHookInstalled = install("Activity.onDestroy", () ->
+                    XposedHelpers.findAndHookMethod(Activity.class, "onDestroy", lifecycleHooks));
+        }
 
         boolean coreReady = sResumeHookInstalled && sCreateHookInstalled
                 && sPostResumeHookInstalled && sDestroyHookInstalled;
@@ -68,24 +75,46 @@ public final class HookRegistry {
             }
         }
 
-        sTouchHookInstalled |= install("View.dispatchTouchEvent", () -> {
-            InteractionHooks.TouchHook hook = new InteractionHooks.TouchHook(
-                    ModuleBootstrap.getEditorOrchestrator());
-            XposedHelpers.findAndHookMethod(View.class, "dispatchTouchEvent",
-                    MotionEvent.class, hook);
-            ModuleBootstrap.getSwitchProp().addOnPropertyChangeListener(
-                    ModuleBootstrap.getEditorOrchestrator());
-        });
-        sKeyHookInstalled |= install("Activity.dispatchKeyEvent", () ->
-                XposedHelpers.findAndHookMethod(Activity.class, "dispatchKeyEvent",
-                        KeyEvent.class,
-                        new InteractionHooks.KeyHook(ModuleBootstrap.getEditorOrchestrator())));
+        if (!sTouchHookInstalled) {
+            sTouchHookInstalled = install("View.dispatchTouchEvent", () -> {
+                InteractionHooks.TouchHook hook = new InteractionHooks.TouchHook(
+                        ModuleBootstrap.getEditorOrchestrator());
+                XposedHelpers.findAndHookMethod(View.class, "dispatchTouchEvent",
+                        MotionEvent.class, hook);
+                ModuleBootstrap.getSwitchProp().addOnPropertyChangeListener(
+                        ModuleBootstrap.getEditorOrchestrator());
+            });
+        }
+        if (!sKeyHookInstalled) {
+            sKeyHookInstalled = install("Activity.dispatchKeyEvent", () ->
+                    XposedHelpers.findAndHookMethod(Activity.class, "dispatchKeyEvent",
+                            KeyEvent.class,
+                            new InteractionHooks.KeyHook(ModuleBootstrap.getEditorOrchestrator())));
+        }
 
         sHooksRegistered = coreReady && sEventBusRegistered;
         Logger.i(TAG, "hook install result: core=" + sHooksRegistered
                 + ", touch=" + sTouchHookInstalled + ", key=" + sKeyHookInstalled);
         return new HookInstallReport(sHooksRegistered, sTouchHookInstalled,
                 sKeyHookInstalled, sEventBusRegistered);
+    }
+
+    /** Updates the editor business gate without changing the physical hook. */
+    public static void setEditorEnabled(boolean enabled) {
+        sEditorEnabled = enabled;
+    }
+
+    public static boolean isEditorEnabled() {
+        return sEditorEnabled;
+    }
+
+    /** Updates the repeatable-rule business gate without changing hooks. */
+    public static void setRepeatableRulesEnabled(boolean enabled) {
+        sRepeatableRulesEnabled = enabled;
+    }
+
+    public static boolean isRepeatableRulesEnabled() {
+        return sRepeatableRulesEnabled;
     }
 
     private static boolean install(String name, HookInstall action) {

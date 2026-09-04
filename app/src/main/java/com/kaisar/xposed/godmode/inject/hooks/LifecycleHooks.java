@@ -7,6 +7,7 @@ import com.kaisar.xposed.godmode.engine.Property;
 import com.kaisar.xposed.godmode.engine.event.ActivityLifecycleEvent;
 import com.kaisar.xposed.godmode.engine.event.EventBus;
 import com.kaisar.xposed.godmode.inject.ModuleBootstrap;
+import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.util.ModuleResources;
 import com.kaisar.xposed.godmode.editor.EditorOrchestrator;
 
@@ -50,9 +51,13 @@ public final class LifecycleHooks extends XC_MethodHook {
     public static final class ActivityResumeHook extends XC_MethodHook {
         @Override
         protected void afterHookedMethod(MethodHookParam param) {
-            EditorOrchestrator orchestrator = ModuleBootstrap.getEditorOrchestrator();
-            if (orchestrator != null) {
-                orchestrator.setActivity((Activity) param.thisObject);
+            try {
+                EditorOrchestrator orchestrator = ModuleBootstrap.getEditorOrchestrator();
+                if (orchestrator != null && param.thisObject instanceof Activity) {
+                    orchestrator.setActivity((Activity) param.thisObject);
+                }
+            } catch (Throwable failure) {
+                Logger.w(TAG, "editor activity update failed", failure);
             }
         }
     }
@@ -73,14 +78,39 @@ public final class LifecycleHooks extends XC_MethodHook {
         }
 
         @Override
-        protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-            Activity activity = (Activity) param.thisObject;
-            ModuleResources.injectInto(activity.getResources());
-            if (mSwitchProp.get()) {
-                activity.getWindow().getDecorView().post(
-                        () -> ModuleBootstrap.getEditorOrchestrator().setDisplay(true));
+        protected void afterHookedMethod(MethodHookParam param) {
+            Activity activity = param.thisObject instanceof Activity
+                    ? (Activity) param.thisObject : null;
+            if (activity == null) return;
+            try {
+                ModuleResources.injectInto(activity.getResources());
+            } catch (Throwable failure) {
+                Logger.w(TAG, "module resource injection failed", failure);
             }
-            super.afterHookedMethod(param);
+            try {
+                if (mSwitchProp != null && Boolean.TRUE.equals(mSwitchProp.get())
+                        && activity.getWindow() != null
+                        && activity.getWindow().getDecorView() != null) {
+                    activity.getWindow().getDecorView().post(() -> {
+                        try {
+                            EditorOrchestrator orchestrator =
+                                    ModuleBootstrap.getEditorOrchestrator();
+                            if (orchestrator != null) {
+                                orchestrator.setDisplayForActivity(activity, true);
+                            }
+                        } catch (Throwable failure) {
+                            Logger.w(TAG, "deferred editor display failed", failure);
+                        }
+                    });
+                }
+            } catch (Throwable failure) {
+                Logger.w(TAG, "editor display scheduling failed", failure);
+            }
+            try {
+                super.afterHookedMethod(param);
+            } catch (Throwable failure) {
+                Logger.w(TAG, "ActivityCreateHook completion failed", failure);
+            }
         }
     }
 
@@ -89,17 +119,28 @@ public final class LifecycleHooks extends XC_MethodHook {
     // =========================================================================
 
     @Override
-    protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-        super.afterHookedMethod(param);
-        Activity activity = (Activity) param.thisObject;
-        String methodName = param.method.getName();
+    protected void afterHookedMethod(MethodHookParam param) {
+        try {
+            super.afterHookedMethod(param);
+            if (!(param.thisObject instanceof Activity) || param.method == null) return;
+            Activity activity = (Activity) param.thisObject;
+            String methodName = param.method.getName();
 
-        if ("onPostResume".equals(methodName)) {
-            mEventBus.post(new ActivityLifecycleEvent(
-                    ActivityLifecycleEvent.Type.RESUME, activity));
-        } else if ("onDestroy".equals(methodName)) {
-            mEventBus.post(new ActivityLifecycleEvent(
-                    ActivityLifecycleEvent.Type.DESTROY, activity));
+            if ("onPostResume".equals(methodName)) {
+                mEventBus.post(new ActivityLifecycleEvent(
+                        ActivityLifecycleEvent.Type.RESUME, activity));
+            } else if ("onDestroy".equals(methodName)) {
+                try {
+                    EditorOrchestrator orchestrator = ModuleBootstrap.getEditorOrchestrator();
+                    if (orchestrator != null) orchestrator.onActivityDestroyed(activity);
+                } catch (Throwable failure) {
+                    Logger.w(TAG, "editor activity destroy failed", failure);
+                }
+                mEventBus.post(new ActivityLifecycleEvent(
+                        ActivityLifecycleEvent.Type.DESTROY, activity));
+            }
+        } catch (Throwable failure) {
+            Logger.w(TAG, "lifecycle event hook failed", failure);
         }
     }
 }
