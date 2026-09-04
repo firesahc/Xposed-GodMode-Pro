@@ -366,7 +366,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     }
 
     private void dismissNodePanelNow() {
-        mPreviewHandler.restorePreview(null, null, null);
+        mPreviewHandler.restorePreview(mCurrentActivityRef.get(), null, null, null);
         mInteractionMode = EditorInteractionMode.INITIAL;
         mNodePanel.setModifySessionLocked(false);
         mNodePanel.dismiss();
@@ -388,7 +388,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
             List<WeakReference<View>> viewNodes = mNodePanel.getViewNodes();
             if (viewNodes == null || viewNodes.isEmpty()) return;
             if (mPreviewHandler.isPreviewing()) {
-                mPreviewHandler.restorePreview(mNodePanel.getMaskView(),
+                mPreviewHandler.restorePreview(activity, mNodePanel.getMaskView(),
                         mNodePanel.getSelectedView(), () -> updatePreviewButton(false));
             }
             final View view = mNodePanel.getSelectedView();
@@ -598,7 +598,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
         if (mPreviewHandler.isPreviewing()) {
             MaskView maskView = mNodePanel.getMaskView();
             View selectedView = mNodePanel.getSelectedView();
-            mPreviewHandler.restorePreview(maskView, selectedView,
+            mPreviewHandler.restorePreview(activity, maskView, selectedView,
                     () -> updatePreviewButton(false));
         } else {
             List<WeakReference<View>> viewNodes = mNodePanel.getViewNodes();
@@ -606,7 +606,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
             View view = mNodePanel.getSelectedView();
             if (view == null) return;
             MaskView maskView = mNodePanel.getMaskView();
-            mPreviewHandler.startPreview(view, maskView,
+            mPreviewHandler.startPreview(activity, view, maskView,
                     () -> updatePreviewButton(true), isInfoFlowMode());
         }
     }
