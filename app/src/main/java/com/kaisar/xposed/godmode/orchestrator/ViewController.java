@@ -177,6 +177,17 @@ public final class ViewController {
      * @param onComplete 全部匹配+应用完成后在主线程回调（用于 mApplying 重置等场景），可为 null
      */
     public void applyRuleBatch(Activity activity, List<RuleRecord> rules, Runnable onComplete) {
+        applyRuleBatch(activity, rules, onComplete, null);
+    }
+
+    /**
+     * 批量应用规则，并在某条规则实际写入 View 后通知调用方。
+     * <p>
+     * 该回调仅用于运行时反馈，不改变公开批量 API 的行为。调用方应保持回调轻量，
+     * 并自行捕获需要隔离的异常。
+     */
+    void applyRuleBatch(Activity activity, List<RuleRecord> rules, Runnable onComplete,
+            Runnable onPhysicalWrite) {
         ViewGroup decorView = activity != null && activity.getWindow() != null
                 ? (ViewGroup) activity.getWindow().getDecorView() : null;
         if (decorView == null) {
@@ -229,7 +240,16 @@ public final class ViewController {
         int applied = 0;
         for (MatchTask task : pending) {
             try {
-                if (applyRule(task.view, task.rule)) applied++;
+                if (applyRule(task.view, task.rule)) {
+                    applied++;
+                    if (onPhysicalWrite != null) {
+                        try {
+                            onPhysicalWrite.run();
+                        } catch (Throwable callbackFailure) {
+                            Logger.w(TAG, "physical write callback failed", callbackFailure);
+                        }
+                    }
+                }
             } catch (Exception e) {
                 Logger.w(TAG, "apply rule failed", e);
             }
