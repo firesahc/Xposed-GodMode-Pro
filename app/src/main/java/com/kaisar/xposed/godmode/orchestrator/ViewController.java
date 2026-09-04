@@ -484,6 +484,13 @@ public final class ViewController {
         }
     }
 
+    /**
+     * 已应用规则的调度索引 — 记录“哪个槽位绑了哪个 View（弱引用）+ 绑定代次”。
+     * <p>
+     * This is NOT a baseline. 本类不存任何 View 属性值，撤销恢复必须走
+     * {@code ModifyApplier} / {@code RemoveApplier} 持有的基线；绕过 ViewController
+     * 直调 applier 会残留本索引，导致下次误命中已删 View。DO NOT 与两处基线合并。
+     */
     private static final class AppliedTarget {
         final WeakReference<View> view;
         final long bindingEpoch;

@@ -4,6 +4,14 @@ import android.util.Log;
 
 import androidx.annotation.Keep;
 
+/**
+ * 全进程日志门面 — 所有 logcat 与持久化日志的统一入口。
+ * <p>
+ * 与 {@code control.GodModeLog}（system_server 落盘实现）互补而非重复：本类只做分发
+ *（Writer 接口 + 串行日志线程 + 防递归），真正写 {@code godmodepro.log} 文件的是
+ * system_server 侧的 GodModeLog；应用进程的 Writer 经 IPC 转发。DO NOT 绕过本类直接调用
+ * {@code android.util.Log}（静态门禁强制），DO NOT 把落盘逻辑搬进本类。
+ */
 @Keep
 public final class Logger {
 

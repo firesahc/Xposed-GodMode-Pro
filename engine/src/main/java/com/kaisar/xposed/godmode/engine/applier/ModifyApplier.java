@@ -143,6 +143,8 @@ public final class ModifyApplier implements RuleApplier<ModifyEffect> {
             if (state != null) state.imageLoad.cancel();
         }
         mAppliedViews.clear();
+        // 静态位图缓存与绑定同生命周期；不随清理会长期滞留已删规则的图片引用。
+        BITMAP_CACHE.clear();
     }
 
     String getActivityClassName() {

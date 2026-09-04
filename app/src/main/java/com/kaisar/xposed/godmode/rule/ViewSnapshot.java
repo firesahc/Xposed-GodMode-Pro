@@ -13,6 +13,9 @@ import android.widget.TextView;
  * <p>
  * 解决了 {@code makeModifyRule(view)} 从已修改视图读取 text/orig* 导致
  * 匹配字段被污染、重新应用失败的问题。
+ * <p>
+ * 与运行时基线（{@code ModifyApplier.AppliedState} / {@code RemoveApplier} 内部基线）正交：
+ * 本类是编辑构造期的 orig 值快照，存活于规则创建；基线存活于规则应用。DO NOT 混用。
  */
 public class ViewSnapshot {
 

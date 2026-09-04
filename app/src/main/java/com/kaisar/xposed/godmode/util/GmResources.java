@@ -7,6 +7,13 @@ import android.view.ViewGroup;
 
 import com.kaisar.xposed.godmode.engine.util.GmConstants;
 
+/**
+ * 模块资源访问器 — 被注入进程读取模块自带资源（布局/文本/图片）的统一入口。
+ * <p>
+ * 与 {@code ModuleResources}（资源注入器）互补而非重复：本类负责“读”已可用的模块资源
+ *（含 {@link #markAsGmComponent} 自身 UI 标记，供 engine 遍历跳过自身面板），后者负责“写”
+ *（经 AssetManager 把模块资源注入目标进程）。DO NOT 合并两者：注入时序与读取路径分属不同进程阶段。
+ */
 public final class GmResources {
 
     private static Resources sModuleRes;

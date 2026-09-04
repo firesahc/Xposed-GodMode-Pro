@@ -14,6 +14,10 @@ import java.lang.reflect.Method;
 /**
  * 模块资源管理 — 提供 GodMode 模块资源注入目标应用 AssetManager 的功能。
  * 由注入层在 Activity 创建阶段初始化。
+ * <p>
+ * 与 {@code GmResources}（资源访问器）互补而非重复：本类负责“写”（注入），
+ * {@code GmResources} 负责“读”；{@link #init} 内委托 {@code GmResources.init} 只是共享
+ * 初始化入口，不代表职责合并。DO NOT 合并两者。
  */
 public final class ModuleResources {
 

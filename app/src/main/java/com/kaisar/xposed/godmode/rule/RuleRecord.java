@@ -318,6 +318,13 @@ public final class RuleRecord implements Parcelable, Cloneable {
                 origHeight, origAlpha, origText, matchSpec.clone(), effect);
     }
 
+    /**
+     * 身份相等 — 仅比较槽位身份（权威包 + MatchSpec 派生）。
+     * <p>
+     * 与 {@link #contentEquals} 的区别：后者面向 UI DiffUtil，额外比较展示与坐标字段。
+     * 运行时 diff 必须用 {@code RuntimeRuleComparator}，DO NOT 用本方法或 contentEquals
+     * 做完整状态比较（6.10-ipc-authority 禁止用槽位比较代替 canonical 扁平 JSON 比较）。
+     */
     public boolean equals(Object object) {
         if (this == object) return true;
         if (!(object instanceof RuleRecord)) return false;
@@ -327,6 +334,12 @@ public final class RuleRecord implements Parcelable, Cloneable {
 
     public int hashCode() { return slotKey(packageName).hashCode(); }
 
+    /**
+     * UI 内容相等 — 面向 UI DiffUtil，含 alias/matchSpec/effect/imagePath/坐标。
+     * <p>
+     * DO NOT 用于运行时 diff（会误把展示变化当规则变化）；运行时语义比较见
+     * {@code orchestrator.RuntimeRuleComparator}。
+     */
     public boolean contentEquals(@NonNull RuleRecord other) {
         return Objects.equals(alias, other.alias)
                 && Objects.equals(matchSpec, other.matchSpec)

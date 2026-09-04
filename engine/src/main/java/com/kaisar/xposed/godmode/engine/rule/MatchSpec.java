@@ -206,6 +206,13 @@ public final class MatchSpec implements MatchFields {
         return targetLevel != null ? targetLevel : TargetLevel.ELEMENT;
     }
 
+    /**
+     * 原始值全等 — 持久化/传输层的严格比较。
+     * <p>
+     * 与 {@link #hasSameRuntimeSemantics} 的区别：后者比较“真正改变 Matcher 行为的
+     * 有效语义”（repeatable 忽略 text/desc，null 模式取默认值）。运行时比较用后者，
+     * DO NOT 统一两者。
+     */
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;

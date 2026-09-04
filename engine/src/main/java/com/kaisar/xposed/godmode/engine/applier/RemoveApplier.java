@@ -136,6 +136,8 @@ public final class RemoveApplier implements RuleApplier<RemoveEffect> {
     }
 
     // ---- 内部 ViewProperty ----
+    // Remove 效果的极简基线权威（alpha/clickable/visibility），与 ModifyApplier.AppliedState
+    // 各管一类效果。DO NOT 与 AppliedState / ViewController.AppliedTarget 合并。
 
     private static final class ViewProperty {
         final float alpha;

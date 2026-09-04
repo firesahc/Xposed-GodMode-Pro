@@ -25,6 +25,10 @@ import java.util.concurrent.TimeUnit;
  * <p>
  * 从 {@code service/} 移入 control/ 包，职责不变。
  * 将所有日志写入 {@code /data/misc/godmode/godmodepro.log}。
+ * <p>
+ * 与 engine {@code Logger}（全进程门面）互补而非重复：本类仅是 {@code Logger.Writer}
+ * 的 system_server 落盘实现（单线程 + 0600 权限 + 轮转 + 截断），不做分发与路由。
+ * DO NOT 在本类之外另起落盘入口。
  */
 public final class GodModeLog {
 

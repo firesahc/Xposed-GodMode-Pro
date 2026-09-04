@@ -42,6 +42,10 @@ import java.util.UUID;
  * 从 {@code util/BackupUtils} 迁入 control/ 层，职责不变。
  * 依赖 {@link RuleServiceClient} 跨进程读写规则和图片，
  * 依赖 {@link RuleRecord} 序列化/反序列化规则数据。
+ * <p>
+ * 双路径说明：本类批量路径与单条 CRUD 同经 {@link RuleServiceClient} IPC，
+ * 无旁路写文件；入参 viewRules 仅作选择键，最终以权威快照按槽位重选为准。
+ * 恢复按条目逐条提交、可部分成功（非原子，见 RestoreReport），DO NOT 当作整体事务使用。
  */
 public final class RuleBackupManager {
 
