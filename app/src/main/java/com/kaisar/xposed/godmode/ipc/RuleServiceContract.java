@@ -48,5 +48,33 @@ public final class RuleServiceContract {
     public static final int RESULT_OWNER_MISMATCH = 10;
     public static final int RESULT_ALREADY_UNDONE = 11;
 
+    /**
+     * 终态成功 — 提交已生效或本就无变化，调用方可清除诊断并视为完成。
+     * <p>
+     * 唯一真值来源：替代各处手写的 {@code == COMMITTED || == NO_CHANGE}，
+     * 防止未来新增成功语义时漏改某处（见 6.10 保留/刷新投影契约）。
+     */
+    public static boolean isTerminalSuccess(int status) {
+        return status == RESULT_COMMITTED || status == RESULT_NO_CHANGE;
+    }
+
+    /**
+     * 可重试瞬态 — 忙/写失败/不确定，调用方应保留当前投影供对账或重试，
+     * 不得刷新权威状态（见 6.10 BUSY / WRITE_FAILED / UNCERTAIN 保留条款）。
+     * <p>
+     * 与 {@code EditorUndoController} 的瞬态判定同组；收敛于此一处，
+     * 后续语义变化只改这里。
+     */
+    public static boolean isRetryableTransient(int status) {
+        return status == RESULT_BUSY
+                || status == RESULT_WRITE_FAILED
+                || status == RESULT_UNCERTAIN;
+    }
+
+    /** 是否为不确定终态（需走快照/历史对账，不得重放写入）。 */
+    public static boolean isUncertain(int status) {
+        return status == RESULT_UNCERTAIN;
+    }
+
     private RuleServiceContract() {}
 }

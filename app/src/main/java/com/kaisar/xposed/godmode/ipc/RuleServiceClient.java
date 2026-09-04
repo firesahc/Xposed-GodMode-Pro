@@ -735,7 +735,7 @@ public final class RuleServiceClient {
         }
         String requestId = UUID.randomUUID().toString();
         UndoResultParcel first = executeUndo(packageName, expected, requestId);
-        if (first.status != RuleServiceContract.RESULT_UNCERTAIN) return first;
+        if (!RuleServiceContract.isUncertain(first.status)) return first;
         return executeUndo(packageName, expected, requestId);
     }
 
@@ -762,8 +762,7 @@ public final class RuleServiceClient {
                         "undo result is missing");
             }
             mLastMutationStatus = result.status;
-            if (result.status == RuleServiceContract.RESULT_COMMITTED
-                    || result.status == RuleServiceContract.RESULT_NO_CHANGE) {
+            if (RuleServiceContract.isTerminalSuccess(result.status)) {
                 clearDiagnostic();
             } else {
                 recordResultFailure(result.status, result.message);
@@ -953,11 +952,13 @@ public final class RuleServiceClient {
         String line = "mutation client complete operation=" + mutationOperationName(operation)
                 + " requestId=" + requestId + " package=" + packageName
                 + " status=" + mutationStatusName(status) + " outcome=" + outcome;
-        if (status == RuleServiceContract.RESULT_COMMITTED
-                || status == RuleServiceContract.RESULT_NO_CHANGE) {
+        if (RuleServiceContract.isTerminalSuccess(status)) {
             Logger.i(TAG, line);
-        } else if (status == RuleServiceContract.RESULT_WRITE_FAILED
-                || status == RuleServiceContract.RESULT_UNCERTAIN) {
+        } else if (RuleServiceContract.isRetryableTransient(status)) {
+            Logger.w(TAG, line);
+        } else if (status == RuleServiceContract.RESULT_REJECTED) {
+            // 拒绝多为权限/归属问题，是线上排障的关键信号，禁止淹没在 debug 中。
+            // （BUSY 已在上一分支按瞬态处理为 warning，不会落到这里。）
             Logger.w(TAG, line);
         } else {
             Logger.d(TAG, line);
@@ -997,29 +998,50 @@ public final class RuleServiceClient {
                                    boolean hadMainImage, boolean hadModifiedImage,
                                    String value) {
         if (operation == RuleServiceContract.MUTATION_SET_TOOLBAR) {
-            String current = getToolbarHiddenItems(RuleServiceContract.GLOBAL_SCOPE);
-            if (current == null) return RuleServiceContract.RESULT_UNCERTAIN;
-            return current.equals(value == null ? "" : value)
-                    ? RuleServiceContract.RESULT_COMMITTED
-                    : RuleServiceContract.RESULT_REJECTED;
+            return reconcileToolbarValue(
+                    getToolbarHiddenItems(RuleServiceContract.GLOBAL_SCOPE), value);
         }
         ActRules rules = getRules(packageName);
         if (rules == null) return RuleServiceContract.RESULT_UNCERTAIN;
         switch (operation) {
             case RuleServiceContract.MUTATION_WRITE:
             case RuleServiceContract.MUTATION_UPDATE:
-                return containsCommittedRule(rules, rule, hadMainImage, hadModifiedImage)
-                        ? RuleServiceContract.RESULT_COMMITTED
-                        : RuleServiceContract.RESULT_REJECTED;
+                return reconcileUpsert(rules, rule, hadMainImage, hadModifiedImage);
             case RuleServiceContract.MUTATION_DELETE:
-                return containsSlot(rules, rule) ? RuleServiceContract.RESULT_REJECTED
-                        : RuleServiceContract.RESULT_COMMITTED;
+                return reconcileDelete(rules, rule);
             case RuleServiceContract.MUTATION_DELETE_ALL:
-                return isEmpty(rules) ? RuleServiceContract.RESULT_COMMITTED
-                        : RuleServiceContract.RESULT_REJECTED;
+                return reconcileDeleteAll(rules);
             default:
                 return RuleServiceContract.RESULT_UNCERTAIN;
         }
+    }
+
+    /** 工具栏回读一致即提交成功，读不到即不确定，对不上即拒绝。 */
+    private int reconcileToolbarValue(String current, String value) {
+        if (current == null) return RuleServiceContract.RESULT_UNCERTAIN;
+        return current.equals(value == null ? "" : value)
+                ? RuleServiceContract.RESULT_COMMITTED
+                : RuleServiceContract.RESULT_REJECTED;
+    }
+
+    /** 写/改后能在权威快照中找到提交态规则即成功，否则拒绝。 */
+    private int reconcileUpsert(ActRules rules, RuleRecord rule,
+                                boolean hadMainImage, boolean hadModifiedImage) {
+        return containsCommittedRule(rules, rule, hadMainImage, hadModifiedImage)
+                ? RuleServiceContract.RESULT_COMMITTED
+                : RuleServiceContract.RESULT_REJECTED;
+    }
+
+    /** 删除后槽位仍在即拒绝，否则提交成功。 */
+    private int reconcileDelete(ActRules rules, RuleRecord rule) {
+        return containsSlot(rules, rule) ? RuleServiceContract.RESULT_REJECTED
+                : RuleServiceContract.RESULT_COMMITTED;
+    }
+
+    /** 全删后为空即成功，否则拒绝。 */
+    private int reconcileDeleteAll(ActRules rules) {
+        return isEmpty(rules) ? RuleServiceContract.RESULT_COMMITTED
+                : RuleServiceContract.RESULT_REJECTED;
     }
 
     static boolean containsCommittedRule(ActRules rules, RuleRecord expected,
