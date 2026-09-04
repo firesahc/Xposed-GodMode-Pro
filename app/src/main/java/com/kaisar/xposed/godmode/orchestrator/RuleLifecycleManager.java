@@ -525,7 +525,9 @@ public final class RuleLifecycleManager implements RecyclerAdapterHook.Delegate 
                 }
             } catch (Throwable e) {
                 Logger.w(TAG, "applyRuleIfMatchCondition failed", e);
-                resetGuards();
+                // Keep a marker set by an earlier physical write in this batch;
+                // only the applying guard is invalidated on an exceptional exit.
+                mApplying = false;
             } finally {
                 // The completion callback is synchronous today, but this guard also
                 // protects the listener if a future batch implementation exits early.
