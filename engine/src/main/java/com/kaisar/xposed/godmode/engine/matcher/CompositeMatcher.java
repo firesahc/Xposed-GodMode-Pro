@@ -14,6 +14,7 @@ import com.kaisar.xposed.godmode.engine.util.TextMatcher;
 
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -44,6 +45,7 @@ public final class CompositeMatcher implements Matcher {
     // WeakReference 持有 root，Activity 重建或 GC 后自动失效。
     private WeakReference<View> mCachedRoot;
     private final List<WeakReference<ViewGroup>> mCachedRecyclerViews = new ArrayList<>();
+    private String mLastSingleElementFailure;
 
     // ---- Matcher 实现 ----
 
@@ -61,11 +63,24 @@ public final class CompositeMatcher implements Matcher {
         // 错配宿主内容的代价高于暂时漏应用，漏应用由对账与后续 bind 兜底重试。
         if (spec.getDepth() != null && spec.getDepth().length > 0) {
             View byDepth = ViewTraversal.findViewByDepth(root, spec.getDepth());
-            if (byDepth != null && isVisibleView(byDepth)
-                    && matchesResourceName(byDepth, spec)
-                    && isStructuralMatch(byDepth, spec, true)) {
+            if (byDepth == null) {
+                logSingleElementFailure(spec, "depth_path_missing", null);
+                return null;
+            }
+            if (!isVisibleView(byDepth)) {
+                logSingleElementFailure(spec, "target_not_visible", byDepth);
+                return null;
+            }
+            if (!matchesResourceName(byDepth, spec)) {
+                logSingleElementFailure(spec, "resource_name_mismatch", byDepth);
+                return null;
+            }
+            String structuralFailure = structuralFailureReason(byDepth, spec, true);
+            if (structuralFailure == null) {
+                mLastSingleElementFailure = null;
                 return byDepth;
             }
+            logSingleElementFailure(spec, structuralFailure, byDepth);
             return null;
         }
 
@@ -73,8 +88,23 @@ public final class CompositeMatcher implements Matcher {
         if (!TextUtils.isEmpty(spec.getResourceName())) {
             View viewById = findByResourceId(root, spec);
             if (viewById != null && isStructuralMatch(viewById, spec, true)) {
+                mLastSingleElementFailure = null;
                 return viewById;
             }
+            View resourceAnchor = viewById != null
+                    ? viewById : findResourceAnchorIgnoringVisibility(root, spec);
+            String reason;
+            if (resourceAnchor == null) {
+                reason = "resource_anchor_missing";
+            } else if (!isVisibleView(resourceAnchor)) {
+                reason = "target_not_visible";
+            } else {
+                reason = structuralFailureReason(resourceAnchor, spec, true);
+            }
+            logSingleElementFailure(spec,
+                    reason == null ? "structural_match_failed" : reason, resourceAnchor);
+        } else {
+            logSingleElementFailure(spec, "missing_locator", null);
         }
 
         return null;
@@ -231,6 +261,21 @@ public final class CompositeMatcher implements Matcher {
         }
     }
 
+    /**
+     * Looks up the resource anchor without applying the visibility gate. This is used only to
+     * explain a failed resource-only match; the actual matching path remains fail-closed.
+     */
+    private static View findResourceAnchorIgnoringVisibility(View root, MatchFields spec) {
+        if (root == null || TextUtils.isEmpty(spec.getResourceName())) return null;
+        try {
+            int id = root.getResources().getIdentifier(spec.getResourceName(), "id", null);
+            if (id == 0 || id == View.NO_ID) return null;
+            return root.findViewById(id);
+        } catch (Resources.NotFoundException e) {
+            return null;
+        }
+    }
+
     /** 单次递归遍历，收集视图树中所有 RecyclerView（不递归进入 RecyclerView 内部） */
     private static void collectRecyclerViews(View view, List<ViewGroup> results) {
         if (view.getClass().getName().contains("RecyclerView") && view instanceof ViewGroup) {
@@ -378,52 +423,97 @@ public final class CompositeMatcher implements Matcher {
      *                     false=信息流模式，parentClass 提供但不强制
      */
     public static boolean isStructuralMatch(View view, MatchFields spec, boolean strictParent) {
-        if (view == null || spec == null) return false;
-
-        // ── viewClass ──
-        if (hasContent(spec.getViewClass())
-                && !view.getClass().getName().equals(spec.getViewClass())) {
-            return false;
-        }
-
-        // Repeatable targets are located structurally. Their captured text is
-        // retained for wire/UI compatibility but must not prevent cross-card matching.
-        boolean structuralRepeatable = spec.isRepeatable() && spec.getItemPath() != null
-                && spec.getItemPath().length > 0;
-
-        // ── text ──
-        if (!structuralRepeatable && hasContent(spec.getText())) {
-            if (!(view instanceof TextView)) return false;
-            CharSequence t = ((TextView) view).getText();
-            if (t == null) return false;
-            if (!TextMatcher.matchText(t.toString(), spec.getText(), spec.getMatchMode())) {
-                return false;
-            }
-        }
-
-        // ── description ──
-        if (!structuralRepeatable && hasContent(spec.getDescription())) {
-            CharSequence d = view.getContentDescription();
-            if (d == null) return false;
-            if (!TextMatcher.matchText(d.toString(), spec.getDescription(), spec.getMatchMode())) {
-                return false;
-            }
-        }
-
-        // ── parentClass（条件检） ──
-        if (hasContent(spec.getParentClass()) && strictParent) {
-            ViewParent p = view.getParent();
-            if (!(p instanceof View)
-                    || !p.getClass().getName().equals(spec.getParentClass())) {
-                return false;
-            }
-        }
-
-        return true;
+        return structuralFailureReason(view, spec, strictParent) == null;
     }
 
     private static boolean hasContent(String s) {
         return s != null && !s.isEmpty();
+    }
+
+    /**
+     * Returns the first structural mismatch in the same order used by
+     * {@link #isStructuralMatch}. A null result means the view matches.
+     */
+    private static String structuralFailureReason(View view, MatchFields spec,
+            boolean strictParent) {
+        if (view == null || spec == null) return "structural_match_failed";
+
+        if (hasContent(spec.getViewClass())
+                && !view.getClass().getName().equals(spec.getViewClass())) {
+            return "view_class_mismatch";
+        }
+
+        // Repeatable targets are located structurally. Their captured text/description
+        // must not prevent cross-card matching.
+        boolean structuralRepeatable = spec.isRepeatable() && spec.getItemPath() != null
+                && spec.getItemPath().length > 0;
+
+        if (!structuralRepeatable && hasContent(spec.getText())) {
+            if (!(view instanceof TextView)) return "text_target_not_text_view";
+            CharSequence text = ((TextView) view).getText();
+            if (text == null || !TextMatcher.matchText(text.toString(), spec.getText(),
+                    spec.getMatchMode())) {
+                return "text_mismatch";
+            }
+        }
+
+        if (!structuralRepeatable && hasContent(spec.getDescription())) {
+            CharSequence description = view.getContentDescription();
+            if (description == null || !TextMatcher.matchText(description.toString(),
+                    spec.getDescription(), spec.getMatchMode())) {
+                return "description_mismatch";
+            }
+        }
+
+        if (hasContent(spec.getParentClass()) && strictParent) {
+            ViewParent parent = view.getParent();
+            if (!(parent instanceof View)
+                    || !parent.getClass().getName().equals(spec.getParentClass())) {
+                return "parent_class_mismatch";
+            }
+        }
+
+        return null;
+    }
+
+    private void logSingleElementFailure(MatchFields spec, String reason, View actual) {
+        String actualResource = actualResourceName(actual);
+        String key = (reason == null ? "unknown" : reason) + "|"
+                + valueOrEmpty(spec.getActivityClass()) + "|"
+                + valueOrEmpty(spec.getViewClass()) + "|"
+                + valueOrEmpty(spec.getResourceName()) + "|"
+                + valueOrEmpty(spec.getText()) + "|"
+                + valueOrEmpty(spec.getDescription()) + "|"
+                + valueOrEmpty(spec.getParentClass()) + "|"
+                + Arrays.toString(spec.getDepth()) + "|"
+                + (actual == null ? "" : actual.getClass().getName()) + "|"
+                + (actual == null ? -1 : actual.getVisibility()) + "|" + actualResource;
+        // A static page may trigger repeated evaluations. Keep one line per unchanged
+        // failure state while allowing a later structural change to be observed.
+        if (key.equals(mLastSingleElementFailure)) return;
+        mLastSingleElementFailure = key;
+        Logger.d("CompositeMatcher", "single_element_match_failed"
+                + " reason=" + (reason == null ? "unknown" : reason)
+                + " activity=" + valueOrEmpty(spec.getActivityClass())
+                + " expectedClass=" + valueOrEmpty(spec.getViewClass())
+                + " actualClass=" + (actual == null ? "" : actual.getClass().getName())
+                + " actualVisibility=" + (actual == null ? -1 : actual.getVisibility())
+                + " resource=" + valueOrEmpty(spec.getResourceName())
+                + " actualResource=" + actualResource
+                + " depth=" + Arrays.toString(spec.getDepth()));
+    }
+
+    private static String actualResourceName(View view) {
+        if (view == null || view.getId() == View.NO_ID) return "";
+        try {
+            return view.getResources().getResourceName(view.getId());
+        } catch (Resources.NotFoundException ignored) {
+            return "";
+        }
+    }
+
+    private static String valueOrEmpty(String value) {
+        return value == null ? "" : value;
     }
 
 }
