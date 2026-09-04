@@ -15,6 +15,12 @@ public final class ServiceDiagnostic {
         PERMISSION_REJECTED,
         OPERATION_BUSY,
         COMMIT_UNCERTAIN,
+        WRITE_FAILED,
+        STATE_STALE,
+        SESSION_EXPIRED,
+        OWNER_MISMATCH,
+        ALREADY_UNDONE,
+        INVALID_REQUEST,
         UNKNOWN
     }
 
@@ -57,6 +63,24 @@ public final class ServiceDiagnostic {
             case COMMIT_UNCERTAIN:
                 return new ServiceDiagnostic(type, DiagnosticMessages.COMMIT_UNCERTAIN_SUMMARY,
                         DiagnosticMessages.COMMIT_UNCERTAIN_ACTION, technicalDetail);
+            case WRITE_FAILED:
+                return new ServiceDiagnostic(type, DiagnosticMessages.WRITE_FAILED_SUMMARY,
+                        DiagnosticMessages.WRITE_FAILED_ACTION, technicalDetail);
+            case STATE_STALE:
+                return new ServiceDiagnostic(type, DiagnosticMessages.STATE_STALE_SUMMARY,
+                        DiagnosticMessages.STATE_STALE_ACTION, technicalDetail);
+            case SESSION_EXPIRED:
+                return new ServiceDiagnostic(type, DiagnosticMessages.SESSION_EXPIRED_SUMMARY,
+                        DiagnosticMessages.SESSION_EXPIRED_ACTION, technicalDetail);
+            case OWNER_MISMATCH:
+                return new ServiceDiagnostic(type, DiagnosticMessages.OWNER_MISMATCH_SUMMARY,
+                        DiagnosticMessages.OWNER_MISMATCH_ACTION, technicalDetail);
+            case ALREADY_UNDONE:
+                return new ServiceDiagnostic(type, DiagnosticMessages.ALREADY_UNDONE_SUMMARY,
+                        DiagnosticMessages.ALREADY_UNDONE_ACTION, technicalDetail);
+            case INVALID_REQUEST:
+                return new ServiceDiagnostic(type, DiagnosticMessages.INVALID_REQUEST_SUMMARY,
+                        DiagnosticMessages.INVALID_REQUEST_ACTION, technicalDetail);
             case UNKNOWN:
             default:
                 return new ServiceDiagnostic(Type.UNKNOWN, DiagnosticMessages.UNKNOWN_ERROR_SUMMARY,
@@ -86,6 +110,24 @@ public final class ServiceDiagnostic {
         }
         if (status == RuleServiceContract.RESULT_UNCERTAIN) {
             return of(Type.COMMIT_UNCERTAIN, technicalDetail);
+        }
+        if (status == RuleServiceContract.RESULT_WRITE_FAILED) {
+            return of(Type.WRITE_FAILED, technicalDetail);
+        }
+        if (status == RuleServiceContract.RESULT_STALE) {
+            return of(Type.STATE_STALE, technicalDetail);
+        }
+        if (status == RuleServiceContract.RESULT_EXPIRED) {
+            return of(Type.SESSION_EXPIRED, technicalDetail);
+        }
+        if (status == RuleServiceContract.RESULT_OWNER_MISMATCH) {
+            return of(Type.OWNER_MISMATCH, technicalDetail);
+        }
+        if (status == RuleServiceContract.RESULT_ALREADY_UNDONE) {
+            return of(Type.ALREADY_UNDONE, technicalDetail);
+        }
+        if (status == RuleServiceContract.RESULT_INVALID) {
+            return of(Type.INVALID_REQUEST, technicalDetail);
         }
         return of(Type.UNKNOWN, technicalDetail);
     }

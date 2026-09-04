@@ -47,11 +47,30 @@ public class ServiceDiagnosticTest {
         assertEquals(ServiceDiagnostic.Type.CONTRACT_MISMATCH,
                 ServiceDiagnostic.forResultStatus(
                         RuleServiceContract.RESULT_REBOOT_REQUIRED, "reboot").getType());
-        assertEquals(ServiceDiagnostic.Type.UNKNOWN,
+        assertEquals(ServiceDiagnostic.Type.WRITE_FAILED,
                 ServiceDiagnostic.forResultStatus(RuleServiceContract.RESULT_WRITE_FAILED, "io")
                         .getType());
         assertEquals(ServiceDiagnostic.Type.COMMIT_UNCERTAIN,
                 ServiceDiagnostic.forResultStatus(RuleServiceContract.RESULT_UNCERTAIN, "lost")
+                        .getType());
+    }
+
+    @Test
+    public void resultStatusMapsStaleExpiredOwnerUndoneAndInvalid() {
+        assertEquals(ServiceDiagnostic.Type.STATE_STALE,
+                ServiceDiagnostic.forResultStatus(RuleServiceContract.RESULT_STALE, "stale")
+                        .getType());
+        assertEquals(ServiceDiagnostic.Type.SESSION_EXPIRED,
+                ServiceDiagnostic.forResultStatus(RuleServiceContract.RESULT_EXPIRED, "expired")
+                        .getType());
+        assertEquals(ServiceDiagnostic.Type.OWNER_MISMATCH,
+                ServiceDiagnostic.forResultStatus(
+                        RuleServiceContract.RESULT_OWNER_MISMATCH, "owner").getType());
+        assertEquals(ServiceDiagnostic.Type.ALREADY_UNDONE,
+                ServiceDiagnostic.forResultStatus(
+                        RuleServiceContract.RESULT_ALREADY_UNDONE, "undone").getType());
+        assertEquals(ServiceDiagnostic.Type.INVALID_REQUEST,
+                ServiceDiagnostic.forResultStatus(RuleServiceContract.RESULT_INVALID, "bad")
                         .getType());
     }
 

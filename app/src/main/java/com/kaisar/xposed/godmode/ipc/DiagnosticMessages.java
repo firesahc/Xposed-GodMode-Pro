@@ -34,6 +34,24 @@ final class DiagnosticMessages {
     static final String COMMIT_UNCERTAIN_SUMMARY = "规则提交状态未知";
     static final String COMMIT_UNCERTAIN_ACTION = "请刷新规则后再操作，不要重复提交";
 
+    static final String WRITE_FAILED_SUMMARY = "规则写入失败";
+    static final String WRITE_FAILED_ACTION = "请检查持久化日志中的详细原因后重试";
+
+    static final String STATE_STALE_SUMMARY = "规则状态已过期";
+    static final String STATE_STALE_ACTION = "请刷新规则后重新操作";
+
+    static final String SESSION_EXPIRED_SUMMARY = "编辑会话已过期";
+    static final String SESSION_EXPIRED_ACTION = "请退出当前编辑并重新进入";
+
+    static final String OWNER_MISMATCH_SUMMARY = "调用身份与规则所有者不一致";
+    static final String OWNER_MISMATCH_ACTION = "请确认目标应用与调用范围正确后重试";
+
+    static final String ALREADY_UNDONE_SUMMARY = "该操作已经撤销";
+    static final String ALREADY_UNDONE_ACTION = "无需重复操作，可刷新规则确认";
+
+    static final String INVALID_REQUEST_SUMMARY = "规则请求参数非法";
+    static final String INVALID_REQUEST_ACTION = "请检查目标应用与规则内容后重试";
+
     static final String UNKNOWN_ERROR_SUMMARY = "规则服务发生未知错误";
     static final String UNKNOWN_ERROR_ACTION = "请查看持久化日志中的详细原因";
 
