@@ -198,7 +198,7 @@ public final class RuleBackupManager {
                 if (entryName == null) {
                     throw new IOException("required main image is unavailable");
                 }
-                viewRuleCopy.imagePath = entryName;
+                viewRuleCopy = viewRuleCopy.withImagePath(entryName);
             }
             if (viewRule.isModifyRule() && !isEmptyText(viewRule.getModImagePath())) {
                 if (viewRule.getModImagePath().equals(viewRule.imagePath)) {
