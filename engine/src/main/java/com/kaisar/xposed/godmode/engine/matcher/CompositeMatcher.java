@@ -508,6 +508,7 @@ public final class CompositeMatcher implements Matcher {
         try {
             return view.getResources().getResourceName(view.getId());
         } catch (Resources.NotFoundException ignored) {
+            // 仅诊断字符串用，解析失败回空串；不记日志（mismatch 诊断路径内，避免递归噪音）。
             return "";
         }
     }

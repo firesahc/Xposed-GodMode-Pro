@@ -416,6 +416,7 @@ public final class RecyclerAdapterHook {
             Object value = XposedHelpers.callMethod(adapter, "getItemViewType", position);
             return value instanceof Integer ? (Integer) value : -1;
         } catch (Throwable ignored) {
+            // 反射失败（ROM 无此方法）即视为未知类型返回 -1；bind 热路径不记日志防刷屏。
             return -1;
         }
     }
@@ -426,6 +427,7 @@ public final class RecyclerAdapterHook {
             Object value = XposedHelpers.callMethod(holder, "getItemViewType");
             return value instanceof Integer ? (Integer) value : -1;
         } catch (Throwable ignored) {
+            // 同上：未知 holder 类型返回 -1，bind 热路径不记日志。
             return -1;
         }
     }

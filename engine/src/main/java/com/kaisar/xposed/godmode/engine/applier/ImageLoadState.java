@@ -1,5 +1,7 @@
 package com.kaisar.xposed.godmode.engine.applier;
 
+import com.kaisar.xposed.godmode.engine.util.Logger;
+
 import java.util.concurrent.Callable;
 import java.util.concurrent.Executor;
 import java.util.function.Consumer;
@@ -7,6 +9,8 @@ import java.util.function.Function;
 
 /** Tracks one asynchronous image request until delivery or a terminal failure. */
 final class ImageLoadState {
+
+    private static final String TAG = "ImageLoadState";
 
     private boolean pending;
     private long generation;
@@ -105,8 +109,10 @@ final class ImageLoadState {
         if (handler == null) return;
         try {
             handler.accept(failure);
-        } catch (Throwable ignored) {
-            // Failure reporting must not keep a request pending.
+        } catch (Throwable handlerFailure) {
+            // Failure reporting must not keep a request pending; but a throwing handler
+            // is a client bug worth one warning (rare path, no flood risk).
+            Logger.w(TAG, "failure handler threw", handlerFailure);
         }
     }
 }

@@ -370,7 +370,9 @@ final class OperationLeaseController {
         try {
             mListener.onEditTransition(new EditTransition(
                     result.editEnabled, result.editRevision, 0L));
-        } catch (RuntimeException ignored) { }
+        } catch (RuntimeException ignored) {
+            // Listener 回调异常不得打断租约发布；服务端实现方自行保证回调不抛。
+        }
     }
 
     private void completeTransition(OperationCoordinator.CloseResult result) {
@@ -382,18 +384,24 @@ final class OperationLeaseController {
         if (!result.editEnabled && result.closedEditRevision > 0L) {
             try {
                 mListener.onEditRevisionClosed(result.closedEditRevision);
-            } catch (RuntimeException ignored) { }
+            } catch (RuntimeException ignored) {
+                // 同上：关闭通知的 listener 异常不得阻断租约状态机收敛。
+            }
         }
         try {
             mListener.onEditTransition(new EditTransition(
                     result.editEnabled, result.editRevision, result.closedEditRevision));
-        } catch (RuntimeException ignored) { }
+        } catch (RuntimeException ignored) {
+            // 同上：过渡发布失败时租约侧已收敛，observer 侧以下次快照对账为准。
+        }
     }
 
     private void publishOwnerDied(LeaseInfo lease) {
         try {
             mListener.onOwnerDied(lease);
-        } catch (RuntimeException ignored) { }
+        } catch (RuntimeException ignored) {
+            // 同上：owner 死亡清理已完成，通知失败不影响租约释放。
+        }
     }
 
     private OperationCoordinator.OpenResult unavailable(int type, String message) {
