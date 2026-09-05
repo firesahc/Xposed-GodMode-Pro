@@ -40,6 +40,12 @@ public final class ParticleEffectHelper {
     public interface Completion {
         void onCommitted(UndoStateParcel undoState);
         void onError(String message);
+        /**
+         * 本地乐观应用成功后触发（动画启动处，早于权威提交）。
+         * 调用方应在此推进选中与遮罩（前端投影），账本仍等 onCommitted。
+         * default 空实现：老调用方不强制处理。
+         */
+        default void onFrontApplied() {}
     }
 
     /**
@@ -86,6 +92,13 @@ public final class ParticleEffectHelper {
                     }
                 } catch (Exception e) {
                     Logger.e(TAG, "applyRule/drawRuleMask on animation start fail", e);
+                }
+                if (runtimeApplied[0] && completion != null) {
+                    try {
+                        completion.onFrontApplied();
+                    } catch (Exception e) {
+                        Logger.w(TAG, "front-applied callback failed", e);
+                    }
                 }
                 if (maskView != null) {
                     maskView.detachFromContainer();

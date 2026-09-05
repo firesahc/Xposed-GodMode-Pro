@@ -425,9 +425,22 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
                         }
 
                         @Override
+                        public void onFrontApplied(int index) {
+                            // 前端投影：本地乐观应用已完成，立即推进选中与遮罩，
+                            // 不等权威提交。提交到达时 revision 守卫天然幂等；
+                            // 账本仍只在 onCommitted 处理。
+                            if (isCurrentActivitySession(activity, sessionGeneration)) {
+                                mNodePanel.navigateNext();
+                                mNodePanel.refreshMaskToSelection();
+                            }
+                        }
+
+                        @Override
                         public void onError(String message) {
                             if (mUndoController.failForwardMutation(mutationScope)
                                     && isCurrentActivitySession(activity, sessionGeneration)) {
+                                // 纠正：本地乐观应用已被回滚，按当前选中恢复遮罩。
+                                mNodePanel.refreshMaskToSelection();
                                 Toast.makeText(activity,
                                         GmResources.getString(R.string.block_fail, message),
                                         Toast.LENGTH_SHORT).show();

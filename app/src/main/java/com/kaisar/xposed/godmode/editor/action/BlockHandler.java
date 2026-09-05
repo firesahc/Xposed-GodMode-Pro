@@ -28,6 +28,11 @@ public final class BlockHandler {
     public interface OnBlockListener {
         void onCommitted(int blockedViewIndex, UndoStateParcel undoState);
         void onError(String message);
+        /**
+         * 本地乐观应用成功后触发（早于权威提交）。调用方应在此推进选中与遮罩；
+         * 撤销账本仍只在 onCommitted 处理。default 空实现：老调用方不强制处理。
+         */
+        default void onFrontApplied(int blockedViewIndex) {}
     }
 
     /**
@@ -58,6 +63,13 @@ public final class BlockHandler {
                         public void onCommitted(UndoStateParcel undoState) {
                             if (listener != null) {
                                 listener.onCommitted(blockedViewIndex, undoState);
+                            }
+                        }
+
+                        @Override
+                        public void onFrontApplied() {
+                            if (listener != null) {
+                                listener.onFrontApplied(blockedViewIndex);
                             }
                         }
 
