@@ -591,6 +591,9 @@ public class PropertyEditorPanel {
                     CommonUtils.recycleNullableBitmap(finalSnapshot);
                     return;
                 }
+                // 前端投影：本地应用已成功，立即按当前目标刷新遮罩，不等后端写入；
+                // 后端失败走 finishSaveFailure/abort 纠正，成功走 dismiss 会话关闭。
+                notifySession();
                 TaskExecutor.executeIo(() -> {
                     RuleMutationResult result;
                     // The modification image is sent with the rule mutation. The service
