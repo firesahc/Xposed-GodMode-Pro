@@ -16,7 +16,6 @@ import com.kaisar.xposed.godmode.engine.rule.ModifyEffect;
 import com.kaisar.xposed.godmode.engine.rule.RemoveEffect;
 import com.kaisar.xposed.godmode.engine.rule.RuleSlotKey;
 import com.kaisar.xposed.godmode.engine.util.Logger;
-import com.kaisar.xposed.godmode.ipc.RuleServiceClient;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 
 import java.lang.ref.WeakReference;
@@ -58,6 +57,9 @@ public final class ViewController {
     /** Activity 类名，Activity 级实例时非 null */
     private final String mActivityClassName;
 
+    /** 图片加载器（构造注入，可空兼容：空时回退 BinderImageLoader 默认） */
+    private final ModifyApplier.ImageLoader mImageLoader;
+
     // =========================================================================
     // 单例模式（向后兼容）
     // =========================================================================
@@ -83,6 +85,7 @@ public final class ViewController {
     /** 进程级单例私有构造 */
     private ViewController(String activityClassName) {
         this.mActivityClassName = activityClassName;
+        this.mImageLoader = null;
     }
 
     /**
@@ -95,8 +98,22 @@ public final class ViewController {
      * @param activity Activity 实例（用于获取类名）
      */
     public ViewController(Activity activity) {
+        this(activity, BinderImageLoader.getDefault());
+    }
+
+    /**
+     * 创建 Activity 级 ViewController 实例（构造注入图片加载器）。
+     * <p>
+     * Engine 纯度边界：图片 FD 打开由外部 {@link ModifyApplier.ImageLoader} 提供，
+     * ViewController 不再直连 Binder。空 loader 回退共享默认实现，避免 NPE。
+     *
+     * @param activity    Activity 实例（用于获取类名）
+     * @param imageLoader 图片加载器，可空（空时回退共享默认）
+     */
+    public ViewController(Activity activity, ModifyApplier.ImageLoader imageLoader) {
         this.mActivityClassName = activity != null
                 ? activity.getComponentName().getClassName() : null;
+        this.mImageLoader = imageLoader;
     }
 
     /**
@@ -112,9 +129,9 @@ public final class ViewController {
 
     private synchronized ModifyApplier getModifyApplier() {
         if (mModifyApplier == null) {
-            mModifyApplier = new ModifyApplier(
-                    path -> RuleServiceClient.getDefault().openImageFileDescriptor(path),
-                    mActivityClassName);
+            ModifyApplier.ImageLoader loader = mImageLoader != null
+                    ? mImageLoader : BinderImageLoader.getDefault();
+            mModifyApplier = new ModifyApplier(loader, mActivityClassName);
         }
         return mModifyApplier;
     }

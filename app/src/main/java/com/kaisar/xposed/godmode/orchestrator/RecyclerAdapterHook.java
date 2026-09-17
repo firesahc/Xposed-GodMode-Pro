@@ -9,7 +9,6 @@ import com.kaisar.xposed.godmode.engine.matcher.ViewTraversal;
 import com.kaisar.xposed.godmode.engine.rule.MatchFields;
 import com.kaisar.xposed.godmode.engine.rule.MatchSpec;
 import com.kaisar.xposed.godmode.engine.util.Logger;
-import com.kaisar.xposed.godmode.inject.HookRegistry;
 import com.kaisar.xposed.godmode.util.ViewUtils;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
@@ -46,6 +45,29 @@ public final class RecyclerAdapterHook {
     /** Per-item execution is enabled only when bind and recycle are both hooked. */
     private static volatile boolean sItemHooksEnabled;
 
+    /** Repeatable 业务门控 — 由 AppInjector 装配，空时默认关闭，不抛异常。 */
+    private static volatile RepeatableRuleGate sRepeatableGate;
+
+    /** 装配 repeatable 门控实现；空参忽略并保持宿主默认行为。 */
+    public static void setRepeatableRuleGate(RepeatableRuleGate gate) {
+        if (gate == null) {
+            Logger.w(TAG, "setRepeatableRuleGate ignored: null gate");
+            return;
+        }
+        sRepeatableGate = gate;
+    }
+
+    private static boolean isRepeatableGateEnabled() {
+        RepeatableRuleGate gate = sRepeatableGate;
+        if (gate == null) return false;
+        try {
+            return gate.isRepeatableRulesEnabled();
+        } catch (Throwable failure) {
+            Logger.w(TAG, "repeatable gate check failed", failure);
+            return false;
+        }
+    }
+
     /** 当前 ViewHolder 绑定 token；弱键避免持有已回收 holder。 */
     private static final Map<Object, BindingToken> sBindings = new WeakHashMap<>();
     private static final AtomicLong sBindingEpoch = new AtomicLong();
@@ -63,12 +85,12 @@ public final class RecyclerAdapterHook {
 
     /** Whether the bind/recycle pair is complete enough for per-item rules. */
     public static boolean isItemHooksEnabled() {
-        return sItemHooksEnabled && HookRegistry.isRepeatableRulesEnabled();
+        return sItemHooksEnabled && isRepeatableGateEnabled();
     }
 
     private static boolean isItemHooksEnabled(HookFamilyState family) {
         return family != null && family.itemHooksEnabled()
-                && HookRegistry.isRepeatableRulesEnabled();
+                && isRepeatableGateEnabled();
     }
 
     private static synchronized void recomputeAggregateState() {
@@ -85,7 +107,33 @@ public final class RecyclerAdapterHook {
 
     /** Changes the repeatable-rule gate without installing or removing hooks. */
     public static void setRepeatableRulesEnabled(boolean enabled) {
-        HookRegistry.setRepeatableRulesEnabled(enabled);
+        RepeatableRuleGate gate = sRepeatableGate;
+        if (gate == null) {
+            Logger.w(TAG, "setRepeatableRulesEnabled ignored: gate not installed");
+            return;
+        }
+        try {
+            gate.setRepeatableRulesEnabled(enabled);
+        } catch (Throwable failure) {
+            Logger.w(TAG, "setRepeatableRulesEnabled failed", failure);
+        }
+    }
+
+    /**
+     * 安装 RecyclerView.Adapter 的三条钩子。
+     * <p>
+     * 安全可重入：仅首次调用生效，同一进程后续调用直接返回。
+     *
+     * @param activity 用于获取 ClassLoader 的 Activity 实例
+     * @param delegate 缓存清理和重应用调度回调（通常由 RuleLifecycleManager 实现）
+     * @param gate repeatable 门控实例；非空时先装配再安装，空时保持现有装配
+     */
+    public static synchronized void install(Activity activity, Delegate delegate,
+            RepeatableRuleGate gate) {
+        if (gate != null) {
+            setRepeatableRuleGate(gate);
+        }
+        install(activity, delegate);
     }
 
     /**
@@ -133,7 +181,7 @@ public final class RecyclerAdapterHook {
                                 @Override
                                 protected void afterHookedMethod(MethodHookParam param) {
                                     try {
-                                        if (!HookRegistry.isRepeatableRulesEnabled()
+                                        if (!isRepeatableGateEnabled()
                                                 || !RuleManager.isInitialized()
                                                 || !RuleManager.get().hasRules()) return;
                                         delegate.invalidateMatcherCaches();

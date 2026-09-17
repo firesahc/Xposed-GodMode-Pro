@@ -28,6 +28,7 @@ public final class PreviewHandler {
 
     private View mPreviewView;
     private RuleRecord mPreviewRule;
+    private ViewController mPreviewController;
     private boolean mIsPreviewing;
 
     /** 检查是否正在预览中 */
@@ -36,20 +37,27 @@ public final class PreviewHandler {
     }
 
     /**
-     * 按 Activity 解析作用域控制器：优先 Activity 级实例（applier 缓存隔离），
-     * 取不到时回落进程单例（与修复前行为逐字一致）。
+     * 按 Activity 解析作用域控制器：优先 Activity 级实例（applier 缓存隔离）。
+     * <p>
+     * Activity-scoped 收敛：activity 非空时仅返回 scoped 实例，缺失返回 null
+     * 不再回退进程单例，避免 apply 与 revoke 落到不同 applier 互踩；
+     * 仅 activity 为 null 时回退进程单例以保兼容。
      */
     private static ViewController resolveController(Activity activity) {
-        if (activity != null) {
-            try {
-                ViewController scoped =
-                        RuleLifecycleManager.getInstance().getViewController(activity);
-                if (scoped != null) return scoped;
-            } catch (Exception e) {
-                Logger.w(TAG, "resolve scoped controller failed, fallback to default", e);
-            }
+        if (activity == null) {
+            return ViewController.getDefault();
         }
-        return ViewController.getDefault();
+        try {
+            ViewController scoped =
+                    RuleLifecycleManager.getInstance().getViewController(activity);
+            if (scoped == null) {
+                Logger.w(TAG, "resolve scoped controller missed: activity=" + activity);
+            }
+            return scoped;
+        } catch (Exception e) {
+            Logger.w(TAG, "resolve scoped controller failed: activity=" + activity, e);
+            return null;
+        }
     }
 
     /**
@@ -65,15 +73,22 @@ public final class PreviewHandler {
             Runnable onStateChanged, boolean infoFlowMode) {
         if (view == null) return;
         try {
+            ViewController controller = resolveController(activity);
+            if (controller == null) {
+                Logger.w(TAG, "startPreview skipped: no scoped controller activity=" + activity);
+                return;
+            }
             mPreviewRule = RuleRecordFactory.makeRemoveRule(view, infoFlowMode);
             mPreviewRule = mPreviewRule.withEffect(RemoveEffect.of(View.GONE));
-            resolveController(activity).applyRule(view, mPreviewRule);
+            controller.applyRule(view, mPreviewRule);
             mPreviewView = view;
+            mPreviewController = controller;
             mIsPreviewing = true;
             if (onStateChanged != null) onStateChanged.run();
             if (maskView != null) maskView.updateOverlayBounds(new Rect());
         } catch (Exception e) {
             Logger.e(TAG, "startPreview fail", e);
+            mPreviewController = null;
         }
     }
 
@@ -90,10 +105,29 @@ public final class PreviewHandler {
      */
     public void restorePreview(Activity activity, MaskView maskView, View selectedView,
             Runnable onStateChanged) {
-        if (mPreviewView != null && mPreviewRule != null) {
-            resolveController(activity).revokeRule(mPreviewView, mPreviewRule);
+        try {
+            if (mPreviewView != null && mPreviewRule != null) {
+                ViewController controller = mPreviewController;
+                if (controller == null) {
+                    Logger.w(TAG, "restorePreview skipped: no cached controller activity=" + activity);
+                } else {
+                    try {
+                        ViewController current = resolveController(activity);
+                        if (current != null && current != controller) {
+                            Logger.w(TAG, "restorePreview activity mismatch, use start controller activity=" + activity);
+                        }
+                    } catch (Exception e) {
+                        Logger.w(TAG, "restorePreview resolve current failed activity=" + activity, e);
+                    }
+                    controller.revokeRule(mPreviewView, mPreviewRule);
+                }
+            }
+        } catch (Exception e) {
+            Logger.w(TAG, "restorePreview failed activity=" + activity, e);
+        } finally {
             mPreviewView = null;
             mPreviewRule = null;
+            mPreviewController = null;
         }
         mIsPreviewing = false;
         if (onStateChanged != null) onStateChanged.run();

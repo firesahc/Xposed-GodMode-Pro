@@ -10,7 +10,7 @@ import com.kaisar.xposed.godmode.engine.Property;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.inject.hooks.InteractionHooks;
 import com.kaisar.xposed.godmode.inject.hooks.LifecycleHooks;
-import com.kaisar.xposed.godmode.orchestrator.RuleLifecycleManager;
+import com.kaisar.xposed.godmode.orchestrator.RepeatableRuleGate;
 
 import de.robv.android.xposed.XposedHelpers;
 
@@ -20,7 +20,7 @@ import de.robv.android.xposed.XposedHelpers;
  * 由 {@link AppInjector} 在注入目标应用时调用。
  * 不持有业务状态，仅负责 Hook 注册。
  */
-public final class HookRegistry {
+public final class HookRegistry implements RepeatableRuleGate {
 
     private static final String TAG = "HookRegistry";
     private static volatile boolean sHooksRegistered;
@@ -35,6 +35,14 @@ public final class HookRegistry {
     private static volatile boolean sRepeatableRulesEnabled;
 
     private HookRegistry() {}
+
+    /** Gate 单例 — 由 AppInjector 装配给 orchestrator 层，避免静态跨包调用。 */
+    private static final HookRegistry sGateInstance = new HookRegistry();
+
+    /** 获取 repeatable 门控实例（inject 层唯一实现）。 */
+    public static RepeatableRuleGate getGate() {
+        return sGateInstance;
+    }
 
     /**
      * Registers all hooks independently. A failed optional hook can be retried
@@ -66,14 +74,8 @@ public final class HookRegistry {
 
         boolean coreReady = sResumeHookInstalled && sCreateHookInstalled
                 && sPostResumeHookInstalled && sDestroyHookInstalled;
-        if (coreReady && !sEventBusRegistered) {
-            try {
-                ModuleBootstrap.getEventBus().register(RuleLifecycleManager.getInstance());
-                sEventBusRegistered = true;
-            } catch (Throwable failure) {
-                Logger.w(TAG, "RuleLifecycleManager registration failed", failure);
-            }
-        }
+        // P0-1: EventBus 注册已迁移至 AppInjector，此处不再触碰 orchestrator 层，
+        // 避免 inject <-> orchestrator 双向循环。coreReady 仅反映物理 Hook 状态。
 
         if (!sTouchHookInstalled) {
             sTouchHookInstalled = install("View.dispatchTouchEvent", () -> {
@@ -92,7 +94,7 @@ public final class HookRegistry {
                             new InteractionHooks.KeyHook(ModuleBootstrap.getEditorOrchestrator())));
         }
 
-        sHooksRegistered = coreReady && sEventBusRegistered;
+        sHooksRegistered = coreReady;
         Logger.i(TAG, "hook install result: core=" + sHooksRegistered
                 + ", touch=" + sTouchHookInstalled + ", key=" + sKeyHookInstalled);
         return new HookInstallReport(sHooksRegistered, sTouchHookInstalled,
@@ -109,12 +111,19 @@ public final class HookRegistry {
     }
 
     /** Updates the repeatable-rule business gate without changing hooks. */
-    public static void setRepeatableRulesEnabled(boolean enabled) {
+    @Override
+    public void setRepeatableRulesEnabled(boolean enabled) {
         sRepeatableRulesEnabled = enabled;
     }
 
-    public static boolean isRepeatableRulesEnabled() {
+    @Override
+    public boolean isRepeatableRulesEnabled() {
         return sRepeatableRulesEnabled;
+    }
+
+    /** 由 AppInjector 在 EventBus 注册成功后调用，保持诊断口径一致。 */
+    public static void setEventBusRegistered(boolean registered) {
+        sEventBusRegistered = registered;
     }
 
     private static boolean install(String name, HookInstall action) {

@@ -3,6 +3,9 @@ package com.kaisar.xposed.godmode.inject;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.ipc.RuleServiceClient;
 import com.kaisar.xposed.godmode.ipc.ServiceObserver;
+import com.kaisar.xposed.godmode.orchestrator.RecyclerAdapterHook;
+import com.kaisar.xposed.godmode.orchestrator.RepeatableRuleGate;
+import com.kaisar.xposed.godmode.orchestrator.RuleLifecycleManager;
 import com.kaisar.xposed.godmode.orchestrator.RuleManager;
 
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
@@ -39,6 +42,12 @@ public final class AppInjector {
             return;
         }
 
+        // [P0-1] gate 组装 + EventBus 注册（原 HookRegistry 内聚逻辑外移，打破双向循环）。
+        assembleRepeatableGate();
+        if (!registerRuleLifecycleManager(packageName)) {
+            return;
+        }
+
         // [Phase 4] 初始化 RuleManager（Binder 获取规则 + 文件快照降级）
         RuleManager.init(packageName);
         serviceClient.addBinderDeathListener(() ->
@@ -59,5 +68,44 @@ public final class AppInjector {
                         }
                     }
                 }));
+    }
+
+    /** 将 inject 层门控实现装配给 orchestrator 层；失败只记日志不抛给宿主。 */
+    private static void assembleRepeatableGate() {
+        try {
+            RepeatableRuleGate gate = HookRegistry.getGate();
+            try {
+                RuleLifecycleManager.getInstance().setRepeatableRuleGate(gate);
+            } catch (Throwable failure) {
+                Logger.w(TAG, "repeatable gate install failed for RuleLifecycleManager",
+                        failure);
+            }
+            try {
+                RecyclerAdapterHook.setRepeatableRuleGate(gate);
+            } catch (Throwable failure) {
+                Logger.w(TAG, "repeatable gate install failed for RecyclerAdapterHook",
+                        failure);
+            }
+        } catch (Throwable failure) {
+            Logger.w(TAG, "repeatable gate assembly failed", failure);
+        }
+    }
+
+    /**
+     * 注册 RuleLifecycleManager 到 EventBus；失败则跳过后续运行时初始化。
+     *
+     * @return true 注册成功，false 注册失败（调用方直接返回）
+     */
+    private static boolean registerRuleLifecycleManager(String packageName) {
+        try {
+            ModuleBootstrap.getEventBus().register(RuleLifecycleManager.getInstance());
+        } catch (Throwable failure) {
+            Logger.w(TAG, "RuleLifecycleManager registration failed", failure);
+            Logger.e(TAG, "lifecycle hooks unavailable; skip runtime for "
+                    + packageName);
+            return false;
+        }
+        HookRegistry.setEventBusRegistered(true);
+        return true;
     }
 }

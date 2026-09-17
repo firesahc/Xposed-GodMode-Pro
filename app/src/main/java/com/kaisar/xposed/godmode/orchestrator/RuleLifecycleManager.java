@@ -16,7 +16,6 @@ import com.kaisar.xposed.godmode.engine.matcher.CompositeMatcher;
 import com.kaisar.xposed.godmode.engine.matcher.Matcher;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.engine.util.Preconditions;
-import com.kaisar.xposed.godmode.inject.HookRegistry;
 import com.kaisar.xposed.godmode.orchestrator.ViewController;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
@@ -74,6 +73,20 @@ public final class RuleLifecycleManager implements RecyclerAdapterHook.Delegate 
 
     /** 防抖 Handler（主线程） */
     private final Handler mDebounceHandler = new Handler(Looper.getMainLooper());
+
+    /** Repeatable 业务门控 — 由 AppInjector 装配，代替直调 inject 层静态开关。 */
+    private volatile RepeatableRuleGate mRepeatableGate;
+
+    /**
+     * 装配 repeatable 门控实现；空参忽略并保持宿主默认行为。
+     */
+    public void setRepeatableRuleGate(RepeatableRuleGate gate) {
+        if (gate == null) {
+            Logger.w(TAG, "setRepeatableRuleGate ignored: null gate");
+            return;
+        }
+        mRepeatableGate = gate;
+    }
 
     // ===== 单例 =====
 
@@ -137,7 +150,8 @@ public final class RuleLifecycleManager implements RecyclerAdapterHook.Delegate 
 
         // 创建 Activity 级 ViewController（缓存隔离）
         if (!mViewControllers.containsKey(activity)) {
-            mViewControllers.put(activity, new ViewController(activity));
+            mViewControllers.put(activity,
+                    new ViewController(activity, BinderImageLoader.getDefault()));
         }
 
         // 安装 RecyclerView 钩子（幂等：仅首次生效）
@@ -254,7 +268,6 @@ public final class RuleLifecycleManager implements RecyclerAdapterHook.Delegate 
                 vc.invalidateMatcherCache();
             }
         }
-        ViewController.getDefault().invalidateMatcherCache();
     }
 
     @Override
@@ -283,7 +296,16 @@ public final class RuleLifecycleManager implements RecyclerAdapterHook.Delegate 
                 if (enabled) break;
             }
         }
-        HookRegistry.setRepeatableRulesEnabled(enabled);
+        RepeatableRuleGate gate = mRepeatableGate;
+        if (gate == null) {
+            Logger.w(TAG, "refreshRepeatableRulesGate skipped: gate not installed");
+            return;
+        }
+        try {
+            gate.setRepeatableRulesEnabled(enabled);
+        } catch (Throwable failure) {
+            Logger.w(TAG, "refreshRepeatableRulesGate failed", failure);
+        }
     }
 
     // ===================================================================
@@ -291,14 +313,14 @@ public final class RuleLifecycleManager implements RecyclerAdapterHook.Delegate 
     // ===================================================================
 
     /**
-     * 获取指定 Activity 的 ViewController 实例。
+     * 获取指定 Activity 的 ViewController 实例（Activity-scoped）。
      * <p>
-     * 优先返回 Activity 级实例（缓存隔离），不存在时回退到进程级单例（向后兼容）。
+     * 仅返回 Activity 级实例（缓存隔离），不存在时返回 null，调用方须判空跳过，
+     * 不再回退进程级单例，避免跨 Activity 基线互踩。
      */
     @Override
     public ViewController getViewController(Activity activity) {
-        ViewController vc = mViewControllers.get(activity);
-        return vc != null ? vc : ViewController.getDefault();
+        return mViewControllers.get(activity);
     }
 
     // ===================================================================
@@ -316,11 +338,16 @@ public final class RuleLifecycleManager implements RecyclerAdapterHook.Delegate 
                     revRemove.add(r);
                 }
             }
+            ViewController vc = getViewController(activity);
+            if (vc == null) {
+                Logger.w(TAG, "revokeRules skipped: no scoped controller activity=" + activity);
+                return;
+            }
             if (!revRemove.isEmpty()) {
-                getViewController(activity).revokeRuleBatch(activity, revRemove);
+                vc.revokeRuleBatch(activity, revRemove);
             }
             if (!revModify.isEmpty()) {
-                getViewController(activity).revokeRuleBatch(activity, revModify);
+                vc.revokeRuleBatch(activity, revModify);
             }
         });
     }
@@ -328,7 +355,12 @@ public final class RuleLifecycleManager implements RecyclerAdapterHook.Delegate 
     private void applyRulesForActivities(ActRules rules) {
         forEachMatchingActivity(rules, (activity, ruleList) -> {
             if (!ruleList.isEmpty()) {
-                getViewController(activity).applyRuleBatch(activity, ruleList);
+                ViewController vc = getViewController(activity);
+                if (vc == null) {
+                    Logger.w(TAG, "applyRules skipped: no scoped controller activity=" + activity);
+                    return;
+                }
+                vc.applyRuleBatch(activity, ruleList);
             }
         });
     }
@@ -517,7 +549,13 @@ public final class RuleLifecycleManager implements RecyclerAdapterHook.Delegate 
                                 activity.getComponentName().getClassName())
                         : null;
                 if (rules != null && !rules.isEmpty()) {
-                    getViewController(activity).applyRuleBatch(activity, rules,
+                    ViewController vc = getViewController(activity);
+                    if (vc == null) {
+                        Logger.w(TAG, "applyRuleIfMatchCondition skipped: no scoped controller activity=" + activity);
+                        resetGuards();
+                        return;
+                    }
+                    vc.applyRuleBatch(activity, rules,
                             () -> mApplying = false,
                             this::onRuleApplied);
                 } else {
