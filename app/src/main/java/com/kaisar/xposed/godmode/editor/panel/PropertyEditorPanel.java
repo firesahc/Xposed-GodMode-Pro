@@ -3,9 +3,7 @@ package com.kaisar.xposed.godmode.editor.panel;
 import com.kaisar.xposed.godmode.engine.util.CommonUtils;
 
 import android.app.Activity;
-import android.content.Intent;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.LayoutInflater;
@@ -22,6 +20,7 @@ import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.util.ModuleResources;
 import com.kaisar.xposed.godmode.editor.IRuleEditor;
+import com.kaisar.xposed.godmode.editor.ImagePickPort;
 import com.kaisar.xposed.godmode.ipc.RuleServiceContract;
 import com.kaisar.xposed.godmode.ipc.contract.RuleMutationResult;
 import com.kaisar.xposed.godmode.ipc.contract.UndoStateParcel;
@@ -36,11 +35,8 @@ import com.kaisar.xposed.godmode.util.ViewUtils;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 import com.kaisar.xposed.godmode.rule.RuleDraft;
 
-import java.io.InputStream;
 import java.util.Objects;
 import java.lang.ref.WeakReference;
-import de.robv.android.xposed.XC_MethodHook;
-import de.robv.android.xposed.XposedHelpers;
 
 /**
  * Property editor panel for modifying view attributes.
@@ -59,7 +55,6 @@ public class PropertyEditorPanel {
     private static final String TAG = "PropertyEditorPanel";
     private static final String MODIFY_TAG = "ModifyPanel";
 
-    private static final int REQUEST_CODE_PICK_IMAGE = 0x5A45;
     private static final int ANIM_DURATION_SHORT = 200;
     private static final int ANIM_DURATION_MEDIUM = 150;
 
@@ -136,12 +131,11 @@ public class PropertyEditorPanel {
     private int[] mModifyingViewDepth;
     private String mModifyingViewActClass;
 
-    private boolean mActivityResultHooked;
     private WeakReference<Activity> mEditingActivity = new WeakReference<>(null);
     private WeakReference<View> mEditingRoot = new WeakReference<>(null);
-    private long mImageRequestGeneration = -1L;
     private final IRuleEditor mRuleEditor;
     private final SnapshotProvider mSnapshotProvider;
+    private ImagePickPort mImagePickPort;
 
     public interface SnapshotProvider {
         Bitmap capture(View targetView);
@@ -158,6 +152,14 @@ public class PropertyEditorPanel {
         this.mSessionListener = sessionListener;
         this.mSnapshotProvider = Objects.requireNonNull(snapshotProvider, "snapshotProvider");
         this.mMutationListener = mutationListener;
+    }
+
+    /**
+     * 注入图片选择端口（由 AppInjector 经 EditorOrchestrator 持有的本实例装配）。
+     * 未装配时选图入口直接吐司提示，不触碰 Bitmap 状态。
+     */
+    public void setImagePickPort(ImagePickPort imagePickPort) {
+        mImagePickPort = imagePickPort;
     }
 
     /**
@@ -236,6 +238,14 @@ public class PropertyEditorPanel {
         mDismissPending = false;
         mPreviewing = false;
         mGeneration++;
+        ImagePickPort port = mImagePickPort;
+        if (port != null) {
+            try {
+                port.cancel();
+            } catch (Exception e) {
+                Logger.w(MODIFY_TAG, "image pick cancel failed", e);
+            }
+        }
         mSeekLayoutPending = false;
         mPendingSeekWidth = -1;
         mPendingSeekHeight = -1;
@@ -316,14 +326,33 @@ public class PropertyEditorPanel {
 
         imageSection.setVisibility(View.VISIBLE);
         mPendingImageView = (ImageView) selectedView;
-        hookActivityResult(activity);
         panel.findViewById(R.id.mod_image_pick).setOnClickListener(v -> {
             try {
-                mImageRequestGeneration = mGeneration;
-                Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-                intent.addCategory(Intent.CATEGORY_OPENABLE);
-                intent.setType("image/*");
-                activity.startActivityForResult(intent, REQUEST_CODE_PICK_IMAGE);
+                ImagePickPort port = mImagePickPort;
+                if (port == null) {
+                    Toast.makeText(activity, GmResources.getString(R.string.toast_cannot_open_image_picker), Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                final long requestGeneration = mGeneration;
+                ImagePickPort.ImagePickSession session = new ImagePickPort.ImagePickSession(
+                        requestGeneration,
+                        new WeakReference<>(activity),
+                        new WeakReference<View>(mPendingImageView),
+                        (generation, target) -> mPanelView != null && !mSaving
+                                && generation == mGeneration
+                                && target != null && target == mTargetView
+                                && verifyViewIdentity(target),
+                        bitmap -> {
+                            View target = mTargetView;
+                            if (!(target instanceof ImageView)) {
+                                CommonUtils.recycleNullableBitmap(bitmap);
+                                return;
+                            }
+                            CommonUtils.recycleNullableBitmap(mPendingImageBitmap);
+                            mPendingImageBitmap = bitmap;
+                            ((ImageView) target).setImageBitmap(bitmap);
+                        });
+                port.requestPick(activity, session);
             } catch (Exception e) {
                 Toast.makeText(activity, GmResources.getString(R.string.toast_cannot_open_image_picker), Toast.LENGTH_SHORT).show();
             }
@@ -716,59 +745,6 @@ public class PropertyEditorPanel {
             View child = parent.getChildAt(i);
             child.setEnabled(enabled);
             if (child instanceof ViewGroup) setChildrenEnabled((ViewGroup) child, enabled);
-        }
-    }
-
-    // ---- Xposed Hook 图片替换（拦截图片选择器返回结果进行位图替换）----
-
-    private void hookActivityResult(Activity activity) {
-        if (mActivityResultHooked) return;
-        try {
-            XposedHelpers.findAndHookMethod(Activity.class, "onActivityResult",
-                    int.class, int.class, Intent.class, new XC_MethodHook() {
-                        @Override
-                        protected void beforeHookedMethod(MethodHookParam param) {
-                            int requestCode = (int) param.args[0];
-                            int resultCode = (int) param.args[1];
-                            Intent data = (Intent) param.args[2];
-                            if (requestCode != REQUEST_CODE_PICK_IMAGE || resultCode != Activity.RESULT_OK || data == null) return;
-
-                            try {
-                                android.net.Uri uri = data.getData();
-                                if (uri == null) return;
-                                Activity currentActivity = (Activity) param.thisObject;
-                                try (InputStream is = currentActivity.getContentResolver().openInputStream(uri)) {
-                                    Bitmap bitmap = BitmapFactory.decodeStream(is);
-                                    if (bitmap == null) return;
-
-                                    Activity editingActivity = mEditingActivity.get();
-                                    if (mPanelView == null || mSaving || editingActivity == null
-                                            || currentActivity != editingActivity
-                                            || mImageRequestGeneration != mGeneration) {
-                                        CommonUtils.recycleNullableBitmap(bitmap);
-                                        return;
-                                    }
-                                    View targetView = mPendingImageView;
-                                    if (!(targetView instanceof ImageView)
-                                            || targetView != mTargetView
-                                            || !verifyViewIdentity(targetView)) {
-                                        CommonUtils.recycleNullableBitmap(bitmap);
-                                        return;
-                                    }
-
-                                    CommonUtils.recycleNullableBitmap(mPendingImageBitmap);
-                                    mPendingImageBitmap = bitmap;
-                                    ((ImageView) targetView).setImageBitmap(bitmap);
-                                }
-                            } catch (Exception e) {
-                                Logger.e(MODIFY_TAG, "handle image pick fail", e);
-                            }
-                        }
-                    });
-            mActivityResultHooked = true;
-        } catch (Exception e) {
-            Logger.e(MODIFY_TAG,
-                    "hookActivityResult: Xposed hook failed, image replacement disabled", e);
         }
     }
 

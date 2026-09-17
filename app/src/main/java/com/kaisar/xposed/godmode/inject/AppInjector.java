@@ -10,6 +10,8 @@ import com.kaisar.xposed.godmode.orchestrator.RepeatableRuleGate;
 import com.kaisar.xposed.godmode.orchestrator.RuleLifecycleManager;
 import com.kaisar.xposed.godmode.orchestrator.RuleManager;
 
+import com.kaisar.xposed.godmode.inject.hooks.ActivityResultHook;
+
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
 
 /**
@@ -47,6 +49,7 @@ public final class AppInjector {
         // [P0-1] gate 组装 + EventBus 注册（原 HookRegistry 内聚逻辑外移，打破双向循环）。
         assembleRepeatableGate();
         assembleRecyclerBindingPort();
+        assembleImagePickPort();
         if (!registerRuleLifecycleManager(packageName)) {
             return;
         }
@@ -129,6 +132,28 @@ public final class AppInjector {
             }
         } catch (Throwable failure) {
             Logger.w(TAG, "binding port assembly failed", failure);
+        }
+    }
+
+    /**
+     * 将图片选择端口实现装配给编辑器面板；实例归属 Panel 持有，不新开全局单例，
+     * 失败只记日志不抛宿主。
+     * <p>
+     * Panel 实例由 EditorOrchestrator 构造并持有（ModuleBootstrap 单例链路），
+     * 故经 Orchestrator 的 getter 拿到同一实例做 setter 注入。
+     */
+    private static void assembleImagePickPort() {
+        try {
+            ActivityResultHook hook = new ActivityResultHook();
+            try {
+                ModuleBootstrap.getEditorOrchestrator().getPropertyEditor()
+                        .setImagePickPort(hook);
+            } catch (Throwable failure) {
+                Logger.w(TAG, "image pick port install failed for PropertyEditorPanel",
+                        failure);
+            }
+        } catch (Throwable failure) {
+            Logger.w(TAG, "image pick port assembly failed", failure);
         }
     }
 
