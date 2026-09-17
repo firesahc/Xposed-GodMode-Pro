@@ -9,23 +9,25 @@ import com.kaisar.xposed.godmode.engine.event.EventBus;
 import com.kaisar.xposed.godmode.inject.ModuleBootstrap;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.util.ModuleResources;
-import com.kaisar.xposed.godmode.editor.EditorOrchestrator;
 
 import de.robv.android.xposed.XC_MethodHook;
 
 /**
- * Activity 生命周期 Hook 集合。
+ * Activity 生命周期 Hook 集合 — 单一事件通道。
  * <p>
  * 包含三类 Hook：
  * <ul>
- *   <li>{@link ActivityResumeHook} — 拦截 {@link Activity#onResume} 记录当前 Activity</li>
- *   <li>{@link ActivityCreateHook} — 拦截 {@link Activity#onCreate} 注入模块资源 + 编辑面板</li>
+ *   <li>{@link ActivityResumeHook} — 拦截 {@link Activity#onResume} 发布 RESUME 事件</li>
+ *   <li>{@link ActivityCreateHook} — 拦截 {@link Activity#onCreate} 注入模块资源后发布
+ *       CREATE 事件（display 调度的开关/窗口守卫与 decorView.post 延迟已迁移至
+ *       EditorOrchestrator 订阅侧）</li>
  *   <li>自身 {@link XC_MethodHook} — 拦截 {@code onPostResume} / {@code onDestroy}
- *       通过 EventBus 发布 {@link ActivityLifecycleEvent}</li>
+ *       发布 {@link ActivityLifecycleEvent}（RESUME / DESTROY）</li>
  * </ul>
  * <p>
- * 注入层只负责把原始 Activity 回调转成事件；规则应用由 runtime 层的
- * RuleLifecycleManager 消费事件并完成。
+ * 注入层只负责把原始 Activity 回调转成事件，不直调 Editor；规则应用与编辑器绑定
+ * 分别由 runtime 层的 RuleLifecycleManager 与 EditorOrchestrator 消费事件完成。
+ * Hook 内异常只记日志，不抛给宿主。
  */
 public final class LifecycleHooks extends XC_MethodHook {
 
@@ -46,15 +48,17 @@ public final class LifecycleHooks extends XC_MethodHook {
     // =========================================================================
 
     /**
-     * 拦截 {@link Activity#onResume} 记录当前 Activity 到 EditorOrchestrator。
+     * 拦截 {@link Activity#onResume} 转译为 RESUME 事件。
+     * <p>
+     * Editor 绑定由 EditorOrchestrator 订阅 RESUME 完成（setActivity），此处不直调。
      */
     public static final class ActivityResumeHook extends XC_MethodHook {
         @Override
         protected void afterHookedMethod(MethodHookParam param) {
             try {
-                EditorOrchestrator orchestrator = ModuleBootstrap.getEditorOrchestrator();
-                if (orchestrator != null && param.thisObject instanceof Activity) {
-                    orchestrator.setActivity((Activity) param.thisObject);
+                if (param.thisObject instanceof Activity) {
+                    ModuleBootstrap.getEventBus().post(new ActivityLifecycleEvent(
+                            ActivityLifecycleEvent.Type.RESUME, (Activity) param.thisObject));
                 }
             } catch (Throwable failure) {
                 Logger.w(TAG, "editor activity update failed", failure);
@@ -67,8 +71,11 @@ public final class LifecycleHooks extends XC_MethodHook {
     // =========================================================================
 
     /**
-     * 拦截 {@link Activity#onCreate} 注入模块资源。
-     * 在编辑器模式下显示编辑面板。
+     * 拦截 {@link Activity#onCreate} 注入模块资源，随后发布 CREATE 事件。
+     * <p>
+     * 开关门控、窗口/decorView 守卫与 decorView.post 延迟 display 逻辑已迁移至
+     * EditorOrchestrator 订阅侧；此处仅做回调转译。构造器保留 switchProp 参数以
+     * 兼容 HookRegistry 分装，Hook 内不再使用其做门控判断。
      */
     public static final class ActivityCreateHook extends XC_MethodHook {
         private final Property<Boolean> mSwitchProp;
@@ -88,21 +95,8 @@ public final class LifecycleHooks extends XC_MethodHook {
                 Logger.w(TAG, "module resource injection failed", failure);
             }
             try {
-                if (mSwitchProp != null && Boolean.TRUE.equals(mSwitchProp.get())
-                        && activity.getWindow() != null
-                        && activity.getWindow().getDecorView() != null) {
-                    activity.getWindow().getDecorView().post(() -> {
-                        try {
-                            EditorOrchestrator orchestrator =
-                                    ModuleBootstrap.getEditorOrchestrator();
-                            if (orchestrator != null) {
-                                orchestrator.setDisplayForActivity(activity, true);
-                            }
-                        } catch (Throwable failure) {
-                            Logger.w(TAG, "deferred editor display failed", failure);
-                        }
-                    });
-                }
+                ModuleBootstrap.getEventBus().post(new ActivityLifecycleEvent(
+                        ActivityLifecycleEvent.Type.CREATE, activity));
             } catch (Throwable failure) {
                 Logger.w(TAG, "editor display scheduling failed", failure);
             }
@@ -130,12 +124,9 @@ public final class LifecycleHooks extends XC_MethodHook {
                 mEventBus.post(new ActivityLifecycleEvent(
                         ActivityLifecycleEvent.Type.RESUME, activity));
             } else if ("onDestroy".equals(methodName)) {
-                try {
-                    EditorOrchestrator orchestrator = ModuleBootstrap.getEditorOrchestrator();
-                    if (orchestrator != null) orchestrator.onActivityDestroyed(activity);
-                } catch (Throwable failure) {
-                    Logger.w(TAG, "editor activity destroy failed", failure);
-                }
+                // Editor 清理由 EditorOrchestrator 订阅 DESTROY 完成（注册顺序保证
+                // Editor 先于 RuleLifecycleManager 执行，保持原“先清 Editor 再发 DESTROY”语义）；
+                // 此处仅发布事件，不直调 Editor。
                 mEventBus.post(new ActivityLifecycleEvent(
                         ActivityLifecycleEvent.Type.DESTROY, activity));
             }

@@ -92,15 +92,20 @@ public final class AppInjector {
     }
 
     /**
-     * 注册 RuleLifecycleManager 到 EventBus；失败则跳过后续运行时初始化。
+     * 注册生命周期订阅者到 EventBus；失败则跳过后续运行时初始化。
+     * <p>
+     * 注册顺序：EditorOrchestrator 先于 RuleLifecycleManager，保证 DESTROY 事件
+     * 先清 Editor 会话再清规则缓存，与原“先 onActivityDestroyed 再 post DESTROY”
+     * 顺序一致。EventBus 按注册顺序同步派发。
      *
      * @return true 注册成功，false 注册失败（调用方直接返回）
      */
     private static boolean registerRuleLifecycleManager(String packageName) {
         try {
+            ModuleBootstrap.getEventBus().register(ModuleBootstrap.getEditorOrchestrator());
             ModuleBootstrap.getEventBus().register(RuleLifecycleManager.getInstance());
         } catch (Throwable failure) {
-            Logger.w(TAG, "RuleLifecycleManager registration failed", failure);
+            Logger.w(TAG, "lifecycle subscriber registration failed", failure);
             Logger.e(TAG, "lifecycle hooks unavailable; skip runtime for "
                     + packageName);
             return false;

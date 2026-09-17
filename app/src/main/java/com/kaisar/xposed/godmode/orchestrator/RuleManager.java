@@ -233,12 +233,11 @@ public final class RuleManager {
         mRetryAttempt = 0;
         if (mRetryHandler != null) mRetryHandler.removeCallbacks(mRetryTask);
 
-        // Publish before replacing the manager snapshot. RuleLifecycleManager
-        // must diff against the old runtime rules in order to revoke/apply.
-        publishRulesChanged(copyRules(serviceRules));
-        // EventBus dispatch is synchronous. Keep a defensive fallback for
-        // processes where no lifecycle subscriber is installed (for example,
-        // a headless test process) without changing the ordering above.
+        // 先一次算好显式快照再发布：消费方用事件自带 old/new 做 diff，
+        // 不依赖发布与替换之间的同步派发时序去读内部活引用。
+        ActRules oldSnapshot = copyRules(mActRules);
+        ActRules newSnapshot = copyRules(serviceRules);
+        publishRulesChanged(newSnapshot, oldSnapshot);
         replaceRules(serviceRules);
         mLogger.i("rules accepted from Binder for " + mPackageName
                 + " (" + serviceRules.size() + " activities, state=" + mLoadState + ")");
@@ -281,18 +280,25 @@ public final class RuleManager {
 
     private synchronized void suspendRuntimeForUnavailableService() {
         if (mActRules.isEmpty()) return;
-        publishRulesChanged(new ActRules());
-        replaceRules(new ActRules());
+        // 空快照路径同样显式传参：old=当前，new=空。
+        ActRules oldSnapshot = copyRules(mActRules);
+        ActRules emptySnapshot = new ActRules();
+        publishRulesChanged(emptySnapshot, oldSnapshot);
+        replaceRules(emptySnapshot);
     }
 
     /**
      * 发布规则变更事件 — 与 {@link EventBus#getDefault()} 单例直连，
      * 不经 inject 层全局容器转发，保持 orchestrator 包对入口层的零依赖。
+     * <p>
+     * 唯一发布端：先发布已算好的显式快照，之后再由调用方替换内部状态；
+     * 消费方不得回读发布端活引用。
      */
-    private static void publishRulesChanged(ActRules actRules) {
-        if (actRules == null) return;
+    private static void publishRulesChanged(ActRules newSnapshot, ActRules oldSnapshot) {
+        if (newSnapshot == null) return;
         EventBus.getDefault().post(new RulesChangedEvent(
-                sInstance.mPackageName != null ? sInstance.mPackageName : "", actRules));
+                sInstance.mPackageName != null ? sInstance.mPackageName : "",
+                oldSnapshot, newSnapshot));
     }
 
     private Handler getRetryHandler() {

@@ -5,11 +5,27 @@ import android.app.Activity;
 /**
  * Activity 生命周期事件 — 由 LifecycleHooks 发布，由 runtime 层消费。
  * <p>
- * 当前消费者为 RuleLifecycleManager，负责规则应用和 Activity 级缓存维护。
+ * 消费者：
+ * <ul>
+ *   <li>RuleLifecycleManager — RESUME 时注册布局监听并应用规则，DESTROY 时清理
+ *      （忽略 CREATE）</li>
+ *   <li>EditorOrchestrator — RESUME 时绑定当前 Activity，CREATE 时按开关调度
+ *       延迟 display，DESTROY 时清理编辑会话</li>
+ * </ul>
  */
 public final class ActivityLifecycleEvent {
 
-    public enum Type { RESUME, DESTROY }
+    /**
+     * 生命周期语义（与 Android 回调 1:1 对应）：
+     * <ul>
+     *   <li>CREATE — {@code Activity#onCreate} 之后（资源注入完成后发布；
+     *       仅携带 Activity，display 调度所需的开关/窗口守卫由订阅侧执行）</li>
+     *   <li>RESUME — {@code onResume}/{@code onPostResume}（当前实现由两处发布，
+     *       订阅侧须幂等）</li>
+     *   <li>DESTROY — {@code onDestroy}</li>
+     * </ul>
+     */
+    public enum Type { CREATE, RESUME, DESTROY }
 
     private final Type mType;
     private final Activity mActivity;

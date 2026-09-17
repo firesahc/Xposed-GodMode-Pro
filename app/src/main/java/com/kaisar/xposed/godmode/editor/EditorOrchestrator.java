@@ -20,6 +20,8 @@ import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.editor.IRuleEditor;
 import com.kaisar.xposed.godmode.engine.EditorInteractionMode;
 import com.kaisar.xposed.godmode.engine.Property;
+import com.kaisar.xposed.godmode.engine.event.ActivityLifecycleEvent;
+import com.kaisar.xposed.godmode.engine.event.Subscribe;
 import com.kaisar.xposed.godmode.engine.matcher.ViewTraversal;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.editor.action.BlockHandler;
@@ -233,8 +235,59 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
 
 
     // =========================================================================
-    // Activity 管理 — 由 LifecycleHooks 的 onResume 回调设置当前 Activity
+    // Activity 管理 — 订阅 LifecycleHooks 经 EventBus 发布的生命周期事件
+    // （RESUME 绑定当前 Activity，CREATE 调度延迟 display，DESTROY 清理会话）
     // =========================================================================
+
+    /**
+     * 处理 Activity 生命周期事件（P1-1 单一事件通道）。
+     * <p>
+     * 原 LifecycleHooks 三处直调（onResume 的 setActivity、onCreate 延迟的
+     * setDisplayForActivity、onDestroy 的 onActivityDestroyed）迁移至此；
+     * Hook 仅做回调转译。异常由 EventBus 统一记日志，不抛给宿主。
+     */
+    @Subscribe
+    public void onActivityLifecycle(ActivityLifecycleEvent event) {
+        if (event == null) return;
+        Activity activity = event.getActivity();
+        switch (event.getType()) {
+            case RESUME:
+                if (activity == null || activity.isFinishing()) return;
+                setActivity(activity);
+                break;
+            case CREATE:
+                onActivityCreated(activity);
+                break;
+            case DESTROY:
+                onActivityDestroyed(activity);
+                break;
+        }
+    }
+
+    /**
+     * CREATE 语义：原 ActivityCreateHook 门控与 decorView.post 延迟原样迁移。
+     * <p>
+     * 守卫：activity 空/finishing/destroyed 判断、switchProp 门控、window/decorView
+     * 空判断；实际 display 经 post 延迟后走 setDisplayForActivity（内含 current
+     * 绑定与 sessionGeneration 守卫）。
+     */
+    private void onActivityCreated(Activity activity) {
+        if (activity == null || activity.isFinishing() || activity.isDestroyed()) return;
+        if (mSwitchProp == null || !Boolean.TRUE.equals(mSwitchProp.get())) return;
+        if (activity.getWindow() == null
+                || activity.getWindow().getDecorView() == null) return;
+        try {
+            activity.getWindow().getDecorView().post(() -> {
+                try {
+                    setDisplayForActivity(activity, true);
+                } catch (Throwable failure) {
+                    Logger.w(TAG, "deferred editor display failed", failure);
+                }
+            });
+        } catch (Throwable failure) {
+            Logger.w(TAG, "editor display scheduling failed", failure);
+        }
+    }
 
     public void setActivity(final Activity a) {
         Activity current = mCurrentActivityRef.get();

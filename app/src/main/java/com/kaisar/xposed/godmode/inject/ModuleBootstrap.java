@@ -12,13 +12,11 @@ import android.view.View;
 import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.engine.Property;
 import com.kaisar.xposed.godmode.engine.event.EventBus;
-import com.kaisar.xposed.godmode.engine.event.RulesChangedEvent;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.editor.RuleEditorClient;
 import com.kaisar.xposed.godmode.editor.EditorOrchestrator;
 import com.kaisar.xposed.godmode.util.BlockListChecker;
 import com.kaisar.xposed.godmode.util.ModuleResources;
-import com.kaisar.xposed.godmode.rule.ActRules;
 
 import java.lang.reflect.Method;
 
@@ -161,11 +159,5 @@ public final class ModuleBootstrap implements IXposedHookLoadPackage, IXposedHoo
         }
         HookRegistry.setEditorEnabled(sState == State.ALLOWED && enable);
         sEditorOrchestrator.setDisplay(enable);
-    }
-
-    public static void notifyViewRulesChanged(ActRules actRules) {
-        if (actRules == null) return;
-        sEventBus.post(new RulesChangedEvent(
-                getPackageName() != null ? getPackageName() : "", actRules));
     }
 }

@@ -207,19 +207,22 @@ public final class RuleLifecycleManager implements RecyclerAdapterHook.Delegate 
     @Subscribe
     public void onRulesChanged(RulesChangedEvent event) {
         if (event == null) return;
-        ActRules newRules = toActRules(event.rules);
-        if (newRules == null) {
+        // 显式快照：用事件自带 old/new 做 diff，不回读 RuleManager 活引用；
+        // 旧单参事件无 old 时回退到 legacy rules 字段（其恒等于 new）。
+        Map<String, ?> rawNew = event.newSnapshot != null ? event.newSnapshot : event.rules;
+        if (rawNew == null) {
             Logger.w(TAG, "onRulesChanged received null rules");
             return;
         }
+        ActRules newRules = snapshotToActRules(rawNew);
+        ActRules oldRules = snapshotToActRules(event.oldSnapshot);
 
         if (!RuleManager.isInitialized()) {
             Logger.w(TAG, "onRulesChanged skipped — RuleManager not initialized");
             return;
         }
 
-        ActRules currentRules = RuleManager.get().viewRules();
-        RuleDiff diff = computeRuntimeDiff(currentRules, newRules);
+        RuleDiff diff = computeRuntimeDiff(oldRules, newRules);
         if (diff.isEmpty()) {
             // 展示元数据可能变化；更新快照，但不重建运行时效果。
             RuleManager.get().replaceRules(newRules);
@@ -458,9 +461,35 @@ public final class RuleLifecycleManager implements RecyclerAdapterHook.Delegate 
      * <p>
      * 架构限制：RulesChangedEvent 位于 engine 层，无法声明 {@code Map<String, List<RuleRecord>>} 泛型。
      */
+    /**
+     * 将事件自带的不可变快照（engine 层拷贝的普通 Map）还原为 app 层
+     * {@link ActRules} 供 diff 使用。null 归一为空；逐项浅拷贝 list，
+     * 元素仍为同一 RuleRecord 引用（diff 只读；后续 replace 会深拷贝）。
+     */
     @SuppressWarnings("unchecked")
-    private static ActRules toActRules(Map<String, ?> rules) {
-        return (rules instanceof ActRules) ? (ActRules) rules : new ActRules();
+    private static ActRules snapshotToActRules(Map<String, ?> snapshot) {
+        ActRules result = new ActRules();
+        if (snapshot == null || snapshot.isEmpty()) return result;
+        if (snapshot instanceof ActRules) {
+            for (Map.Entry<String, ?> entry : snapshot.entrySet()) {
+                String key = entry.getKey();
+                Object value = entry.getValue();
+                if (key == null || !(value instanceof List)) continue;
+                result.put(key, new ArrayList<>((List<RuleRecord>) value));
+            }
+            return result;
+        }
+        for (Map.Entry<String, ?> entry : snapshot.entrySet()) {
+            String key = entry.getKey();
+            Object value = entry.getValue();
+            if (key == null || !(value instanceof List)) continue;
+            List<RuleRecord> rules = new ArrayList<>();
+            for (Object item : (List<?>) value) {
+                rules.add((RuleRecord) item);
+            }
+            result.put(key, rules);
+        }
+        return result;
     }
 
     /**
