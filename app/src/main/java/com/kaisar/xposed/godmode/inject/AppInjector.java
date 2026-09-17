@@ -4,6 +4,8 @@ import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.ipc.RuleServiceClient;
 import com.kaisar.xposed.godmode.ipc.ServiceObserver;
 import com.kaisar.xposed.godmode.orchestrator.RecyclerAdapterHook;
+import com.kaisar.xposed.godmode.orchestrator.RecyclerBindingCoordinator;
+import com.kaisar.xposed.godmode.orchestrator.RecyclerBindingSource;
 import com.kaisar.xposed.godmode.orchestrator.RepeatableRuleGate;
 import com.kaisar.xposed.godmode.orchestrator.RuleLifecycleManager;
 import com.kaisar.xposed.godmode.orchestrator.RuleManager;
@@ -44,6 +46,7 @@ public final class AppInjector {
 
         // [P0-1] gate 组装 + EventBus 注册（原 HookRegistry 内聚逻辑外移，打破双向循环）。
         assembleRepeatableGate();
+        assembleRecyclerBindingPort();
         if (!registerRuleLifecycleManager(packageName)) {
             return;
         }
@@ -88,6 +91,44 @@ public final class AppInjector {
             }
         } catch (Throwable failure) {
             Logger.w(TAG, "repeatable gate assembly failed", failure);
+        }
+    }
+
+    /**
+     * 将绑定端口适配器装配给运行时；先装 gate 再装 coordinator 最后装 port，
+     * 失败只记日志不抛宿主。
+     * <p>
+     * 薄适配器转发静态钩子工具，运行时经端口调用，不直调静态方法；
+     * 协调器持有运行时委托并承载全部 token/匹配逻辑，钩子回调经其分发。
+     */
+    private static void assembleRecyclerBindingPort() {
+        try {
+            RuleLifecycleManager lifecycle = RuleLifecycleManager.getInstance();
+            RecyclerBindingCoordinator coordinator =
+                    new RecyclerBindingCoordinator(lifecycle);
+            try {
+                RepeatableRuleGate gate = HookRegistry.getGate();
+                if (gate != null) {
+                    coordinator.setRepeatableRuleGate(gate);
+                }
+            } catch (Throwable failure) {
+                Logger.w(TAG, "binding coordinator gate install failed", failure);
+            }
+            try {
+                RecyclerAdapterHook.setBindingCoordinator(coordinator);
+            } catch (Throwable failure) {
+                Logger.w(TAG, "binding coordinator install failed for RecyclerAdapterHook",
+                        failure);
+            }
+            RecyclerBindingSource source = new RecyclerBindingSource(lifecycle, coordinator);
+            try {
+                lifecycle.setRecyclerBindingPort(source);
+            } catch (Throwable failure) {
+                Logger.w(TAG, "binding port install failed for RuleLifecycleManager",
+                        failure);
+            }
+        } catch (Throwable failure) {
+            Logger.w(TAG, "binding port assembly failed", failure);
         }
     }
 

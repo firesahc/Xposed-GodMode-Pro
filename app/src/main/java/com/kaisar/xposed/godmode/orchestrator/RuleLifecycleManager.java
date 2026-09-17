@@ -36,7 +36,7 @@ import java.util.function.Consumer;
  *   <li>订阅 {@link ActivityLifecycleEvent} — 在 Activity RESUME 时注册布局监听并应用规则，
  *       DESTROY 时清理资源</li>
  *   <li>订阅 {@link RulesChangedEvent} — 计算规则差集，撤销旧规则、应用新规则</li>
- *   <li>实现 {@link RecyclerAdapterHook.Delegate} — 为 RecyclerView 钩子提供缓存清理和重应用调度</li>
+ *   <li>实现 {@link RecyclerBindingPort} — 为 RecyclerView 钩子提供缓存清理和重应用调度</li>
  * </ol>
  * <p>
  * 规则应用有三条互补路径：
@@ -51,7 +51,7 @@ import java.util.function.Consumer;
  * <p>
  * 使用 {@link #getInstance()} 获取单例，由注入层注册到 EventBus。
  */
-public final class RuleLifecycleManager implements RecyclerAdapterHook.Delegate {
+public final class RuleLifecycleManager implements RecyclerBindingPort {
 
     private static final String TAG = "RuleLifecycleManager";
 
@@ -76,6 +76,20 @@ public final class RuleLifecycleManager implements RecyclerAdapterHook.Delegate 
 
     /** Repeatable 业务门控 — 由 AppInjector 装配，代替直调 inject 层静态开关。 */
     private volatile RepeatableRuleGate mRepeatableGate;
+
+    /** RecyclerView 绑定端口 — 由 AppInjector 装配适配器，空时跳过不抛宿主。 */
+    private volatile RecyclerBindingPort mBindingPort;
+
+    /**
+     * 装配 RecyclerView 绑定端口实现；空参忽略并保持宿主默认行为。
+     */
+    public void setRecyclerBindingPort(RecyclerBindingPort port) {
+        if (port == null) {
+            Logger.w(TAG, "setRecyclerBindingPort ignored: null port");
+            return;
+        }
+        mBindingPort = port;
+    }
 
     /**
      * 装配 repeatable 门控实现；空参忽略并保持宿主默认行为。
@@ -154,8 +168,17 @@ public final class RuleLifecycleManager implements RecyclerAdapterHook.Delegate 
                     new ViewController(activity, BinderImageLoader.getDefault()));
         }
 
-        // 安装 RecyclerView 钩子（幂等：仅首次生效）
-        RecyclerAdapterHook.install(activity, this);
+        // 安装 RecyclerView 钩子（幂等：仅首次生效；经端口调用，不直调静态工具）
+        RecyclerBindingPort bindingPort = mBindingPort;
+        if (bindingPort == null) {
+            Logger.w(TAG, "recycler binding install skipped: port not installed");
+        } else {
+            try {
+                bindingPort.ensureInstalled(activity);
+            } catch (Throwable failure) {
+                Logger.w(TAG, "recycler binding install failed", failure);
+            }
+        }
     }
 
     private void onActivityDestroy(Activity activity) {
@@ -168,9 +191,18 @@ public final class RuleLifecycleManager implements RecyclerAdapterHook.Delegate 
             listener.dispose();
         }
 
-        // 清理 Activity 级 ViewController 及其 Applier 缓存
+        // 清理 Activity 级 ViewController 及其 Applier 缓存（经端口清理绑定 token）
         ViewController vc = mViewControllers.remove(activity);
-        RecyclerAdapterHook.invalidateActivity(activity, vc);
+        RecyclerBindingPort invalidatePort = mBindingPort;
+        if (invalidatePort == null) {
+            Logger.w(TAG, "recycler binding invalidate skipped: port not installed");
+        } else {
+            try {
+                invalidatePort.invalidateActivity(activity, vc);
+            } catch (Throwable failure) {
+                Logger.w(TAG, "recycler binding invalidate failed", failure);
+            }
+        }
         if (vc != null) {
             vc.clearBlockedCache();
             // 清除 RecyclerView 收集缓存，释放对已销毁 DecorView 的引用
@@ -259,8 +291,49 @@ public final class RuleLifecycleManager implements RecyclerAdapterHook.Delegate 
     }
 
     // ===================================================================
-    // RecyclerAdapterHook.Delegate 实现
+    // RecyclerBindingPort 实现 — 回调三方法保留原实现；
+    // 装配/诊断/清理三方法转发持有的端口适配器，不直调静态工具
     // ===================================================================
+
+    @Override
+    public void ensureInstalled(Activity activity) {
+        RecyclerBindingPort port = mBindingPort;
+        if (port == null) {
+            Logger.w(TAG, "ensureInstalled skipped: port not installed");
+            return;
+        }
+        try {
+            port.ensureInstalled(activity);
+        } catch (Throwable failure) {
+            Logger.w(TAG, "ensureInstalled failed", failure);
+        }
+    }
+
+    @Override
+    public boolean isItemBindingActive() {
+        RecyclerBindingPort port = mBindingPort;
+        if (port == null) return false;
+        try {
+            return port.isItemBindingActive();
+        } catch (Throwable failure) {
+            Logger.w(TAG, "isItemBindingActive failed", failure);
+            return false;
+        }
+    }
+
+    @Override
+    public void invalidateActivity(Activity activity, ViewController controller) {
+        RecyclerBindingPort port = mBindingPort;
+        if (port == null) {
+            Logger.w(TAG, "invalidateActivity skipped: port not installed");
+            return;
+        }
+        try {
+            port.invalidateActivity(activity, controller);
+        } catch (Throwable failure) {
+            Logger.w(TAG, "invalidateActivity failed", failure);
+        }
+    }
 
     @Override
     public void invalidateMatcherCaches() {

@@ -4,20 +4,10 @@ import android.app.Activity;
 import android.view.View;
 
 import com.kaisar.xposed.godmode.engine.core.PlatformCapabilities;
-import com.kaisar.xposed.godmode.engine.matcher.CompositeMatcher;
-import com.kaisar.xposed.godmode.engine.matcher.ViewTraversal;
-import com.kaisar.xposed.godmode.engine.rule.MatchFields;
-import com.kaisar.xposed.godmode.engine.rule.MatchSpec;
 import com.kaisar.xposed.godmode.engine.util.Logger;
-import com.kaisar.xposed.godmode.util.ViewUtils;
-import com.kaisar.xposed.godmode.rule.ActRules;
-import com.kaisar.xposed.godmode.rule.RuleRecord;
 
-import java.lang.ref.WeakReference;
-import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
-import java.util.concurrent.atomic.AtomicLong;
 
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedHelpers;
@@ -32,7 +22,7 @@ import de.robv.android.xposed.XposedHelpers;
  *   <li><b>onViewRecycled</b> — item 回收时撤销所有已应用的规则，避免缓存误命中</li>
  * </ol>
  * <p>
- * 通过 {@link Delegate} 接口回调，调用方提供缓存清理和重应用调度能力。
+ * 通过 {@link RecyclerBindingPort} 端口回调，调用方提供缓存清理和重应用调度能力。
  */
 public final class RecyclerAdapterHook {
 
@@ -68,9 +58,22 @@ public final class RecyclerAdapterHook {
         }
     }
 
-    /** 当前 ViewHolder 绑定 token；弱键避免持有已回收 holder。 */
-    private static final Map<Object, BindingToken> sBindings = new WeakHashMap<>();
-    private static final AtomicLong sBindingEpoch = new AtomicLong();
+    /** 绑定协调器 — 由 AppInjector 装配；P2-1 Commit 2 后全部 token/匹配逻辑归属其所有。 */
+    private static volatile RecyclerBindingCoordinator sCoordinator;
+
+    /** 装配绑定协调器；空参忽略并保持宿主默认行为。 */
+    public static void setBindingCoordinator(RecyclerBindingCoordinator coordinator) {
+        if (coordinator == null) {
+            Logger.w(TAG, "setBindingCoordinator ignored: null coordinator");
+            return;
+        }
+        sCoordinator = coordinator;
+    }
+
+    /** 当前 ViewHolder 绑定逻辑持有者；未装配时 Hook 回调跳过，不抛宿主。 */
+    private static RecyclerBindingCoordinator coordinatorOrNull() {
+        return sCoordinator;
+    }
 
     private RecyclerAdapterHook() {
         // 工具类不可实例化
@@ -125,10 +128,10 @@ public final class RecyclerAdapterHook {
      * 安全可重入：仅首次调用生效，同一进程后续调用直接返回。
      *
      * @param activity 用于获取 ClassLoader 的 Activity 实例
-     * @param delegate 缓存清理和重应用调度回调（通常由 RuleLifecycleManager 实现）
+     * @param delegate 端口回调（签名兼容保留，实际运行时回调由协调器持有）
      * @param gate repeatable 门控实例；非空时先装配再安装，空时保持现有装配
      */
-    public static synchronized void install(Activity activity, Delegate delegate,
+    public static synchronized void install(Activity activity, RecyclerBindingPort delegate,
             RepeatableRuleGate gate) {
         if (gate != null) {
             setRepeatableRuleGate(gate);
@@ -140,13 +143,21 @@ public final class RecyclerAdapterHook {
      * 安装 RecyclerView.Adapter 的三条钩子。
      * <p>
      * 安全可重入：仅首次调用生效，同一进程后续调用直接返回。
+     * <p>
+     * 绑定运行时逻辑归属 {@link RecyclerBindingCoordinator}（须经
+     * {@link #setBindingCoordinator} 预装配，否则 Hook 回调跳过）；
+     * {@code delegate} 参数保留以兼容既有签名，实际运行时回调由协调器持有
+     * （AppInjector 将二者装配为同一 RLM 单例）。
      *
      * @param activity 用于获取 ClassLoader 的 Activity 实例
-     * @param delegate 缓存清理和重应用调度回调（通常由 RuleLifecycleManager 实现）
+     * @param delegate 端口回调（签名兼容保留，实际由协调器持有）
      */
-    public static synchronized void install(Activity activity, Delegate delegate) {
+    public static synchronized void install(Activity activity, RecyclerBindingPort delegate) {
         if (activity == null || delegate == null) return;
         if (!PlatformCapabilities.supportsRecyclerViewHook()) return;
+        if (coordinatorOrNull() == null) {
+            Logger.w(TAG, "install continuing without coordinator: hook callbacks will skip");
+        }
 
         ClassLoader cl = activity.getClassLoader();
         if (cl == null) return;
@@ -181,11 +192,9 @@ public final class RecyclerAdapterHook {
                                 @Override
                                 protected void afterHookedMethod(MethodHookParam param) {
                                     try {
-                                        if (!isRepeatableGateEnabled()
-                                                || !RuleManager.isInitialized()
-                                                || !RuleManager.get().hasRules()) return;
-                                        delegate.invalidateMatcherCaches();
-                                        delegate.scheduleReapplyForActivities();
+                                        RecyclerBindingCoordinator coordinator = coordinatorOrNull();
+                                        if (coordinator == null) return;
+                                        coordinator.onNotifyChanged();
                                     } catch (Throwable failure) {
                                         Logger.w(TAG, "notifyDataSetChanged hook failed", failure);
                                     }
@@ -205,26 +214,13 @@ public final class RecyclerAdapterHook {
                         protected void beforeHookedMethod(MethodHookParam param) {
                             try {
                                 if (!isItemHooksEnabled(hookFamily)) return;
+                                RecyclerBindingCoordinator coordinator = coordinatorOrNull();
+                                if (coordinator == null) return;
                                 Object holder = param.args[0];
                                 View itemView = getItemView(holder);
                                 if (holder == null || itemView == null) return;
-                                Object adapter = param.thisObject;
-                                int position = (Integer) param.args[1];
-                                BindingToken previous = currentBinding(holder);
-                                if (previous != null) {
-                                    // The host adapter owns the next write. Drop the
-                                    // old runtime ownership now, but do not restore
-                                    // the old row values before bindViewHolder runs.
-                                    deactivateForRebind(previous, delegate);
-                                }
-                                BindingToken token = new BindingToken(
-                                        adapter, holder, itemView,
-                                        resolveViewType(adapter, position),
-                                        hookFamily,
-                                        sBindingEpoch.incrementAndGet());
-                                synchronized (sBindings) {
-                                    sBindings.put(holder, token);
-                                }
+                                coordinator.onBeforeBind(param.thisObject, holder, itemView,
+                                        resolveViewType(param.thisObject, (Integer) param.args[1]));
                             } catch (Throwable failure) {
                                 Logger.w(TAG, "bindViewHolder before hook failed", failure);
                             }
@@ -234,16 +230,13 @@ public final class RecyclerAdapterHook {
                         protected void afterHookedMethod(MethodHookParam param) {
                             try {
                                 if (!isItemHooksEnabled(hookFamily)) return;
-                                if (!RuleManager.isInitialized()
-                                        || !RuleManager.get().hasRules()) return;
+                                RecyclerBindingCoordinator coordinator = coordinatorOrNull();
+                                if (coordinator == null) return;
                                 Object holder = param.args[0];
                                 View itemView = getItemView(holder);
-                                BindingToken token = currentBinding(holder);
-                                if (token == null || !token.matches(adapterFor(param), holder,
-                                        itemView, resolveHolderViewType(holder))) {
-                                    return;
-                                }
-                                applyToken(token, delegate);
+                                if (holder == null || itemView == null) return;
+                                coordinator.onAfterBind(param.thisObject, holder, itemView,
+                                        resolveHolderViewType(holder));
                             } catch (Throwable failure) {
                                 Logger.w(TAG, "bindViewHolder after hook failed", failure);
                             }
@@ -266,31 +259,13 @@ public final class RecyclerAdapterHook {
                                 // Recycle remains active after the logical gate closes so
                                 // effects from the previous binding are still released.
                                 if (!hookFamily.itemHooksEnabled()) return;
+                                RecyclerBindingCoordinator coordinator = coordinatorOrNull();
+                                if (coordinator == null) return;
                                 Object holder = param.args[0];
                                 View itemView = getItemView(holder);
-                                if (itemView == null) return;
-                                BindingToken token = currentBinding(holder);
-                                if (token == null || !token.matches(adapterFor(param), holder,
-                                        itemView, resolveHolderViewType(holder))) {
-                                    // A stale recycle from another adapter must not touch the
-                                    // current binding or its baseline.
-                                    return;
-                                }
-                                removeBinding(holder, token);
-                                token.active = false;
-                                View.OnAttachStateChangeListener lifecycle = token.lifecycleListener;
-                                if (lifecycle != null) {
-                                    itemView.removeOnAttachStateChangeListener(lifecycle);
-                                    token.lifecycleListener = null;
-                                }
-                                if (token.controller != null) {
-                                    token.controller.revokeAllRules(itemView, token.bindingEpoch);
-                                    return;
-                                }
-                                Activity activity = ViewUtils.getAttachedActivityFromView(itemView);
-                                if (activity == null) return;
-                                delegate.getViewController(activity)
-                                        .revokeAllRules(itemView, token.bindingEpoch);
+                                if (holder == null || itemView == null) return;
+                                coordinator.onRecycled(param.thisObject, holder, itemView,
+                                        resolveHolderViewType(holder));
                             } catch (Throwable failure) {
                                 Logger.w(TAG, "onViewRecycled hook failed", failure);
                             }
@@ -315,137 +290,21 @@ public final class RecyclerAdapterHook {
         }
     }
 
-    // =========================================================================
-    // bindViewHolder 精确规则应用（快速路径）
-    // =========================================================================
-
     /**
-     * 在 ViewHolder 绑定后立即检查并应用匹配的 repeatable 规则。
+     * {@link RecyclerBindingPort#ensureInstalled} 的静态转发入口。
      * <p>
-     * 这是消除组件闪现的关键路径：在 RecyclerView 完成 item 布局之前，
-     * 优先于 onGlobalLayout 全树扫描，精确匹配目标规则并应用。
+     * 纯转发 {@link #install(Activity, RecyclerBindingPort)}；调用方经端口传入。
      */
-    private static ViewController applyRepeatableRulesToBoundItem(
-            View itemRoot, long bindingEpoch, int boundViewType, Delegate delegate) {
-        if (itemRoot == null || delegate == null
-                || itemRoot.getVisibility() != View.VISIBLE) return null;
-        Activity activity = ViewUtils.getAttachedActivityFromView(itemRoot);
-        if (activity == null || activity.isFinishing()) return null;
-
-        ActRules rules = RuleManager.get().viewRules();
-        List<RuleRecord> activityRules = rules.get(
-                activity.getComponentName().getClassName());
-        if (activityRules == null || activityRules.isEmpty()) return null;
-
-        ViewController controller = delegate.getViewController(activity);
-        boolean applied = false;
-        for (RuleRecord rule : activityRules) {
-            if (!rule.isRepeatable()) continue;
-            try {
-                MatchSpec spec = rule.getMatchSpec();
-                if (!isApplicableToItem(spec, itemRoot, boundViewType)) continue;
-
-                // CARD 和 ELEMENT 模式走统一的导航+验证管线
-                View target = navigateAndValidate(itemRoot, spec);
-                if (target != null) {
-                    applied |= controller.applyRule(target, rule, bindingEpoch);
-                }
-            } catch (Throwable t) {
-                Logger.w(TAG, "apply bound item rule failed", t);
-            }
-        }
-        return applied ? controller : null;
+    public static void ensureInstalled(Activity activity, RecyclerBindingPort delegate) {
+        install(activity, delegate);
     }
 
-    private static void applyToken(BindingToken token, Delegate delegate) {
-        View itemView = token.itemRoot.get();
-        if (itemView == null || !isCurrent(token) || !isItemHooksEnabled(token.family)) return;
-        ViewController owner = applyRepeatableRulesToBoundItem(
-                itemView, token.bindingEpoch, token.viewType, delegate);
-        if (owner != null) {
-            token.controller = owner;
-        }
-        ensureLifecycleListener(token, delegate);
-    }
-
-    private static void ensureLifecycleListener(BindingToken token, Delegate delegate) {
-        if (token == null || token.lifecycleListener != null) return;
-        View itemView = token.itemRoot.get();
-        if (itemView == null) return;
-        View.OnAttachStateChangeListener listener = new View.OnAttachStateChangeListener() {
-            @Override
-            public void onViewAttachedToWindow(View view) {
-                if (!isCurrent(token) || !token.active
-                        || !isItemHooksEnabled(token.family)) return;
-                // cached-view 免 rebind 复用时此处是规则唯一恢复入口。
-                // 原 view.post 会先渲染一帧宿主原始内容全高可见（GONE 规则下
-                // 表现为下拉回看时列表突然向上弹跳）；attach 回调先于本帧
-                // child 测量执行，同步应用使塌缩直接参与本次测量布局。
-                applyToken(token, delegate);
-            }
-
-            @Override
-            public void onViewDetachedFromWindow(View view) {
-                if (!isCurrent(token) || !token.active) return;
-                ViewController controller = token.controller;
-                if (controller == null) {
-                    Activity activity = token.activity.get();
-                    if (activity != null) controller = delegate.getViewController(activity);
-                }
-                if (controller != null) {
-                    // Detach is a valid revoke boundary. Epoch filtering keeps
-                    // an old detach from restoring a rebound holder.
-                    controller.revokeAllRules(view, token.bindingEpoch);
-                }
-            }
-        };
-        token.lifecycleListener = listener;
-        itemView.addOnAttachStateChangeListener(listener);
-    }
-
-    private static void deactivateForRebind(BindingToken token, Delegate delegate) {
-        if (token == null) return;
-        token.active = false;
-        View itemView = token.itemRoot.get();
-        View.OnAttachStateChangeListener lifecycle = token.lifecycleListener;
-        if (itemView != null && lifecycle != null) {
-            itemView.removeOnAttachStateChangeListener(lifecycle);
-        }
-        token.lifecycleListener = null;
-        ViewController controller = token.controller;
-        if (controller == null && itemView != null) {
-            Activity activity = token.activity.get();
-            if (activity != null) controller = delegate.getViewController(activity);
-        }
-        if (controller != null && itemView != null) {
-            controller.discardBindingEffects(itemView, token.bindingEpoch);
-        }
-    }
-
-    private static BindingToken currentBinding(Object holder) {
-        if (holder == null) return null;
-        synchronized (sBindings) {
-            return sBindings.get(holder);
-        }
-    }
-
-    private static void removeBinding(Object holder, BindingToken token) {
-        synchronized (sBindings) {
-            if (sBindings.get(holder) == token) sBindings.remove(holder);
-        }
-    }
-
-    private static boolean isCurrent(BindingToken token) {
-        if (token == null) return false;
-        Object holder = token.holder.get();
-        synchronized (sBindings) {
-            return holder != null && sBindings.get(holder) == token;
-        }
-    }
-
-    private static Object adapterFor(XC_MethodHook.MethodHookParam param) {
-        return param.thisObject;
-    }
+    // =========================================================================
+    // 绑定运行时逻辑（token/epoch/匹配/应用）已搬迁至 RecyclerBindingCoordinator；
+    // 本类仅保留拦截转译（参数提取 + 协调器回调）与宿主反射提取 helper。
+    // 反射 helper 留在此处的原因：它们经 XposedHelpers 操作宿主类，属于注入适配
+    // 手段；协调器接收已提取的 View/viewType 纯数据，从而保持零 de.robv import。
+    // =========================================================================
 
     private static View getItemView(Object holder) {
         if (holder == null) return null;
@@ -480,68 +339,21 @@ public final class RecyclerAdapterHook {
         }
     }
 
-    /** Invalidates tokens owned by an Activity before its controller is cleared. */
+    /**
+     * Invalidates tokens owned by an Activity before its controller is cleared.
+     * <p>
+     * 兼容转发：实际逻辑归属 {@link RecyclerBindingCoordinator}；未装配时记日志跳过。
+     */
     public static void invalidateActivity(Activity activity, ViewController controller) {
-        if (activity == null && controller == null) return;
-        synchronized (sBindings) {
-            java.util.Iterator<Map.Entry<Object, BindingToken>> iterator =
-                    sBindings.entrySet().iterator();
-            while (iterator.hasNext()) {
-                Map.Entry<Object, BindingToken> entry = iterator.next();
-                BindingToken token = entry.getValue();
-                View root = token != null ? token.itemRoot.get() : null;
-                boolean owned = token != null && (controller != null && token.controller == controller);
-                if (!owned && activity != null) {
-                    owned = token != null && token.activity.get() == activity;
-                    if (!owned && root != null) {
-                        owned = ViewUtils.getAttachedActivityFromView(root) == activity;
-                    }
-                }
-                if (owned) {
-                    token.active = false;
-                    if (root != null && token.lifecycleListener != null) {
-                        root.removeOnAttachStateChangeListener(token.lifecycleListener);
-                        token.lifecycleListener = null;
-                    }
-                    if (root != null && controller != null) {
-                        controller.discardBindingEffects(root, token.bindingEpoch);
-                    }
-                    iterator.remove();
-                }
-            }
+        RecyclerBindingCoordinator coordinator = coordinatorOrNull();
+        if (coordinator == null) {
+            Logger.w(TAG, "invalidateActivity skipped: coordinator not installed");
+            return;
         }
-    }
-
-    private static final class BindingToken {
-        final WeakReference<Object> adapter;
-        final WeakReference<Object> holder;
-        final WeakReference<View> itemRoot;
-        final WeakReference<Activity> activity;
-        final int viewType;
-        final HookFamilyState family;
-        final long bindingEpoch;
-        volatile ViewController controller;
-        volatile boolean active = true;
-        volatile View.OnAttachStateChangeListener lifecycleListener;
-
-        BindingToken(Object adapter, Object holder, View itemRoot,
-                int viewType, HookFamilyState family, long bindingEpoch) {
-            this.adapter = new WeakReference<>(adapter);
-            this.holder = new WeakReference<>(holder);
-            this.itemRoot = new WeakReference<>(itemRoot);
-            this.activity = new WeakReference<>(ViewUtils.getAttachedActivityFromView(itemRoot));
-            this.viewType = viewType;
-            this.family = family;
-            this.bindingEpoch = bindingEpoch;
-        }
-
-        boolean matches(Object currentAdapter, Object currentHolder, View currentItemRoot,
-                int currentViewType) {
-            return adapter.get() == currentAdapter
-                    && holder.get() == currentHolder
-                    && itemRoot.get() == currentItemRoot
-                    && viewType == currentViewType
-                    && active;
+        try {
+            coordinator.invalidateActivity(activity, controller);
+        } catch (Throwable failure) {
+            Logger.w(TAG, "invalidateActivity failed", failure);
         }
     }
 
@@ -556,70 +368,5 @@ public final class RecyclerAdapterHook {
         boolean itemHooksEnabled() {
             return bindInstalled && recycleInstalled;
         }
-    }
-
-    /**
-     * 检查规则规格是否适用于当前 itemRoot。
-     * <p>
-     * 与批量路径（{@code CompositeMatcher.matchAllViewsBatch}）的过滤条件
-     * 保持同构：itemPath 非空 + itemRootClass 类名相等 + viewType 匹配
-     * （spec.viewType=0 表示不过滤，向后兼容旧规则）。
-     *
-     * @param spec          规则匹配规格
-     * @param itemRoot      item 的根 View
-     * @param boundViewType 当前绑定 holder 的实际 viewType（token 权威值）
-     * @return true 如果该规则应应用于此 item
-     */
-    private static boolean isApplicableToItem(MatchFields spec, View itemRoot,
-            int boundViewType) {
-        return spec.getItemPath() != null && spec.getItemPath().length > 0
-                && spec.getItemRootClass() != null
-                && itemRoot.getClass().getName().equals(spec.getItemRootClass())
-                && (spec.getInfoFlowViewType() <= 0
-                    || spec.getInfoFlowViewType() == boundViewType);
-    }
-
-    /**
-     * 通过 itemPath 导航到目标 View，并进行结构验证。
-     * <p>
-     * CARD 和 ELEMENT 模式使用完全相同的管线：
-     * <ol>
-     *   <li>精确索引 + 类名导航</li>
-     *   <li>失败 → 纯类名链回退</li>
-     *   <li>成功 → isStructuralMatch 验证</li>
-     * </ol>
-     *
-     * @param itemRoot item 的根 View
-     * @param spec     规则匹配规格
-     * @return 验证通过的目标 View，导航失败或验证失败返回 null
-     */
-    private static View navigateAndValidate(View itemRoot, MatchFields spec) {
-        View target = ViewTraversal.findViewByItemPath(itemRoot, spec.getItemPath(), 0);
-        if (target == null) {
-            target = ViewTraversal.findViewByClassChain(itemRoot, spec.getItemPath(), 0);
-        }
-        if (target != null && CompositeMatcher.isStructuralMatch(target, spec, false)) {
-            return target;
-        }
-        return null;
-    }
-
-    // =========================================================================
-    // 回调接口
-    // =========================================================================
-
-    /**
-     * RuleLifecycleManager 实现的回调接口，提供 RecyclerView 钩子所需的
-     * 缓存清理和重应用调度能力。
-     */
-    public interface Delegate {
-        /** 失效所有 Activity 的匹配定位缓存，保留 applier baseline。 */
-        void invalidateMatcherCaches();
-
-        /** 返回 item 所属 Activity 的状态所有者。 */
-        ViewController getViewController(Activity activity);
-
-        /** 对所有存活 Activity 调度防抖重应用 */
-        void scheduleReapplyForActivities();
     }
 }
