@@ -24,7 +24,6 @@ public final class HookRegistry implements RepeatableRuleGate {
 
     private static final String TAG = "HookRegistry";
     private static volatile boolean sHooksRegistered;
-    private static volatile boolean sResumeHookInstalled;
     private static volatile boolean sCreateHookInstalled;
     private static volatile boolean sPostResumeHookInstalled;
     private static volatile boolean sDestroyHookInstalled;
@@ -51,11 +50,6 @@ public final class HookRegistry implements RepeatableRuleGate {
     public static synchronized HookInstallReport registerAll(Property<Boolean> switchProp) {
         if (switchProp != null) sEditorEnabled = switchProp.get();
 
-        if (!sResumeHookInstalled) {
-            sResumeHookInstalled = install("Activity.onResume", () ->
-                    XposedHelpers.findAndHookMethod(Activity.class, "onResume",
-                            new LifecycleHooks.ActivityResumeHook()));
-        }
         if (!sCreateHookInstalled) {
             sCreateHookInstalled = install("Activity.onCreate", () ->
                     XposedHelpers.findAndHookMethod(Activity.class, "onCreate", Bundle.class,
@@ -72,7 +66,8 @@ public final class HookRegistry implements RepeatableRuleGate {
                     XposedHelpers.findAndHookMethod(Activity.class, "onDestroy", lifecycleHooks));
         }
 
-        boolean coreReady = sResumeHookInstalled && sCreateHookInstalled
+        // P1.5-A: onResume 通道已合并至 onPostResume（唯一 RESUME 发布源），此处不再安装。
+        boolean coreReady = sCreateHookInstalled
                 && sPostResumeHookInstalled && sDestroyHookInstalled;
         // P0-1: EventBus 注册已迁移至 AppInjector，此处不再触碰 orchestrator 层，
         // 避免 inject <-> orchestrator 双向循环。coreReady 仅反映物理 Hook 状态。

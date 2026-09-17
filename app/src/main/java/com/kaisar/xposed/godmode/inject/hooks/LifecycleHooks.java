@@ -15,9 +15,8 @@ import de.robv.android.xposed.XC_MethodHook;
 /**
  * Activity 生命周期 Hook 集合 — 单一事件通道。
  * <p>
- * 包含三类 Hook：
+ * 包含两类 Hook：
  * <ul>
- *   <li>{@link ActivityResumeHook} — 拦截 {@link Activity#onResume} 发布 RESUME 事件</li>
  *   <li>{@link ActivityCreateHook} — 拦截 {@link Activity#onCreate} 注入模块资源后发布
  *       CREATE 事件（display 调度的开关/窗口守卫与 decorView.post 延迟已迁移至
  *       EditorOrchestrator 订阅侧）</li>
@@ -41,29 +40,6 @@ public final class LifecycleHooks extends XC_MethodHook {
     /** 默认构造器，使用 ModuleBootstrap 的 EventBus */
     public LifecycleHooks() {
         this(ModuleBootstrap.getEventBus());
-    }
-
-    // =========================================================================
-    // ActivityResumeHook — 记录当前 Activity
-    // =========================================================================
-
-    /**
-     * 拦截 {@link Activity#onResume} 转译为 RESUME 事件。
-     * <p>
-     * Editor 绑定由 EditorOrchestrator 订阅 RESUME 完成（setActivity），此处不直调。
-     */
-    public static final class ActivityResumeHook extends XC_MethodHook {
-        @Override
-        protected void afterHookedMethod(MethodHookParam param) {
-            try {
-                if (param.thisObject instanceof Activity) {
-                    ModuleBootstrap.getEventBus().post(new ActivityLifecycleEvent(
-                            ActivityLifecycleEvent.Type.RESUME, (Activity) param.thisObject));
-                }
-            } catch (Throwable failure) {
-                Logger.w(TAG, "editor activity update failed", failure);
-            }
-        }
     }
 
     // =========================================================================

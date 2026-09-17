@@ -200,7 +200,7 @@ public final class RuleLifecycleManager implements RecyclerAdapterHook.Delegate 
      * <ol>
      *   <li>计算差集 — 旧规则中不在新规则内的部分需要撤销</li>
      *   <li>撤销旧规则 — 必须在失效匹配缓存之前，revoke 依赖 applier baseline</li>
-     *   <li>替换 + 应用新规则</li>
+     *   <li>应用新规则 — 快照替换由 RuleManager 发布后完成，本处只读事件快照</li>
      *   <li>防抖重应用 — 50ms 延迟确保布局稳定</li>
      * </ol>
      */
@@ -224,8 +224,7 @@ public final class RuleLifecycleManager implements RecyclerAdapterHook.Delegate 
 
         RuleDiff diff = computeRuntimeDiff(oldRules, newRules);
         if (diff.isEmpty()) {
-            // 展示元数据可能变化；更新快照，但不重建运行时效果。
-            RuleManager.get().replaceRules(newRules);
+            // 展示元数据可能变化；不重建运行时效果，仅刷新门控后返回。
             refreshRepeatableRulesGate(newRules);
             return;
         }
@@ -238,8 +237,7 @@ public final class RuleLifecycleManager implements RecyclerAdapterHook.Delegate 
         // Step 2: 仅失效匹配位置缓存，不能清除撤销所需的 baseline。
         invalidateMatcherCaches();
 
-        // Step 3: 替换规则集并应用新规则
-        RuleManager.get().replaceRules(newRules);
+        // Step 3: 应用新规则（只读事件快照；快照替换由 RuleManager 发布后完成）
         refreshRepeatableRulesGate(newRules);
         if (!diff.toApply.isEmpty()) {
             applyRulesForActivities(mapToActRules(diff.toApply));

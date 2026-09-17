@@ -20,8 +20,7 @@ public final class ActivityLifecycleEvent {
      * <ul>
      *   <li>CREATE — {@code Activity#onCreate} 之后（资源注入完成后发布；
      *       仅携带 Activity，display 调度所需的开关/窗口守卫由订阅侧执行）</li>
-     *   <li>RESUME — {@code onResume}/{@code onPostResume}（当前实现由两处发布，
-     *       订阅侧须幂等）</li>
+     *   <li>RESUME — {@code onPostResume} 之后（唯一发布源；窗口就绪，晚于 onResume）</li>
      *   <li>DESTROY — {@code onDestroy}</li>
      * </ul>
      */
