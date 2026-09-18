@@ -38,24 +38,9 @@ public final class LeaseHub {
     private volatile Listener mListener;
     private volatile String mRestoreLease;
     private volatile String mBackupLease;
-    private final ILeaseOwner mLeaseOwner = new ILeaseOwner.Stub() {
-        @Override public void onLeaseRevoked(int reason) {
-            boolean hadRestoreLease = mRestoreLease != null;
-            boolean hadBackupLease = mBackupLease != null;
-            Listener listener = mListener;
-            boolean wasEditEnabled = listener != null && listener.isEditEnabled();
-            long editRevision = listener == null ? -1L : listener.editRevision();
-            long epoch = mServiceConnection.getConnectionEpoch();
-            mRestoreLease = null;
-            mBackupLease = null;
-            if (listener != null) listener.onEditLeaseRevoked();
-            Logger.w(TAG, "operation lease revoked reason=" + reason
-                    + " epoch=" + epoch + " editEnabled=" + wasEditEnabled
-                    + " editRevision=" + editRevision
-                    + " hadRestoreLease=" + hadRestoreLease
-                    + " hadBackupLease=" + hadBackupLease);
-        }
-    };
+    // 延迟创建：Binder 桩构造依赖 Binder 基础设施， fork 期构造必须零副作用
+    // （同 ServiceConnection 主 Handler 的 fork-safe 要求）。
+    private volatile ILeaseOwner mLeaseOwner;
 
     public LeaseHub(ServiceConnection serviceConnection) {
         if (serviceConnection == null) throw new IllegalArgumentException("serviceConnection is required");
@@ -84,7 +69,38 @@ public final class LeaseHub {
     }
 
     public ILeaseOwner getLeaseOwner() {
-        return mLeaseOwner;
+        ILeaseOwner owner = mLeaseOwner;
+        if (owner == null) {
+            synchronized (this) {
+                owner = mLeaseOwner;
+                if (owner == null) {
+                    owner = new ILeaseOwner.Stub() {
+                        @Override public void onLeaseRevoked(int reason) {
+                            onOwnerLeaseRevoked(reason);
+                        }
+                    };
+                    mLeaseOwner = owner;
+                }
+            }
+        }
+        return owner;
+    }
+
+    private void onOwnerLeaseRevoked(int reason) {
+        boolean hadRestoreLease = mRestoreLease != null;
+        boolean hadBackupLease = mBackupLease != null;
+        Listener listener = mListener;
+        boolean wasEditEnabled = listener != null && listener.isEditEnabled();
+        long editRevision = listener == null ? -1L : listener.editRevision();
+        long epoch = mServiceConnection.getConnectionEpoch();
+        mRestoreLease = null;
+        mBackupLease = null;
+        if (listener != null) listener.onEditLeaseRevoked();
+        Logger.w(TAG, "operation lease revoked reason=" + reason
+                + " epoch=" + epoch + " editEnabled=" + wasEditEnabled
+                + " editRevision=" + editRevision
+                + " hadRestoreLease=" + hadRestoreLease
+                + " hadBackupLease=" + hadBackupLease);
     }
 
     /** 恢复长租约句柄（mutate 复用，不转移所有权），可为 null。 */

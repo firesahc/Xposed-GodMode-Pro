@@ -85,7 +85,25 @@ public final class ServiceConnection {
         RemoteException flushPendingLogs(Connection connection);
     }
 
-    private final Handler mMainHandler = new Handler(Looper.getMainLooper());
+    // 延迟创建：模块类在 Zygote fork 期初始化，此时主 Looper 尚未 prepare，
+    // eager new Handler 会导致 ExceptionInInitializerError 使整个模块加载失败。
+    private volatile Handler mMainHandler;
+
+    private Handler mainHandler() {
+        Handler handler = mMainHandler;
+        if (handler == null) {
+            synchronized (this) {
+                handler = mMainHandler;
+                if (handler == null) {
+                    Looper looper = Looper.getMainLooper();
+                    if (looper == null) return null;
+                    handler = new Handler(looper);
+                    mMainHandler = handler;
+                }
+            }
+        }
+        return handler;
+    }
     private final CopyOnWriteArrayList<Runnable> mBinderDeathListeners = new CopyOnWriteArrayList<>();
     private final AtomicLong mConnectionEpoch = new AtomicLong();
 
@@ -328,8 +346,16 @@ public final class ServiceConnection {
     }
 
     private void notifyBinderDead() {
+        Handler handler = mainHandler();
         for (Runnable listener : mBinderDeathListeners) {
-            mMainHandler.post(() -> {
+            if (handler == null) {
+                // 主 Looper 尚不可用（仅 fork 期理论可达，此时尚无 Binder 连接，
+                // 故无死亡事件可丢）：内联执行保证通知不丢失。
+                try { listener.run(); }
+                catch (Throwable t) { Logger.w(TAG, "binder death listener failed", t); }
+                continue;
+            }
+            handler.post(() -> {
                 try { listener.run(); }
                 catch (Throwable t) { Logger.w(TAG, "binder death listener failed", t); }
             });
