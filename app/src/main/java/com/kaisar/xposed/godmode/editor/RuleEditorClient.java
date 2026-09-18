@@ -246,7 +246,7 @@ public final class RuleEditorClient implements IRuleEditor {
         }
         if (lease == null) {
             mLastMutationStatus = RuleServiceContract.RESULT_BUSY;
-            mServiceConnection.logMutationTerminal(operation, packageName, requestId,
+            logMutationTerminal(operation, packageName, requestId,
                     mLastMutationStatus, "lease_unavailable");
             return localMutationResult(requestId, packageName, mLastMutationStatus,
                     "mutation lease unavailable");
@@ -261,7 +261,7 @@ public final class RuleEditorClient implements IRuleEditor {
             ImageStore.awaitPipe(modifiedPipe);
             if (temporary) mLeaseHub.closeLease(lease);
             mLastMutationStatus = RuleServiceContract.RESULT_WRITE_FAILED;
-            mServiceConnection.logMutationTerminal(operation, packageName, requestId,
+            logMutationTerminal(operation, packageName, requestId,
                     mLastMutationStatus, "image_pipe_unavailable");
             return localMutationResult(requestId, packageName, mLastMutationStatus,
                     "image pipe unavailable");
@@ -310,7 +310,7 @@ public final class RuleEditorClient implements IRuleEditor {
             Throwable pipeFailure = ImageStore.firstFailure(mainPipe, modifiedPipe);
             if (pipeFailure != null) {
                 Logger.w(TAG, "mutation image pipe failed operation="
-                        + ServiceConnection.mutationOperationName(operation) + " package=" + packageName
+                        + mutationOperationName(operation) + " package=" + packageName
                         + " requestId=" + requestId, pipeFailure);
                 if (!accepted && !uncertain) {
                     mLastMutationStatus = RuleServiceContract.RESULT_WRITE_FAILED;
@@ -334,13 +334,13 @@ public final class RuleEditorClient implements IRuleEditor {
                 if (state != null && requestId.equals(state.topSourceRequestId)) {
                     mLastMutationStatus = RuleServiceContract.RESULT_COMMITTED;
                     mServiceConnection.clearDiagnostic();
-                    mServiceConnection.logMutationTerminal(operation, packageName, requestId,
+                    logMutationTerminal(operation, packageName, requestId,
                             mLastMutationStatus, "undo_history_reconciled");
                     return new RuleMutationResult(RuleServiceContract.RESULT_COMMITTED,
                             requestId, packageName, mHost.ruleGeneration(), null, state,
                             "committed; response reconciled from undo history");
                 }
-                mServiceConnection.logMutationTerminal(operation, packageName, requestId,
+                logMutationTerminal(operation, packageName, requestId,
                         RuleServiceContract.RESULT_UNCERTAIN, "undo_history_inconclusive");
                 return localMutationResult(requestId, packageName,
                         RuleServiceContract.RESULT_UNCERTAIN,
@@ -351,7 +351,7 @@ public final class RuleEditorClient implements IRuleEditor {
             mLastMutationStatus = reconciled;
             if (reconciled == RuleServiceContract.RESULT_COMMITTED) {
                 mServiceConnection.clearDiagnostic();
-                mServiceConnection.logMutationTerminal(operation, packageName, requestId, reconciled,
+                logMutationTerminal(operation, packageName, requestId, reconciled,
                         "reconciled_committed");
                 return localMutationResult(requestId, packageName, reconciled,
                         "committed; response reconciled from snapshot");
@@ -365,12 +365,12 @@ public final class RuleEditorClient implements IRuleEditor {
                         String.format(Locale.US, DiagnosticMessages.MUTATE_RECONCILE_UNKNOWN_REQUEST_ID_DETAIL,
                                 requestId)));
             }
-            mServiceConnection.logMutationTerminal(operation, packageName, requestId, reconciled,
+            logMutationTerminal(operation, packageName, requestId, reconciled,
                     "reconciled_inconclusive");
             return localMutationResult(requestId, packageName, reconciled,
                     "mutation result remains uncertain after snapshot reconciliation");
         }
-        mServiceConnection.logMutationTerminal(operation, packageName, requestId, mLastMutationStatus,
+        logMutationTerminal(operation, packageName, requestId, mLastMutationStatus,
                 accepted ? "accepted" : "rejected");
         return authoritative == null
                 ? localMutationResult(requestId, packageName, mLastMutationStatus,
@@ -474,6 +474,53 @@ public final class RuleEditorClient implements IRuleEditor {
             if (activityRules != null && !activityRules.isEmpty()) return false;
         }
         return true;
+    }
+
+    private void logMutationTerminal(int operation, String packageName, String requestId,
+                                     int status, String outcome) {
+        String line = "mutation client complete operation=" + mutationOperationName(operation)
+                + " requestId=" + requestId + " package=" + packageName
+                + " status=" + mutationStatusName(status) + " outcome=" + outcome;
+        if (RuleServiceContract.isTerminalSuccess(status)) {
+            Logger.i(TAG, line);
+        } else if (RuleServiceContract.isRetryableTransient(status)) {
+            Logger.w(TAG, line);
+        } else if (status == RuleServiceContract.RESULT_REJECTED) {
+            // 拒绝多为权限/归属问题，是线上排障的关键信号，禁止淹没在 debug 中。
+            // （BUSY 已在上一分支按瞬态处理为 warning，不会落到这里。）
+            Logger.w(TAG, line);
+        } else {
+            Logger.d(TAG, line);
+        }
+    }
+
+    private static String mutationOperationName(int operation) {
+        switch (operation) {
+            case RuleServiceContract.MUTATION_WRITE: return "write";
+            case RuleServiceContract.MUTATION_UPDATE: return "update";
+            case RuleServiceContract.MUTATION_DELETE: return "delete";
+            case RuleServiceContract.MUTATION_DELETE_ALL: return "delete_all";
+            case RuleServiceContract.MUTATION_SET_TOOLBAR: return "set_toolbar";
+            default: return "unknown(" + operation + ")";
+        }
+    }
+
+    private static String mutationStatusName(int status) {
+        switch (status) {
+            case RuleServiceContract.RESULT_COMMITTED: return "committed";
+            case RuleServiceContract.RESULT_NO_CHANGE: return "no_change";
+            case RuleServiceContract.RESULT_BUSY: return "busy";
+            case RuleServiceContract.RESULT_REJECTED: return "rejected";
+            case RuleServiceContract.RESULT_WRITE_FAILED: return "write_failed";
+            case RuleServiceContract.RESULT_REBOOT_REQUIRED: return "reboot_required";
+            case RuleServiceContract.RESULT_INVALID: return "invalid";
+            case RuleServiceContract.RESULT_UNCERTAIN: return "uncertain";
+            case RuleServiceContract.RESULT_STALE: return "stale";
+            case RuleServiceContract.RESULT_EXPIRED: return "expired";
+            case RuleServiceContract.RESULT_OWNER_MISMATCH: return "owner_mismatch";
+            case RuleServiceContract.RESULT_ALREADY_UNDONE: return "already_undone";
+            default: return "unknown(" + status + ")";
+        }
     }
 
     @Override
