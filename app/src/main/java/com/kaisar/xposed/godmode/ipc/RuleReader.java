@@ -37,9 +37,21 @@ public final class RuleReader {
         mServiceConnection = serviceConnection;
     }
 
-    /** 职责门面直调入口（与 Client 共享同一连接核，不分裂 epoch）。 */
+    /** 职责门面直调入口：真单例，直连 {@link ServiceConnection#getDefault()}。 */
+    private static volatile RuleReader sInstance;
+
     public static RuleReader getDefault() {
-        return RuleServiceClient.getDefault().getRuleReader();
+        RuleReader result = sInstance;
+        if (result == null) {
+            synchronized (RuleReader.class) {
+                result = sInstance;
+                if (result == null) {
+                    result = new RuleReader(ServiceConnection.getDefault());
+                    sInstance = result;
+                }
+            }
+        }
+        return result;
     }
 
     /** 当前读水位，供写入对账（RuleEditorClient.Host）与观察者校验共用。 */

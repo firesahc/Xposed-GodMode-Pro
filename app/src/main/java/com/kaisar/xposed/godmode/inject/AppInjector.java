@@ -1,8 +1,9 @@
 package com.kaisar.xposed.godmode.inject;
 
 import com.kaisar.xposed.godmode.engine.util.Logger;
+import com.kaisar.xposed.godmode.ipc.LogBridge;
 import com.kaisar.xposed.godmode.ipc.ObserverCenter;
-import com.kaisar.xposed.godmode.ipc.RuleServiceClient;
+import com.kaisar.xposed.godmode.ipc.ServiceConnection;
 import com.kaisar.xposed.godmode.ipc.ServiceObserver;
 import com.kaisar.xposed.godmode.orchestrator.RecyclerAdapterHook;
 import com.kaisar.xposed.godmode.orchestrator.RecyclerBindingCoordinator;
@@ -26,13 +27,12 @@ public final class AppInjector {
 
     /** 注入目标应用 */
     public void inject(XC_LoadPackage.LoadPackageParam lpp, String packageName) {
-        RuleServiceClient serviceClient = RuleServiceClient.getDefault();
         // Install the sink before the handshake so failures during startup use the same
         // contract as later runtime logs. forwardLog remains best effort until Binder is ready.
-        serviceClient.getLogBridge().installProcessLogging(packageName);
-        if (!serviceClient.awaitReady(2_500L)) {
+        LogBridge.getDefault().installProcessLogging(packageName);
+        if (!ServiceConnection.getDefault().awaitReady(2_500L)) {
             Logger.e(TAG, "IPC handshake failed; skip hooks for " + packageName
-                    + ", state=" + serviceClient.getServiceState());
+                    + ", state=" + ServiceConnection.getDefault().getServiceState());
             return;
         }
 
@@ -57,7 +57,7 @@ public final class AppInjector {
 
         // [Phase 4] 初始化 RuleManager（Binder 获取规则 + 文件快照降级）
         RuleManager.init(packageName);
-        serviceClient.addBinderDeathListener(() ->
+        ServiceConnection.getDefault().addBinderDeathListener(() ->
                 ModuleBootstrap.notifyEditModeChanged(false));
 
         // 注册 IPC 观察者，监听规则变更

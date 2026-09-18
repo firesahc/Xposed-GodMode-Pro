@@ -62,9 +62,21 @@ public final class LeaseHub {
         mServiceConnection = serviceConnection;
     }
 
-    /** 职责门面直调入口（与 Client 共享同一连接核，不分裂租约句柄）。 */
+    /** 职责门面直调入口：真单例，直连 {@link ServiceConnection#getDefault()}。 */
+    private static volatile LeaseHub sInstance;
+
     public static LeaseHub getDefault() {
-        return RuleServiceClient.getDefault().getLeaseHub();
+        LeaseHub result = sInstance;
+        if (result == null) {
+            synchronized (LeaseHub.class) {
+                result = sInstance;
+                if (result == null) {
+                    result = new LeaseHub(ServiceConnection.getDefault());
+                    sInstance = result;
+                }
+            }
+        }
+        return result;
     }
 
     public void setListener(Listener listener) {

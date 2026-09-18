@@ -54,12 +54,39 @@ public final class ObserverCenter {
         });
     }
 
-    /** 职责门面直调入口（与 Client 共享同一连接核，不分裂 epoch）。 */
+    /** 职责门面直调入口：真单例，直连 {@link ServiceConnection#getDefault()} 及租约/读单例，并装配连接监听。 */
+    private static volatile ObserverCenter sInstance;
+
     public static ObserverCenter getDefault() {
-        return RuleServiceClient.getDefault().getObserverCenter();
+        ObserverCenter result = sInstance;
+        if (result == null) {
+            synchronized (ObserverCenter.class) {
+                result = sInstance;
+                if (result == null) {
+                    ObserverCenter created = new ObserverCenter(ServiceConnection.getDefault(),
+                            LeaseHub.getDefault(), RuleReader.getDefault());
+                    final ObserverCenter bound = created;
+                    ServiceConnection.getDefault().setConnectionListener(
+                            new ServiceConnection.ConnectionListener() {
+                                @Override public void onConnectionCleared() {
+                                    LeaseHub.getDefault().clearLeases();
+                                    bound.onConnectionCleared();
+                                }
+
+                                @Override public void onConnectionEstablished(
+                                        ServiceConnection.Connection connection) {
+                                    bound.onConnectionEstablished(connection);
+                                }
+                            });
+                    sInstance = created;
+                    result = created;
+                }
+            }
+        }
+        return result;
     }
 
-    /** 连接清空时清理投影与远端句柄（由 Client 的 ConnectionListener 转调）。 */
+    /** 连接清空时清理投影与远端句柄（由本单例装配的 ConnectionListener 转调）。 */
     public void onConnectionCleared() {
         mEditState.reset();
         mRuleReader.resetGeneration();
@@ -68,7 +95,7 @@ public final class ObserverCenter {
         }
     }
 
-    /** 建连成功时重注册观察者（由 Client 的 ConnectionListener 转调）。 */
+    /** 建连成功时重注册观察者（由本单例装配的 ConnectionListener 转调）。 */
     public void onConnectionEstablished(ServiceConnection.Connection connection) {
         reregisterObservers(connection);
     }

@@ -9,7 +9,8 @@ import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.ipc.DiagnosticMessages;
 import com.kaisar.xposed.godmode.ipc.ImageStore;
 import com.kaisar.xposed.godmode.ipc.LeaseHub;
-import com.kaisar.xposed.godmode.ipc.RuleServiceClient;
+import com.kaisar.xposed.godmode.ipc.ObserverCenter;
+import com.kaisar.xposed.godmode.ipc.RuleReader;
 import com.kaisar.xposed.godmode.ipc.RuleServiceContract;
 import com.kaisar.xposed.godmode.ipc.ServiceConnection;
 import com.kaisar.xposed.godmode.ipc.ServiceDiagnostic;
@@ -34,13 +35,14 @@ import java.util.UUID;
  * <p>协作口：{@link ServiceConnection}（连接核：建连/诊断/终端日志）、
  * {@link LeaseHub}（租约机制：open/close/恢复复用）、{@link ImageStore}
  * （图片库：pipe 双写并发与 FD 只读）、{@link Host}（只读协作口：
- * getRules/getToolbarHiddenItems/世代/编辑 revision 经 Client 现有方法）。
+ * getRules/getToolbarHiddenItems/世代/编辑 revision 经读/观察者真单例）。
  */
 public final class RuleEditorClient implements IRuleEditor {
 
     /**
-     * Client 侧只读协作口：读快照团（getRules/getToolbarHiddenItems/世代）仍归
-     * RuleServiceClient。B4 起 pipe 口已收归 {@link ImageStore}。
+     * 读侧只读协作口：读快照团（getRules/getToolbarHiddenItems/世代）归
+     * {@link RuleReader}，编辑 revision 归 {@link ObserverCenter}。
+     * B4 起 pipe 口已收归 {@link ImageStore}。
      */
     public interface Host {
         ActRules getRules(String packageName);
@@ -70,9 +72,36 @@ public final class RuleEditorClient implements IRuleEditor {
         mHost = host;
     }
 
-    /** 获取已接线的写入 owner 实例（归 RuleServiceClient 持有，Panel 调用处零改）。 */
+    /** 写入 owner 真单例：直连连接核/租约/图片真单例，Host 直调读/观察者真单例。 */
+    private static volatile RuleEditorClient sInstance;
+
     public static RuleEditorClient getInstance() {
-        return RuleServiceClient.getDefault().getRuleEditor();
+        RuleEditorClient result = sInstance;
+        if (result == null) {
+            synchronized (RuleEditorClient.class) {
+                result = sInstance;
+                if (result == null) {
+                    result = new RuleEditorClient(ServiceConnection.getDefault(),
+                            LeaseHub.getDefault(), ImageStore.getDefault(),
+                            new Host() {
+                                @Override public ActRules getRules(String packageName) {
+                                    return RuleReader.getDefault().getRules(packageName);
+                                }
+                                @Override public String getToolbarHiddenItems(String packageName) {
+                                    return RuleReader.getDefault().getToolbarHiddenItems(packageName);
+                                }
+                                @Override public long ruleGeneration() {
+                                    return RuleReader.getDefault().ruleGeneration();
+                                }
+                                @Override public long editRevision() {
+                                    return ObserverCenter.getDefault().editRevision();
+                                }
+                            });
+                    sInstance = result;
+                }
+            }
+        }
+        return result;
     }
 
     @Override

@@ -42,6 +42,23 @@ public final class ServiceConnection {
     private static final int CONNECT_RETRY_COUNT = 3;
     private static final long[] CONNECT_RETRY_DELAYS_MS = {80L, 160L};
 
+    private static volatile ServiceConnection sInstance;
+
+    /** 进程级唯一连接核：epoch/连接态单一来源，各职责门面构造直连此单例。 */
+    public static ServiceConnection getDefault() {
+        ServiceConnection result = sInstance;
+        if (result == null) {
+            synchronized (ServiceConnection.class) {
+                result = sInstance;
+                if (result == null) {
+                    result = new ServiceConnection();
+                    sInstance = result;
+                }
+            }
+        }
+        return result;
+    }
+
     /** 连接句柄：binder + 服务代理 + 建连 epoch。 */
     public static final class Connection {
         public final IBinder binder;

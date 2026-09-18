@@ -9,14 +9,13 @@ import com.kaisar.xposed.godmode.rule.ActRules;
 
 /** Delivers versioned service observer events on the target process main thread. */
 public final class ServiceObserver implements Handler.Callback,
-        RuleServiceClient.ObserverCallback {
+        ObserverCenter.ObserverCallback {
 
     private static final String TAG = "ServiceObserver";
     private static final int ACTION_EDIT_MODE_CHANGED = 0;
     private static final int ACTION_VIEW_RULES_CHANGED = 1;
 
     private final Handler mHandler = new Handler(Looper.getMainLooper(), this);
-    private final RuleServiceClient mClient;
     private final Callback mCallback;
 
     public interface Callback {
@@ -25,7 +24,6 @@ public final class ServiceObserver implements Handler.Callback,
     }
 
     public ServiceObserver(Callback callback) {
-        mClient = RuleServiceClient.getDefault();
         mCallback = callback;
     }
 
@@ -41,13 +39,13 @@ public final class ServiceObserver implements Handler.Callback,
     }
 
     private void loadRules(String packageName, long generation, long connectionEpoch, int attempt) {
-        ActRules rules = mClient.getRulesAtLeast(packageName, generation);
+        ActRules rules = RuleReader.getDefault().getRulesAtLeast(packageName, generation);
         if (rules != null) {
             mHandler.obtainMessage(ACTION_VIEW_RULES_CHANGED,
                     new RulesUpdate(generation, connectionEpoch, rules)).sendToTarget();
             return;
         }
-        if (attempt < 2 && mClient.isCurrentRuleEvent(connectionEpoch, generation)) {
+        if (attempt < 2 && ObserverCenter.getDefault().isCurrentRuleEvent(connectionEpoch, generation)) {
             Logger.d(TAG, "load rules after invalidation retry package=" + packageName
                     + " generation=" + generation + " attempt=" + (attempt + 1));
             mHandler.postDelayed(() -> loadRules(packageName, generation, connectionEpoch,
@@ -67,7 +65,7 @@ public final class ServiceObserver implements Handler.Callback,
         if (msg.what == ACTION_EDIT_MODE_CHANGED) {
             EditUpdate update = (EditUpdate) msg.obj;
             if (mCallback != null
-                    && mClient.isCurrentEditEvent(update.connectionEpoch, update.editRevision)) {
+                    && ObserverCenter.getDefault().isCurrentEditEvent(update.connectionEpoch, update.editRevision)) {
                 try {
                     mCallback.onEditModeChanged(update.enabled);
                 } catch (Throwable failure) {
@@ -79,7 +77,7 @@ public final class ServiceObserver implements Handler.Callback,
         } else if (msg.what == ACTION_VIEW_RULES_CHANGED) {
             RulesUpdate update = (RulesUpdate) msg.obj;
             if (mCallback != null
-                    && mClient.isCurrentRuleEvent(update.connectionEpoch, update.generation)) {
+                    && ObserverCenter.getDefault().isCurrentRuleEvent(update.connectionEpoch, update.generation)) {
                 try {
                     mCallback.onViewRulesChanged(update.rules);
                 } catch (Throwable failure) {

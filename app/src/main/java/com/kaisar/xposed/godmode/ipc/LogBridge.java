@@ -25,6 +25,24 @@ public final class LogBridge implements ServiceConnection.LogBridge {
     private long mDroppedPendingLogs;
     private long mRejectedPendingLogs;
 
+    private static volatile LogBridge sInstance;
+
+    /** 职责门面直调入口：真单例，直连 {@link ServiceConnection#getDefault()} 并回装核内转发点。 */
+    public static LogBridge getDefault() {
+        LogBridge result = sInstance;
+        if (result == null) {
+            synchronized (LogBridge.class) {
+                result = sInstance;
+                if (result == null) {
+                    result = new LogBridge(ServiceConnection.getDefault());
+                    ServiceConnection.getDefault().setLogBridge(result);
+                    sInstance = result;
+                }
+            }
+        }
+        return result;
+    }
+
     public LogBridge(ServiceConnection serviceConnection) {
         mServiceConnection = serviceConnection;
     }

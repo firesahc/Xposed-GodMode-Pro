@@ -25,6 +25,23 @@ import java.util.concurrent.atomic.AtomicReference;
 public final class ImageStore {
     private static final String TAG = "RuleServiceClient";
 
+    private static volatile ImageStore sInstance;
+
+    /** 职责门面直调入口：真单例，直连 {@link ServiceConnection#getDefault()}。 */
+    public static ImageStore getDefault() {
+        ImageStore result = sInstance;
+        if (result == null) {
+            synchronized (ImageStore.class) {
+                result = sInstance;
+                if (result == null) {
+                    result = new ImageStore(ServiceConnection.getDefault());
+                    sInstance = result;
+                }
+            }
+        }
+        return result;
+    }
+
     private final ServiceConnection mServiceConnection;
 
     public ImageStore(ServiceConnection serviceConnection) {
