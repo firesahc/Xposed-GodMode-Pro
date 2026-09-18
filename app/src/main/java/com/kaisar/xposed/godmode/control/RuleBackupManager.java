@@ -429,7 +429,7 @@ public final class RuleBackupManager {
 
     /** 生产实现 — 打开服务端图片描述符并包装为拥有型流；{@code null} 表示来源不可用。 */
     private static InputStream openServiceImage(String imagePath) {
-        ParcelFileDescriptor pfd = RuleServiceClient.getDefault()
+        ParcelFileDescriptor pfd = RuleServiceClient.getDefault().getImageStore()
                 .openImageFileDescriptor(imagePath);
         return pfd == null ? null : new ParcelFileDescriptor.AutoCloseInputStream(pfd);
     }

@@ -7,6 +7,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.ipc.DiagnosticMessages;
+import com.kaisar.xposed.godmode.ipc.ImageStore;
 import com.kaisar.xposed.godmode.ipc.LeaseHub;
 import com.kaisar.xposed.godmode.ipc.RuleServiceClient;
 import com.kaisar.xposed.godmode.ipc.RuleServiceContract;
@@ -31,43 +32,41 @@ import java.util.UUID;
  * 全家逐行收归此类，分支顺序与语义零差。
  *
  * <p>协作口：{@link ServiceConnection}（连接核：建连/诊断/终端日志）、
- * {@link LeaseHub}（租约机制：open/close/恢复复用）、{@link Host}（读快照团与
- * pipe 暂留口：getRules/getToolbarHiddenItems/世代/编辑 revision 经 Client 现有方法，
- * pipe 经 Client 现有 pipe 方法）。
- *
- * <p>TODO(B4-ImageStore)：mutate 内的 openPipe/awaitPipe/closePipe/firstPipeFailure
- * 调用暂留经 {@link Host} 与 {@link RuleServiceClient} 静态方法，待 ImageStore
- * 独立后迁移，本类只保留写入编排语义。
+ * {@link LeaseHub}（租约机制：open/close/恢复复用）、{@link ImageStore}
+ * （图片库：pipe 双写并发与 FD 只读）、{@link Host}（只读协作口：
+ * getRules/getToolbarHiddenItems/世代/编辑 revision 经 Client 现有方法）。
  */
 public final class RuleEditorClient implements IRuleEditor {
 
     /**
-     * Client 侧暂留协作口：读快照团（getRules/getToolbarHiddenItems/世代）与
-     * pipe 机制（openPipe）仍归 RuleServiceClient，本期只读不迁。
-     * TODO(B4-ImageStore)：pipe 口迁入 ImageStore 后本接口瘦身为只读协作口。
+     * Client 侧只读协作口：读快照团（getRules/getToolbarHiddenItems/世代）仍归
+     * RuleServiceClient。B4 起 pipe 口已收归 {@link ImageStore}。
      */
     public interface Host {
         ActRules getRules(String packageName);
         String getToolbarHiddenItems(String packageName);
         long ruleGeneration();
         long editRevision();
-        RuleServiceClient.PipeAsset openPipe(Bitmap bitmap);
     }
 
     private static final String TAG = "RuleEditorClient";
 
     private final ServiceConnection mServiceConnection;
     private final LeaseHub mLeaseHub;
+    private final ImageStore mImageStore;
     private final Host mHost;
     private final Gson mGson = new GsonBuilder().create();
     private volatile int mLastMutationStatus = RuleServiceContract.RESULT_NO_CHANGE;
 
-    public RuleEditorClient(ServiceConnection serviceConnection, LeaseHub leaseHub, Host host) {
+    public RuleEditorClient(ServiceConnection serviceConnection, LeaseHub leaseHub,
+                            ImageStore imageStore, Host host) {
         if (serviceConnection == null) throw new IllegalArgumentException("serviceConnection is required");
         if (leaseHub == null) throw new IllegalArgumentException("leaseHub is required");
+        if (imageStore == null) throw new IllegalArgumentException("imageStore is required");
         if (host == null) throw new IllegalArgumentException("host is required");
         mServiceConnection = serviceConnection;
         mLeaseHub = leaseHub;
+        mImageStore = imageStore;
         mHost = host;
     }
 
@@ -223,14 +222,14 @@ public final class RuleEditorClient implements IRuleEditor {
             return localMutationResult(requestId, packageName, mLastMutationStatus,
                     "mutation lease unavailable");
         }
-        // TODO(B4-ImageStore)：pipe 机制迁入 ImageStore 后改走 ImageStore 协作口。
-        RuleServiceClient.PipeAsset mainPipe = mHost.openPipe(main);
-        RuleServiceClient.PipeAsset modifiedPipe = mHost.openPipe(modified);
+        // B4：pipe 经 ImageStore 直调，Host 只剩只读协作口。
+        ImageStore.PipeAsset mainPipe = mImageStore.openPipe(main);
+        ImageStore.PipeAsset modifiedPipe = mImageStore.openPipe(modified);
         if ((main != null && mainPipe == null) || (modified != null && modifiedPipe == null)) {
-            RuleServiceClient.closePipe(mainPipe);
-            RuleServiceClient.closePipe(modifiedPipe);
-            RuleServiceClient.awaitPipe(mainPipe);
-            RuleServiceClient.awaitPipe(modifiedPipe);
+            ImageStore.closePipe(mainPipe);
+            ImageStore.closePipe(modifiedPipe);
+            ImageStore.awaitPipe(mainPipe);
+            ImageStore.awaitPipe(modifiedPipe);
             if (temporary) mLeaseHub.closeLease(lease);
             mLastMutationStatus = RuleServiceContract.RESULT_WRITE_FAILED;
             mServiceConnection.logMutationTerminal(operation, packageName, requestId,
@@ -277,9 +276,9 @@ public final class RuleEditorClient implements IRuleEditor {
         finally {
             if (mainPipe != null) mainPipe.closeRead();
             if (modifiedPipe != null) modifiedPipe.closeRead();
-            RuleServiceClient.awaitPipe(mainPipe);
-            RuleServiceClient.awaitPipe(modifiedPipe);
-            Throwable pipeFailure = RuleServiceClient.firstFailure(mainPipe, modifiedPipe);
+            ImageStore.awaitPipe(mainPipe);
+            ImageStore.awaitPipe(modifiedPipe);
+            Throwable pipeFailure = ImageStore.firstFailure(mainPipe, modifiedPipe);
             if (pipeFailure != null) {
                 Logger.w(TAG, "mutation image pipe failed operation="
                         + ServiceConnection.mutationOperationName(operation) + " package=" + packageName
@@ -291,8 +290,8 @@ public final class RuleEditorClient implements IRuleEditor {
                                     pipeFailure.getMessage())));
                 }
             }
-            RuleServiceClient.closePipe(mainPipe);
-            RuleServiceClient.closePipe(modifiedPipe);
+            ImageStore.closePipe(mainPipe);
+            ImageStore.closePipe(modifiedPipe);
             ServiceDiagnostic mutationDiagnostic = mServiceConnection.getServiceDiagnostic();
             String mutationError = mServiceConnection.getLastError();
             if (temporary) mLeaseHub.closeLease(lease);

@@ -38,7 +38,7 @@ public final class BinderImageLoader implements ModifyApplier.ImageLoader {
     @Override
     public ParcelFileDescriptor openImageFileDescriptor(String path) throws Exception {
         try {
-            return RuleServiceClient.getDefault().openImageFileDescriptor(path);
+            return RuleServiceClient.getDefault().getImageStore().openImageFileDescriptor(path);
         } catch (Exception e) {
             Logger.w(TAG, "openImageFileDescriptor failed image=" + path, e);
             throw e;

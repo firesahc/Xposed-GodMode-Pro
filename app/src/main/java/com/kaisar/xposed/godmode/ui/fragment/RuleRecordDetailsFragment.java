@@ -221,7 +221,7 @@ public final class RuleRecordDetailsFragment extends PreferenceFragmentCompat im
 
     private void reserveImagePlaceholder() {
         try {
-            ParcelFileDescriptor pfd = RuleServiceClient.getDefault().openImageFileDescriptor(mRuleRecord.imagePath);
+            ParcelFileDescriptor pfd = RuleServiceClient.getDefault().getImageStore().openImageFileDescriptor(mRuleRecord.imagePath);
             if (pfd == null) return;
             BitmapFactory.Options opts = new BitmapFactory.Options();
             opts.inJustDecodeBounds = true;
@@ -280,7 +280,7 @@ public final class RuleRecordDetailsFragment extends PreferenceFragmentCompat im
     @Nullable
     private static Bitmap loadRuleImageBitmap(@NonNull RuleRecord viewRule) {
         try {
-            ParcelFileDescriptor pfd = RuleServiceClient.getDefault().openImageFileDescriptor(viewRule.imagePath);
+            ParcelFileDescriptor pfd = RuleServiceClient.getDefault().getImageStore().openImageFileDescriptor(viewRule.imagePath);
             Objects.requireNonNull(pfd, String.format("Can not open %s", viewRule.imagePath));
             try {
                 // 带采样上限保护的安全解码，避免大图 OOM；失败返回 null 由上层兜底

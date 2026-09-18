@@ -73,7 +73,7 @@ public class GmGlideModule extends AppGlideModule {
 
         @Override
         public void loadData(@NonNull Priority priority, @NonNull DataCallback<? super Bitmap> callback) {
-            ParcelFileDescriptor pfd = RuleServiceClient.getDefault().openImageFileDescriptor(mPreview.imagePath);
+            ParcelFileDescriptor pfd = RuleServiceClient.getDefault().getImageStore().openImageFileDescriptor(mPreview.imagePath);
             if (pfd != null) {
                 try {
                     // 采样解码并按原图坐标 ROI 裁剪，避免大图全量解码导致 OOM；

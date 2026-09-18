@@ -7,7 +7,6 @@ import android.os.SharedMemory;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import com.kaisar.xposed.godmode.engine.util.Closeables;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.editor.RuleEditorClient;
 import com.kaisar.xposed.godmode.ipc.contract.IRuleObserver;
@@ -20,18 +19,12 @@ import com.kaisar.xposed.godmode.ipc.contract.UndoStateParcel;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.AppRules;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
-import com.kaisar.xposed.godmode.util.TaskExecutor;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.util.Locale;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicReference;
 
 /** Single client facade for the canonical 6.10 rule service. */
 public final class RuleServiceClient {
@@ -45,11 +38,13 @@ public final class RuleServiceClient {
     private final AtomicLong mRuleGeneration = new AtomicLong();
     private final ClientEditState mEditState = new ClientEditState();
     private final LeaseHub mLeaseHub;
+    private final ImageStore mImageStore;
     private final RuleEditorClient mRuleEditor;
 
     private RuleServiceClient() {
         mLogBridge = new LogBridge(mServiceConnection);
         mLeaseHub = new LeaseHub(mServiceConnection);
+        mImageStore = new ImageStore(mServiceConnection);
         // ClientEditState 是观察者链路的编辑投影，留在 Client 侧；Hub 经 Listener 回调
         // 通知投影清理，避免投影与租约机制耦合。
         mLeaseHub.setListener(new LeaseHub.Listener() {
@@ -62,7 +57,7 @@ public final class RuleServiceClient {
                 }
             }
         });
-        mRuleEditor = new RuleEditorClient(mServiceConnection, mLeaseHub,
+        mRuleEditor = new RuleEditorClient(mServiceConnection, mLeaseHub, mImageStore,
                 new RuleEditorClient.Host() {
                     @Override public ActRules getRules(String packageName) {
                         return RuleServiceClient.this.getRules(packageName);
@@ -72,9 +67,6 @@ public final class RuleServiceClient {
                     }
                     @Override public long ruleGeneration() { return mRuleGeneration.get(); }
                     @Override public long editRevision() { return mEditState.revision(); }
-                    @Override public PipeAsset openPipe(Bitmap bitmap) {
-                        return RuleServiceClient.this.openPipe(bitmap);
-                    }
                 });
         mServiceConnection.setConnectionListener(new ServiceConnection.ConnectionListener() {
             @Override public void onConnectionCleared() {
@@ -494,100 +486,13 @@ public final class RuleServiceClient {
         return RuleEditorClient.containsSlot(rules, expected);
     }
 
-    private PipeAsset openPipe(Bitmap bitmap) {
-        if (bitmap == null) return null;
-        if (bitmap.isRecycled()) {
-            recordDiagnostic(ServiceDiagnostic.of(ServiceDiagnostic.Type.UNKNOWN,
-                    DiagnosticMessages.IMAGE_RECYCLED_MUTATION_CANCELLED_DETAIL));
-            return null;
-        }
-        try {
-            ParcelFileDescriptor[] pipe = ParcelFileDescriptor.createPipe();
-            PipeAsset asset = new PipeAsset(pipe[0], pipe[1], bitmap);
-            TaskExecutor.executeFdWrite(asset::write);
-            return asset;
-        } catch (IOException e) {
-            recordDiagnostic(ServiceDiagnostic.of(ServiceDiagnostic.Type.UNKNOWN,
-                    String.format(Locale.US, DiagnosticMessages.IMAGE_PIPE_CREATE_FAILED_DETAIL, e.getMessage())));
-            Logger.w(TAG, "create image pipe failed", e);
-            return null;
-        }
-    }
-
-    public static void awaitPipe(PipeAsset asset) {
-        if (asset == null) return;
-        try {
-            if (!asset.finished.await(10, TimeUnit.SECONDS)) {
-                asset.failure.compareAndSet(null,
-                        new IOException("pipe writer did not stop within 10 seconds"));
-                asset.closeWrite();
-                Logger.w(TAG, "image pipe writer timed out");
-            }
-        }
-        catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            asset.failure.compareAndSet(null, e);
-            asset.closeWrite();
-            Logger.w(TAG, "image pipe writer wait interrupted", e);
-        }
-    }
-
-    public static void closePipe(PipeAsset asset) {
-        if (asset == null) return;
-        asset.closeRead();
-        asset.closeWrite();
-    }
-
-    public static Throwable firstFailure(PipeAsset first, PipeAsset second) {
-        Throwable failure = first == null ? null : first.failure.get();
-        return failure != null || second == null ? failure : second.failure.get();
-    }
-
-    /** B3 暂留：pipe 机制仍归 Client，跨包供写入 owner 调用，逻辑不动，待 B4 迁入 ImageStore。 */
-    public final class PipeAsset {
-        public final ParcelFileDescriptor readEnd;
-        private ParcelFileDescriptor writeEnd;
-        final Bitmap bitmap;
-        final CountDownLatch finished = new CountDownLatch(1);
-        final AtomicReference<Throwable> failure = new AtomicReference<>();
-
-        PipeAsset(ParcelFileDescriptor readEnd, ParcelFileDescriptor writeEnd, Bitmap bitmap) {
-            this.readEnd = readEnd;
-            this.writeEnd = writeEnd;
-            this.bitmap = bitmap;
-        }
-
-        void write() {
-            try (ParcelFileDescriptor.AutoCloseOutputStream output =
-                         new ParcelFileDescriptor.AutoCloseOutputStream(writeEnd)) {
-                writeEnd = null;
-                if (!bitmap.compress(Bitmap.CompressFormat.WEBP, 80, output)) {
-                    throw new IOException("bitmap encode failed");
-                }
-                output.flush();
-            } catch (Throwable t) {
-                failure.compareAndSet(null, t);
-                closeWrite();
-            } finally {
-                finished.countDown();
-            }
-        }
-
-        public void closeRead() {
-            Closeables.closeQuietly(readEnd);
-        }
-
-        void closeWrite() {
-            ParcelFileDescriptor current = writeEnd;
-            writeEnd = null;
-            Closeables.closeQuietly(current);
-        }
+    /** B4：图片库已收归 {@link ImageStore}，本类只保留 FD 公开签名转发。 */
+    public ImageStore getImageStore() {
+        return mImageStore;
     }
 
     public ParcelFileDescriptor openImageFileDescriptor(String path) {
-        ServiceConnection.Connection c = ensureConnection(); if (c == null) return null;
-        try { return c.service.openImageFileDescriptor(path); }
-        catch (RemoteException e) { logError("openImageFileDescriptor", c, e); return null; }
+        return mImageStore.openImageFileDescriptor(path);
     }
 
     public String getToolbarHiddenItems(String packageName) {
