@@ -12,6 +12,9 @@
   descriptor 硬切、租约、快照校验、持久化顺序、恢复语义和权威撤销账本。
 - [ADR-0001：RuleRecord 内部组件](adr/0001-rule-record-wire-components.md)：
   记录 RuleRecord 的内部拆分，但不改变 JSON、Parcelable、ZIP V1 或匹配结果。
+- [架构边界准则](architecture-boundary.md)：6.11.0 后重构沉淀的评审执行标准
+  （依赖方向、状态所有权、职责归属与可 grep 验证口径）。
+  只约束边界，不定义 wire/IPC/匹配语义；与上述合同冲突时以合同为准。
 - [全项目设备测试规则](device-test-rules.md)：规定所有版本和测试目标的前台
   Activity 唤起、持久化日志目录核对以及设备证据记录顺序。
 
