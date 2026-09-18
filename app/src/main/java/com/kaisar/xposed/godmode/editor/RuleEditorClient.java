@@ -19,9 +19,9 @@ import com.kaisar.xposed.godmode.ipc.contract.RuleMutationResult;
 import com.kaisar.xposed.godmode.ipc.contract.UndoRequestParcel;
 import com.kaisar.xposed.godmode.ipc.contract.UndoResultParcel;
 import com.kaisar.xposed.godmode.ipc.contract.UndoStateParcel;
-import com.kaisar.xposed.godmode.orchestrator.RuntimeRuleComparator;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
+import com.kaisar.xposed.godmode.rule.RuntimeRuleComparator;
 
 import java.util.List;
 import java.util.Locale;

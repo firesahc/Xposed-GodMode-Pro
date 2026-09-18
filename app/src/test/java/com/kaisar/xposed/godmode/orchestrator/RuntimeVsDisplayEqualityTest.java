@@ -8,6 +8,7 @@ import com.kaisar.xposed.godmode.engine.matcher.TargetLevel;
 import com.kaisar.xposed.godmode.engine.rule.MatchSpec;
 import com.kaisar.xposed.godmode.engine.rule.ModifyEffect;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
+import com.kaisar.xposed.godmode.rule.RuntimeRuleComparator;
 
 import org.junit.Test;
 

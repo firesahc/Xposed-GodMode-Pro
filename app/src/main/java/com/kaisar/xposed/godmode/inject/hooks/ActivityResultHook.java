@@ -7,13 +7,10 @@ import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.view.View;
 import android.widget.ImageView;
-import android.widget.Toast;
 
-import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.editor.ImagePickPort;
 import com.kaisar.xposed.godmode.engine.util.CommonUtils;
 import com.kaisar.xposed.godmode.engine.util.Logger;
-import com.kaisar.xposed.godmode.util.GmResources;
 
 import java.io.InputStream;
 
@@ -37,6 +34,8 @@ import de.robv.android.xposed.XposedHelpers;
  *   <li>解码失败 / 校验失败走 {@code CommonUtils.recycleNullableBitmap} 路径；
  *       全部异常只记日志，不抛给宿主；解码与交付仍在 Hook 回调线程，
  *       不引入线程切换。</li>
+ *   <li>选图器拉起失败经 {@code onPickerUnavailable} 回传 UI（本类不直接弹窗，
+ *       提示由 {@code PropertyEditorPanel} 提供的会话回调负责）。</li>
  * </ul>
  * <p>
  * 本类是 {@code de.robv} 引用的终点：editor/UI 层不得再出现 Xposed 符号。
@@ -60,7 +59,29 @@ public final class ActivityResultHook extends XC_MethodHook implements ImagePick
             intent.setType("image/*");
             activity.startActivityForResult(intent, REQUEST_CODE_PICK_IMAGE);
         } catch (Exception e) {
-            Toast.makeText(activity, GmResources.getString(R.string.toast_cannot_open_image_picker), Toast.LENGTH_SHORT).show();
+            Logger.w(TAG, "open image picker failed", e);
+            try {
+                onPickerUnavailable(activity);
+            } catch (Exception callbackFailure) {
+                Logger.w(TAG, "picker unavailable callback failed", callbackFailure);
+            }
+        }
+    }
+
+    /**
+     * 选图器不可用回传 — 本类只报告不弹窗：转发给快照携带的 UI 回调
+     *（{@code PropertyEditorPanel} 组装会话时提供，负责提示）；无会话则忽略。
+     * 全部异常只记日志，不抛给宿主。
+     */
+    @Override
+    public void onPickerUnavailable(Activity activity) {
+        if (activity == null) return;
+        ImagePickSession session = mSession;
+        if (session == null) return;
+        try {
+            session.onPickerUnavailable().onUnavailable(activity);
+        } catch (Exception e) {
+            Logger.w(TAG, "picker unavailable callback failed", e);
         }
     }
 

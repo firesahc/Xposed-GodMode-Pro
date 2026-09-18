@@ -40,6 +40,18 @@ public interface ImagePickPort {
     void cancel();
 
     /**
+     * 选图器拉起失败回传 — 注入侧只报告，UI 侧实现提示。
+     * <p>
+     * default 空实现：已有 {@code ImagePickPort} 实现不覆盖也能编译；
+     * 注入侧实现（{@code inject.hooks.ActivityResultHook}）覆盖本方法，
+     * 将失败转发给快照携带的 {@link OnPickerUnavailable}（UI 侧组装会话时提供）。
+     *
+     * @param activity 发起选图的宿主 Activity（非空）
+     */
+    default void onPickerUnavailable(Activity activity) {
+    }
+
+    /**
      * 图片选择会话的不可变快照 — 由 UI 在点击选图时组装，由注入侧在回调时消费。
      * <p>
      * 快照一旦构造即冻结：generation 为点击时刻的 Panel 会话代次；
@@ -55,17 +67,30 @@ public interface ImagePickPort {
         private final WeakReference<View> targetView;
         private final Verify verify;
         private final OnImage onImage;
+        private final OnPickerUnavailable onPickerUnavailable;
 
         public ImagePickSession(long generation,
                 WeakReference<Activity> editingActivity,
                 WeakReference<View> targetView,
                 Verify verify,
                 OnImage onImage) {
+            this(generation, editingActivity, targetView, verify, onImage, null);
+        }
+
+        public ImagePickSession(long generation,
+                WeakReference<Activity> editingActivity,
+                WeakReference<View> targetView,
+                Verify verify,
+                OnImage onImage,
+                OnPickerUnavailable onPickerUnavailable) {
             this.generation = generation;
             this.editingActivity = Objects.requireNonNull(editingActivity, "editingActivity");
             this.targetView = Objects.requireNonNull(targetView, "targetView");
             this.verify = Objects.requireNonNull(verify, "verify");
             this.onImage = Objects.requireNonNull(onImage, "onImage");
+            // 旧调用兼容：未提供回传时为空实现（保持编译与静默兼容，不抛异常）。
+            this.onPickerUnavailable = onPickerUnavailable != null ? onPickerUnavailable
+                    : (hostActivity) -> { };
         }
 
         /** 点击时刻的会话代次；注入侧用它与 UI 实时代次比较，替代原 mImageRequestGeneration 比对。 */
@@ -91,6 +116,11 @@ public interface ImagePickPort {
         /** Bitmap 交付回调（所有权转移给 UI）。 */
         public OnImage onImage() {
             return onImage;
+        }
+
+        /** 选图器不可用回传（UI 侧提供；旧快照默认为空实现）。 */
+        public OnPickerUnavailable onPickerUnavailable() {
+            return onPickerUnavailable;
         }
     }
 
@@ -123,5 +153,20 @@ public interface ImagePickPort {
          * @param bitmap 解码得到的非空位图，所有权转移给调用方
          */
         void onImage(Bitmap bitmap);
+    }
+
+    /**
+     * 选图器不可用回传 — 由 UI 实现（{@code PropertyEditorPanel} 弹 Toast 提示），
+     * 注入侧只调用不解释。
+     * <p>
+     * 调用线程即 Hook 回调线程（与原实现一致，不做线程切换）；
+     * 异常由注入侧统一记日志，不抛给宿主。
+     */
+    interface OnPickerUnavailable {
+
+        /**
+         * @param activity 发起选图的宿主 Activity（非空，请求时刻的同一实例）
+         */
+        void onUnavailable(Activity activity);
     }
 }

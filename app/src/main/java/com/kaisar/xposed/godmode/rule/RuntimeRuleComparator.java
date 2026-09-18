@@ -1,9 +1,10 @@
-package com.kaisar.xposed.godmode.orchestrator;
-
-import com.kaisar.xposed.godmode.rule.RuleRecord;
+package com.kaisar.xposed.godmode.rule;
 
 /**
  * 运行时内容比较器 — 供规则 diff 判定"效果是否变化"。
+ * <p>
+ * 纯规则语义归属：本类已由 {@code orchestrator} 迁入 {@code rule} 包，与
+ * {@link RuleRecord} 同包；比较范围与语义零差，仅包归属变更。
  * <p>
  * 比较范围 = 匹配结构语义（{@code MatchSpec#hasSameRuntimeSemantics}）+ 效果字段；
  * <b>有意排除</b>两类非运行时数据：

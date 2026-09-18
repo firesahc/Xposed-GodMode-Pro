@@ -324,7 +324,7 @@ public final class RuleRecord implements Parcelable, Cloneable {
      * UI 内容相等 — 面向 UI DiffUtil，含 alias/matchSpec/effect/imagePath/坐标。
      * <p>
      * DO NOT 用于运行时 diff（会误把展示变化当规则变化）；运行时语义比较见
-     * {@code orchestrator.RuntimeRuleComparator}。
+     * {@code rule.RuntimeRuleComparator}。
      */
     public boolean contentEquals(@NonNull RuleRecord other) {
         return Objects.equals(alias, other.alias)

@@ -351,7 +351,10 @@ public class PropertyEditorPanel {
                             CommonUtils.recycleNullableBitmap(mPendingImageBitmap);
                             mPendingImageBitmap = bitmap;
                             ((ImageView) target).setImageBitmap(bitmap);
-                        });
+                        },
+                        hostActivity -> Toast.makeText(hostActivity,
+                                GmResources.getString(R.string.toast_cannot_open_image_picker),
+                                Toast.LENGTH_SHORT).show());
                 port.requestPick(activity, session);
             } catch (Exception e) {
                 Toast.makeText(activity, GmResources.getString(R.string.toast_cannot_open_image_picker), Toast.LENGTH_SHORT).show();
