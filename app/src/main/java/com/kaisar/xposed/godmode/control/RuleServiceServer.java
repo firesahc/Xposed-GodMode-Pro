@@ -623,6 +623,9 @@ public final class RuleServiceServer extends IRuleService.Stub {
     private IncomingImageReader.ReadResult readIncomingImage(ParcelFileDescriptor descriptor,
                                                               String packageName,
                                                               String requestId, String label) {
+        // 空 FD（如工具栏全局写入）不触包目录，直接返回有效空结果；
+        // 否则 "*" 等非包作用域会在 getAppDataDir 提前炸掉本次提交。
+        if (descriptor == null) return IncomingImageReader.ReadResult.absent();
         try {
             return mIncomingImageReader.read(descriptor,
                     new File(mRepository.getAppDataDir(packageName)), requestId,
