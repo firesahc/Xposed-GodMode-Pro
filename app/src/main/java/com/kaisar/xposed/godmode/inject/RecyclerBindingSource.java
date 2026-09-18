@@ -1,8 +1,13 @@
-package com.kaisar.xposed.godmode.orchestrator;
+package com.kaisar.xposed.godmode.inject;
 
 import android.app.Activity;
 
 import com.kaisar.xposed.godmode.engine.util.Logger;
+import com.kaisar.xposed.godmode.inject.hooks.RecyclerAdapterHook;
+import com.kaisar.xposed.godmode.orchestrator.RecyclerBindingCoordinator;
+import com.kaisar.xposed.godmode.orchestrator.RecyclerBindingPort;
+import com.kaisar.xposed.godmode.orchestrator.RuleLifecycleManager;
+import com.kaisar.xposed.godmode.orchestrator.ViewController;
 
 /**
  * {@link RecyclerBindingPort} 薄适配器（方案 a）。

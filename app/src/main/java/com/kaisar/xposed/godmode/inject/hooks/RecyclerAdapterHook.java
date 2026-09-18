@@ -1,10 +1,14 @@
-package com.kaisar.xposed.godmode.orchestrator;
+package com.kaisar.xposed.godmode.inject.hooks;
 
 import android.app.Activity;
 import android.view.View;
 
 import com.kaisar.xposed.godmode.engine.core.PlatformCapabilities;
 import com.kaisar.xposed.godmode.engine.util.Logger;
+import com.kaisar.xposed.godmode.orchestrator.RecyclerBindingCoordinator;
+import com.kaisar.xposed.godmode.orchestrator.RecyclerBindingPort;
+import com.kaisar.xposed.godmode.orchestrator.RepeatableRuleGate;
+import com.kaisar.xposed.godmode.orchestrator.ViewController;
 
 import java.util.Map;
 import java.util.WeakHashMap;

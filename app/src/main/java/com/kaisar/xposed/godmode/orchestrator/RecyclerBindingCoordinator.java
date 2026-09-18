@@ -23,10 +23,10 @@ import java.util.concurrent.atomic.AtomicLong;
  * <p>
  * 职责：ViewHolder 绑定生命周期（token/epoch 存储）+ repeatable 规则匹配应用
  * （导航/验证/apply/revoke）+ Activity 级 token 清理。零 {@code de.robv} import：
- * 所有 Xposed 拦截与宿主反射提取仍由 {@link RecyclerAdapterHook} 承担，本类只接收
+ * 所有 Xposed 拦截与宿主反射提取仍由注入侧Recycler绑定Hook承担，本类只接收
  * 已提取的纯数据（adapter/holder/itemView/viewType），经 {@link RecyclerBindingPort}
  * 回调运行时（缓存清理、ViewController 查询、重应用调度）。依赖方向：
- * Coordinator {@code ->} 端口接口，{@link RecyclerAdapterHook} {@code ->} 本类
+ * Coordinator {@code ->} 端口接口，注入侧Recycler绑定Hook {@code ->} 本类
  * （单向持有，无循环）。
  * <p>
  * 与 P0 {@code RepeatableRuleGate} 模式同构：运行时逻辑住在本类，注入侧只做转译。
@@ -46,7 +46,7 @@ public final class RecyclerBindingCoordinator {
     /** 运行时回调（通常为 RuleLifecycleManager 单例），空时跳过不抛宿主。 */
     private volatile RecyclerBindingPort mDelegate;
 
-    /** Repeatable 业务门控 — 由 AppInjector 与 RecyclerAdapterHook 装配同一实例。 */
+    /** Repeatable 业务门控 — 由 AppInjector 与注入侧Recycler绑定Hook装配同一实例。 */
     private volatile RepeatableRuleGate mRepeatableGate;
 
     public RecyclerBindingCoordinator(RecyclerBindingPort delegate) {
