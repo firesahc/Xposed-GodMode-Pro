@@ -1,10 +1,6 @@
 package com.kaisar.xposed.godmode.ipc;
 
 import android.graphics.Bitmap;
-import android.os.DeadObjectException;
-import android.os.Handler;
-import android.os.IBinder;
-import android.os.Looper;
 import android.os.ParcelFileDescriptor;
 import android.os.RemoteException;
 import android.os.SharedMemory;
@@ -15,13 +11,11 @@ import com.kaisar.xposed.godmode.engine.util.Closeables;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.ipc.contract.ILeaseOwner;
 import com.kaisar.xposed.godmode.ipc.contract.IRuleObserver;
-import com.kaisar.xposed.godmode.ipc.contract.IRuleService;
 import com.kaisar.xposed.godmode.ipc.contract.ObserverRegistrationParcel;
 import com.kaisar.xposed.godmode.ipc.contract.OperationLeaseParcel;
 import com.kaisar.xposed.godmode.ipc.contract.RuleMutationRequest;
 import com.kaisar.xposed.godmode.ipc.contract.RuleMutationResult;
 import com.kaisar.xposed.godmode.ipc.contract.RuleSnapshotParcel;
-import com.kaisar.xposed.godmode.ipc.contract.ServiceIdentityParcel;
 import com.kaisar.xposed.godmode.ipc.contract.UndoRequestParcel;
 import com.kaisar.xposed.godmode.ipc.contract.UndoResultParcel;
 import com.kaisar.xposed.godmode.ipc.contract.UndoStateParcel;
@@ -49,16 +43,12 @@ import java.util.concurrent.atomic.AtomicReference;
 /** Single client facade for the canonical 6.10 rule service. */
 public final class RuleServiceClient {
     private static final String TAG = "RuleServiceClient";
-    private static final int CONNECT_RETRY_COUNT = 3;
-    private static final long[] CONNECT_RETRY_DELAYS_MS = {80L, 160L};
     private static final int MAX_PENDING_LOGS = 512;
     private static volatile RuleServiceClient instance;
 
+    private final ServiceConnection mServiceConnection = new ServiceConnection();
     private final Gson mGson = new GsonBuilder().create();
-    private final Handler mMainHandler = new Handler(Looper.getMainLooper());
-    private final CopyOnWriteArrayList<Runnable> mBinderDeathListeners = new CopyOnWriteArrayList<>();
     private final CopyOnWriteArrayList<ObserverSubscription> mObserverSubscriptions = new CopyOnWriteArrayList<>();
-    private final AtomicLong mConnectionEpoch = new AtomicLong();
     private final AtomicLong mRuleGeneration = new AtomicLong();
     private final ClientEditState mEditState = new ClientEditState();
     private final Object mLogLock = new Object();
@@ -71,7 +61,7 @@ public final class RuleServiceClient {
             boolean hadBackupLease = mBackupLease != null;
             boolean wasEditEnabled = mEditState.isEnabled();
             long editRevision = mEditState.revision();
-            long epoch = mConnectionEpoch.get();
+            long epoch = mServiceConnection.getConnectionEpoch();
             mRestoreLease = null;
             mBackupLease = null;
             mEditState.reset();
@@ -82,15 +72,37 @@ public final class RuleServiceClient {
                     + " hadBackupLease=" + hadBackupLease);
         }
     };
-    private volatile Connection mConnection;
-    private volatile String mLastError;
-    private volatile ServiceDiagnostic mServiceDiagnostic;
-    private volatile int mServiceState = RuleServiceContract.STARTING;
     private volatile String mRestoreLease;
     private volatile String mBackupLease;
     private volatile int mLastMutationStatus = RuleServiceContract.RESULT_NO_CHANGE;
 
-    private RuleServiceClient() { }
+    private RuleServiceClient() {
+        mServiceConnection.setConnectionListener(new ServiceConnection.ConnectionListener() {
+            @Override public void onConnectionCleared() {
+                mRestoreLease = null;
+                mBackupLease = null;
+                mEditState.reset();
+                mRuleGeneration.set(0L);
+                for (ObserverSubscription subscription : mObserverSubscriptions) {
+                    subscription.clearRemote();
+                }
+            }
+
+            @Override public void onConnectionEstablished(ServiceConnection.Connection connection) {
+                reregisterObservers(connection);
+            }
+        });
+        mServiceConnection.setLogBridge(new ServiceConnection.LogBridge() {
+            @Override public ServiceConnection.Connection flushReadyPendingLogs(
+                    ServiceConnection.Connection connection) {
+                return RuleServiceClient.this.flushReadyPendingLogs(connection);
+            }
+
+            @Override public RemoteException flushPendingLogs(ServiceConnection.Connection connection) {
+                return RuleServiceClient.this.flushPendingLogs(connection);
+            }
+        });
+    }
 
     /** Installs the process-side durable sink for Logger and XServiceManager diagnostics. */
     public void installProcessLogging(String packageName) {
@@ -125,208 +137,49 @@ public final class RuleServiceClient {
         return result;
     }
 
-    private Connection ensureConnection() {
-        Connection current = mConnection;
-        if (isReady(current)) return flushReadyPendingLogs(current);
-        if (mServiceState == RuleServiceContract.REBOOT_REQUIRED) return null;
-        synchronized (this) {
-            current = mConnection;
-            if (isReady(current)) return flushReadyPendingLogs(current);
-            IBinder remote = connectWithRetry();
-            if (remote == null) {
-                mServiceState = RuleServiceContract.FAILED;
-                recordDiagnostic(buildBridgeDiagnostic());
-                return null;
-            }
-            try {
-                String descriptor = remote.getInterfaceDescriptor();
-                if (!RuleServiceContract.DESCRIPTOR.equals(descriptor)) {
-                    markRebootRequired(ServiceDiagnostic.of(
-                            ServiceDiagnostic.Type.DESCRIPTOR_MISMATCH,
-                            String.format(Locale.US, DiagnosticMessages.DESCRIPTOR_MISMATCH_DETAIL, descriptor)));
-                    return null;
-                }
-                IRuleService service = IRuleService.Stub.asInterface(remote);
-                ServiceIdentityParcel identity = service.getServiceIdentity();
-                if (!isExpectedIdentity(identity)) {
-                    markRebootRequired(ServiceDiagnostic.of(
-                            ServiceDiagnostic.Type.CONTRACT_MISMATCH,
-                            DiagnosticMessages.IDENTITY_FINGERPRINT_MISMATCH_DETAIL));
-                    return null;
-                }
-                int state = identity.serviceState;
-                if (state != RuleServiceContract.READY) {
-                    mServiceState = state;
-                    recordDiagnostic(ServiceDiagnostic.forServiceState(state,
-                            String.format(Locale.US, DiagnosticMessages.SERVICE_NOT_READY_STATE_DETAIL, state)));
-                    return null;
-                }
-                final Connection connection = new Connection(remote, service, mConnectionEpoch.incrementAndGet());
-                remote.linkToDeath(() -> onBinderDied(connection), 0);
-                mConnection = connection;
-                mServiceState = RuleServiceContract.READY;
-                clearDiagnostic();
-                RemoteException pendingLogFailure = flushPendingLogs(connection);
-                if (pendingLogFailure != null) {
-                    logError("flushLogs", connection, pendingLogFailure);
-                    if (!isReady(connection)) return null;
-                }
-                reregisterObservers(connection);
-                return connection;
-            } catch (RemoteException e) {
-                if (remote.isBinderAlive()) {
-                    mServiceState = RuleServiceContract.FAILED;
-                    recordDiagnostic(ServiceDiagnostic.of(ServiceDiagnostic.Type.UNKNOWN,
-                            String.format(Locale.US, DiagnosticMessages.HANDSHAKE_FAILED_DETAIL, e.getMessage())));
-                } else {
-                    mServiceState = RuleServiceContract.STARTING;
-                    recordDiagnostic(ServiceDiagnostic.of(ServiceDiagnostic.Type.BINDER_DIED,
-                            String.format(Locale.US, DiagnosticMessages.HANDSHAKE_BINDER_DEAD_DETAIL, e.getMessage())));
-                }
-                Logger.e(TAG, "rule service handshake failed state=" + mServiceState, e);
-                return null;
-            } catch (RuntimeException e) {
-                mServiceState = RuleServiceContract.FAILED;
-                recordDiagnostic(ServiceDiagnostic.of(ServiceDiagnostic.Type.UNKNOWN,
-                        String.format(Locale.US, DiagnosticMessages.HANDSHAKE_UNEXPECTED_FAILURE_DETAIL, e.getMessage())));
-                Logger.e(TAG, "rule service handshake exception state=" + mServiceState, e);
-                return null;
-            }
-        }
+    public String getLastError() { return mServiceConnection.getLastError(); }
+    public ServiceDiagnostic getServiceDiagnostic() { return mServiceConnection.getServiceDiagnostic(); }
+    public String getServiceFailureMessage() { return mServiceConnection.getServiceFailureMessage(); }
+    public int getServiceState() { return mServiceConnection.getServiceState(); }
+    public boolean isReady() { return mServiceConnection.isReady(); }
+    public boolean isConnected() { return mServiceConnection.isConnected(); }
+    public boolean hasReadyConnection() { return mServiceConnection.hasReadyConnection(); }
+    public boolean awaitReady(long timeoutMs) { return mServiceConnection.awaitReady(timeoutMs); }
+
+    public void addBinderDeathListener(Runnable listener) {
+        mServiceConnection.addBinderDeathListener(listener);
+    }
+    public void removeBinderDeathListener(Runnable listener) {
+        mServiceConnection.removeBinderDeathListener(listener);
     }
 
-    private void onBinderDied(Connection dead) {
-        boolean notify = false;
-        synchronized (this) {
-            if (mConnection != dead) return;
-            clearConnectionStateLocked(RuleServiceContract.STARTING,
-                    ServiceDiagnostic.of(ServiceDiagnostic.Type.BINDER_DIED,
-                            DiagnosticMessages.BINDER_DIED_AWAITING_RECONNECT_DETAIL));
-            notify = true;
-        }
-        if (notify) {
-            Logger.w(TAG, "rule service binder died epoch=" + dead.epoch);
-            notifyBinderDead();
-        }
-    }
+    public boolean hasLight() { return mServiceConnection.hasLight(); }
 
-    private void markRebootRequired(ServiceDiagnostic diagnostic) {
-        synchronized (this) {
-            clearConnectionStateLocked(RuleServiceContract.REBOOT_REQUIRED, diagnostic);
-        }
-        Logger.e(TAG, diagnostic.getTechnicalDetail());
-    }
-
-    private void clearConnectionStateLocked(int state, ServiceDiagnostic diagnostic) {
-        mConnection = null;
-        mConnectionEpoch.incrementAndGet();
-        mServiceState = state;
-        recordDiagnostic(diagnostic);
-        mRestoreLease = null;
-        mBackupLease = null;
-        mEditState.reset();
-        mRuleGeneration.set(0L);
-        for (ObserverSubscription subscription : mObserverSubscriptions) {
-            subscription.clearRemote();
-        }
-    }
-
-    private boolean isReady(Connection connection) {
-        return connection != null && connection.binder.isBinderAlive()
-                && mServiceState == RuleServiceContract.READY;
-    }
-
-    private IBinder connectWithRetry() {
-        for (int i = 0; i < CONNECT_RETRY_COUNT; i++) {
-            if (XServiceManager.pingBridge()) {
-                IBinder service = XServiceManager.getService(RuleServiceContract.SERVICE_NAME);
-                if (service != null) return service;
-            }
-            recordDiagnostic(buildBridgeDiagnostic());
-            if (i < CONNECT_RETRY_DELAYS_MS.length) sleepQuietly(CONNECT_RETRY_DELAYS_MS[i]);
-        }
-        return null;
-    }
-
-    private static void sleepQuietly(long millis) {
-        try { Thread.sleep(millis); }
-        catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-    }
-
-    private static ServiceDiagnostic buildBridgeDiagnostic() {
-        String error = XServiceManager.getLastError();
-        XServiceManager.BridgeStatus status = XServiceManager.getRemoteBridgeStatus();
-        String detail;
-        if (status != null && !status.bridgeInstalled) {
-            detail = DiagnosticMessages.BRIDGE_NOT_INSTALLED_DETAIL;
-            return ServiceDiagnostic.of(ServiceDiagnostic.Type.BRIDGE_UNAVAILABLE, detail);
-        } else if (status != null && !status.systemServer) {
-            detail = DiagnosticMessages.BRIDGE_NOT_IN_SYSTEM_SERVER_DETAIL;
-            return ServiceDiagnostic.of(ServiceDiagnostic.Type.BRIDGE_UNAVAILABLE, detail);
-        }
-        detail = error == null || error.trim().isEmpty()
-                ? DiagnosticMessages.BRIDGE_READY_SERVICE_UNREGISTERED_DETAIL : error;
-        return status == null
-                ? ServiceDiagnostic.of(ServiceDiagnostic.Type.BRIDGE_UNAVAILABLE, detail)
-                : ServiceDiagnostic.of(ServiceDiagnostic.Type.SERVICE_STARTING, detail);
-    }
-
-    public String getLastError() { return mLastError; }
-    public ServiceDiagnostic getServiceDiagnostic() { return mServiceDiagnostic; }
-    public String getServiceFailureMessage() {
-        ServiceDiagnostic diagnostic = mServiceDiagnostic;
-        return diagnostic == null ? null : diagnostic.getUserMessage();
+    private ServiceConnection.Connection ensureConnection() {
+        return mServiceConnection.ensureConnection();
     }
 
     private void recordDiagnostic(ServiceDiagnostic diagnostic) {
-        mServiceDiagnostic = diagnostic;
-        if (diagnostic == null) {
-            mLastError = null;
-            return;
-        }
-        String detail = diagnostic.getTechnicalDetail();
-        mLastError = detail == null || detail.trim().isEmpty()
-                ? diagnostic.getSummary() : detail;
+        mServiceConnection.recordDiagnostic(diagnostic);
     }
 
     private void clearDiagnostic() {
-        recordDiagnostic(null);
+        mServiceConnection.clearDiagnostic();
     }
 
     private void recordResultFailure(int status, String detail) {
-        recordDiagnostic(ServiceDiagnostic.forResultStatus(status, detail));
-    }
-    public int getServiceState() { ensureConnection(); return mServiceState; }
-    public boolean isReady() { return ensureConnection() != null; }
-    public boolean isConnected() { return isReady(); }
-    public boolean hasReadyConnection() { return isReady(mConnection); }
-    public boolean awaitReady(long timeoutMs) {
-        long deadline = System.currentTimeMillis() + Math.max(0L, timeoutMs);
-        do {
-            if (isReady()) return true;
-            if (mServiceState == RuleServiceContract.REBOOT_REQUIRED) return false;
-            long remaining = deadline - System.currentTimeMillis();
-            if (remaining <= 0L) return false;
-            sleepQuietly(Math.min(100L, remaining));
-        } while (true);
+        mServiceConnection.recordResultFailure(status, detail);
     }
 
-    public void addBinderDeathListener(Runnable listener) {
-        if (listener != null && !mBinderDeathListeners.contains(listener)) mBinderDeathListeners.add(listener);
-    }
-    public void removeBinderDeathListener(Runnable listener) {
-        if (listener != null) mBinderDeathListeners.remove(listener);
-    }
-    private void notifyBinderDead() {
-        for (Runnable listener : mBinderDeathListeners) {
-            mMainHandler.post(() -> {
-                try { listener.run(); }
-                catch (Throwable t) { Logger.w(TAG, "binder death listener failed", t); }
-            });
-        }
+    private void logError(String method, ServiceConnection.Connection connection, RemoteException e) {
+        mServiceConnection.logError(method, connection, e);
     }
 
-    private Connection flushReadyPendingLogs(Connection connection) {
+    private boolean isReady(ServiceConnection.Connection connection) {
+        return mServiceConnection.isReady(connection);
+    }
+
+    private ServiceConnection.Connection flushReadyPendingLogs(ServiceConnection.Connection connection) {
         synchronized (mLogLock) {
             if (mPendingLogs.isEmpty()) return connection;
         }
@@ -338,14 +191,14 @@ public final class RuleServiceClient {
         return connection;
     }
 
-    private void reregisterObservers(Connection connection) {
+    private void reregisterObservers(ServiceConnection.Connection connection) {
         for (ObserverSubscription subscription : mObserverSubscriptions) {
             try { registerObserver(connection, subscription); }
             catch (RemoteException e) { Logger.w(TAG, "observer re-register failed", e); }
         }
     }
 
-    private void registerObserver(Connection connection, ObserverSubscription subscription)
+    private void registerObserver(ServiceConnection.Connection connection, ObserverSubscription subscription)
             throws RemoteException {
         ObserverRelay relay = new ObserverRelay(connection.epoch, subscription.observer);
         ObserverRegistrationParcel registration = connection.service.addObserver(
@@ -368,18 +221,6 @@ public final class RuleServiceClient {
             subscription.observer.onRulesInvalidated(subscription.packageName,
                     registration.ruleGeneration, connection.epoch);
         }
-    }
-
-    static boolean isExpectedIdentity(ServiceIdentityParcel identity) {
-        return identity != null
-                && identity.protocolVersion == RuleServiceContract.PROTOCOL_VERSION
-                && identity.buildVersionCode == RuleServiceContract.BUILD_VERSION_CODE
-                && RuleServiceContract.CONTRACT_FINGERPRINT.equals(identity.contractFingerprint);
-    }
-
-    public boolean hasLight() {
-        Connection c = ensureConnection(); if (c == null) return false;
-        try { return c.service.hasLight(); } catch (RemoteException e) { logError("hasLight", c, e); return false; }
     }
 
     public synchronized boolean setEditMode(boolean enable) {
@@ -421,7 +262,7 @@ public final class RuleServiceClient {
     }
 
     private String openLease(int type, String packageName) {
-        Connection c = ensureConnection(); if (c == null) return null;
+        ServiceConnection.Connection c = ensureConnection(); if (c == null) return null;
         try {
             OperationLeaseParcel lease = c.service.openOperation(type, packageName, mLeaseOwner);
             if (lease != null && lease.status == RuleServiceContract.RESULT_COMMITTED) {
@@ -439,7 +280,7 @@ public final class RuleServiceClient {
     }
 
     private boolean closeLease(String token) {
-        Connection c = ensureConnection(); if (c == null) return false;
+        ServiceConnection.Connection c = ensureConnection(); if (c == null) return false;
         try {
             OperationLeaseParcel result = c.service.closeOperation(token, mLeaseOwner);
             boolean closed = result != null
@@ -473,7 +314,7 @@ public final class RuleServiceClient {
             subscription = new ObserverSubscription(packageName, observer);
             mObserverSubscriptions.add(subscription);
         }
-        Connection c = ensureConnection();
+        ServiceConnection.Connection c = ensureConnection();
         if (c == null) {
             Logger.w(TAG, "addObserver deferred package=" + packageName
                     + " reason=service_unavailable");
@@ -500,7 +341,7 @@ public final class RuleServiceClient {
             return;
         }
         mObserverSubscriptions.remove(subscription);
-        Connection c = ensureConnection();
+        ServiceConnection.Connection c = ensureConnection();
         if (c == null) {
             Logger.d(TAG, "removeObserver local_only package=" + packageName
                     + " reason=service_unavailable");
@@ -524,7 +365,7 @@ public final class RuleServiceClient {
     }
 
     private boolean acceptEditState(long epoch, boolean enabled, long revision) {
-        synchronized (this) {
+        synchronized (mServiceConnection) {
             return isCurrentEpochLocked(epoch) && mEditState.accept(enabled, revision);
         }
     }
@@ -535,22 +376,21 @@ public final class RuleServiceClient {
     }
 
     public boolean isCurrentEditEvent(long epoch, long revision) {
-        return ClientEventOrder.isCurrent(epoch, mConnectionEpoch.get(),
+        return ClientEventOrder.isCurrent(epoch, mServiceConnection.getConnectionEpoch(),
                 revision, mEditState.revision()) && isCurrentEpoch(epoch);
     }
 
     public boolean isCurrentRuleEvent(long epoch, long generation) {
-        return ClientEventOrder.isCurrent(epoch, mConnectionEpoch.get(),
+        return ClientEventOrder.isCurrent(epoch, mServiceConnection.getConnectionEpoch(),
                 generation, mRuleGeneration.get()) && isCurrentEpoch(epoch);
     }
 
     private boolean isCurrentEpoch(long epoch) {
-        synchronized (this) { return isCurrentEpochLocked(epoch); }
+        return mServiceConnection.isCurrentEpoch(epoch);
     }
 
     private boolean isCurrentEpochLocked(long epoch) {
-        return mConnection != null && mConnection.epoch == epoch
-                && mConnectionEpoch.get() == epoch && isReady(mConnection);
+        return mServiceConnection.isCurrentEpoch(epoch);
     }
 
     public AppRules getAllRules() {
@@ -559,7 +399,7 @@ public final class RuleServiceClient {
 
     public AppRules getAllRulesAtLeast(long minimumGeneration) {
         for (int attempt = 0; attempt < 3; attempt++) {
-            Connection c = ensureConnection(); if (c == null) return null;
+            ServiceConnection.Connection c = ensureConnection(); if (c == null) return null;
             try {
                 RuleSnapshotParcel snapshot = c.service.getAllRulesSnapshot();
                 if (snapshot == null || snapshot.status == RuleServiceContract.SNAPSHOT_UNAVAILABLE) {
@@ -582,7 +422,7 @@ public final class RuleServiceClient {
                 mRuleGeneration.accumulateAndGet(snapshot.generation, Math::max);
                 return rules;
             } catch (RemoteException | RuntimeException e) {
-                logError("getAllRules", c, asRemote(e)); return null;
+                logError("getAllRules", c, ServiceConnection.asRemote(e)); return null;
             }
         }
         Logger.w(TAG, "getAllRules could not satisfy minimum generation=" + minimumGeneration);
@@ -593,7 +433,7 @@ public final class RuleServiceClient {
 
     public ActRules getRulesAtLeast(String packageName, long minimumGeneration) {
         for (int attempt = 0; attempt < 3; attempt++) {
-            Connection c = ensureConnection(); if (c == null) return null;
+            ServiceConnection.Connection c = ensureConnection(); if (c == null) return null;
             try {
                 RuleSnapshotParcel snapshot = c.service.getRulesSnapshot(packageName);
                 if (snapshot == null || snapshot.status == RuleServiceContract.SNAPSHOT_UNAVAILABLE) {
@@ -618,7 +458,7 @@ public final class RuleServiceClient {
                 mRuleGeneration.accumulateAndGet(snapshot.generation, Math::max);
                 return rules;
             } catch (RemoteException | RuntimeException e) {
-                logError("getRules", c, asRemote(e));
+                logError("getRules", c, ServiceConnection.asRemote(e));
                 return null;
             }
         }
@@ -707,7 +547,7 @@ public final class RuleServiceClient {
     }
 
     public UndoStateParcel getUndoState(String packageName) {
-        Connection connection = ensureConnection();
+        ServiceConnection.Connection connection = ensureConnection();
         if (connection == null) {
             return new UndoStateParcel(RuleServiceContract.RESULT_BUSY, packageName,
                     mEditState.revision(), 0L, 0, 0L, null,
@@ -747,7 +587,7 @@ public final class RuleServiceClient {
             return localUndoResult(requestId, packageName, RuleServiceContract.RESULT_BUSY,
                     expected, "mutation lease unavailable");
         }
-        Connection connection = ensureConnection();
+        ServiceConnection.Connection connection = ensureConnection();
         if (connection == null) {
             closeLease(lease);
             return localUndoResult(requestId, packageName, RuleServiceContract.RESULT_UNCERTAIN,
@@ -806,7 +646,7 @@ public final class RuleServiceClient {
         }
         if (lease == null) {
             mLastMutationStatus = RuleServiceContract.RESULT_BUSY;
-            logMutationTerminal(operation, packageName, requestId,
+            mServiceConnection.logMutationTerminal(operation, packageName, requestId,
                     mLastMutationStatus, "lease_unavailable");
             return localMutationResult(requestId, packageName, mLastMutationStatus,
                     "mutation lease unavailable");
@@ -820,7 +660,7 @@ public final class RuleServiceClient {
             awaitPipe(modifiedPipe);
             if (temporary) closeLease(lease);
             mLastMutationStatus = RuleServiceContract.RESULT_WRITE_FAILED;
-            logMutationTerminal(operation, packageName, requestId,
+            mServiceConnection.logMutationTerminal(operation, packageName, requestId,
                     mLastMutationStatus, "image_pipe_unavailable");
             return localMutationResult(requestId, packageName, mLastMutationStatus,
                     "image pipe unavailable");
@@ -829,7 +669,7 @@ public final class RuleServiceClient {
                 packageName, rule == null ? null : mGson.toJson(rule),
                 mainPipe == null ? null : mainPipe.readEnd,
                 modifiedPipe == null ? null : modifiedPipe.readEnd, value, captureUndo);
-        Connection c = ensureConnection();
+        ServiceConnection.Connection c = ensureConnection();
         boolean accepted = false;
         boolean uncertain = false;
         RuleMutationResult authoritative = null;
@@ -869,7 +709,7 @@ public final class RuleServiceClient {
             Throwable pipeFailure = firstFailure(mainPipe, modifiedPipe);
             if (pipeFailure != null) {
                 Logger.w(TAG, "mutation image pipe failed operation="
-                        + mutationOperationName(operation) + " package=" + packageName
+                        + ServiceConnection.mutationOperationName(operation) + " package=" + packageName
                         + " requestId=" + requestId, pipeFailure);
                 if (!accepted && !uncertain) {
                     mLastMutationStatus = RuleServiceContract.RESULT_WRITE_FAILED;
@@ -880,12 +720,11 @@ public final class RuleServiceClient {
             }
             closePipe(mainPipe);
             closePipe(modifiedPipe);
-            ServiceDiagnostic mutationDiagnostic = mServiceDiagnostic;
-            String mutationError = mLastError;
+            ServiceDiagnostic mutationDiagnostic = mServiceConnection.getServiceDiagnostic();
+            String mutationError = mServiceConnection.getLastError();
             if (temporary) closeLease(lease);
             if (!accepted && mutationDiagnostic != null) {
-                mServiceDiagnostic = mutationDiagnostic;
-                mLastError = mutationError;
+                mServiceConnection.restoreDiagnostic(mutationDiagnostic, mutationError);
             }
         }
         if (uncertain) {
@@ -894,13 +733,13 @@ public final class RuleServiceClient {
                 if (state != null && requestId.equals(state.topSourceRequestId)) {
                     mLastMutationStatus = RuleServiceContract.RESULT_COMMITTED;
                     clearDiagnostic();
-                    logMutationTerminal(operation, packageName, requestId,
+                    mServiceConnection.logMutationTerminal(operation, packageName, requestId,
                             mLastMutationStatus, "undo_history_reconciled");
                     return new RuleMutationResult(RuleServiceContract.RESULT_COMMITTED,
                             requestId, packageName, mRuleGeneration.get(), null, state,
                             "committed; response reconciled from undo history");
                 }
-                logMutationTerminal(operation, packageName, requestId,
+                mServiceConnection.logMutationTerminal(operation, packageName, requestId,
                         RuleServiceContract.RESULT_UNCERTAIN, "undo_history_inconclusive");
                 return localMutationResult(requestId, packageName,
                         RuleServiceContract.RESULT_UNCERTAIN,
@@ -911,7 +750,7 @@ public final class RuleServiceClient {
             mLastMutationStatus = reconciled;
             if (reconciled == RuleServiceContract.RESULT_COMMITTED) {
                 clearDiagnostic();
-                logMutationTerminal(operation, packageName, requestId, reconciled,
+                mServiceConnection.logMutationTerminal(operation, packageName, requestId, reconciled,
                         "reconciled_committed");
                 return localMutationResult(requestId, packageName, reconciled,
                         "committed; response reconciled from snapshot");
@@ -925,12 +764,12 @@ public final class RuleServiceClient {
                         String.format(Locale.US, DiagnosticMessages.MUTATE_RECONCILE_UNKNOWN_REQUEST_ID_DETAIL,
                                 requestId)));
             }
-            logMutationTerminal(operation, packageName, requestId, reconciled,
+            mServiceConnection.logMutationTerminal(operation, packageName, requestId, reconciled,
                     "reconciled_inconclusive");
             return localMutationResult(requestId, packageName, reconciled,
                     "mutation result remains uncertain after snapshot reconciliation");
         }
-        logMutationTerminal(operation, packageName, requestId, mLastMutationStatus,
+        mServiceConnection.logMutationTerminal(operation, packageName, requestId, mLastMutationStatus,
                 accepted ? "accepted" : "rejected");
         return authoritative == null
                 ? localMutationResult(requestId, packageName, mLastMutationStatus,
@@ -946,53 +785,6 @@ public final class RuleServiceClient {
     private static boolean isAccepted(RuleMutationResult result) {
         return result != null && (result.status == RuleServiceContract.RESULT_COMMITTED
                 || result.status == RuleServiceContract.RESULT_NO_CHANGE);
-    }
-
-    private void logMutationTerminal(int operation, String packageName, String requestId,
-                                     int status, String outcome) {
-        String line = "mutation client complete operation=" + mutationOperationName(operation)
-                + " requestId=" + requestId + " package=" + packageName
-                + " status=" + mutationStatusName(status) + " outcome=" + outcome;
-        if (RuleServiceContract.isTerminalSuccess(status)) {
-            Logger.i(TAG, line);
-        } else if (RuleServiceContract.isRetryableTransient(status)) {
-            Logger.w(TAG, line);
-        } else if (status == RuleServiceContract.RESULT_REJECTED) {
-            // 拒绝多为权限/归属问题，是线上排障的关键信号，禁止淹没在 debug 中。
-            // （BUSY 已在上一分支按瞬态处理为 warning，不会落到这里。）
-            Logger.w(TAG, line);
-        } else {
-            Logger.d(TAG, line);
-        }
-    }
-
-    private static String mutationOperationName(int operation) {
-        switch (operation) {
-            case RuleServiceContract.MUTATION_WRITE: return "write";
-            case RuleServiceContract.MUTATION_UPDATE: return "update";
-            case RuleServiceContract.MUTATION_DELETE: return "delete";
-            case RuleServiceContract.MUTATION_DELETE_ALL: return "delete_all";
-            case RuleServiceContract.MUTATION_SET_TOOLBAR: return "set_toolbar";
-            default: return "unknown(" + operation + ")";
-        }
-    }
-
-    private static String mutationStatusName(int status) {
-        switch (status) {
-            case RuleServiceContract.RESULT_COMMITTED: return "committed";
-            case RuleServiceContract.RESULT_NO_CHANGE: return "no_change";
-            case RuleServiceContract.RESULT_BUSY: return "busy";
-            case RuleServiceContract.RESULT_REJECTED: return "rejected";
-            case RuleServiceContract.RESULT_WRITE_FAILED: return "write_failed";
-            case RuleServiceContract.RESULT_REBOOT_REQUIRED: return "reboot_required";
-            case RuleServiceContract.RESULT_INVALID: return "invalid";
-            case RuleServiceContract.RESULT_UNCERTAIN: return "uncertain";
-            case RuleServiceContract.RESULT_STALE: return "stale";
-            case RuleServiceContract.RESULT_EXPIRED: return "expired";
-            case RuleServiceContract.RESULT_OWNER_MISMATCH: return "owner_mismatch";
-            case RuleServiceContract.RESULT_ALREADY_UNDONE: return "already_undone";
-            default: return "unknown(" + status + ")";
-        }
     }
 
     private int reconcileUncertain(String packageName, int operation, RuleRecord rule,
@@ -1173,13 +965,13 @@ public final class RuleServiceClient {
     }
 
     public ParcelFileDescriptor openImageFileDescriptor(String path) {
-        Connection c = ensureConnection(); if (c == null) return null;
+        ServiceConnection.Connection c = ensureConnection(); if (c == null) return null;
         try { return c.service.openImageFileDescriptor(path); }
         catch (RemoteException e) { logError("openImageFileDescriptor", c, e); return null; }
     }
 
     public String getToolbarHiddenItems(String packageName) {
-        Connection c = ensureConnection(); if (c == null) return null;
+        ServiceConnection.Connection c = ensureConnection(); if (c == null) return null;
         try { return c.service.getToolbarHiddenItems(packageName); }
         catch (RemoteException e) { logError("getToolbarHiddenItems", c, e); return null; }
     }
@@ -1198,7 +990,7 @@ public final class RuleServiceClient {
         // the next successful connection instead of disappearing silently.
         PendingLog pending = new PendingLog(packageName == null ? "unknown" : packageName,
                 level, tag, msg, timestamp);
-        Connection c = mConnection;
+        ServiceConnection.Connection c = mServiceConnection.currentConnection();
         RemoteException failure = null;
         synchronized (mLogLock) {
             if (!isReady(c) || !mPendingLogs.isEmpty()) {
@@ -1227,7 +1019,7 @@ public final class RuleServiceClient {
         }
     }
 
-    private RemoteException flushPendingLogs(Connection connection) {
+    private RemoteException flushPendingLogs(ServiceConnection.Connection connection) {
         synchronized (mLogLock) {
             while (!mPendingLogs.isEmpty()) {
                 PendingLog pending = mPendingLogs.peekFirst();
@@ -1257,7 +1049,7 @@ public final class RuleServiceClient {
         }
     }
 
-    private static void sendLog(Connection connection, PendingLog pending) throws RemoteException {
+    private static void sendLog(ServiceConnection.Connection connection, PendingLog pending) throws RemoteException {
         connection.service.log(pending.level, pending.packageName, pending.timestamp,
                 pending.tag, pending.message);
     }
@@ -1279,46 +1071,11 @@ public final class RuleServiceClient {
         if (mBackupLease != null && closeLease(mBackupLease)) mBackupLease = null;
     }
 
-    private void logError(String method, Connection connection, RemoteException e) {
-        boolean notify = false;
-        boolean current = false;
-        String event = "RuleServiceClient#" + method + " call failed";
-        String detail = event + ": " + e.getMessage();
-        synchronized (this) {
-            current = mConnection == connection;
-            if (current && (e instanceof DeadObjectException || !connection.binder.isBinderAlive())) {
-                clearConnectionStateLocked(RuleServiceContract.STARTING,
-                        ServiceDiagnostic.of(ServiceDiagnostic.Type.BINDER_DIED, detail));
-                notify = true;
-            }
-        }
-        if (notify) notifyBinderDead();
-        if (current && !notify) {
-            recordDiagnostic(ServiceDiagnostic.of(ServiceDiagnostic.Type.UNKNOWN, detail));
-        }
-        Logger.e(TAG, event, e);
-    }
-
-    private static RemoteException asRemote(Exception e) {
-        RemoteException remote = new RemoteException(e.getMessage());
-        remote.initCause(e);
-        return remote;
-    }
-
     private static String sha256(byte[] data) throws Exception {
         byte[] digest = MessageDigest.getInstance("SHA-256").digest(data);
         StringBuilder out = new StringBuilder(digest.length * 2);
         for (byte value : digest) out.append(String.format("%02x", value & 0xff));
         return out.toString();
-    }
-
-    private static final class Connection {
-        final IBinder binder;
-        final IRuleService service;
-        final long epoch;
-        Connection(IBinder binder, IRuleService service, long epoch) {
-            this.binder = binder; this.service = service; this.epoch = epoch;
-        }
     }
 
     private static final class PendingLog {
