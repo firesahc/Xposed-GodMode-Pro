@@ -1,10 +1,7 @@
 package com.kaisar.xposed.godmode.rule;
 
-import android.content.res.Resources;
 import android.os.Parcel;
 import android.os.Parcelable;
-import android.text.TextUtils;
-import android.view.View;
 
 import androidx.annotation.Keep;
 import androidx.annotation.NonNull;
@@ -204,17 +201,6 @@ public final class RuleRecord implements Parcelable, Cloneable {
     public boolean hasModifications() {
         return isWidthModified() || isHeightModified() || isAlphaModified()
                 || isPositionModified() || isTextModified() || isImageModified();
-    }
-
-    public int getViewId(Resources res) {
-        if (!TextUtils.isEmpty(getResourceName())) {
-            String[] start = getResourceName().split(":");
-            if (start.length < 2) return View.NO_ID;
-            String[] end = start[1].split("/");
-            if (end.length < 2) return View.NO_ID;
-            return res.getIdentifier(end[1], end[0], start[0]);
-        }
-        return View.NO_ID;
     }
 
     public RuleRecord withEffect(RuleEffect newEffect) {

@@ -17,11 +17,16 @@ import com.kaisar.xposed.godmode.rule.RuleRecord;
  * 升级触发条件：若未来 ruleTag 承载运行时语义，
  * 本类与 {@code ModifyEffect#equals} 需同步扩展比较范围。
  */
-final class RuntimeRuleComparator {
+public final class RuntimeRuleComparator {
 
     private RuntimeRuleComparator() {}
 
-    static boolean contentEquals(RuleRecord left, RuleRecord right) {
+    /**
+     * 提交对账的 canonical 运行时比较入口。
+     * <p>
+     * 语义见类注释：slotKey + 运行时语义（MatchSpec + RuleEffect），排除展示字段。
+     */
+    public static boolean contentEquals(RuleRecord left, RuleRecord right) {
         return left == right || left != null && right != null
                 && left.getMatchSpec().hasSameRuntimeSemantics(right.getMatchSpec())
                 && left.getEffect().equals(right.getEffect());

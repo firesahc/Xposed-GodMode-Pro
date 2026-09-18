@@ -61,8 +61,7 @@ public final class RuleServiceServer extends IRuleService.Stub {
 
     public RuleServiceServer(Context context) {
         mLogger = Logger.getLogger("RuleServiceServer");
-        Logger.setWriter((level, tag, msg, timestamp) ->
-                GodModeLog.write(level, "system_server", tag, msg, timestamp));
+        // 系统侧日志写入器唯一安装点归 ServiceBootstrapper，此处不再重复安装。
         mIncomingImageReader = new IncomingImageReader(mLogger);
         mPermissionEnforcer = new PermissionEnforcer(context);
         mObserverRegistry = new ObserverRegistry(Logger.getLogger("ObserverRegistry"));

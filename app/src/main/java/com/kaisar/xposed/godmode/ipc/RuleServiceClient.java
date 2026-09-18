@@ -25,6 +25,7 @@ import com.kaisar.xposed.godmode.ipc.contract.ServiceIdentityParcel;
 import com.kaisar.xposed.godmode.ipc.contract.UndoRequestParcel;
 import com.kaisar.xposed.godmode.ipc.contract.UndoResultParcel;
 import com.kaisar.xposed.godmode.ipc.contract.UndoStateParcel;
+import com.kaisar.xposed.godmode.orchestrator.RuntimeRuleComparator;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.AppRules;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
@@ -1057,7 +1058,7 @@ public final class RuleServiceClient {
                 if (hadModifiedImage) {
                     normalized = normalized.withModifyImagePath(actual.getModImagePath());
                 }
-                if (actual.contentEquals(normalized)) return true;
+                if (RuntimeRuleComparator.contentEquals(actual, normalized)) return true;
             }
         }
         return false;
