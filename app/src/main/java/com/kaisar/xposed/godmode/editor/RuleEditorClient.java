@@ -32,7 +32,8 @@ import java.util.UUID;
  *（幂等 requestId、UNCERTAIN 对账、lease open/close 配对）、reconcile 全家与 undo
  * 全家逐行收归此类，分支顺序与语义零差。
  *
- * <p>协作口：{@link ServiceConnection}（连接核：建连/诊断/终端日志）、
+ * <p>协作口：{@link ServiceConnection}（连接核：建连/诊断）、
+ * 本类（mutation 终端日志 owner）、
  * {@link LeaseHub}（租约机制：open/close/恢复复用）、{@link ImageStore}
  * （图片库：pipe 双写并发与 FD 只读）、{@link Host}（只读协作口：
  * getRules/getToolbarHiddenItems/世代/编辑 revision 经读/观察者真单例）。

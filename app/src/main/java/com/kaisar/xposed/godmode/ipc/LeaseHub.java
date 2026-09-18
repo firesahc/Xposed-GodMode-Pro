@@ -17,7 +17,7 @@ import com.kaisar.xposed.godmode.ipc.contract.OperationLeaseParcel;
  * 避免投影与租约机制耦合。
  */
 public final class LeaseHub {
-    private static final String TAG = "RuleServiceClient";
+    private static final String TAG = "LeaseHub";
 
     /**
      * 租约事件回调，由 Client 实现。所有回调只做状态清理，不得阻塞、不得再对

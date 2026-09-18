@@ -3,7 +3,6 @@ package com.kaisar.xposed.godmode.inject.hooks;
 import android.app.Activity;
 import android.os.Bundle;
 
-import com.kaisar.xposed.godmode.engine.Property;
 import com.kaisar.xposed.godmode.engine.event.ActivityLifecycleEvent;
 import com.kaisar.xposed.godmode.engine.event.EventBus;
 import com.kaisar.xposed.godmode.inject.ModuleBootstrap;
@@ -50,14 +49,15 @@ public final class LifecycleHooks extends XC_MethodHook {
      * 拦截 {@link Activity#onCreate} 注入模块资源，随后发布 CREATE 事件。
      * <p>
      * 开关门控、窗口/decorView 守卫与 decorView.post 延迟 display 逻辑已迁移至
-     * EditorOrchestrator 订阅侧；此处仅做回调转译。构造器保留 switchProp 参数以
-     * 兼容 HookRegistry 分装，Hook 内不再使用其做门控判断。
+     * EditorOrchestrator 订阅侧；此处仅做回调转译。构造器注入 EventBus，
+     * 由 HookRegistry 分装时传入 {@link ModuleBootstrap#getEventBus()}。
      */
     public static final class ActivityCreateHook extends XC_MethodHook {
-        private final Property<Boolean> mSwitchProp;
+        private final EventBus mEventBus;
 
-        public ActivityCreateHook(Property<Boolean> switchProp) {
-            this.mSwitchProp = switchProp;
+        public ActivityCreateHook(EventBus eventBus) {
+            if (eventBus == null) throw new IllegalArgumentException("eventBus is required");
+            this.mEventBus = eventBus;
         }
 
         @Override
@@ -71,7 +71,7 @@ public final class LifecycleHooks extends XC_MethodHook {
                 Logger.w(TAG, "module resource injection failed", failure);
             }
             try {
-                ModuleBootstrap.getEventBus().post(new ActivityLifecycleEvent(
+                mEventBus.post(new ActivityLifecycleEvent(
                         ActivityLifecycleEvent.Type.CREATE, activity));
             } catch (Throwable failure) {
                 Logger.w(TAG, "editor display scheduling failed", failure);

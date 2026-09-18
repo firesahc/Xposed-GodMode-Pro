@@ -16,7 +16,7 @@ import java.util.ArrayDeque;
  * 核内 flushReadyPendingLogs/flushPendingLogs 转发点调本实现。
  */
 public final class LogBridge implements ServiceConnection.LogBridge {
-    private static final String TAG = "RuleServiceClient";
+    private static final String TAG = "LogBridge";
     private static final int MAX_PENDING_LOGS = 512;
 
     private final ServiceConnection mServiceConnection;

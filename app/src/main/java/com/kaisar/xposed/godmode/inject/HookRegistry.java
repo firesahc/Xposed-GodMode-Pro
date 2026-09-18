@@ -54,7 +54,7 @@ public final class HookRegistry implements RepeatableRuleGate {
         if (!sCreateHookInstalled) {
             sCreateHookInstalled = install("Activity.onCreate", () ->
                     XposedHelpers.findAndHookMethod(Activity.class, "onCreate", Bundle.class,
-                            new LifecycleHooks.ActivityCreateHook(switchProp)));
+                            new LifecycleHooks.ActivityCreateHook(ModuleBootstrap.getEventBus())));
         }
 
         LifecycleHooks lifecycleHooks = new LifecycleHooks();

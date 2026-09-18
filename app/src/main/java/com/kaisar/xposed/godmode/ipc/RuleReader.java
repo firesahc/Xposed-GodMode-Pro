@@ -26,7 +26,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * {@link ObserverCenter#acceptRuleGeneration} 读写本水位，保证单源。
  */
 public final class RuleReader {
-    private static final String TAG = "RuleServiceClient";
+    private static final String TAG = "RuleReader";
 
     private final ServiceConnection mServiceConnection;
     private final Gson mGson = new GsonBuilder().create();

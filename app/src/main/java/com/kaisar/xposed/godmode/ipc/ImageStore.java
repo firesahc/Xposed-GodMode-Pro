@@ -23,7 +23,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * openImageFileDescriptor 公开签名转发，写入 owner 经本实现直调。
  */
 public final class ImageStore {
-    private static final String TAG = "RuleServiceClient";
+    private static final String TAG = "ImageStore";
 
     private static volatile ImageStore sInstance;
 

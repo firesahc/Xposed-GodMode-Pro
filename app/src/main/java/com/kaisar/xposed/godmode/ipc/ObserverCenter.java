@@ -25,7 +25,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * 本中心（租约 open/close 配对经 LeaseHub）。
  */
 public final class ObserverCenter {
-    private static final String TAG = "RuleServiceClient";
+    private static final String TAG = "ObserverCenter";
 
     private final ServiceConnection mServiceConnection;
     private final LeaseHub mLeaseHub;

@@ -21,7 +21,8 @@ import java.util.concurrent.atomic.AtomicLong;
  * <p>行为零差抽取自 RuleServiceClient（ensure/onBinderDied/clear/isReady/
  * connectWithRetry/sleepQuietly/buildBridgeDiagnostic/notify/record/clearDiagnostic/
  * recordResultFailure/logError/asRemote/awaitReady/death监听/getter/hasLight/
- * mutation终端日志命名）。同步语义逐行保留：连接态单锁（本实例），
+ * 诊断语义；mutation 终端日志已归 {@link com.kaisar.xposed.godmode.editor.RuleEditorClient}）。
+ * 同步语义逐行保留：连接态单锁（本实例），
  * epoch CAS，三态（空连接/死亡/REBOOT）不变，只记日志不抛宿主。
  *
  * <p>协作口（本期 LogBridge/观察者/租约不动，核内保留转发点）：
@@ -38,7 +39,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * 实现必须非阻塞、不得再对 RuleServiceClient 加锁，可重入本核读方法。
  */
 public final class ServiceConnection {
-    private static final String TAG = "RuleServiceClient";
+    private static final String TAG = "ServiceConnection";
     private static final int CONNECT_RETRY_COUNT = 3;
     private static final long[] CONNECT_RETRY_DELAYS_MS = {80L, 160L};
 
@@ -356,7 +357,7 @@ public final class ServiceConnection {
     public void logError(String method, Connection connection, RemoteException e) {
         boolean notify = false;
         boolean current = false;
-        String event = "RuleServiceClient#" + method + " call failed";
+        String event = "ServiceConnection#" + method + " call failed";
         String detail = event + ": " + e.getMessage();
         synchronized (this) {
             current = mConnection == connection;
