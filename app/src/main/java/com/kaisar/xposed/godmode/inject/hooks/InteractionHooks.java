@@ -4,10 +4,9 @@ import android.app.Activity;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
-import android.os.SystemClock;
 
 import com.kaisar.xposed.godmode.inject.HookRegistry;
-import com.kaisar.xposed.godmode.editor.EditorOrchestrator;
+import com.kaisar.xposed.godmode.editor.EditorInteractionPort;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 
 import de.robv.android.xposed.XC_MethodHook;
@@ -17,6 +16,9 @@ import de.robv.android.xposed.XC_MethodHook;
  * <p>
  * 合并自 {@code injection/entry/TouchHook} 和 {@code injection/entry/ActivityKeyHook}。
  * 由 {@link com.kaisar.xposed.godmode.inject.HookRegistry} 注册。
+ * <p>
+ * 职责：只做过滤与透传。音量键过滤归 Hook，时机导航政策归 Editor
+ * （见 {@link EditorInteractionPort}）。
  */
 public final class InteractionHooks {
 
@@ -28,13 +30,13 @@ public final class InteractionHooks {
 
     /**
      * 拦截 {@link View#dispatchTouchEvent} 将触摸事件转发给
-     * {@link EditorOrchestrator} 进行编辑模式手势处理。
+     * {@link EditorInteractionPort} 进行编辑模式手势处理。
      */
     public static final class TouchHook extends XC_MethodHook {
-        private final EditorOrchestrator mOrchestrator;
+        private final EditorInteractionPort mPort;
 
-        public TouchHook(EditorOrchestrator orchestrator) {
-            this.mOrchestrator = orchestrator;
+        public TouchHook(EditorInteractionPort port) {
+            this.mPort = port;
         }
 
         @Override
@@ -43,13 +45,13 @@ public final class InteractionHooks {
             if (!(param.thisObject instanceof View)
                     || param.args == null || param.args.length == 0
                     || !(param.args[0] instanceof MotionEvent)
-                    || mOrchestrator == null) {
+                    || mPort == null) {
                 return;
             }
             try {
                 View view = (View) param.thisObject;
                 MotionEvent event = (MotionEvent) param.args[0];
-                if (mOrchestrator.onTouchEvent(view, event)) {
+                if (mPort.onTouchEvent(view, event)) {
                     param.setResult(true);
                 }
             } catch (Throwable failure) {
@@ -65,7 +67,8 @@ public final class InteractionHooks {
     /**
      * 拦截 {@link Activity#dispatchKeyEvent} 处理音量键。
      * <p>
-     * 将音量键事件转发给 {@link EditorOrchestrator} 进行面板切换与导航。
+     * 只做音量键过滤，时机与导航政策（双击 350ms 开关、选中态导航）归 Editor，
+     * 经 {@link EditorInteractionPort#onVolumeKeyEvent} 分发，按返回消费。
      * <p>
      * 按键逻辑：
      * <ul>
@@ -76,15 +79,10 @@ public final class InteractionHooks {
      */
     public static final class KeyHook extends XC_MethodHook {
 
-        /** 双击检测间隔（毫秒） */
-        private static final long DOUBLE_CLICK_INTERVAL = 350L;
+        private final EditorInteractionPort mPort;
 
-        private final EditorOrchestrator mOrchestrator;
-        private long mLastVolumeUpTime;
-        private long mLastVolumeDownTime;
-
-        public KeyHook(EditorOrchestrator orchestrator) {
-            this.mOrchestrator = orchestrator;
+        public KeyHook(EditorInteractionPort port) {
+            this.mPort = port;
         }
 
         @Override
@@ -93,13 +91,12 @@ public final class InteractionHooks {
             if (!(param.thisObject instanceof Activity)
                     || param.args == null || param.args.length == 0
                     || !(param.args[0] instanceof KeyEvent)
-                    || mOrchestrator == null) {
+                    || mPort == null) {
                 return;
             }
 
             Activity activity = (Activity) param.thisObject;
             KeyEvent event = (KeyEvent) param.args[0];
-            int action = event.getAction();
             int keyCode = event.getKeyCode();
             if (keyCode != KeyEvent.KEYCODE_VOLUME_UP
                     && keyCode != KeyEvent.KEYCODE_VOLUME_DOWN) {
@@ -108,30 +105,7 @@ public final class InteractionHooks {
 
             boolean handled = false;
             try {
-                if (action == KeyEvent.ACTION_UP) {
-                    long now = SystemClock.uptimeMillis();
-                    long lastTime = keyCode == KeyEvent.KEYCODE_VOLUME_UP
-                            ? mLastVolumeUpTime : mLastVolumeDownTime;
-                    if (now - lastTime > 0 && now - lastTime < DOUBLE_CLICK_INTERVAL) {
-                        mOrchestrator.onVolumeKeyToggle(activity);
-                        if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) {
-                            mLastVolumeUpTime = 0L;
-                        } else {
-                            mLastVolumeDownTime = 0L;
-                        }
-                    } else if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) {
-                        mLastVolumeUpTime = now;
-                    } else {
-                        mLastVolumeDownTime = now;
-                    }
-                    // Volume events are intentionally consumed while editor mode is on.
-                    handled = true;
-                } else if (action == KeyEvent.ACTION_DOWN) {
-                    if (mOrchestrator.isKeySelecting()) {
-                        mOrchestrator.onVolumeKeyNavigate(keyCode);
-                    }
-                    handled = true;
-                }
+                handled = mPort.onVolumeKeyEvent(activity, event);
             } catch (Throwable failure) {
                 Logger.w("InteractionHooks", "key hook failed; keeping host behavior", failure);
                 handled = false;

@@ -8,6 +8,8 @@ import android.app.Activity;
 import android.graphics.Bitmap;
 import android.graphics.Rect;
 import android.os.Looper;
+import android.os.SystemClock;
+import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -54,7 +56,7 @@ import java.util.List;
  * 按键和触摸事件通过 inject/hooks 中的交互 Hook 转发到这里。
  */
 public final class EditorOrchestrator implements Property.OnPropertyChangeListener<Boolean>,
-        TouchEventHandler.TouchCallback, KeyEventHandler.KeyCallback {
+        TouchEventHandler.TouchCallback, KeyEventHandler.KeyCallback, EditorInteractionPort {
 
     // =========================================================================
     // 常量定义    // =========================================================================
@@ -216,6 +218,12 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     // =========================================================================
     // 音量键事件处理（ActivityKeyHook 相关）    // =========================================================================
 
+    /** 双击检测间隔（毫秒） */
+    private static final long DOUBLE_CLICK_INTERVAL = 350L;
+
+    private long mLastVolumeUpTime;
+    private long mLastVolumeDownTime;
+
     /**
      * 音量键切换编辑面板：若未选择则显示节点选择面板，否则关闭面板。
      * 由 ActivityKeyHook 通过按键事件触发调用。
@@ -231,6 +239,54 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
      */
     public void onVolumeKeyNavigate(int keyCode) {
         mKeyEventHandler.onVolumeKeyNavigate(keyCode);
+    }
+
+    /**
+     * 音量键事件端口实现 — 承接时机与导航政策（自 InteractionHooks.KeyHook 平移）。
+     * <p>
+     * 前置约定：音量键过滤已由 Hook 完成，此处仅做防御性复核。
+     * 政策：ACTION_UP 双击 350ms 触发 onVolumeKeyToggle 并消费；
+     * ACTION_DOWN 选中态触发 onVolumeKeyNavigate 并消费；消费返回 true。
+     */
+    @Override
+    public boolean onVolumeKeyEvent(Activity activity, KeyEvent event) {
+        if (activity == null || event == null) return false;
+        int action = event.getAction();
+        int keyCode = event.getKeyCode();
+        if (keyCode != KeyEvent.KEYCODE_VOLUME_UP
+                && keyCode != KeyEvent.KEYCODE_VOLUME_DOWN) {
+            return false;
+        }
+        try {
+            if (action == KeyEvent.ACTION_UP) {
+                long now = SystemClock.uptimeMillis();
+                long lastTime = keyCode == KeyEvent.KEYCODE_VOLUME_UP
+                        ? mLastVolumeUpTime : mLastVolumeDownTime;
+                if (now - lastTime > 0 && now - lastTime < DOUBLE_CLICK_INTERVAL) {
+                    onVolumeKeyToggle(activity);
+                    if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) {
+                        mLastVolumeUpTime = 0L;
+                    } else {
+                        mLastVolumeDownTime = 0L;
+                    }
+                } else if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) {
+                    mLastVolumeUpTime = now;
+                } else {
+                    mLastVolumeDownTime = now;
+                }
+                // Volume events are intentionally consumed while editor mode is on.
+                return true;
+            } else if (action == KeyEvent.ACTION_DOWN) {
+                if (isKeySelecting()) {
+                    onVolumeKeyNavigate(keyCode);
+                }
+                return true;
+            }
+            return false;
+        } catch (Throwable failure) {
+            Logger.w(KEY_EVENT_TAG, "key hook failed; keeping host behavior", failure);
+            return false;
+        }
     }
 
 
@@ -698,6 +754,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
      * 编辑模式触摸事件入口，由 TouchHook 调用。
      * 判断是否处于编辑模式、是否为 GodMode 控件，然后委托给 TouchEventHandler。
      */
+    @Override
     public boolean onTouchEvent(View view, MotionEvent event) {
         if (!mIsInEditMode) return false;
         if (TAG_GM_CMP.equals(view.getTag())) return false;

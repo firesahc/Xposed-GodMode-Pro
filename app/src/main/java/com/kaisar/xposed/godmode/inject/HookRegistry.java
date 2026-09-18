@@ -8,6 +8,7 @@ import android.view.View;
 
 import com.kaisar.xposed.godmode.engine.Property;
 import com.kaisar.xposed.godmode.engine.util.Logger;
+import com.kaisar.xposed.godmode.editor.EditorInteractionPort;
 import com.kaisar.xposed.godmode.inject.hooks.InteractionHooks;
 import com.kaisar.xposed.godmode.inject.hooks.LifecycleHooks;
 import com.kaisar.xposed.godmode.orchestrator.RepeatableRuleGate;
@@ -75,7 +76,7 @@ public final class HookRegistry implements RepeatableRuleGate {
         if (!sTouchHookInstalled) {
             sTouchHookInstalled = install("View.dispatchTouchEvent", () -> {
                 InteractionHooks.TouchHook hook = new InteractionHooks.TouchHook(
-                        ModuleBootstrap.getEditorOrchestrator());
+                        (EditorInteractionPort) ModuleBootstrap.getEditorOrchestrator());
                 XposedHelpers.findAndHookMethod(View.class, "dispatchTouchEvent",
                         MotionEvent.class, hook);
                 ModuleBootstrap.getSwitchProp().addOnPropertyChangeListener(
@@ -86,7 +87,8 @@ public final class HookRegistry implements RepeatableRuleGate {
             sKeyHookInstalled = install("Activity.dispatchKeyEvent", () ->
                     XposedHelpers.findAndHookMethod(Activity.class, "dispatchKeyEvent",
                             KeyEvent.class,
-                            new InteractionHooks.KeyHook(ModuleBootstrap.getEditorOrchestrator())));
+                            new InteractionHooks.KeyHook(
+                                    (EditorInteractionPort) ModuleBootstrap.getEditorOrchestrator())));
         }
 
         sHooksRegistered = coreReady;
