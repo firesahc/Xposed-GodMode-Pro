@@ -20,9 +20,10 @@ import androidx.preference.SwitchPreferenceCompat;
 
 import com.google.android.material.snackbar.Snackbar;
 import com.kaisar.xposed.godmode.R;
+import com.kaisar.xposed.godmode.editor.RuleEditorClient;
 import com.kaisar.xposed.godmode.editor.toolbar.ToolbarPrefsManager;
 import com.kaisar.xposed.godmode.engine.util.Logger;
-import com.kaisar.xposed.godmode.ipc.RuleServiceClient;
+import com.kaisar.xposed.godmode.ipc.RuleReader;
 import com.kaisar.xposed.godmode.ipc.RuleServiceContract;
 import com.kaisar.xposed.godmode.ui.model.SharedViewModel;
 import com.kaisar.xposed.godmode.rule.ActRules;
@@ -323,7 +324,7 @@ public final class SettingsFragment extends PreferenceFragmentCompat implements
 
     // Group C: Persist toolbar preference — stored as comma-separated string
     private boolean saveToolbarPreference(String key, boolean enabled) {
-        String current = RuleServiceClient.getDefault().getToolbarHiddenItems(
+        String current = RuleReader.getDefault().getToolbarHiddenItems(
                 RuleServiceContract.GLOBAL_SCOPE);
         if (current == null) current = "";
         Set<String> hidden = ToolbarPrefsManager.parseHiddenItems(current);
@@ -333,7 +334,7 @@ public final class SettingsFragment extends PreferenceFragmentCompat implements
             hidden.remove(key);
         }
         String value = TextUtils.join(",", hidden);
-        if (!RuleServiceClient.getDefault().setToolbarHiddenItems(value)) {
+        if (!RuleEditorClient.getInstance().setToolbarHiddenItems(value)) {
             Snackbar.make(requireView(), R.string.snack_bar_msg_save_toolbar_fail,
                     Snackbar.LENGTH_SHORT).show();
             return false;
@@ -342,14 +343,14 @@ public final class SettingsFragment extends PreferenceFragmentCompat implements
     }
 
     private Set<String> loadAuthoritativeHiddenItems() {
-        String authoritative = RuleServiceClient.getDefault().getToolbarHiddenItems(
+        String authoritative = RuleReader.getDefault().getToolbarHiddenItems(
                 RuleServiceContract.GLOBAL_SCOPE);
         SharedPreferences legacy = requireContext().getSharedPreferences(
                 TOOLBAR_PREFS, Context.MODE_PRIVATE);
         if (authoritative == null) {
             String legacyValue = readLegacyToolbarValue(legacy);
             if (!TextUtils.isEmpty(legacyValue)
-                    && RuleServiceClient.getDefault().setToolbarHiddenItems(legacyValue)) {
+                    && RuleEditorClient.getInstance().setToolbarHiddenItems(legacyValue)) {
                 authoritative = legacyValue;
                 legacy.edit().clear().apply();
             } else if (TextUtils.isEmpty(legacyValue)) {

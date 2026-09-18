@@ -19,6 +19,9 @@ import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.engine.util.ZipUtils;
 import com.kaisar.xposed.godmode.engine.applier.SafeBitmapDecoder;
 import com.kaisar.xposed.godmode.engine.rule.RuleSlotKey;
+import com.kaisar.xposed.godmode.editor.RuleEditorClient;
+import com.kaisar.xposed.godmode.ipc.LeaseHub;
+import com.kaisar.xposed.godmode.ipc.RuleReader;
 import com.kaisar.xposed.godmode.ipc.RuleServiceClient;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
@@ -110,8 +113,7 @@ public final class RuleBackupManager {
         if (!PackageNameValidator.isValid(packageName) || viewRules == null) {
             throw new BackupException("Invalid backup arguments");
         }
-        RuleServiceClient serviceClient = RuleServiceClient.getDefault();
-        if (!serviceClient.beginBackup()) {
+        if (!LeaseHub.getDefault().beginBackup()) {
             throw new BackupException("Rule service is unavailable or another operation is active");
         }
         Logger.i(TAG, "backupRules start package=" + packageName + " ruleCount=" + viewRules.size());
@@ -119,7 +121,7 @@ public final class RuleBackupManager {
         try {
             backupDir = createOperationDirectory(
                     GodModeApplication.getApplication().getCacheDir(), "backup");
-            ActRules authoritative = serviceClient.getRules(packageName);
+            ActRules authoritative = RuleReader.getDefault().getRules(packageName);
             if (authoritative == null) {
                 throw new BackupException("Unable to read authoritative rule snapshot");
             }
@@ -143,7 +145,7 @@ public final class RuleBackupManager {
             throw new BackupException(e);
         } finally {
             if (backupDir != null) cleanupTempDirectory("backupRules", backupDir);
-            serviceClient.endBackup();
+            LeaseHub.getDefault().endBackup();
         }
     }
 
@@ -261,7 +263,7 @@ public final class RuleBackupManager {
                     throw new RestoreException("Backup exceeds rule limit: " + jsonArray.size());
                 }
                 Logger.d(TAG, "restoreRules manifest parsed ruleCount=" + jsonArray.size());
-                if (!RuleServiceClient.getDefault().beginRestore()) {
+                if (!LeaseHub.getDefault().beginRestore()) {
                     throw new RestoreException("Rule service is unavailable or another restore is active");
                 }
                 int committed = 0;
@@ -304,7 +306,7 @@ public final class RuleBackupManager {
                             }
                         }
 
-                        boolean accepted = RuleServiceClient.getDefault().writeRule(
+                        boolean accepted = RuleEditorClient.getInstance().writeRule(
                                 viewRule.packageName, viewRule, bitmap, modBitmap);
                         if (accepted) {
                             committed++;
@@ -333,7 +335,7 @@ public final class RuleBackupManager {
             Logger.e(TAG, "restoreRules failed malformed_data", e);
             throw new RestoreException(e);
         } finally {
-            RuleServiceClient.getDefault().endRestore();
+            LeaseHub.getDefault().endRestore();
             cleanupTempDirectory("restoreRules", restoreDir);
         }
     }

@@ -1,6 +1,7 @@
 package com.kaisar.xposed.godmode.inject;
 
 import com.kaisar.xposed.godmode.engine.util.Logger;
+import com.kaisar.xposed.godmode.ipc.ObserverCenter;
 import com.kaisar.xposed.godmode.ipc.RuleServiceClient;
 import com.kaisar.xposed.godmode.ipc.ServiceObserver;
 import com.kaisar.xposed.godmode.orchestrator.RecyclerAdapterHook;
@@ -60,7 +61,7 @@ public final class AppInjector {
                 ModuleBootstrap.notifyEditModeChanged(false));
 
         // 注册 IPC 观察者，监听规则变更
-        serviceClient.addObserver(packageName, new ServiceObserver(
+        ObserverCenter.getDefault().addObserver(packageName, new ServiceObserver(
                 new ServiceObserver.Callback() {
                     @Override
                     public void onEditModeChanged(boolean enable) {

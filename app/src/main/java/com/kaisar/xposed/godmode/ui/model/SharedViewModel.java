@@ -12,6 +12,8 @@ import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.ViewModel;
 
 import com.kaisar.xposed.godmode.engine.util.Logger;
+import com.kaisar.xposed.godmode.ipc.ObserverCenter;
+import com.kaisar.xposed.godmode.ipc.RuleReader;
 import com.kaisar.xposed.godmode.ipc.RuleServiceClient;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.AppRules;
@@ -40,10 +42,11 @@ public class SharedViewModel extends ViewModel {
         @Override
         public void onRulesInvalidated(String packageName, long generation,
                                        long connectionEpoch) {
-            RuleServiceClient client = RuleServiceClient.getDefault();
-            AppRules latest = client.getAllRulesAtLeast(generation);
+            RuleReader reader = RuleReader.getDefault();
+            ObserverCenter center = ObserverCenter.getDefault();
+            AppRules latest = reader.getAllRulesAtLeast(generation);
             mMainHandler.post(() -> {
-                if (!client.isCurrentRuleEvent(connectionEpoch, generation)) return;
+                if (!center.isCurrentRuleEvent(connectionEpoch, generation)) return;
                 appRules.setValue(latest);
                 if (TextUtils.equals(packageName, selectedPackage.getValue())) {
                     selectedPackage.setValue(packageName);
@@ -54,7 +57,7 @@ public class SharedViewModel extends ViewModel {
 
     public SharedViewModel() {
         try {
-            RuleServiceClient.getDefault().addObserver("*", mRuleObserver);
+            ObserverCenter.getDefault().addObserver("*", mRuleObserver);
         } catch (Exception e) {
             Logger.w(TAG, "SharedViewModel: register observer failed", e);
         }
@@ -63,12 +66,12 @@ public class SharedViewModel extends ViewModel {
     @Override
     protected void onCleared() {
         super.onCleared();
-        RuleServiceClient.getDefault().removeObserver("*", mRuleObserver);
+        ObserverCenter.getDefault().removeObserver("*", mRuleObserver);
         mMainHandler.removeCallbacksAndMessages(null);
     }
 
     public void loadAppRules() {
-        TaskExecutor.executeIo(() -> appRules.postValue(RuleServiceClient.getDefault().getAllRules()));
+        TaskExecutor.executeIo(() -> appRules.postValue(RuleReader.getDefault().getAllRules()));
     }
 
     public void updateSelectedPackage(String packageName) {

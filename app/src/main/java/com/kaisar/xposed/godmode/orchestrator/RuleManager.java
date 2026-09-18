@@ -6,6 +6,7 @@ import android.os.Looper;
 import com.kaisar.xposed.godmode.engine.event.EventBus;
 import com.kaisar.xposed.godmode.engine.event.RulesChangedEvent;
 import com.kaisar.xposed.godmode.engine.util.Logger;
+import com.kaisar.xposed.godmode.ipc.RuleReader;
 import com.kaisar.xposed.godmode.ipc.RuleServiceClient;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
@@ -201,7 +202,7 @@ public final class RuleManager {
 
     private void loadFromService(RuleServiceClient client, boolean scheduleRetry) {
         try {
-            ActRules binderRules = client.getRules(mPackageName);
+            ActRules binderRules = RuleReader.getDefault().getRules(mPackageName);
             if (client.isConnected() && binderRules != null) {
                 acceptServiceSnapshot(binderRules);
                 return;

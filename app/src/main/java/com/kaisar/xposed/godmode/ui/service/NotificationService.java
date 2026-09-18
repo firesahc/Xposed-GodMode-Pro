@@ -19,6 +19,7 @@ import androidx.preference.PreferenceManager;
 
 import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.engine.core.PlatformCapabilities;
+import com.kaisar.xposed.godmode.ipc.ObserverCenter;
 import com.kaisar.xposed.godmode.ipc.RuleServiceClient;
 import com.kaisar.xposed.godmode.ui.EditModeController;
 import com.kaisar.xposed.godmode.ui.EditModeSnapshot;
@@ -35,9 +36,9 @@ public final class NotificationService extends Service implements SharedPreferen
                 @Override public void onEditModeChanged(boolean enabled, long editRevision,
                                                         long connectionEpoch) {
                     mMainHandler.post(() -> {
-                        RuleServiceClient client = RuleServiceClient.getDefault();
+                        ObserverCenter center = ObserverCenter.getDefault();
                         if (EditModeSnapshot.capture(NotificationService.this).master()
-                                && client.isCurrentEditEvent(connectionEpoch, editRevision)) {
+                                && center.isCurrentEditEvent(connectionEpoch, editRevision)) {
                             showNotification(enabled);
                         }
                     });
@@ -58,7 +59,7 @@ public final class NotificationService extends Service implements SharedPreferen
         PreferenceManager.getDefaultSharedPreferences(this).registerOnSharedPreferenceChangeListener(this);
         RuleServiceClient client = RuleServiceClient.getDefault();
         client.addBinderDeathListener(mBinderDeathListener);
-        client.addObserver("*", mEditObserver);
+        ObserverCenter.getDefault().addObserver("*", mEditObserver);
     }
 
     @Override
@@ -166,7 +167,7 @@ public final class NotificationService extends Service implements SharedPreferen
     @Override
     public void onDestroy() {
         RuleServiceClient client = RuleServiceClient.getDefault();
-        client.removeObserver("*", mEditObserver);
+        ObserverCenter.getDefault().removeObserver("*", mEditObserver);
         client.removeBinderDeathListener(mBinderDeathListener);
         mMainHandler.removeCallbacksAndMessages(null);
         PreferenceManager.getDefaultSharedPreferences(this).unregisterOnSharedPreferenceChangeListener(this);

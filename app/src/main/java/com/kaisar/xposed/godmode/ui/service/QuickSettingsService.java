@@ -12,6 +12,7 @@ import android.widget.Toast;
 import androidx.preference.PreferenceManager;
 
 import com.kaisar.xposed.godmode.R;
+import com.kaisar.xposed.godmode.ipc.ObserverCenter;
 import com.kaisar.xposed.godmode.ipc.RuleServiceClient;
 import com.kaisar.xposed.godmode.ui.EditModeController;
 import com.kaisar.xposed.godmode.ui.EditModeSnapshot;
@@ -25,7 +26,7 @@ public final class QuickSettingsService extends TileService implements SharedPre
                 @Override public void onEditModeChanged(boolean enabled, long editRevision,
                                                         long connectionEpoch) {
                     mMainHandler.post(() -> {
-                        if (RuleServiceClient.getDefault().isCurrentEditEvent(
+                        if (ObserverCenter.getDefault().isCurrentEditEvent(
                                 connectionEpoch, editRevision)) updateTile();
                     });
                 }
@@ -41,7 +42,7 @@ public final class QuickSettingsService extends TileService implements SharedPre
         PreferenceManager.getDefaultSharedPreferences(this).registerOnSharedPreferenceChangeListener(this);
         RuleServiceClient client = RuleServiceClient.getDefault();
         client.addBinderDeathListener(mBinderDeathListener);
-        client.addObserver("*", mEditObserver);
+        ObserverCenter.getDefault().addObserver("*", mEditObserver);
         updateTile();
     }
 
@@ -49,7 +50,7 @@ public final class QuickSettingsService extends TileService implements SharedPre
     public void onStopListening() {
         super.onStopListening();
         RuleServiceClient client = RuleServiceClient.getDefault();
-        client.removeObserver("*", mEditObserver);
+        ObserverCenter.getDefault().removeObserver("*", mEditObserver);
         client.removeBinderDeathListener(mBinderDeathListener);
         PreferenceManager.getDefaultSharedPreferences(this).unregisterOnSharedPreferenceChangeListener(this);
     }
