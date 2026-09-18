@@ -315,7 +315,7 @@ try {
         $failures.Add("Unable to scan Logger writer installations: $($writerInstallations.Error)")
     } elseif ($writerInstallations.Matches.Count -gt 0) {
         $unexpectedWriterInstallations = @($writerInstallations.Matches | Where-Object {
-            $_ -notmatch "(RuleServiceClient\.java|RuleServiceServer\.java|ServiceBootstrapper\.java)"
+            $_ -notmatch "(LogBridge\.java|RuleServiceClient\.java|RuleServiceServer\.java|ServiceBootstrapper\.java)"
         })
         if ($unexpectedWriterInstallations.Count -gt 0) {
             $failures.Add("Logger writer installed outside approved process boundaries:`n$($unexpectedWriterInstallations -join "`n")")
@@ -375,9 +375,9 @@ try {
             $failures.Add("GodModeLog persistent path is missing")
         }
     }
-    $clientSource = "app/src/main/java/com/kaisar/xposed/godmode/ipc/RuleServiceClient.java"
-    if (!(Test-Path $clientSource) -or
-        (Get-Content -Raw $clientSource) -notmatch "MAX_PENDING_LOGS|flushPendingLogs|PendingLog") {
+    $clientLogBridgeSource = "app/src/main/java/com/kaisar/xposed/godmode/ipc/LogBridge.java"
+    if (!(Test-Path $clientLogBridgeSource) -or
+        (Get-Content -Raw $clientLogBridgeSource) -notmatch "MAX_PENDING_LOGS|flushPendingLogs|PendingLog") {
         $failures.Add("Client logging backlog contract is missing")
     }
     $logTest = "app/src/test/java/com/kaisar/xposed/godmode/control/GodModeLogTest.java"

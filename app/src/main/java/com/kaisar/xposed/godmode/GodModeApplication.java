@@ -29,7 +29,7 @@ public final class GodModeApplication extends Application {
         super.onCreate();
         // The settings process is not Xposed-injected, so it must install the same best-effort
         // IPC sink as injected target processes or its diagnostics disappear from the durable log.
-        RuleServiceClient.getDefault().installProcessLogging(getPackageName());
+        RuleServiceClient.getDefault().getLogBridge().installProcessLogging(getPackageName());
     }
 
     public static GodModeApplication getApplication() {

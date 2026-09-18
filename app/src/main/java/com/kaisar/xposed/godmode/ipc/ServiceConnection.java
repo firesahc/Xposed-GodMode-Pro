@@ -61,7 +61,7 @@ public final class ServiceConnection {
         void onConnectionEstablished(Connection connection);
     }
 
-    /** LogBridge 协作口：本期 LogBridge 不动，核内保留转发点。 */
+    /** LogBridge 协作口：实现见 ipc/LogBridge，核内经转发点调用，未装配记日志跳过。 */
     public interface LogBridge {
         Connection flushReadyPendingLogs(Connection connection);
         RemoteException flushPendingLogs(Connection connection);
@@ -320,13 +320,19 @@ public final class ServiceConnection {
 
     private Connection flushReadyViaBridge(Connection connection) {
         LogBridge bridge = mLogBridge;
-        if (bridge == null) return connection;
+        if (bridge == null) {
+            Logger.d(TAG, "log bridge not installed; skip ready flush");
+            return connection;
+        }
         return bridge.flushReadyPendingLogs(connection);
     }
 
     private RemoteException flushViaBridge(Connection connection) {
         LogBridge bridge = mLogBridge;
-        if (bridge == null) return null;
+        if (bridge == null) {
+            Logger.d(TAG, "log bridge not installed; skip pending flush");
+            return null;
+        }
         return bridge.flushPendingLogs(connection);
     }
 

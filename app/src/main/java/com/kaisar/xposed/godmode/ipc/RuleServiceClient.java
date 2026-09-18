@@ -24,13 +24,11 @@ import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.AppRules;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
 import com.kaisar.xposed.godmode.util.TaskExecutor;
-import com.kaisar.xservicemanager.XServiceManager;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.util.ArrayDeque;
 import java.util.Locale;
 import java.util.List;
 import java.util.UUID;
@@ -43,18 +41,14 @@ import java.util.concurrent.atomic.AtomicReference;
 /** Single client facade for the canonical 6.10 rule service. */
 public final class RuleServiceClient {
     private static final String TAG = "RuleServiceClient";
-    private static final int MAX_PENDING_LOGS = 512;
     private static volatile RuleServiceClient instance;
 
     private final ServiceConnection mServiceConnection = new ServiceConnection();
+    private final LogBridge mLogBridge;
     private final Gson mGson = new GsonBuilder().create();
     private final CopyOnWriteArrayList<ObserverSubscription> mObserverSubscriptions = new CopyOnWriteArrayList<>();
     private final AtomicLong mRuleGeneration = new AtomicLong();
     private final ClientEditState mEditState = new ClientEditState();
-    private final Object mLogLock = new Object();
-    private final ArrayDeque<PendingLog> mPendingLogs = new ArrayDeque<>(MAX_PENDING_LOGS);
-    private long mDroppedPendingLogs;
-    private long mRejectedPendingLogs;
     private final ILeaseOwner mLeaseOwner = new ILeaseOwner.Stub() {
         @Override public void onLeaseRevoked(int reason) {
             boolean hadRestoreLease = mRestoreLease != null;
@@ -77,6 +71,7 @@ public final class RuleServiceClient {
     private volatile int mLastMutationStatus = RuleServiceContract.RESULT_NO_CHANGE;
 
     private RuleServiceClient() {
+        mLogBridge = new LogBridge(mServiceConnection);
         mServiceConnection.setConnectionListener(new ServiceConnection.ConnectionListener() {
             @Override public void onConnectionCleared() {
                 mRestoreLease = null;
@@ -92,35 +87,16 @@ public final class RuleServiceClient {
                 reregisterObservers(connection);
             }
         });
-        mServiceConnection.setLogBridge(new ServiceConnection.LogBridge() {
-            @Override public ServiceConnection.Connection flushReadyPendingLogs(
-                    ServiceConnection.Connection connection) {
-                return RuleServiceClient.this.flushReadyPendingLogs(connection);
-            }
-
-            @Override public RemoteException flushPendingLogs(ServiceConnection.Connection connection) {
-                return RuleServiceClient.this.flushPendingLogs(connection);
-            }
-        });
+        mServiceConnection.setLogBridge(mLogBridge);
     }
 
     /** Installs the process-side durable sink for Logger and XServiceManager diagnostics. */
     public void installProcessLogging(String packageName) {
-        final String sourcePackage = packageName == null ? "unknown" : packageName;
-        Logger.setWriter((level, tag, msg, timestamp) ->
-                forwardLog(sourcePackage, level, tag, msg, timestamp));
-        XServiceManager.setLogDelegate(new XServiceManager.LogDelegate() {
-            @Override public void d(String tag, String msg) { Logger.d(tag, msg); }
-            @Override public void i(String tag, String msg) { Logger.i(tag, msg); }
-            @Override public void w(String tag, String msg) { Logger.w(tag, msg); }
-            @Override public void w(String tag, String msg, Throwable tr) {
-                Logger.w(tag, msg, tr);
-            }
-            @Override public void e(String tag, String msg) { Logger.e(tag, msg); }
-            @Override public void e(String tag, String msg, Throwable tr) {
-                Logger.e(tag, msg, tr);
-            }
-        });
+        mLogBridge.installProcessLogging(packageName);
+    }
+
+    public LogBridge getLogBridge() {
+        return mLogBridge;
     }
 
     public static RuleServiceClient getDefault() {
@@ -173,22 +149,6 @@ public final class RuleServiceClient {
 
     private void logError(String method, ServiceConnection.Connection connection, RemoteException e) {
         mServiceConnection.logError(method, connection, e);
-    }
-
-    private boolean isReady(ServiceConnection.Connection connection) {
-        return mServiceConnection.isReady(connection);
-    }
-
-    private ServiceConnection.Connection flushReadyPendingLogs(ServiceConnection.Connection connection) {
-        synchronized (mLogLock) {
-            if (mPendingLogs.isEmpty()) return connection;
-        }
-        RemoteException failure = flushPendingLogs(connection);
-        if (failure != null) {
-            logError("flushLogs", connection, failure);
-            return isReady(connection) ? connection : null;
-        }
-        return connection;
     }
 
     private void reregisterObservers(ServiceConnection.Connection connection) {
@@ -982,76 +942,10 @@ public final class RuleServiceClient {
     }
 
     public void forwardLog(int level, String tag, String msg, long timestamp) {
-        forwardLog("unknown", level, tag, msg, timestamp);
+        mLogBridge.forwardLog(level, tag, msg, timestamp);
     }
     public void forwardLog(String packageName, int level, String tag, String msg, long timestamp) {
-        // Logging never establishes Binder synchronously. While Binder is unavailable, retain a
-        // bounded process-local backlog so handshake/death-window diagnostics can be flushed by
-        // the next successful connection instead of disappearing silently.
-        PendingLog pending = new PendingLog(packageName == null ? "unknown" : packageName,
-                level, tag, msg, timestamp);
-        ServiceConnection.Connection c = mServiceConnection.currentConnection();
-        RemoteException failure = null;
-        synchronized (mLogLock) {
-            if (!isReady(c) || !mPendingLogs.isEmpty()) {
-                enqueuePendingLogLocked(pending, false);
-                return;
-            }
-            try {
-                sendLog(c, pending);
-            } catch (RemoteException e) {
-                enqueuePendingLogLocked(pending, true);
-                failure = e;
-            }
-        }
-        if (failure != null) logError("log", c, failure);
-    }
-
-    private void enqueuePendingLogLocked(PendingLog pending, boolean first) {
-        if (mPendingLogs.size() >= MAX_PENDING_LOGS) {
-            mPendingLogs.removeFirst();
-            mDroppedPendingLogs++;
-        }
-        if (first) {
-            mPendingLogs.addFirst(pending);
-        } else {
-            mPendingLogs.addLast(pending);
-        }
-    }
-
-    private RemoteException flushPendingLogs(ServiceConnection.Connection connection) {
-        synchronized (mLogLock) {
-            while (!mPendingLogs.isEmpty()) {
-                PendingLog pending = mPendingLogs.peekFirst();
-                try {
-                    sendLog(connection, pending);
-                    mPendingLogs.removeFirst();
-                } catch (RemoteException e) {
-                    if (connection.binder.isBinderAlive()) {
-                        // A live Binder with a rejected log (for example an invalid package
-                        // identity) must not block every later record in the backlog.
-                        mPendingLogs.removeFirst();
-                        mRejectedPendingLogs++;
-                        continue;
-                    }
-                    return e;
-                }
-            }
-            long dropped = mDroppedPendingLogs;
-            long rejected = mRejectedPendingLogs;
-            mDroppedPendingLogs = 0L;
-            mRejectedPendingLogs = 0L;
-            if (dropped > 0L || rejected > 0L) {
-                Logger.w(TAG, "pending logs not persisted dropped=" + dropped
-                        + " rejected=" + rejected);
-            }
-            return null;
-        }
-    }
-
-    private static void sendLog(ServiceConnection.Connection connection, PendingLog pending) throws RemoteException {
-        connection.service.log(pending.level, pending.packageName, pending.timestamp,
-                pending.tag, pending.message);
+        mLogBridge.forwardLog(packageName, level, tag, msg, timestamp);
     }
 
     public boolean beginRestore() {
@@ -1076,22 +970,6 @@ public final class RuleServiceClient {
         StringBuilder out = new StringBuilder(digest.length * 2);
         for (byte value : digest) out.append(String.format("%02x", value & 0xff));
         return out.toString();
-    }
-
-    private static final class PendingLog {
-        final String packageName;
-        final int level;
-        final String tag;
-        final String message;
-        final long timestamp;
-
-        PendingLog(String packageName, int level, String tag, String message, long timestamp) {
-            this.packageName = packageName;
-            this.level = level;
-            this.tag = tag;
-            this.message = message;
-            this.timestamp = timestamp;
-        }
     }
 
     public interface ObserverCallback {

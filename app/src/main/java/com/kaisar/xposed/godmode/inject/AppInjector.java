@@ -28,7 +28,7 @@ public final class AppInjector {
         RuleServiceClient serviceClient = RuleServiceClient.getDefault();
         // Install the sink before the handshake so failures during startup use the same
         // contract as later runtime logs. forwardLog remains best effort until Binder is ready.
-        serviceClient.installProcessLogging(packageName);
+        serviceClient.getLogBridge().installProcessLogging(packageName);
         if (!serviceClient.awaitReady(2_500L)) {
             Logger.e(TAG, "IPC handshake failed; skip hooks for " + packageName
                     + ", state=" + serviceClient.getServiceState());
