@@ -3,6 +3,7 @@ package com.kaisar.xposed.godmode.ipc;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import com.kaisar.xposed.godmode.editor.RuleEditorClient;
 import com.kaisar.xposed.godmode.engine.matcher.MatchMode;
 import com.kaisar.xposed.godmode.engine.matcher.TargetLevel;
 import com.kaisar.xposed.godmode.engine.rule.MatchSpec;
@@ -23,7 +24,7 @@ public final class RuleMutationReconciliationTest {
         RuleRecord committed = requested.withImagePath("/data/main.webp")
                 .withModifyImagePath("/data/modified.webp");
 
-        assertTrue(RuleServiceClient.containsCommittedRule(rulesOf(committed), requested,
+        assertTrue(RuleEditorClient.containsCommittedRule(rulesOf(committed), requested,
                 true, true));
     }
 
@@ -32,9 +33,9 @@ public final class RuleMutationReconciliationTest {
         RuleRecord requested = rule(null, null, "replacement");
         RuleRecord old = rule(null, null, "old text");
 
-        assertFalse(RuleServiceClient.containsCommittedRule(rulesOf(old), requested,
+        assertFalse(RuleEditorClient.containsCommittedRule(rulesOf(old), requested,
                 false, false));
-        assertTrue(RuleServiceClient.containsSlot(rulesOf(old), requested));
+        assertTrue(RuleEditorClient.containsSlot(rulesOf(old), requested));
     }
 
     private static RuleRecord rule(String imagePath, String modifiedImagePath, String text) {

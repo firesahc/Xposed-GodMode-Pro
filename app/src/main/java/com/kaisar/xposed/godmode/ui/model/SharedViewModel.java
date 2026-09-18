@@ -12,9 +12,9 @@ import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.ViewModel;
 
 import com.kaisar.xposed.godmode.engine.util.Logger;
+import com.kaisar.xposed.godmode.editor.RuleEditorClient;
 import com.kaisar.xposed.godmode.ipc.ObserverCenter;
 import com.kaisar.xposed.godmode.ipc.RuleReader;
-import com.kaisar.xposed.godmode.ipc.RuleServiceClient;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.AppRules;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
@@ -33,8 +33,8 @@ public class SharedViewModel extends ViewModel {
     public final MutableLiveData<AppRules> appRules = new MutableLiveData<>();
     public final MutableLiveData<List<RuleRecord>> actRules = new MutableLiveData<>();
     public final MutableLiveData<String> selectedPackage = new MutableLiveData<>();
-    private final RuleServiceClient.ObserverCallback mRuleObserver =
-            new RuleServiceClient.ObserverCallback() {
+    private final ObserverCenter.ObserverCallback mRuleObserver =
+            new ObserverCenter.ObserverCallback() {
         @Override
         public void onEditModeChanged(boolean enable, long editRevision, long connectionEpoch) {
         }
@@ -92,15 +92,15 @@ public class SharedViewModel extends ViewModel {
     }
 
     public boolean deleteAppRules(String packageName) {
-        return RuleServiceClient.getDefault().deleteRules(packageName);
+        return RuleEditorClient.getInstance().deleteRules(packageName);
     }
 
     public boolean updateRule(RuleRecord rule) {
-        return RuleServiceClient.getDefault().updateRule(rule.packageName, rule);
+        return RuleEditorClient.getInstance().updateRule(rule.packageName, rule);
     }
 
     public boolean deleteRule(RuleRecord rule) {
-        return RuleServiceClient.getDefault().deleteRule(rule.packageName, rule);
+        return RuleEditorClient.getInstance().deleteRule(rule.packageName, rule);
     }
 
     public void setIconHidden(Context context, boolean hidden) {

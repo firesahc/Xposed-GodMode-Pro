@@ -26,10 +26,10 @@ public final class RuleServiceContractTest {
 
     @Test
     public void mixedFdMutateContractIsRejectedBeforeUse() {
-        assertTrue(RuleServiceClient.isExpectedIdentity(new ServiceIdentityParcel(
+        assertTrue(ServiceConnection.isExpectedIdentity(new ServiceIdentityParcel(
                 61000, BuildConfig.VERSION_CODE, "iruleservice-61000-fd-mutate-v3",
                 RuleServiceContract.READY)));
-        assertFalse(RuleServiceClient.isExpectedIdentity(new ServiceIdentityParcel(
+        assertFalse(ServiceConnection.isExpectedIdentity(new ServiceIdentityParcel(
                 61000, BuildConfig.VERSION_CODE, "iruleservice-61000-fd-mutate-v2",
                 RuleServiceContract.READY)));
     }
@@ -37,7 +37,7 @@ public final class RuleServiceContractTest {
     @Test
     public void staleBuildVersionCodeIsRejected() {
         // system_server 驻留旧版 APK 的服务时，buildVersionCode 必然不等。
-        assertFalse(RuleServiceClient.isExpectedIdentity(new ServiceIdentityParcel(
+        assertFalse(ServiceConnection.isExpectedIdentity(new ServiceIdentityParcel(
                 61000, BuildConfig.VERSION_CODE - 1, "iruleservice-61000-fd-mutate-v3",
                 RuleServiceContract.READY)));
     }

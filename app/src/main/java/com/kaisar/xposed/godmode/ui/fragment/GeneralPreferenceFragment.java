@@ -48,7 +48,7 @@ import com.kaisar.xposed.godmode.CrashHandler;
 import com.kaisar.xposed.godmode.GodModeApplication;
 import com.kaisar.xposed.godmode.ui.EditModeController;
 import com.kaisar.xposed.godmode.R;
-import com.kaisar.xposed.godmode.ipc.RuleServiceClient;
+import com.kaisar.xposed.godmode.ipc.ServiceConnection;
 import com.kaisar.xposed.godmode.ipc.RuleServiceContract;
 import com.kaisar.xposed.godmode.ui.glide.RulePreviewSpec;
 import com.kaisar.xposed.godmode.ui.preference.ProgressPreference;
@@ -288,21 +288,21 @@ public final class GeneralPreferenceFragment extends PreferenceFragmentCompat im
 
         SharedPreferences settingsSp = requireContext().getSharedPreferences(SETTING_PREFS, Context.MODE_PRIVATE);
         int previousVersionCode = settingsSp.getInt(KEY_VERSION_CODE, 0);
-        int serviceState = RuleServiceClient.getDefault().getServiceState();
+        int serviceState = ServiceConnection.getDefault().getServiceState();
         if (serviceState == RuleServiceContract.REBOOT_REQUIRED) {
             mEditorSwitchPreference.setEnabled(false);
             showRebootRequiredDialog();
         } else if (previousVersionCode != BuildConfig.VERSION_CODE) {
             settingsSp.edit().putInt(KEY_VERSION_CODE, BuildConfig.VERSION_CODE).apply();
             showUpdatePolicyDialog();
-        } else if (!RuleServiceClient.getDefault().hasLight()) {
+        } else if (!ServiceConnection.getDefault().hasLight()) {
             showEnableModuleDialog();
         }
     }
 
     private void showRebootRequiredDialog() {
         if (!isAdded()) return;
-        String reason = RuleServiceClient.getDefault().getServiceFailureMessage();
+        String reason = ServiceConnection.getDefault().getServiceFailureMessage();
         new AlertDialog.Builder(requireContext())
                 .setTitle(R.string.hey_guy)
                 .setMessage(reason == null
@@ -333,14 +333,14 @@ public final class GeneralPreferenceFragment extends PreferenceFragmentCompat im
 
     @Override
     public boolean onPreferenceChange(Preference preference, Object newValue) {
-        return RuleServiceClient.getDefault().hasLight();
+        return ServiceConnection.getDefault().hasLight();
     }
 
     @Override
     public boolean onPreferenceClick(Preference preference) {
         String key = preference.getKey();
         if (mEditorSwitchPreference == preference) {
-            RuleServiceClient client = RuleServiceClient.getDefault();
+            ServiceConnection client = ServiceConnection.getDefault();
             if (!client.hasLight()) {
                 String reason = client.getServiceFailureMessage();
                 Toast.makeText(requireContext(), reason == null
@@ -397,7 +397,7 @@ public final class GeneralPreferenceFragment extends PreferenceFragmentCompat im
     }
 
     private void showEnableModuleDialog() {
-        RuleServiceClient client = RuleServiceClient.getDefault();
+        ServiceConnection client = ServiceConnection.getDefault();
         String message = getString(R.string.not_active_module);
         String failureMessage = client.getServiceFailureMessage();
         if (!TextUtils.isEmpty(failureMessage)) {

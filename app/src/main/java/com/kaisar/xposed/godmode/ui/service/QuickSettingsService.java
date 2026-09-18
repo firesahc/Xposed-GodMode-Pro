@@ -13,7 +13,7 @@ import androidx.preference.PreferenceManager;
 
 import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.ipc.ObserverCenter;
-import com.kaisar.xposed.godmode.ipc.RuleServiceClient;
+import com.kaisar.xposed.godmode.ipc.ServiceConnection;
 import com.kaisar.xposed.godmode.ui.EditModeController;
 import com.kaisar.xposed.godmode.ui.EditModeSnapshot;
 import com.kaisar.xposed.godmode.util.TaskExecutor;
@@ -21,8 +21,8 @@ import com.kaisar.xposed.godmode.util.TaskExecutor;
 public final class QuickSettingsService extends TileService implements SharedPreferences.OnSharedPreferenceChangeListener {
 
     private final Handler mMainHandler = new Handler(Looper.getMainLooper());
-    private final RuleServiceClient.ObserverCallback mEditObserver =
-            new RuleServiceClient.ObserverCallback() {
+    private final ObserverCenter.ObserverCallback mEditObserver =
+            new ObserverCenter.ObserverCallback() {
                 @Override public void onEditModeChanged(boolean enabled, long editRevision,
                                                         long connectionEpoch) {
                     mMainHandler.post(() -> {
@@ -40,7 +40,7 @@ public final class QuickSettingsService extends TileService implements SharedPre
     public void onStartListening() {
         super.onStartListening();
         PreferenceManager.getDefaultSharedPreferences(this).registerOnSharedPreferenceChangeListener(this);
-        RuleServiceClient client = RuleServiceClient.getDefault();
+        ServiceConnection client = ServiceConnection.getDefault();
         client.addBinderDeathListener(mBinderDeathListener);
         ObserverCenter.getDefault().addObserver("*", mEditObserver);
         updateTile();
@@ -49,7 +49,7 @@ public final class QuickSettingsService extends TileService implements SharedPre
     @Override
     public void onStopListening() {
         super.onStopListening();
-        RuleServiceClient client = RuleServiceClient.getDefault();
+        ServiceConnection client = ServiceConnection.getDefault();
         ObserverCenter.getDefault().removeObserver("*", mEditObserver);
         client.removeBinderDeathListener(mBinderDeathListener);
         PreferenceManager.getDefaultSharedPreferences(this).unregisterOnSharedPreferenceChangeListener(this);
@@ -71,7 +71,7 @@ public final class QuickSettingsService extends TileService implements SharedPre
             boolean committed = EditModeController.setEditModeEnabled(this, !current);
             mMainHandler.post(() -> {
                 if (!committed) {
-                    String reason = RuleServiceClient.getDefault().getServiceFailureMessage();
+                    String reason = ServiceConnection.getDefault().getServiceFailureMessage();
                     Toast.makeText(this, reason == null
                             ? getString(R.string.edit_mode_update_failed)
                             : getString(R.string.edit_mode_update_failed_with_reason, reason),

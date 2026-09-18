@@ -3,7 +3,8 @@ package com.kaisar.xposed.godmode.ui;
 import android.content.Context;
 
 import com.kaisar.xposed.godmode.R;
-import com.kaisar.xposed.godmode.ipc.RuleServiceClient;
+import com.kaisar.xposed.godmode.ipc.ObserverCenter;
+import com.kaisar.xposed.godmode.ipc.ServiceConnection;
 
 /**
  * 编辑态单快照 — 同一 tick 内一次抓取的只读组合视图。
@@ -41,13 +42,13 @@ public final class EditModeSnapshot {
 
     /** 一次抓取全部底层事实；调用方不得再自行组合散读。 */
     public static EditModeSnapshot capture(Context context, int prefKeyMasterResId) {
-        RuleServiceClient client = RuleServiceClient.getDefault();
+        ObserverCenter center = ObserverCenter.getDefault();
         return new EditModeSnapshot(
                 EditModeController.isMasterEnabled(context, prefKeyMasterResId),
-                client.hasReadyConnection(),
-                client.isEditStateKnown(),
-                client.isEditModeClosing(),
-                client.isEditModeEnabled());
+                ServiceConnection.getDefault().hasReadyConnection(),
+                center.isEditStateKnown(),
+                center.isEditModeClosing(),
+                center.isEditModeEnabled());
     }
 
     public boolean master() { return master; }

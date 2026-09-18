@@ -20,7 +20,7 @@ import androidx.preference.PreferenceManager;
 import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.engine.core.PlatformCapabilities;
 import com.kaisar.xposed.godmode.ipc.ObserverCenter;
-import com.kaisar.xposed.godmode.ipc.RuleServiceClient;
+import com.kaisar.xposed.godmode.ipc.ServiceConnection;
 import com.kaisar.xposed.godmode.ui.EditModeController;
 import com.kaisar.xposed.godmode.ui.EditModeSnapshot;
 import com.kaisar.xposed.godmode.ui.SettingsActivity;
@@ -31,8 +31,8 @@ public final class NotificationService extends Service implements SharedPreferen
 
     private static final String TAG = "NotificationService";
     private final Handler mMainHandler = new Handler(Looper.getMainLooper());
-    private final RuleServiceClient.ObserverCallback mEditObserver =
-            new RuleServiceClient.ObserverCallback() {
+    private final ObserverCenter.ObserverCallback mEditObserver =
+            new ObserverCenter.ObserverCallback() {
                 @Override public void onEditModeChanged(boolean enabled, long editRevision,
                                                         long connectionEpoch) {
                     mMainHandler.post(() -> {
@@ -57,7 +57,7 @@ public final class NotificationService extends Service implements SharedPreferen
         super.onCreate();
         createControlChannel();
         PreferenceManager.getDefaultSharedPreferences(this).registerOnSharedPreferenceChangeListener(this);
-        RuleServiceClient client = RuleServiceClient.getDefault();
+        ServiceConnection client = ServiceConnection.getDefault();
         client.addBinderDeathListener(mBinderDeathListener);
         ObserverCenter.getDefault().addObserver("*", mEditObserver);
     }
@@ -84,7 +84,7 @@ public final class NotificationService extends Service implements SharedPreferen
         }
         boolean editMode = snapshot.enabled();
         if (intent != null && TextUtils.equals(intent.getAction(), Intent.ACTION_EDIT)) {
-            RuleServiceClient client = RuleServiceClient.getDefault();
+            ServiceConnection client = ServiceConnection.getDefault();
             if (!client.hasLight()) {
                 String reason = client.getServiceFailureMessage();
                 Toast.makeText(this, reason == null
@@ -109,7 +109,7 @@ public final class NotificationService extends Service implements SharedPreferen
     }
 
     private void showToggleFailure() {
-        String reason = RuleServiceClient.getDefault().getServiceFailureMessage();
+        String reason = ServiceConnection.getDefault().getServiceFailureMessage();
         Toast.makeText(this, reason == null
                 ? getString(R.string.edit_mode_update_failed)
                 : getString(R.string.edit_mode_update_failed_with_reason, reason),
@@ -166,7 +166,7 @@ public final class NotificationService extends Service implements SharedPreferen
 
     @Override
     public void onDestroy() {
-        RuleServiceClient client = RuleServiceClient.getDefault();
+        ServiceConnection client = ServiceConnection.getDefault();
         ObserverCenter.getDefault().removeObserver("*", mEditObserver);
         client.removeBinderDeathListener(mBinderDeathListener);
         mMainHandler.removeCallbacksAndMessages(null);

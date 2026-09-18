@@ -10,7 +10,7 @@ import com.kaisar.xposed.godmode.rule.RuleRecord;
 /**
  * 编辑器规则持久化接口 — 抽象编辑模式下规则写入和删除操作。
  * <p>
- * 默认实现 {@link RuleEditorClient} 委托给 Binder IPC（{@code RuleServiceClient}），
+ * 默认实现 {@link RuleEditorClient} 委托给 Binder IPC（直调职责门面真单例），
  * 在单元测试中可传入 mock 实现以验证 {@code EditorOrchestrator} 行为。
  * </p>
  */

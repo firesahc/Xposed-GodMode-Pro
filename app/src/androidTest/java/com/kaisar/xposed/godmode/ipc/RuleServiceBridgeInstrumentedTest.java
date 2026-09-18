@@ -48,7 +48,7 @@ public final class RuleServiceBridgeInstrumentedTest {
     public void liveClientCompletesIdentityHandshake() {
         requireLiveBridge();
 
-        RuleServiceClient client = RuleServiceClient.getDefault();
+        ServiceConnection client = ServiceConnection.getDefault();
         assertTrue(client.getLastError(), client.awaitReady(5_000L));
         assertEquals(RuleServiceContract.READY, client.getServiceState());
         assertTrue(client.hasLight());

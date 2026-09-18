@@ -7,9 +7,10 @@ import com.kaisar.xposed.godmode.engine.event.EventBus;
 import com.kaisar.xposed.godmode.engine.event.RulesChangedEvent;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.ipc.RuleReader;
-import com.kaisar.xposed.godmode.ipc.RuleServiceClient;
+import com.kaisar.xposed.godmode.ipc.ServiceConnection;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
+import com.kaisar.xposed.godmode.rule.RuntimeRuleComparator;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -49,7 +50,7 @@ public final class RuleManager {
     private Source mLastSource = Source.PROCESS;
     private volatile LoadState mLoadState = LoadState.UNAVAILABLE;
     private Handler mRetryHandler;
-    private RuleServiceClient mServiceClient;
+    private ServiceConnection mServiceClient;
     private int mRetryAttempt;
     private final Runnable mRetryTask = this::retryLoad;
     private final Runnable mBinderDeathListener = this::onBinderDeath;
@@ -82,7 +83,7 @@ public final class RuleManager {
 
         sInstance = new RuleManager(packageName);
 
-        RuleServiceClient ipcClient = RuleServiceClient.getDefault();
+        ServiceConnection ipcClient = ServiceConnection.getDefault();
         sInstance.mServiceClient = ipcClient;
         ipcClient.addBinderDeathListener(sInstance.mBinderDeathListener);
 
@@ -200,7 +201,7 @@ public final class RuleManager {
         mLogger.d("RuleManager shut down");
     }
 
-    private void loadFromService(RuleServiceClient client, boolean scheduleRetry) {
+    private void loadFromService(ServiceConnection client, boolean scheduleRetry) {
         try {
             ActRules binderRules = RuleReader.getDefault().getRules(mPackageName);
             if (client.isConnected() && binderRules != null) {
@@ -266,7 +267,7 @@ public final class RuleManager {
 
     private void retryLoad() {
         if (!mInitialized || mPackageName == null) return;
-        loadFromService(RuleServiceClient.getDefault(), true);
+        loadFromService(ServiceConnection.getDefault(), true);
     }
 
     private void onBinderDeath() {

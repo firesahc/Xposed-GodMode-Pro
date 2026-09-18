@@ -26,7 +26,7 @@ import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.engine.applier.SafeBitmapDecoder;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.engine.util.Preconditions;
-import com.kaisar.xposed.godmode.ipc.RuleServiceClient;
+import com.kaisar.xposed.godmode.ipc.ImageStore;
 import com.kaisar.xposed.godmode.util.TaskExecutor;
 import com.kaisar.xposed.godmode.ui.preference.ImageViewPreference;
 import com.kaisar.xposed.godmode.ui.model.SharedViewModel;
@@ -221,7 +221,7 @@ public final class RuleRecordDetailsFragment extends PreferenceFragmentCompat im
 
     private void reserveImagePlaceholder() {
         try {
-            ParcelFileDescriptor pfd = RuleServiceClient.getDefault().getImageStore().openImageFileDescriptor(mRuleRecord.imagePath);
+            ParcelFileDescriptor pfd = ImageStore.getDefault().openImageFileDescriptor(mRuleRecord.imagePath);
             if (pfd == null) return;
             BitmapFactory.Options opts = new BitmapFactory.Options();
             opts.inJustDecodeBounds = true;
@@ -280,7 +280,7 @@ public final class RuleRecordDetailsFragment extends PreferenceFragmentCompat im
     @Nullable
     private static Bitmap loadRuleImageBitmap(@NonNull RuleRecord viewRule) {
         try {
-            ParcelFileDescriptor pfd = RuleServiceClient.getDefault().getImageStore().openImageFileDescriptor(viewRule.imagePath);
+            ParcelFileDescriptor pfd = ImageStore.getDefault().openImageFileDescriptor(viewRule.imagePath);
             Objects.requireNonNull(pfd, String.format("Can not open %s", viewRule.imagePath));
             try {
                 // 带采样上限保护的安全解码，避免大图 OOM；失败返回 null 由上层兜底

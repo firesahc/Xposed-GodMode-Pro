@@ -8,7 +8,7 @@ import androidx.preference.PreferenceManager;
 
 import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.engine.util.Logger;
-import com.kaisar.xposed.godmode.ipc.RuleServiceClient;
+import com.kaisar.xposed.godmode.ipc.ObserverCenter;
 import com.kaisar.xposed.godmode.ui.service.NotificationService;
 
 public final class EditModeController {
@@ -25,15 +25,15 @@ public final class EditModeController {
     }
 
     public static boolean setEditModeEnabled(Context context, boolean enabled) {
-        return RuleServiceClient.getDefault().setEditMode(enabled);
+        return ObserverCenter.getDefault().setEditMode(enabled);
     }
 
     public static boolean isEditModeEnabled(Context context) {
-        return RuleServiceClient.getDefault().isEditModeEnabled();
+        return ObserverCenter.getDefault().isEditModeEnabled();
     }
 
     public static boolean isEditModeClosing(Context context) {
-        return RuleServiceClient.getDefault().isEditModeClosing();
+        return ObserverCenter.getDefault().isEditModeClosing();
     }
 
     public static boolean isMasterEnabled(Context context, int prefKeyMasterResId) {
