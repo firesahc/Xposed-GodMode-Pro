@@ -389,6 +389,12 @@ try {
         (Get-Content -Raw $forkSafetyTest) -notmatch "ConstructsWithoutMainLooper") {
         $failures.Add("Xposed entry fork-safety contract test is missing: $forkSafetyTest")
     }
+    $leaseHubSource = "app/src/main/java/com/kaisar/xposed/godmode/ipc/LeaseHub.java"
+    $rawOwnerUses = @(Select-String -Path $leaseHubSource -Pattern "mLeaseOwner\s*[,)]" |
+        Where-Object { $_.Line -notmatch "getLeaseOwner\(\)" })
+    if ($rawOwnerUses.Count -gt 0) {
+        $failures.Add("LeaseHub must pass owner via getLeaseOwner(), raw field use found:`n$($rawOwnerUses -join "`n")")
+    }
     $logRulesDoc = "docs/device-test-rules.md"
     if (!(Test-Path $logRulesDoc) -or
         (Get-Content -Raw $logRulesDoc) -notmatch "MM-dd HH:mm:ss\.SSS pid LEVEL/tag") {

@@ -116,7 +116,7 @@ public final class LeaseHub {
     public String openLease(int type, String packageName) {
         ServiceConnection.Connection c = mServiceConnection.ensureConnection(); if (c == null) return null;
         try {
-            OperationLeaseParcel lease = c.service.openOperation(type, packageName, mLeaseOwner);
+            OperationLeaseParcel lease = c.service.openOperation(type, packageName, getLeaseOwner());
             if (lease != null && lease.status == RuleServiceContract.RESULT_COMMITTED) {
                 mServiceConnection.clearDiagnostic();
                 return lease.token;
@@ -134,7 +134,7 @@ public final class LeaseHub {
     public boolean closeLease(String token) {
         ServiceConnection.Connection c = mServiceConnection.ensureConnection(); if (c == null) return false;
         try {
-            OperationLeaseParcel result = c.service.closeOperation(token, mLeaseOwner);
+            OperationLeaseParcel result = c.service.closeOperation(token, getLeaseOwner());
             boolean closed = result != null
                     && (result.status == RuleServiceContract.RESULT_COMMITTED
                     || result.status == RuleServiceContract.RESULT_NO_CHANGE);
