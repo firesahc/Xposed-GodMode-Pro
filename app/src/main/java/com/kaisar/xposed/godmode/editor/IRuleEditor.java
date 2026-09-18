@@ -51,6 +51,21 @@ public interface IRuleEditor {
      */
     boolean deleteRule(String packageName, RuleRecord rule);
 
+    /**
+     * 更新一条已存在的规则（B3 收归写入 owner 后的统一写入入口）。
+     * default 实现保证既有调用方与 mock 实现零改。
+     */
+    default boolean updateRule(String packageName, RuleRecord rule) {
+        return false;
+    }
+
+    /**
+     * 删除指定包的全部规则。default 实现保证既有调用方与 mock 实现零改。
+     */
+    default boolean deleteRules(String packageName) {
+        return false;
+    }
+
     /** Returns an actionable user-facing explanation for the latest failed request. */
     default String getFailureMessage() {
         return null;
@@ -60,4 +75,11 @@ public interface IRuleEditor {
      * 读取编辑器工具栏隐藏项配置。
      */
     String getToolbarHiddenItems(String packageName);
+
+    /**
+     * 写入编辑器工具栏隐藏项配置。default 实现保证既有调用方与 mock 实现零改。
+     */
+    default boolean setToolbarHiddenItems(String items) {
+        return false;
+    }
 }

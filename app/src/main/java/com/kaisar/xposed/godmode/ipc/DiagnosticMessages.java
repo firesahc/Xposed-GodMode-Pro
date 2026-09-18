@@ -4,7 +4,8 @@ package com.kaisar.xposed.godmode.ipc;
  * User-facing diagnostic strings for the IPC layer. Collected here instead of resource
  * entries because the system_server side cannot resolve this module's R.string.
  */
-final class DiagnosticMessages {
+/** B3 起跨包供写入 owner（editor.RuleEditorClient）引用诊断文案，仅放宽可见性，文案不动。 */
+public final class DiagnosticMessages {
 
     private DiagnosticMessages() { }
 
@@ -70,11 +71,11 @@ final class DiagnosticMessages {
     static final String EDIT_CLOSE_PENDING_COMMIT_DETAIL = "编辑正在关闭，请等待当前提交完成";
     static final String OPERATION_LEASE_MISSING_DETAIL = "规则服务未返回操作租约";
     static final String OPERATION_CLOSE_RESULT_MISSING_DETAIL = "规则服务未返回关闭结果";
-    static final String MUTATE_RESULT_MISSING_DETAIL = "规则服务未返回提交结果";
-    static final String MUTATE_UNCERTAIN_REQUEST_ID_DETAIL = "规则提交结果未知，请刷新规则后再操作 (requestId=%s)";
-    static final String IMAGE_PIPE_WRITE_FAILED_DETAIL = "图片管道写入失败: %s";
-    static final String MUTATE_READBACK_NOT_FOUND_REQUEST_ID_DETAIL = "规则服务读回未发现本次提交，请刷新规则后再操作 (requestId=%s)";
-    static final String MUTATE_RECONCILE_UNKNOWN_REQUEST_ID_DETAIL = "规则提交状态未知，请刷新规则后再操作 (requestId=%s)";
+    public static final String MUTATE_RESULT_MISSING_DETAIL = "规则服务未返回提交结果";
+    public static final String MUTATE_UNCERTAIN_REQUEST_ID_DETAIL = "规则提交结果未知，请刷新规则后再操作 (requestId=%s)";
+    public static final String IMAGE_PIPE_WRITE_FAILED_DETAIL = "图片管道写入失败: %s";
+    public static final String MUTATE_READBACK_NOT_FOUND_REQUEST_ID_DETAIL = "规则服务读回未发现本次提交，请刷新规则后再操作 (requestId=%s)";
+    public static final String MUTATE_RECONCILE_UNKNOWN_REQUEST_ID_DETAIL = "规则提交状态未知，请刷新规则后再操作 (requestId=%s)";
     static final String IMAGE_RECYCLED_MUTATION_CANCELLED_DETAIL = "图片已回收，取消规则提交";
     static final String IMAGE_PIPE_CREATE_FAILED_DETAIL = "创建图片管道失败: %s";
 

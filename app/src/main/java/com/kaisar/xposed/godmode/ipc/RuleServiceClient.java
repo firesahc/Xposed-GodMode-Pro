@@ -9,17 +9,14 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.kaisar.xposed.godmode.engine.util.Closeables;
 import com.kaisar.xposed.godmode.engine.util.Logger;
-import com.kaisar.xposed.godmode.ipc.contract.ILeaseOwner;
+import com.kaisar.xposed.godmode.editor.RuleEditorClient;
 import com.kaisar.xposed.godmode.ipc.contract.IRuleObserver;
 import com.kaisar.xposed.godmode.ipc.contract.ObserverRegistrationParcel;
-import com.kaisar.xposed.godmode.ipc.contract.OperationLeaseParcel;
-import com.kaisar.xposed.godmode.ipc.contract.RuleMutationRequest;
 import com.kaisar.xposed.godmode.ipc.contract.RuleMutationResult;
 import com.kaisar.xposed.godmode.ipc.contract.RuleSnapshotParcel;
-import com.kaisar.xposed.godmode.ipc.contract.UndoRequestParcel;
+import com.kaisar.xposed.godmode.ipc.contract.ServiceIdentityParcel;
 import com.kaisar.xposed.godmode.ipc.contract.UndoResultParcel;
 import com.kaisar.xposed.godmode.ipc.contract.UndoStateParcel;
-import com.kaisar.xposed.godmode.orchestrator.RuntimeRuleComparator;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.AppRules;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
@@ -30,8 +27,6 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Locale;
-import java.util.List;
-import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -49,33 +44,41 @@ public final class RuleServiceClient {
     private final CopyOnWriteArrayList<ObserverSubscription> mObserverSubscriptions = new CopyOnWriteArrayList<>();
     private final AtomicLong mRuleGeneration = new AtomicLong();
     private final ClientEditState mEditState = new ClientEditState();
-    private final ILeaseOwner mLeaseOwner = new ILeaseOwner.Stub() {
-        @Override public void onLeaseRevoked(int reason) {
-            boolean hadRestoreLease = mRestoreLease != null;
-            boolean hadBackupLease = mBackupLease != null;
-            boolean wasEditEnabled = mEditState.isEnabled();
-            long editRevision = mEditState.revision();
-            long epoch = mServiceConnection.getConnectionEpoch();
-            mRestoreLease = null;
-            mBackupLease = null;
-            mEditState.reset();
-            Logger.w(TAG, "operation lease revoked reason=" + reason
-                    + " epoch=" + epoch + " editEnabled=" + wasEditEnabled
-                    + " editRevision=" + editRevision
-                    + " hadRestoreLease=" + hadRestoreLease
-                    + " hadBackupLease=" + hadBackupLease);
-        }
-    };
-    private volatile String mRestoreLease;
-    private volatile String mBackupLease;
-    private volatile int mLastMutationStatus = RuleServiceContract.RESULT_NO_CHANGE;
+    private final LeaseHub mLeaseHub;
+    private final RuleEditorClient mRuleEditor;
 
     private RuleServiceClient() {
         mLogBridge = new LogBridge(mServiceConnection);
+        mLeaseHub = new LeaseHub(mServiceConnection);
+        // ClientEditState 是观察者链路的编辑投影，留在 Client 侧；Hub 经 Listener 回调
+        // 通知投影清理，避免投影与租约机制耦合。
+        mLeaseHub.setListener(new LeaseHub.Listener() {
+            @Override public boolean isEditEnabled() { return mEditState.isEnabled(); }
+            @Override public long editRevision() { return mEditState.revision(); }
+            @Override public void onEditLeaseRevoked() { mEditState.reset(); }
+            @Override public void onLeaseCloseBusy(String token) {
+                if (token != null && token.equals(mEditState.leaseToken())) {
+                    mEditState.markClosing(token);
+                }
+            }
+        });
+        mRuleEditor = new RuleEditorClient(mServiceConnection, mLeaseHub,
+                new RuleEditorClient.Host() {
+                    @Override public ActRules getRules(String packageName) {
+                        return RuleServiceClient.this.getRules(packageName);
+                    }
+                    @Override public String getToolbarHiddenItems(String packageName) {
+                        return RuleServiceClient.this.getToolbarHiddenItems(packageName);
+                    }
+                    @Override public long ruleGeneration() { return mRuleGeneration.get(); }
+                    @Override public long editRevision() { return mEditState.revision(); }
+                    @Override public PipeAsset openPipe(Bitmap bitmap) {
+                        return RuleServiceClient.this.openPipe(bitmap);
+                    }
+                });
         mServiceConnection.setConnectionListener(new ServiceConnection.ConnectionListener() {
             @Override public void onConnectionCleared() {
-                mRestoreLease = null;
-                mBackupLease = null;
+                mLeaseHub.clearLeases();
                 mEditState.reset();
                 mRuleGeneration.set(0L);
                 for (ObserverSubscription subscription : mObserverSubscriptions) {
@@ -192,7 +195,7 @@ public final class RuleServiceClient {
             }
             mEditState.clearStaleDisabledLease();
             if (mEditState.leaseToken() == null) {
-                String token = openLease(RuleServiceContract.OP_EDIT, null);
+                String token = mLeaseHub.openLease(RuleServiceContract.OP_EDIT, null);
                 if (token == null) return false;
                 mEditState.setLeaseToken(token);
             }
@@ -200,7 +203,7 @@ public final class RuleServiceClient {
         }
         String token = mEditState.leaseToken();
         if (token != null) {
-            if (!closeLease(token)) return false;
+            if (!mLeaseHub.closeLease(token)) return false;
             // The close reply and observer callback cross different Binder channels. Keep the
             // client in CLOSING until the authoritative disabled revision arrives.
             mEditState.markClosing(token);
@@ -219,49 +222,6 @@ public final class RuleServiceClient {
 
     public boolean isEditModeClosing() {
         return hasReadyConnection() && mEditState.isClosing();
-    }
-
-    private String openLease(int type, String packageName) {
-        ServiceConnection.Connection c = ensureConnection(); if (c == null) return null;
-        try {
-            OperationLeaseParcel lease = c.service.openOperation(type, packageName, mLeaseOwner);
-            if (lease != null && lease.status == RuleServiceContract.RESULT_COMMITTED) {
-                clearDiagnostic();
-                return lease.token;
-            }
-            if (lease == null) {
-                recordDiagnostic(ServiceDiagnostic.of(ServiceDiagnostic.Type.UNKNOWN,
-                        DiagnosticMessages.OPERATION_LEASE_MISSING_DETAIL));
-            } else {
-                recordResultFailure(lease.status, lease.message);
-            }
-            return null;
-        } catch (RemoteException e) { logError("openOperation", c, e); return null; }
-    }
-
-    private boolean closeLease(String token) {
-        ServiceConnection.Connection c = ensureConnection(); if (c == null) return false;
-        try {
-            OperationLeaseParcel result = c.service.closeOperation(token, mLeaseOwner);
-            boolean closed = result != null
-                    && (result.status == RuleServiceContract.RESULT_COMMITTED
-                    || result.status == RuleServiceContract.RESULT_NO_CHANGE);
-            if (closed) clearDiagnostic();
-            if (!closed) {
-                if (result == null) {
-                    recordDiagnostic(ServiceDiagnostic.of(ServiceDiagnostic.Type.UNKNOWN,
-                            DiagnosticMessages.OPERATION_CLOSE_RESULT_MISSING_DETAIL));
-                } else {
-                    recordResultFailure(result.status, result.message);
-                }
-                if (result != null && result.status == RuleServiceContract.RESULT_BUSY
-                        && token.equals(mEditState.leaseToken())) {
-                    mEditState.markClosing(token);
-                }
-            }
-            return closed;
-        }
-        catch (RemoteException e) { logError("closeOperation", c, e); return false; }
     }
 
     public void addObserver(String packageName, ObserverCallback observer) {
@@ -478,361 +438,60 @@ public final class RuleServiceClient {
         }
     }
 
+    /** B3：写入 owner 已收归 {@link RuleEditorClient}，本类只保留公开签名转发。 */
+    public RuleEditorClient getRuleEditor() {
+        return mRuleEditor;
+    }
+
     public boolean writeRule(String packageName, RuleRecord rule, Bitmap snapshot) {
-        return writeRule(packageName, rule, snapshot, null);
+        return mRuleEditor.writeRule(packageName, rule, snapshot);
     }
 
     public boolean writeRule(String packageName, RuleRecord rule, Bitmap snapshot, Bitmap modifiedSnapshot) {
-        return mutate(packageName, RuleServiceContract.MUTATION_WRITE, rule, snapshot,
-                modifiedSnapshot, null);
+        return mRuleEditor.writeRule(packageName, rule, snapshot, modifiedSnapshot);
     }
 
     public RuleMutationResult writeUndoableRule(String packageName, RuleRecord rule,
                                                 Bitmap snapshot, Bitmap modifiedSnapshot) {
-        return mutateResult(packageName, RuleServiceContract.MUTATION_WRITE, rule, snapshot,
-                modifiedSnapshot, null, true);
+        return mRuleEditor.writeUndoableRule(packageName, rule, snapshot, modifiedSnapshot);
     }
     public boolean updateRule(String packageName, RuleRecord rule) {
-        return mutate(packageName, RuleServiceContract.MUTATION_UPDATE, rule, null, null, null);
+        return mRuleEditor.updateRule(packageName, rule);
     }
     public boolean deleteRule(String packageName, RuleRecord rule) {
-        return mutate(packageName, RuleServiceContract.MUTATION_DELETE, rule, null, null, null);
+        return mRuleEditor.deleteRule(packageName, rule);
     }
     public boolean deleteRules(String packageName) {
-        return mutate(packageName, RuleServiceContract.MUTATION_DELETE_ALL, null, null, null, null);
+        return mRuleEditor.deleteRules(packageName);
     }
 
     public int getLastMutationStatus() {
-        return mLastMutationStatus;
+        return mRuleEditor.getLastMutationStatus();
     }
 
     public UndoStateParcel getUndoState(String packageName) {
-        ServiceConnection.Connection connection = ensureConnection();
-        if (connection == null) {
-            return new UndoStateParcel(RuleServiceContract.RESULT_BUSY, packageName,
-                    mEditState.revision(), 0L, 0, 0L, null,
-                    "rule service is unavailable");
-        }
-        try {
-            UndoStateParcel state = connection.service.getUndoState(packageName, mLeaseOwner);
-            if (state != null && state.status == RuleServiceContract.RESULT_COMMITTED) {
-                clearDiagnostic();
-            } else if (state != null) {
-                recordResultFailure(state.status, state.message);
-            }
-            return state;
-        } catch (RemoteException e) {
-            logError("getUndoState", connection, e);
-            return new UndoStateParcel(RuleServiceContract.RESULT_UNCERTAIN, packageName,
-                    mEditState.revision(), 0L, 0, 0L, null,
-                    "authoritative undo state is uncertain");
-        }
+        return mRuleEditor.getUndoState(packageName);
     }
 
     public UndoResultParcel undoLatest(String packageName, UndoStateParcel expected) {
-        if (packageName == null || expected == null || !packageName.equals(expected.packageName)) {
-            return localUndoResult(null, packageName, RuleServiceContract.RESULT_INVALID,
-                    expected, "valid expected undo state is required");
-        }
-        String requestId = UUID.randomUUID().toString();
-        UndoResultParcel first = executeUndo(packageName, expected, requestId);
-        if (!RuleServiceContract.isUncertain(first.status)) return first;
-        return executeUndo(packageName, expected, requestId);
+        return mRuleEditor.undoLatest(packageName, expected);
     }
 
-    private UndoResultParcel executeUndo(String packageName, UndoStateParcel expected,
-                                         String requestId) {
-        String lease = openLease(RuleServiceContract.OP_MUTATION, packageName);
-        if (lease == null) {
-            return localUndoResult(requestId, packageName, RuleServiceContract.RESULT_BUSY,
-                    expected, "mutation lease unavailable");
-        }
-        ServiceConnection.Connection connection = ensureConnection();
-        if (connection == null) {
-            closeLease(lease);
-            return localUndoResult(requestId, packageName, RuleServiceContract.RESULT_UNCERTAIN,
-                    expected, "rule service is unavailable");
-        }
-        UndoRequestParcel request = new UndoRequestParcel(requestId, lease, packageName,
-                expected.editRevision, expected.historyRevision, expected.topSequence);
-        try {
-            UndoResultParcel result = connection.service.undoLatest(request, mLeaseOwner);
-            if (result == null) {
-                return localUndoResult(requestId, packageName,
-                        RuleServiceContract.RESULT_UNCERTAIN, expected,
-                        "undo result is missing");
-            }
-            mLastMutationStatus = result.status;
-            if (RuleServiceContract.isTerminalSuccess(result.status)) {
-                clearDiagnostic();
-            } else {
-                recordResultFailure(result.status, result.message);
-            }
-            return result;
-        } catch (RemoteException e) {
-            logError("undoLatest", connection, e);
-            mLastMutationStatus = RuleServiceContract.RESULT_UNCERTAIN;
-            return localUndoResult(requestId, packageName,
-                    RuleServiceContract.RESULT_UNCERTAIN, expected,
-                    "undo result is uncertain");
-        } finally {
-            closeLease(lease);
-        }
+    /** 身份校验已收归 ServiceConnection；测试兼容保留包内转发。 */
+    static boolean isExpectedIdentity(ServiceIdentityParcel identity) {
+        return ServiceConnection.isExpectedIdentity(identity);
     }
 
-    private UndoResultParcel localUndoResult(String requestId, String packageName, int status,
-                                             UndoStateParcel state, String message) {
-        mLastMutationStatus = status;
-        return new UndoResultParcel(status, requestId, packageName,
-                mRuleGeneration.get(), state, message);
-    }
-
-    private boolean mutate(String packageName, int operation, RuleRecord rule, Bitmap main,
-                           Bitmap modified, String value) {
-        RuleMutationResult result = mutateResult(packageName, operation, rule, main, modified,
-                value, false);
-        return isAccepted(result);
-    }
-
-    private RuleMutationResult mutateResult(String packageName, int operation, RuleRecord rule,
-                                            Bitmap main, Bitmap modified, String value,
-                                            boolean captureUndo) {
-        String requestId = UUID.randomUUID().toString();
-        boolean temporary = false;
-        String lease = mRestoreLease;
-        if (lease == null) {
-            lease = openLease(RuleServiceContract.OP_MUTATION, packageName);
-            temporary = true;
-        }
-        if (lease == null) {
-            mLastMutationStatus = RuleServiceContract.RESULT_BUSY;
-            mServiceConnection.logMutationTerminal(operation, packageName, requestId,
-                    mLastMutationStatus, "lease_unavailable");
-            return localMutationResult(requestId, packageName, mLastMutationStatus,
-                    "mutation lease unavailable");
-        }
-        PipeAsset mainPipe = openPipe(main);
-        PipeAsset modifiedPipe = openPipe(modified);
-        if ((main != null && mainPipe == null) || (modified != null && modifiedPipe == null)) {
-            closePipe(mainPipe);
-            closePipe(modifiedPipe);
-            awaitPipe(mainPipe);
-            awaitPipe(modifiedPipe);
-            if (temporary) closeLease(lease);
-            mLastMutationStatus = RuleServiceContract.RESULT_WRITE_FAILED;
-            mServiceConnection.logMutationTerminal(operation, packageName, requestId,
-                    mLastMutationStatus, "image_pipe_unavailable");
-            return localMutationResult(requestId, packageName, mLastMutationStatus,
-                    "image pipe unavailable");
-        }
-        RuleMutationRequest request = new RuleMutationRequest(operation, requestId, lease,
-                packageName, rule == null ? null : mGson.toJson(rule),
-                mainPipe == null ? null : mainPipe.readEnd,
-                modifiedPipe == null ? null : modifiedPipe.readEnd, value, captureUndo);
-        ServiceConnection.Connection c = ensureConnection();
-        boolean accepted = false;
-        boolean uncertain = false;
-        RuleMutationResult authoritative = null;
-        try {
-            if (c != null) {
-                authoritative = c.service.mutate(request, mLeaseOwner);
-                mLastMutationStatus = authoritative == null
-                        ? RuleServiceContract.RESULT_UNCERTAIN : authoritative.status;
-                uncertain = authoritative == null;
-                accepted = isAccepted(authoritative);
-                if (accepted) clearDiagnostic();
-                if (!accepted) {
-                    String mutationError = authoritative == null
-                            ? DiagnosticMessages.MUTATE_RESULT_MISSING_DETAIL
-                            : authoritative.message;
-                    if (authoritative == null) {
-                        recordResultFailure(RuleServiceContract.RESULT_UNCERTAIN, mutationError);
-                    } else {
-                        recordResultFailure(authoritative.status, mutationError);
-                    }
-                }
-            } else {
-                mLastMutationStatus = RuleServiceContract.RESULT_REJECTED;
-            }
-        } catch (RemoteException e) {
-            if (c != null) logError("mutate", c, e);
-            uncertain = true;
-            mLastMutationStatus = RuleServiceContract.RESULT_UNCERTAIN;
-            recordDiagnostic(ServiceDiagnostic.of(ServiceDiagnostic.Type.COMMIT_UNCERTAIN,
-                    String.format(Locale.US, DiagnosticMessages.MUTATE_UNCERTAIN_REQUEST_ID_DETAIL, requestId)));
-        }
-        finally {
-            if (mainPipe != null) mainPipe.closeRead();
-            if (modifiedPipe != null) modifiedPipe.closeRead();
-            awaitPipe(mainPipe);
-            awaitPipe(modifiedPipe);
-            Throwable pipeFailure = firstFailure(mainPipe, modifiedPipe);
-            if (pipeFailure != null) {
-                Logger.w(TAG, "mutation image pipe failed operation="
-                        + ServiceConnection.mutationOperationName(operation) + " package=" + packageName
-                        + " requestId=" + requestId, pipeFailure);
-                if (!accepted && !uncertain) {
-                    mLastMutationStatus = RuleServiceContract.RESULT_WRITE_FAILED;
-                    recordDiagnostic(ServiceDiagnostic.of(ServiceDiagnostic.Type.UNKNOWN,
-                            String.format(Locale.US, DiagnosticMessages.IMAGE_PIPE_WRITE_FAILED_DETAIL,
-                                    pipeFailure.getMessage())));
-                }
-            }
-            closePipe(mainPipe);
-            closePipe(modifiedPipe);
-            ServiceDiagnostic mutationDiagnostic = mServiceConnection.getServiceDiagnostic();
-            String mutationError = mServiceConnection.getLastError();
-            if (temporary) closeLease(lease);
-            if (!accepted && mutationDiagnostic != null) {
-                mServiceConnection.restoreDiagnostic(mutationDiagnostic, mutationError);
-            }
-        }
-        if (uncertain) {
-            if (captureUndo) {
-                UndoStateParcel state = getUndoState(packageName);
-                if (state != null && requestId.equals(state.topSourceRequestId)) {
-                    mLastMutationStatus = RuleServiceContract.RESULT_COMMITTED;
-                    clearDiagnostic();
-                    mServiceConnection.logMutationTerminal(operation, packageName, requestId,
-                            mLastMutationStatus, "undo_history_reconciled");
-                    return new RuleMutationResult(RuleServiceContract.RESULT_COMMITTED,
-                            requestId, packageName, mRuleGeneration.get(), null, state,
-                            "committed; response reconciled from undo history");
-                }
-                mServiceConnection.logMutationTerminal(operation, packageName, requestId,
-                        RuleServiceContract.RESULT_UNCERTAIN, "undo_history_inconclusive");
-                return localMutationResult(requestId, packageName,
-                        RuleServiceContract.RESULT_UNCERTAIN,
-                        "mutation result is uncertain; authoritative history did not confirm it");
-            }
-            int reconciled = reconcileUncertain(packageName, operation, rule,
-                    main != null, modified != null, value);
-            mLastMutationStatus = reconciled;
-            if (reconciled == RuleServiceContract.RESULT_COMMITTED) {
-                clearDiagnostic();
-                mServiceConnection.logMutationTerminal(operation, packageName, requestId, reconciled,
-                        "reconciled_committed");
-                return localMutationResult(requestId, packageName, reconciled,
-                        "committed; response reconciled from snapshot");
-            }
-            if (reconciled == RuleServiceContract.RESULT_REJECTED) {
-                recordDiagnostic(ServiceDiagnostic.of(ServiceDiagnostic.Type.UNKNOWN,
-                        String.format(Locale.US, DiagnosticMessages.MUTATE_READBACK_NOT_FOUND_REQUEST_ID_DETAIL,
-                                requestId)));
-            } else {
-                recordDiagnostic(ServiceDiagnostic.of(ServiceDiagnostic.Type.COMMIT_UNCERTAIN,
-                        String.format(Locale.US, DiagnosticMessages.MUTATE_RECONCILE_UNKNOWN_REQUEST_ID_DETAIL,
-                                requestId)));
-            }
-            mServiceConnection.logMutationTerminal(operation, packageName, requestId, reconciled,
-                    "reconciled_inconclusive");
-            return localMutationResult(requestId, packageName, reconciled,
-                    "mutation result remains uncertain after snapshot reconciliation");
-        }
-        mServiceConnection.logMutationTerminal(operation, packageName, requestId, mLastMutationStatus,
-                accepted ? "accepted" : "rejected");
-        return authoritative == null
-                ? localMutationResult(requestId, packageName, mLastMutationStatus,
-                "mutation result missing") : authoritative;
-    }
-
-    private RuleMutationResult localMutationResult(String requestId, String packageName,
-                                                    int status, String message) {
-        return new RuleMutationResult(status, requestId, packageName,
-                mRuleGeneration.get(), null, null, message);
-    }
-
-    private static boolean isAccepted(RuleMutationResult result) {
-        return result != null && (result.status == RuleServiceContract.RESULT_COMMITTED
-                || result.status == RuleServiceContract.RESULT_NO_CHANGE);
-    }
-
-    private int reconcileUncertain(String packageName, int operation, RuleRecord rule,
-                                   boolean hadMainImage, boolean hadModifiedImage,
-                                   String value) {
-        if (operation == RuleServiceContract.MUTATION_SET_TOOLBAR) {
-            return reconcileToolbarValue(
-                    getToolbarHiddenItems(RuleServiceContract.GLOBAL_SCOPE), value);
-        }
-        ActRules rules = getRules(packageName);
-        if (rules == null) return RuleServiceContract.RESULT_UNCERTAIN;
-        switch (operation) {
-            case RuleServiceContract.MUTATION_WRITE:
-            case RuleServiceContract.MUTATION_UPDATE:
-                return reconcileUpsert(rules, rule, hadMainImage, hadModifiedImage);
-            case RuleServiceContract.MUTATION_DELETE:
-                return reconcileDelete(rules, rule);
-            case RuleServiceContract.MUTATION_DELETE_ALL:
-                return reconcileDeleteAll(rules);
-            default:
-                return RuleServiceContract.RESULT_UNCERTAIN;
-        }
-    }
-
-    /** 工具栏回读一致即提交成功，读不到即不确定，对不上即拒绝。 */
-    private int reconcileToolbarValue(String current, String value) {
-        if (current == null) return RuleServiceContract.RESULT_UNCERTAIN;
-        return current.equals(value == null ? "" : value)
-                ? RuleServiceContract.RESULT_COMMITTED
-                : RuleServiceContract.RESULT_REJECTED;
-    }
-
-    /** 写/改后能在权威快照中找到提交态规则即成功，否则拒绝。 */
-    private int reconcileUpsert(ActRules rules, RuleRecord rule,
-                                boolean hadMainImage, boolean hadModifiedImage) {
-        return containsCommittedRule(rules, rule, hadMainImage, hadModifiedImage)
-                ? RuleServiceContract.RESULT_COMMITTED
-                : RuleServiceContract.RESULT_REJECTED;
-    }
-
-    /** 删除后槽位仍在即拒绝，否则提交成功。 */
-    private int reconcileDelete(ActRules rules, RuleRecord rule) {
-        return containsSlot(rules, rule) ? RuleServiceContract.RESULT_REJECTED
-                : RuleServiceContract.RESULT_COMMITTED;
-    }
-
-    /** 全删后为空即成功，否则拒绝。 */
-    private int reconcileDeleteAll(ActRules rules) {
-        return isEmpty(rules) ? RuleServiceContract.RESULT_COMMITTED
-                : RuleServiceContract.RESULT_REJECTED;
-    }
-
+    /** 对账谓词已收归 RuleEditorClient；测试兼容保留包内转发。 */
     static boolean containsCommittedRule(ActRules rules, RuleRecord expected,
                                          boolean hadMainImage, boolean hadModifiedImage) {
-        if (rules == null || expected == null) return false;
-        for (List<RuleRecord> activityRules : rules.values()) {
-            if (activityRules == null) continue;
-            for (RuleRecord actual : activityRules) {
-                if (actual == null || !actual.slotKey(actual.packageName)
-                        .equals(expected.slotKey(expected.packageName))) continue;
-                RuleRecord normalized = expected;
-                if (hadMainImage) normalized = normalized.withImagePath(actual.imagePath);
-                if (hadModifiedImage) {
-                    normalized = normalized.withModifyImagePath(actual.getModImagePath());
-                }
-                if (RuntimeRuleComparator.contentEquals(actual, normalized)) return true;
-            }
-        }
-        return false;
+        return RuleEditorClient.containsCommittedRule(rules, expected,
+                hadMainImage, hadModifiedImage);
     }
 
+    /** 对账谓词已收归 RuleEditorClient；测试兼容保留包内转发。 */
     static boolean containsSlot(ActRules rules, RuleRecord expected) {
-        if (rules == null || expected == null) return false;
-        for (List<RuleRecord> activityRules : rules.values()) {
-            if (activityRules == null) continue;
-            for (RuleRecord actual : activityRules) {
-                if (actual != null && actual.slotKey(actual.packageName)
-                        .equals(expected.slotKey(expected.packageName))) return true;
-            }
-        }
-        return false;
-    }
-
-    private static boolean isEmpty(ActRules rules) {
-        for (List<RuleRecord> activityRules : rules.values()) {
-            if (activityRules != null && !activityRules.isEmpty()) return false;
-        }
-        return true;
+        return RuleEditorClient.containsSlot(rules, expected);
     }
 
     private PipeAsset openPipe(Bitmap bitmap) {
@@ -855,7 +514,7 @@ public final class RuleServiceClient {
         }
     }
 
-    private static void awaitPipe(PipeAsset asset) {
+    public static void awaitPipe(PipeAsset asset) {
         if (asset == null) return;
         try {
             if (!asset.finished.await(10, TimeUnit.SECONDS)) {
@@ -873,19 +532,20 @@ public final class RuleServiceClient {
         }
     }
 
-    private static void closePipe(PipeAsset asset) {
+    public static void closePipe(PipeAsset asset) {
         if (asset == null) return;
         asset.closeRead();
         asset.closeWrite();
     }
 
-    private static Throwable firstFailure(PipeAsset first, PipeAsset second) {
+    public static Throwable firstFailure(PipeAsset first, PipeAsset second) {
         Throwable failure = first == null ? null : first.failure.get();
         return failure != null || second == null ? failure : second.failure.get();
     }
 
-    private final class PipeAsset {
-        final ParcelFileDescriptor readEnd;
+    /** B3 暂留：pipe 机制仍归 Client，跨包供写入 owner 调用，逻辑不动，待 B4 迁入 ImageStore。 */
+    public final class PipeAsset {
+        public final ParcelFileDescriptor readEnd;
         private ParcelFileDescriptor writeEnd;
         final Bitmap bitmap;
         final CountDownLatch finished = new CountDownLatch(1);
@@ -913,7 +573,7 @@ public final class RuleServiceClient {
             }
         }
 
-        void closeRead() {
+        public void closeRead() {
             Closeables.closeQuietly(readEnd);
         }
 
@@ -937,8 +597,7 @@ public final class RuleServiceClient {
     }
 
     public boolean setToolbarHiddenItems(String items) {
-        return mutate(RuleServiceContract.GLOBAL_SCOPE, RuleServiceContract.MUTATION_SET_TOOLBAR,
-                null, null, null, items);
+        return mRuleEditor.setToolbarHiddenItems(items);
     }
 
     public void forwardLog(int level, String tag, String msg, long timestamp) {
@@ -949,20 +608,16 @@ public final class RuleServiceClient {
     }
 
     public boolean beginRestore() {
-        if (mRestoreLease != null) return true;
-        mRestoreLease = openLease(RuleServiceContract.OP_RESTORE, null);
-        return mRestoreLease != null;
+        return mLeaseHub.beginRestore();
     }
     public boolean beginBackup() {
-        if (mBackupLease != null) return false;
-        mBackupLease = openLease(RuleServiceContract.OP_BACKUP, null);
-        return mBackupLease != null;
+        return mLeaseHub.beginBackup();
     }
     public void endRestore() {
-        if (mRestoreLease != null && closeLease(mRestoreLease)) mRestoreLease = null;
+        mLeaseHub.endRestore();
     }
     public void endBackup() {
-        if (mBackupLease != null && closeLease(mBackupLease)) mBackupLease = null;
+        mLeaseHub.endBackup();
     }
 
     private static String sha256(byte[] data) throws Exception {
