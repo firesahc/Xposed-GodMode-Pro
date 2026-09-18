@@ -384,6 +384,11 @@ try {
     if (!(Test-Path $logTest)) {
         $failures.Add("GodModeLog format contract test is missing: $logTest")
     }
+    $forkSafetyTest = "app/src/test/java/com/kaisar/xposed/godmode/inject/XposedEntryForkSafetyTest.java"
+    if (!(Test-Path $forkSafetyTest) -or
+        (Get-Content -Raw $forkSafetyTest) -notmatch "ConstructsWithoutMainLooper") {
+        $failures.Add("Xposed entry fork-safety contract test is missing: $forkSafetyTest")
+    }
     $logRulesDoc = "docs/device-test-rules.md"
     if (!(Test-Path $logRulesDoc) -or
         (Get-Content -Raw $logRulesDoc) -notmatch "MM-dd HH:mm:ss\.SSS pid LEVEL/tag") {
