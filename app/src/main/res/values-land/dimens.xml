@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 横屏双列复写：列宽/按钮/滑条同步缩小，适配横屏高度 -->
+    <!-- 选择列宽：横屏 52dp（竖屏 64dp） -->
+    <dimen name="panel_selection_col_w">52dp</dimen>
+    <!-- 操作列宽：横屏 52dp（竖屏 64dp） -->
+    <dimen name="panel_action_col_w">52dp</dimen>
+    <!-- 工具按钮统一尺寸：横屏 36dp（竖屏 48dp，40dp 级） -->
+    <dimen name="panel_btn_size">36dp</dimen>
+    <!-- 滑条长度：横屏 120dp（竖屏 160dp）；选择列卡片总高 12+120+3×40=252dp（上下 padding 6+6，单按钮槽 36+4） -->
+    <dimen name="panel_seek_len">120dp</dimen>
+</resources>

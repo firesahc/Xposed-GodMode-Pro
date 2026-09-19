@@ -317,6 +317,35 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
             case DESTROY:
                 onActivityDestroyed(activity);
                 break;
+            case CONFIG_CHANGED:
+                onConfigurationChanged(activity);
+                break;
+        }
+    }
+
+    /**
+     * 旋转重建：宿主旋转后旧面板宽高/遮罩错位，需按新方向重建。
+     * <p>
+     * 取舍：属性编辑中旋转则整单全关（复用 dismissNodeSelectPanel 的
+     * cancel 回滚 + 保存挂起链，不重建），避免半吊子编辑态拿着旧截图
+     * 或旧目标 View 继续写规则；纯节点选择态才走
+     * dismissNodePanelNow + showNodeSelectPanel 全流程重建，
+     * 由 NodeSelectorPanel.show 内 syncConfiguration 保证取到 layout-land。
+     */
+    private void onConfigurationChanged(Activity activity) {
+        try {
+            if (activity == null || activity.isFinishing() || activity.isDestroyed()) return;
+            if (activity.getWindow() == null
+                    || activity.getWindow().getDecorView() == null) return;
+            if (!mNodePanel.isShowing()) return;
+            if (mPropertyEditor.isShowing()) {
+                dismissNodeSelectPanel();
+                return;
+            }
+            dismissNodePanelNow();
+            showNodeSelectPanel(activity);
+        } catch (Throwable failure) {
+            Logger.w(TAG, "configuration change rebuild failed", failure);
         }
     }
 

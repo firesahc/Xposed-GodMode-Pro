@@ -19,8 +19,9 @@ import de.robv.android.xposed.XC_MethodHook;
  *   <li>{@link ActivityCreateHook} — 拦截 {@link Activity#onCreate} 注入模块资源后发布
  *       CREATE 事件（display 调度的开关/窗口守卫与 decorView.post 延迟已迁移至
  *       EditorOrchestrator 订阅侧）</li>
- *   <li>自身 {@link XC_MethodHook} — 拦截 {@code onPostResume} / {@code onDestroy}
- *       发布 {@link ActivityLifecycleEvent}（RESUME / DESTROY）</li>
+ *   <li>自身 {@link XC_MethodHook} — 拦截 {@code onPostResume} / {@code onDestroy} /
+ *       {@code onConfigurationChanged} 发布 {@link ActivityLifecycleEvent}
+ *      （RESUME / DESTROY / CONFIG_CHANGED）</li>
  * </ul>
  * <p>
  * 注入层只负责把原始 Activity 回调转成事件，不直调 Editor；规则应用与编辑器绑定
@@ -105,6 +106,9 @@ public final class LifecycleHooks extends XC_MethodHook {
                 // 此处仅发布事件，不直调 Editor。
                 mEventBus.post(new ActivityLifecycleEvent(
                         ActivityLifecycleEvent.Type.DESTROY, activity));
+            } else if ("onConfigurationChanged".equals(methodName)) {
+                mEventBus.post(new ActivityLifecycleEvent(
+                        ActivityLifecycleEvent.Type.CONFIG_CHANGED, activity));
             }
         } catch (Throwable failure) {
             Logger.w(TAG, "lifecycle event hook failed", failure);

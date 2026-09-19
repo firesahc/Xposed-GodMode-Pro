@@ -1,5 +1,6 @@
 package com.kaisar.xposed.godmode.util;
 
+import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.content.res.XmlResourceParser;
 import android.view.View;
@@ -22,6 +23,25 @@ public final class GmResources {
 
     public static void init(Resources moduleRes) {
         sModuleRes = moduleRes;
+    }
+
+    /**
+     * 把宿主最新的 Configuration 同步给模块 Resources，使横屏 layout-land 生效。
+     * <p>
+     * 根因：sModuleRes 在 initZygote 阶段创建时冻结了一份 Configuration，
+     * 之后宿主旋转不再经过模块进程的资源刷新，getLayout 仍按竖屏限定符
+     * 取布局，导致横屏下面板错位。每次 show 前用宿主当前 Configuration
+     * 覆盖一次即可恢复系统按 orientation 选择布局的行为。
+     *
+     * @param config 宿主 Activity 当前 Configuration，为空时直接返回
+     */
+    public static void syncConfiguration(Configuration config) {
+        if (config == null || sModuleRes == null) return;
+        try {
+            sModuleRes.updateConfiguration(new Configuration(config), null);
+        } catch (Throwable ignored) {
+            // 同步失败仅影响本次横竖屏布局选择，不阻断面板显示。
+        }
     }
 
     public static XmlResourceParser getLayout(int id) {

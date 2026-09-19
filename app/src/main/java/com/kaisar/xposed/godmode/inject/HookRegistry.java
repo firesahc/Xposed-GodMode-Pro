@@ -1,6 +1,7 @@
 package com.kaisar.xposed.godmode.inject;
 
 import android.app.Activity;
+import android.content.res.Configuration;
 import android.os.Bundle;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
@@ -28,6 +29,7 @@ public final class HookRegistry implements RepeatableRuleGate {
     private static volatile boolean sCreateHookInstalled;
     private static volatile boolean sPostResumeHookInstalled;
     private static volatile boolean sDestroyHookInstalled;
+    private static volatile boolean sConfigChangedHookInstalled;
     private static volatile boolean sTouchHookInstalled;
     private static volatile boolean sKeyHookInstalled;
     private static volatile boolean sEventBusRegistered;
@@ -65,6 +67,11 @@ public final class HookRegistry implements RepeatableRuleGate {
         if (!sDestroyHookInstalled) {
             sDestroyHookInstalled = install("Activity.onDestroy", () ->
                     XposedHelpers.findAndHookMethod(Activity.class, "onDestroy", lifecycleHooks));
+        }
+        if (!sConfigChangedHookInstalled) {
+            sConfigChangedHookInstalled = install("Activity.onConfigurationChanged", () ->
+                    XposedHelpers.findAndHookMethod(Activity.class, "onConfigurationChanged",
+                            Configuration.class, lifecycleHooks));
         }
 
         // P1.5-A: onResume 通道已合并至 onPostResume（唯一 RESUME 发布源），此处不再安装。

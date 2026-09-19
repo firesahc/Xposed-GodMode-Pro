@@ -22,9 +22,11 @@ public final class ActivityLifecycleEvent {
      *       仅携带 Activity，display 调度所需的开关/窗口守卫由订阅侧执行）</li>
      *   <li>RESUME — {@code onPostResume} 之后（唯一发布源；窗口就绪，晚于 onResume）</li>
      *   <li>DESTROY — {@code onDestroy}</li>
+     *   <li>CONFIG_CHANGED — {@code Activity#onConfigurationChanged} 之后，
+     *       仅 Editor 消费（旋转重建面板），规则层忽略</li>
      * </ul>
      */
-    public enum Type { CREATE, RESUME, DESTROY }
+    public enum Type { CREATE, RESUME, DESTROY, CONFIG_CHANGED }
 
     private final Type mType;
     private final Activity mActivity;

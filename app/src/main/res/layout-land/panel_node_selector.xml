@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 竖屏双区单卡：单工具列内套选择组/操作组两层透明 LinearLayout -->
+<!-- 横屏双列单卡：复用竖屏同 id 同内容，仅工具列改为横向双列（左操作组/右选择组，选择区居右外侧） -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@android:color/transparent">
 
+    <!-- 外层定位容器：靠右垂直居中；左右 padding 均为 8dp 对称 -->
     <LinearLayout
         android:id="@+id/top_content"
         android:layout_width="wrap_content"
@@ -14,80 +15,28 @@
         android:background="@android:color/transparent"
         android:clipToPadding="false"
         android:orientation="vertical"
-        android:paddingLeft="4dp"
+        android:paddingLeft="8dp"
         android:paddingTop="4dp"
         android:paddingRight="8dp"
         android:paddingBottom="4dp">
 
-        <!-- 单卡工具列：单背景 + translationZ 保留；marginTop/Bottom 14→0，改 paddingTop/Bottom 8 统一节奏 -->
+        <!-- 横屏工具列：横向双列单背景 + translationZ 保留；上下 6dp、左右 8dp 对称 -->
         <LinearLayout
-            android:layout_width="@dimen/panel_selection_col_w"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="right"
             android:background="@drawable/rounded_bg_full"
             android:clipChildren="false"
             android:clipToPadding="false"
-            android:orientation="vertical"
-            android:paddingTop="8dp"
-            android:paddingBottom="8dp"
+            android:orientation="horizontal"
+            android:paddingTop="6dp"
+            android:paddingBottom="6dp"
+            android:paddingLeft="8dp"
+            android:paddingRight="8dp"
             android:translationZ="9dp"
             tools:gravity="right">
 
-            <!-- 选择组：滑条容器 + exchange + Up + Down（顺序 slider→exchange→Up→Down，Up/Down 从列尾上移）；无 margin 无背景 -->
-            <!-- 组内节奏：首项 marginTop 0，其余直接子项 marginTop 4 -->
-            <LinearLayout
-                android:id="@+id/selection_group"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical">
-
-                <FrameLayout
-                    android:layout_width="wrap_content"
-                    android:layout_height="@dimen/panel_seek_len">
-
-                    <SeekBar
-                        android:id="@+id/slider"
-                        android:layout_width="@dimen/panel_seek_len"
-                        android:layout_height="@dimen/panel_selection_col_w"
-                        android:layout_gravity="center"
-                        android:clickable="true"
-                        android:rotation="90" />
-
-                </FrameLayout>
-
-                <ImageButton
-                    android:id="@+id/exchange"
-                    android:layout_width="@dimen/panel_btn_size"
-                    android:layout_height="@dimen/panel_btn_size"
-                    android:layout_gravity="center"
-                    android:layout_marginTop="4dp"
-                    android:background="@drawable/ripple_drawable_20dp"
-                    android:contentDescription="@string/accessibility_exchange"
-                    android:src="@drawable/exchange" />
-
-                <ImageButton
-                    android:id="@+id/Up"
-                    android:layout_width="@dimen/panel_btn_size"
-                    android:layout_height="@dimen/panel_btn_size"
-                    android:layout_gravity="center"
-                    android:layout_marginTop="4dp"
-                    android:background="@drawable/ripple_drawable_20dp"
-                    android:contentDescription="@string/accessibility_up"
-                    android:src="@drawable/up" />
-
-                <ImageButton
-                    android:id="@+id/Down"
-                    android:layout_width="@dimen/panel_btn_size"
-                    android:layout_height="@dimen/panel_btn_size"
-                    android:layout_gravity="center"
-                    android:layout_marginTop="4dp"
-                    android:background="@drawable/ripple_drawable_20dp"
-                    android:contentDescription="@string/accessibility_down"
-                    android:src="@drawable/down" />
-
-            </LinearLayout>
-
-            <!-- 操作组：info 开关 + remove 开关/菜单 + modify 开关/菜单 + undo；无 margin 无背景，现宽与单卡同宽（双列预留） -->
+            <!-- 操作组在左（内侧）：信息流开关 + 移除开关/菜单 + 修改开关/菜单 + 撤销；顺序与竖屏一致 -->
             <!-- 组内节奏：首项 marginTop 0，其余直接子项 marginTop 4（含菜单容器与 undo）；菜单内首次 0、次 4 -->
             <LinearLayout
                 android:id="@+id/action_group"
@@ -217,6 +166,60 @@
                     android:contentDescription="@string/accessibility_undo"
                     android:enabled="false"
                     android:src="@drawable/ic_undo" />
+
+            </LinearLayout>
+
+            <!-- 选择组在右（外侧）：滑条容器 + exchange + Up + Down（顺序 slider→exchange→Up→Down，与竖屏一致） -->
+            <!-- 组内节奏：首项 marginTop 0，其余直接子项 marginTop 4；SeekBar 保持 rotation=90 竖置复用 -->
+            <LinearLayout
+                android:id="@+id/selection_group"
+                android:layout_width="@dimen/panel_selection_col_w"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <FrameLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="@dimen/panel_seek_len">
+
+                    <SeekBar
+                        android:id="@+id/slider"
+                        android:layout_width="@dimen/panel_seek_len"
+                        android:layout_height="@dimen/panel_selection_col_w"
+                        android:layout_gravity="center"
+                        android:clickable="true"
+                        android:rotation="90" />
+
+                </FrameLayout>
+
+                <ImageButton
+                    android:id="@+id/exchange"
+                    android:layout_width="@dimen/panel_btn_size"
+                    android:layout_height="@dimen/panel_btn_size"
+                    android:layout_gravity="center"
+                    android:layout_marginTop="4dp"
+                    android:background="@drawable/ripple_drawable_20dp"
+                    android:contentDescription="@string/accessibility_exchange"
+                    android:src="@drawable/exchange" />
+
+                <ImageButton
+                    android:id="@+id/Up"
+                    android:layout_width="@dimen/panel_btn_size"
+                    android:layout_height="@dimen/panel_btn_size"
+                    android:layout_gravity="center"
+                    android:layout_marginTop="4dp"
+                    android:background="@drawable/ripple_drawable_20dp"
+                    android:contentDescription="@string/accessibility_up"
+                    android:src="@drawable/up" />
+
+                <ImageButton
+                    android:id="@+id/Down"
+                    android:layout_width="@dimen/panel_btn_size"
+                    android:layout_height="@dimen/panel_btn_size"
+                    android:layout_gravity="center"
+                    android:layout_marginTop="4dp"
+                    android:background="@drawable/ripple_drawable_20dp"
+                    android:contentDescription="@string/accessibility_down"
+                    android:src="@drawable/down" />
 
             </LinearLayout>
 

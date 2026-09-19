@@ -97,6 +97,13 @@ public class NodeSelectorPanel {
             mMaskView.attachToContainer(container);
             // 尝试注入模块资源，记录是否成功
             boolean moduleResInjected = ModuleResources.injectInto(activity.getResources());
+            try {
+                // 旋转后宿主 Configuration 已变，模块 Resources 仍冻结旧方向，
+                // 先同步一次再取布局，否则 layout-land 永远不生效。
+                GmResources.syncConfiguration(activity.getResources().getConfiguration());
+            } catch (Throwable ignored) {
+                // 同步失败不阻断面板显示，仅本次可能仍用旧方向布局。
+            }
             LayoutInflater inflater = LayoutInflater.from(activity);
             mPanelView = inflater.inflate(
                     GmResources.getLayout(R.layout.panel_node_selector), container, false);

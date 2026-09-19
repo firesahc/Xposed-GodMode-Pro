@@ -1,3 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- 节点选择面板：竖屏双区单卡尺寸（纯 res，零 Java） -->
+    <!-- 选择列宽：单卡外列宽，SeekBar 旋转后高度同值 -->
+    <dimen name="panel_selection_col_w">64dp</dimen>
+    <!-- 操作列宽：现与单卡同宽 64dp，为后续双列拆分预留 -->
+    <dimen name="panel_action_col_w">64dp</dimen>
+    <!-- 工具按钮统一尺寸：交换/开关/菜单项/撤销/上下键节奏统一 -->
+    <dimen name="panel_btn_size">48dp</dimen>
+    <!-- 滑条长度：滑条容器高 = 滑条宽 -->
+    <dimen name="panel_seek_len">160dp</dimen>
 </resources>
