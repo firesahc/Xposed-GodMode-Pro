@@ -22,6 +22,7 @@ import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.editor.IRuleEditor;
 import com.kaisar.xposed.godmode.engine.EditorInteractionMode;
 import com.kaisar.xposed.godmode.engine.Property;
+import com.kaisar.xposed.godmode.engine.event.ActivityConfigurationSnapshot;
 import com.kaisar.xposed.godmode.engine.event.ActivityLifecycleEvent;
 import com.kaisar.xposed.godmode.engine.event.Subscribe;
 import com.kaisar.xposed.godmode.engine.matcher.ViewTraversal;
@@ -87,6 +88,34 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     private long mSessionGeneration;
     /** A whole-editor close requested while the property editor is saving. */
     private boolean mNodePanelDismissPending;
+    /** Layout observation is a fact source only; reconciliation owns all rebuild policy. */
+    private View mObservedDecorView;
+    private Activity mObservedPanelActivity;
+    private boolean mPanelRebuildPosted;
+    private final View.OnLayoutChangeListener mPanelLayoutChangeListener =
+            new View.OnLayoutChangeListener() {
+                @Override
+                public void onLayoutChange(View view, int left, int top, int right, int bottom,
+                        int oldLeft, int oldTop, int oldRight, int oldBottom) {
+                    Activity activity = mObservedPanelActivity;
+                    if (activity == null || view != mObservedDecorView
+                            || !mNodePanel.isShowing()
+                            || mCurrentActivityRef.get() != activity
+                            || mPanelRebuildPosted) {
+                        return;
+                    }
+                    ActivityConfigurationSnapshot current =
+                            GmResources.captureConfiguration(activity);
+                    if (!mNodePanel.isConfigurationStale(current)) return;
+                    mPanelRebuildPosted = true;
+                    if (!view.post(() -> {
+                        mPanelRebuildPosted = false;
+                        reconcileNodePanelConfiguration(activity, null);
+                    })) {
+                        mPanelRebuildPosted = false;
+                    }
+                }
+            };
 
     // =========================================================================
     // 节点选择面板回调（NodeSelectorPanel.Callbacks）    // =========================================================================
@@ -310,6 +339,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
             case RESUME:
                 if (activity == null || activity.isFinishing()) return;
                 setActivity(activity);
+                reconcileNodePanelConfiguration(activity, null);
                 break;
             case CREATE:
                 onActivityCreated(activity);
@@ -318,7 +348,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
                 onActivityDestroyed(activity);
                 break;
             case CONFIG_CHANGED:
-                onConfigurationChanged(activity);
+                reconcileNodePanelConfiguration(activity, event.getConfigurationSnapshot());
                 break;
         }
     }
@@ -332,21 +362,45 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
      * dismissNodePanelNow + showNodeSelectPanel 全流程重建，
      * 由 GmResources.createUiContext 的宿主配置快照保证取到 layout-land。
      */
-    private void onConfigurationChanged(Activity activity) {
+    private void reconcileNodePanelConfiguration(Activity activity,
+            ActivityConfigurationSnapshot snapshot) {
         try {
             if (activity == null || activity.isFinishing() || activity.isDestroyed()) return;
+            if (mCurrentActivityRef.get() != activity) return;
             if (activity.getWindow() == null
                     || activity.getWindow().getDecorView() == null) return;
             if (!mNodePanel.isShowing()) return;
+            ActivityConfigurationSnapshot current = snapshot != null
+                    ? snapshot : GmResources.captureConfiguration(activity);
+            if (!mNodePanel.isConfigurationStale(current)) return;
             if (mPropertyEditor.isShowing()) {
                 dismissNodeSelectPanel();
                 return;
             }
             dismissNodePanelNow();
-            showNodeSelectPanel(activity);
+            showNodeSelectPanel(activity, current);
         } catch (Throwable failure) {
             Logger.w(TAG, "configuration change rebuild failed", failure);
         }
+    }
+
+    private void installPanelLayoutObserver(Activity activity) {
+        removePanelLayoutObserver();
+        View decorView = activity == null || activity.getWindow() == null
+                ? null : activity.getWindow().getDecorView();
+        if (decorView == null) return;
+        mObservedPanelActivity = activity;
+        mObservedDecorView = decorView;
+        decorView.addOnLayoutChangeListener(mPanelLayoutChangeListener);
+    }
+
+    private void removePanelLayoutObserver() {
+        if (mObservedDecorView != null) {
+            mObservedDecorView.removeOnLayoutChangeListener(mPanelLayoutChangeListener);
+        }
+        mObservedDecorView = null;
+        mObservedPanelActivity = null;
+        mPanelRebuildPosted = false;
     }
 
     /**
@@ -466,13 +520,20 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     // =========================================================================
 
     private void showNodeSelectPanel(final Activity activity) {
+        showNodeSelectPanel(activity, null);
+    }
+
+    private void showNodeSelectPanel(final Activity activity,
+            ActivityConfigurationSnapshot configurationSnapshot) {
         Logger.i(KEY_EVENT_TAG, "showNodeSelectPanel for " + activity.getPackageName());
         List<WeakReference<View>> viewNodes = ViewTraversal.buildViewNodes(
                 activity.getWindow().getDecorView());
         final ViewGroup container = (ViewGroup) activity.getWindow().getDecorView();
-        mNodePanel.show(viewNodes, activity, container, OVERLAY_COLOR, mSeekBarHandler);
+        mNodePanel.show(viewNodes, activity, container, OVERLAY_COLOR, mSeekBarHandler,
+                configurationSnapshot);
         if (!mNodePanel.isKeySelecting()) return;
-        ToolbarVisibilityController.apply(mNodePanel.getPanelView());
+        ToolbarVisibilityController.apply(mNodePanel.getPanelView(), activity.getPackageName());
+        installPanelLayoutObserver(activity);
         mNodePanel.wireButtons(activity, container, mNodePanelCallbacks);
         mKeyEventHandler.updateInfoFlowModeButton();
         refreshUndoState(activity, null);
@@ -480,6 +541,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
 
     private void dismissNodeSelectPanel() {
         Logger.i(KEY_EVENT_TAG, "dismissNodeSelectPanel");
+        removePanelLayoutObserver();
         mPropertyEditor.cancel();
         if (mPropertyEditor.isSaving()) {
             mNodePanelDismissPending = true;
@@ -504,6 +566,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     }
 
     private void dismissNodePanelNow() {
+        removePanelLayoutObserver();
         mPreviewHandler.restorePreview(mCurrentActivityRef.get(), null, null, null);
         mInteractionMode = EditorInteractionMode.INITIAL;
         mNodePanel.setModifySessionLocked(false);
@@ -544,7 +607,8 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
             if (startedMutationScope == EditorUndoController.INVALID_SCOPE) {
                 CommonUtils.recycleNullableBitmap(snapshot);
                 Toast.makeText(activity,
-                        GmResources.getString(R.string.toast_editor_operation_busy),
+                        GmResources.getUiString(activity,
+                                R.string.toast_editor_operation_busy),
                         Toast.LENGTH_SHORT).show();
                 return;
             }
@@ -580,7 +644,8 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
                                 // 纠正：本地乐观应用已被回滚，按当前选中恢复遮罩。
                                 mNodePanel.refreshMaskToSelection();
                                 Toast.makeText(activity,
-                                        GmResources.getString(R.string.block_fail, message),
+                                        GmResources.getUiString(activity,
+                                                R.string.block_fail, message),
                                         Toast.LENGTH_SHORT).show();
                             }
                         }
@@ -590,7 +655,8 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
                 mUndoController.failForwardMutation(startedMutationScope);
             }
             Logger.e(KEY_EVENT_TAG, "block fail", e);
-            Toast.makeText(activity, GmResources.getString(R.string.block_fail, e.getMessage()),
+            Toast.makeText(activity, GmResources.getUiString(activity,
+                            R.string.block_fail, e.getMessage()),
                     Toast.LENGTH_SHORT).show();
         }
     }
@@ -649,7 +715,8 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
         if (committed) {
             if (!mUndoController.completeUndo(undoScope, result.undoState)) return;
             if (!isCurrentActivitySession(activity, sessionGeneration)) return;
-            Toast.makeText(activity, GmResources.getString(R.string.toast_undo_succeeded),
+            Toast.makeText(activity, GmResources.getUiString(activity,
+                            R.string.toast_undo_succeeded),
                     Toast.LENGTH_SHORT).show();
             return;
         }
@@ -657,9 +724,11 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
                 result == null ? null : result.undoState)) return;
         if (!isCurrentActivitySession(activity, sessionGeneration)) return;
         String reason = result == null ? null : result.message;
-        Toast.makeText(activity, GmResources.getString(R.string.toast_undo_failed_format,
+        Toast.makeText(activity, GmResources.getUiString(activity,
+                        R.string.toast_undo_failed_format,
                         reason == null
-                                ? GmResources.getString(R.string.toast_undo_not_completed)
+                                ? GmResources.getUiString(activity,
+                                        R.string.toast_undo_not_completed)
                                 : reason),
                 Toast.LENGTH_SHORT).show();
     }
@@ -771,9 +840,13 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
                             : android.R.drawable.ic_menu_view);
         }
         if (btnPreview != null) {
-            TooltipCompat.setTooltipText(btnPreview,
-                    GmResources.getText(inPreview
-                            ? R.string.accessibility_preview_exit : R.string.accessibility_preview));
+            Activity activity = mCurrentActivityRef.get();
+            if (activity != null) {
+                TooltipCompat.setTooltipText(btnPreview,
+                        GmResources.getUiText(activity, inPreview
+                                ? R.string.accessibility_preview_exit
+                                : R.string.accessibility_preview));
+            }
         }
     }
     // =========================================================================

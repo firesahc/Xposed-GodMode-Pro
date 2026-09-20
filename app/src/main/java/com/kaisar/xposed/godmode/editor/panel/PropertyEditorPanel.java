@@ -185,7 +185,7 @@ public class PropertyEditorPanel {
 
             // 渲染上下文：资源/配置快照/主题三权收归模块，宿主仅提供窗口与容器。
             // 不再调用 injectInto（旧通路只污染宿主 AssetManager，对本面板无收益）。
-            android.content.Context uiContext = GmResources.createUiContext(activity);
+            GmResources.UiContext uiContext = GmResources.createUiContext(activity);
             mPanelView = GmResources.inflate(uiContext, activity,
                     R.layout.panel_modify, container, false);
             GmResources.markAsGmComponent(mPanelView);
@@ -235,7 +235,7 @@ public class PropertyEditorPanel {
      * 资源一律取自本次 show 的 uiContext，逐项独立失败，结束汇总报数。
      */
     private static void patchPanelStyle(Activity activity,
-            android.content.Context uiContext, View panelView) {
+            GmResources.UiContext uiContext, View panelView) {
         if (panelView == null || uiContext == null) return;
         final android.content.res.Resources uiRes = uiContext.getResources();
         int ok = 0;
@@ -243,7 +243,7 @@ public class PropertyEditorPanel {
         try {
             try {
                 panelView.setBackground(uiRes.getDrawable(
-                        R.drawable.rounded_bg_full, uiContext.getTheme()));
+                        R.drawable.rounded_bg_full, uiContext.getContext().getTheme()));
                 ok++;
             } catch (Exception e) {
                 fail++;
@@ -407,7 +407,8 @@ public class PropertyEditorPanel {
             try {
                 ImagePickPort port = mImagePickPort;
                 if (port == null) {
-                    Toast.makeText(activity, GmResources.getString(R.string.toast_cannot_open_image_picker), Toast.LENGTH_SHORT).show();
+                    Toast.makeText(activity, GmResources.getUiString(activity,
+                            R.string.toast_cannot_open_image_picker), Toast.LENGTH_SHORT).show();
                     return;
                 }
                 final long requestGeneration = mGeneration;
@@ -430,11 +431,13 @@ public class PropertyEditorPanel {
                             ((ImageView) target).setImageBitmap(bitmap);
                         },
                         hostActivity -> Toast.makeText(hostActivity,
-                                GmResources.getString(R.string.toast_cannot_open_image_picker),
+                                GmResources.getUiString(hostActivity,
+                                        R.string.toast_cannot_open_image_picker),
                                 Toast.LENGTH_SHORT).show());
                 port.requestPick(activity, session);
             } catch (Exception e) {
-                Toast.makeText(activity, GmResources.getString(R.string.toast_cannot_open_image_picker), Toast.LENGTH_SHORT).show();
+                Toast.makeText(activity, GmResources.getUiString(activity,
+                        R.string.toast_cannot_open_image_picker), Toast.LENGTH_SHORT).show();
             }
         });
     }
@@ -642,7 +645,8 @@ public class PropertyEditorPanel {
         mApplySeekLayoutRunnable.run();
         final RuleRecord draftRule = buildCurrentRule(mTargetView);
         if (draftRule == null || !draftRule.hasModifications()) {
-            Toast.makeText(activity, GmResources.getString(R.string.toast_no_modifications_to_save), Toast.LENGTH_SHORT).show();
+            Toast.makeText(activity, GmResources.getUiString(activity,
+                    R.string.toast_no_modifications_to_save), Toast.LENGTH_SHORT).show();
             return;
         }
         final long generation = mGeneration;
@@ -670,7 +674,8 @@ public class PropertyEditorPanel {
             if (mMutationScope < 0L) {
                 CommonUtils.recycleNullableBitmap(snapshot);
                 finishSaveFailure(activity,
-                        GmResources.getString(R.string.toast_editor_operation_busy));
+                        GmResources.getUiString(activity,
+                                R.string.toast_editor_operation_busy));
                 return;
             }
         }
@@ -696,7 +701,8 @@ public class PropertyEditorPanel {
                     applyDraftToView(target, draftRule);
                     mInFlightImageBitmap = null;
                     finishSaveFailure(activity,
-                            GmResources.getString(R.string.toast_runtime_apply_failed));
+                            GmResources.getUiString(activity,
+                                    R.string.toast_runtime_apply_failed));
                     CommonUtils.recycleNullableBitmap(finalSnapshot);
                     return;
                 }
@@ -727,7 +733,8 @@ public class PropertyEditorPanel {
                         releaseInFlightImage(pendingImage);
                         if (isCommitted(finalResult)) {
                             reportMutationSucceeded(finalResult.undoState);
-                            Toast.makeText(activity, GmResources.getString(R.string.toast_modifications_saved), Toast.LENGTH_SHORT).show();
+                            Toast.makeText(activity, GmResources.getUiString(activity,
+                                    R.string.toast_modifications_saved), Toast.LENGTH_SHORT).show();
                             dismiss();
                         } else {
                             controller.revokeRule(target, draftRule);
@@ -736,7 +743,8 @@ public class PropertyEditorPanel {
                             reportMutationFailed();
                             String reason = finalResult == null ? null : finalResult.message;
                             finishSaveFailure(activity, reason == null
-                                    ? GmResources.getString(R.string.toast_rule_service_rejected)
+                                    ? GmResources.getUiString(activity,
+                                            R.string.toast_rule_service_rejected)
                                     : reason);
                         }
                     });
@@ -769,8 +777,9 @@ public class PropertyEditorPanel {
         reportMutationFailed();
         setPanelControlsEnabled(true);
         notifySession();
-        Toast.makeText(activity, GmResources.getString(
-                R.string.toast_modifications_save_failed_format, reason), Toast.LENGTH_SHORT).show();
+        Toast.makeText(activity, GmResources.getUiString(activity,
+                R.string.toast_modifications_save_failed_format, reason),
+                Toast.LENGTH_SHORT).show();
         if (mDismissPending) dismiss();
     }
 

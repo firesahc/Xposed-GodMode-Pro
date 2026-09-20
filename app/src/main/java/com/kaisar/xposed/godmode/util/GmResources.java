@@ -7,139 +7,205 @@ import android.content.res.AssetManager;
 import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.content.res.XmlResourceParser;
+import android.util.DisplayMetrics;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 
 import com.kaisar.xposed.godmode.BuildConfig;
 import com.kaisar.xposed.godmode.R;
+import com.kaisar.xposed.godmode.engine.event.ActivityConfigurationSnapshot;
 import com.kaisar.xposed.godmode.engine.util.GmConstants;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 
 /**
- * 模块资源访问器 — 被注入进程读取模块自带资源（布局/文本/图片）的统一入口。
- * <p>
- * 与 {@code ModuleResources}（资源注入器）互补而非重复：本类负责“读”已可用的模块资源
- *（含 {@link #markAsGmComponent} 自身 UI 标记，供 engine 遍历跳过自身面板），后者负责“写”
- *（经 AssetManager 把模块资源注入目标进程）。DO NOT 合并两者：注入时序与读取路径分属不同进程阶段。
+ * Module UI resource boundary.
+ *
+ * <p>Every panel render receives its own resource context and immutable
+ * configuration snapshot. The bootstrap value is only an AssetManager source
+ * for the exceptional hand-built fallback; no panel reads a mutable global
+ * {@link Resources} instance.</p>
  */
 public final class GmResources {
 
     private static final String TAG = "GmResources";
-
-    /** 安装包名即模块包名（applicationId），createPackageContext 用它取模块资源。 */
     private static final String MODULE_PACKAGE = BuildConfig.APPLICATION_ID;
 
-    private static Resources sModuleRes;
+    /** Module asset source retained by bootstrap; configuration is per render. */
+    private static AssetManager sModuleAssets;
 
     private GmResources() {}
 
     public static void init(Resources moduleRes) {
-        sModuleRes = moduleRes;
+        sModuleAssets = moduleRes == null ? null : moduleRes.getAssets();
     }
 
-    public static XmlResourceParser getLayout(int id) {
-        return sModuleRes.getLayout(id);
-    }
+    /** The complete resource/theme/configuration owner for one panel render. */
+    public static final class UiContext {
+        private final Context mContext;
+        private final Resources mResources;
+        private final ActivityConfigurationSnapshot mConfigurationSnapshot;
+        private final boolean mFallback;
 
-    /**
-     * 创建面板渲染上下文：Resource Owner = Module，Configuration = 当前
-     * Activity 快照，Theme Owner = Module（{@code GmPanelTheme}）。
-     * <p>
-     * 降级链（有序，每级失败记 d 日志）：flag=0 的包上下文 →
-     * {@code CONTEXT_IGNORE_SECURITY} → 手写 ModuleContext 套模块主题 →
-     * 手写 ModuleContext（宿主主题，旧行为）。只取资源不取代码，
-     * 因此默认不申请 {@code CONTEXT_INCLUDE_CODE}。
-     */
-    public static Context createUiContext(Activity activity) {
-        if (activity == null) throw new IllegalArgumentException("activity is required");
-        Configuration hostConfig = null;
-        try {
-            hostConfig = activity.getResources().getConfiguration();
-        } catch (RuntimeException e) {
-            Logger.d(TAG, "host configuration unavailable, use base", e);
+        private UiContext(Context context, Resources resources,
+                ActivityConfigurationSnapshot configurationSnapshot, boolean fallback) {
+            mContext = context;
+            mResources = resources;
+            mConfigurationSnapshot = configurationSnapshot;
+            mFallback = fallback;
         }
+
+        public Context getContext() { return mContext; }
+        public Resources getResources() { return mResources; }
+        public ActivityConfigurationSnapshot getConfigurationSnapshot() {
+            return mConfigurationSnapshot;
+        }
+        public boolean isFallback() { return mFallback; }
+    }
+
+    /** Capture the host configuration without exposing Android types to callers. */
+    public static ActivityConfigurationSnapshot captureConfiguration(Activity activity) {
+        if (activity == null) return null;
         try {
-            return themedUiContext(activity.createPackageContext(MODULE_PACKAGE, 0), hostConfig);
-        } catch (Throwable first) {
+            return snapshotOf(activity.getResources().getConfiguration());
+        } catch (RuntimeException failure) {
+            Logger.d(TAG, "host configuration unavailable", failure);
+            return null;
+        }
+    }
+
+    /** Create a UI context using the Activity's current configuration. */
+    public static UiContext createUiContext(Activity activity) {
+        return createUiContext(activity, captureConfiguration(activity));
+    }
+
+    /** Create a UI context using an explicit lifecycle configuration snapshot. */
+    public static UiContext createUiContext(Activity activity,
+            ActivityConfigurationSnapshot snapshot) {
+        if (activity == null) throw new IllegalArgumentException("activity is required");
+        Configuration effectiveConfiguration = effectiveConfiguration(activity, snapshot);
+        ActivityConfigurationSnapshot renderedSnapshot = snapshotOf(effectiveConfiguration);
+
+        try {
+            Context packageContext = activity.createPackageContext(MODULE_PACKAGE, 0);
+            return configuredUiContext(packageContext, effectiveConfiguration,
+                    renderedSnapshot, false);
+        } catch (Exception first) {
             Logger.d(TAG, "package context flag=0 failed, try IGNORE_SECURITY", first);
         }
         try {
-            return themedUiContext(
-                    activity.createPackageContext(
-                            MODULE_PACKAGE, Context.CONTEXT_IGNORE_SECURITY),
-                    hostConfig);
-        } catch (Throwable second) {
-            Logger.d(TAG, "package context IGNORE_SECURITY failed, hand-rolled fallback", second);
+            Context packageContext = activity.createPackageContext(
+                    MODULE_PACKAGE, Context.CONTEXT_IGNORE_SECURITY);
+            return configuredUiContext(packageContext, effectiveConfiguration,
+                    renderedSnapshot, false);
+        } catch (Exception second) {
+            Logger.d(TAG, "package context IGNORE_SECURITY failed, hand-built fallback", second);
         }
-        if (sModuleRes == null) {
-            throw new IllegalStateException("module Resources not ready");
+
+        if (sModuleAssets == null) {
+            throw new IllegalStateException("module resources not ready");
         }
-        // 手写回退：资源走 sModuleRes；主题仍套模块主题（框架 ContextThemeWrapper
-        // 把主题挂在新实例上，绝不污染 base；若主题本身解析失败则保留宿主主题）。
         try {
-            return new android.view.ContextThemeWrapper(
-                    new ModuleContext(activity, sModuleRes), R.style.GmPanelTheme);
-        } catch (Throwable third) {
-            Logger.d(TAG, "module theme on hand-rolled context failed, host theme kept", third);
-            return new ModuleContext(activity, sModuleRes);
+            DisplayMetrics metrics = new DisplayMetrics();
+            metrics.setTo(activity.getResources().getDisplayMetrics());
+            Resources configuredResources = new Resources(sModuleAssets, metrics,
+                    new Configuration(effectiveConfiguration));
+            Context moduleContext = new ModuleContext(activity, configuredResources);
+            Context themedContext = themedContext(moduleContext);
+            return new UiContext(themedContext, configuredResources, renderedSnapshot, true);
+        } catch (Exception fallbackFailure) {
+            Logger.e(TAG, "configuration-scoped module resource fallback failed", fallbackFailure);
+            throw new IllegalStateException("module UI resources unavailable", fallbackFailure);
         }
     }
 
-    /** 包上下文套宿主配置快照，再套模块主题；任一步失败由调用方降级。
-     * 颜色权威在此：面板涟漪/文字色一律取自 GmPanelTheme，与宿主主题无关；
-     * 换涟漪色只改主题一处，勿改 ripple XML 的颜色引用。 */
-    private static Context themedUiContext(Context packageContext, Configuration hostConfig) {
-        Context configured = packageContext;
-        if (hostConfig != null) {
-            configured = packageContext.createConfigurationContext(new Configuration(hostConfig));
-        }
-        return new android.view.ContextThemeWrapper(configured, R.style.GmPanelTheme);
+    private static UiContext configuredUiContext(Context packageContext,
+            Configuration effectiveConfiguration,
+            ActivityConfigurationSnapshot renderedSnapshot,
+            boolean fallback) {
+        Context configured = packageContext.createConfigurationContext(
+                new Configuration(effectiveConfiguration));
+        Context themed = themedContext(configured);
+        return new UiContext(themed, themed.getResources(), renderedSnapshot, fallback);
     }
 
-    /** 手写回退 Context：资源走模块，主题默认沿 base（仅在包上下文不可用时启用）。 */
+    private static Context themedContext(Context base) {
+        return new android.view.ContextThemeWrapper(base, R.style.GmPanelTheme);
+    }
+
+    private static Configuration effectiveConfiguration(Activity activity,
+            ActivityConfigurationSnapshot snapshot) {
+        Configuration configuration;
+        try {
+            configuration = new Configuration(activity.getResources().getConfiguration());
+        } catch (RuntimeException failure) {
+            Logger.d(TAG, "host configuration unavailable, use empty base", failure);
+            configuration = new Configuration();
+        }
+        if (snapshot == null) return configuration;
+        configuration.orientation = snapshot.getOrientation();
+        configuration.screenWidthDp = snapshot.getScreenWidthDp();
+        configuration.screenHeightDp = snapshot.getScreenHeightDp();
+        configuration.smallestScreenWidthDp = snapshot.getSmallestScreenWidthDp();
+        configuration.densityDpi = snapshot.getDensityDpi();
+        configuration.screenLayout = snapshot.getScreenLayout();
+        configuration.uiMode = snapshot.getUiMode();
+        configuration.fontScale = snapshot.getFontScale();
+        return configuration;
+    }
+
+    private static ActivityConfigurationSnapshot snapshotOf(Configuration configuration) {
+        if (configuration == null) return null;
+        return new ActivityConfigurationSnapshot(
+                configuration.orientation,
+                configuration.screenWidthDp,
+                configuration.screenHeightDp,
+                configuration.smallestScreenWidthDp,
+                configuration.densityDpi,
+                configuration.screenLayout,
+                configuration.uiMode,
+                configuration.fontScale);
+    }
+
+    /** Module resource Context used only by the configuration-scoped fallback. */
     private static final class ModuleContext extends ContextWrapper {
-        private final Resources mModuleRes;
+        private final Resources mModuleResources;
 
-        ModuleContext(Context base, Resources moduleRes) {
+        ModuleContext(Context base, Resources moduleResources) {
             super(base);
-            mModuleRes = moduleRes;
+            mModuleResources = moduleResources;
         }
 
         @Override
-        public Resources getResources() {
-            return mModuleRes;
-        }
+        public Resources getResources() { return mModuleResources; }
 
         @Override
-        public AssetManager getAssets() {
-            return mModuleRes.getAssets();
-        }
+        public AssetManager getAssets() { return mModuleResources.getAssets(); }
     }
 
     /**
-     * 统一 inflate 入口 — 模块优先，宿主兼容回退。
-     * <p>
-     * 宿主资源环境已被实证不可信（微信下 0x95 包名表缺失、MIUI 主题链丢引用），
-     * 因此主路径即模块 UI Context；host 仅作可选回退。parser 一次性消费，
-     * 重试前重新 {@link #getLayout}。
+     * Inflate from the current UiContext. If module inflation fails with a
+     * known compatibility exception, the same module parser is handed to the
+     * host inflater; it is not re-resolved through a global resource.
      */
-    public static View inflate(Context uiContext, Activity hostActivity,
+    public static View inflate(UiContext uiContext, Activity hostActivity,
             int layoutId, ViewGroup parent, boolean attach) {
         if (uiContext == null) throw new IllegalArgumentException("uiContext is required");
         try {
-            return LayoutInflater.from(uiContext)
-                    .inflate(uiContext.getResources().getLayout(layoutId), parent, attach);
+            return LayoutInflater.from(uiContext.getContext()).inflate(
+                    uiContext.getResources().getLayout(layoutId), parent, attach);
         } catch (RuntimeException moduleFailure) {
             if (!isInflationCompatibilityFailure(moduleFailure)) throw moduleFailure;
             Logger.w(TAG, "module inflate failed, host fallback"
                     + " activity=" + (hostActivity == null
                             ? "null" : hostActivity.getClass().getName())
-                    + " layout=0x" + Integer.toHexString(layoutId), moduleFailure);
+                    + " layout=0x" + Integer.toHexString(layoutId)
+                    + " source=" + (uiContext.isFallback()
+                            ? "CONFIGURED_ASSET_FALLBACK" : "PACKAGE"), moduleFailure);
             try {
                 if (hostActivity == null) throw moduleFailure;
-                return LayoutInflater.from(hostActivity)
-                        .inflate(getLayout(layoutId), parent, attach);
+                XmlResourceParser parser = uiContext.getResources().getLayout(layoutId);
+                return LayoutInflater.from(hostActivity).inflate(parser, parent, attach);
             } catch (RuntimeException hostFailure) {
                 hostFailure.addSuppressed(moduleFailure);
                 throw hostFailure;
@@ -147,10 +213,6 @@ public final class GmResources {
         }
     }
 
-    /**
-     * 仅资源兼容性失败允许 fallback；真正的程序 bug（NPE 等）必须原样抛出，
-     * 否则会把编码错误伪装成宿主兼容问题。
-     */
     private static boolean isInflationCompatibilityFailure(Throwable t) {
         while (t != null) {
             if (t instanceof Resources.NotFoundException
@@ -163,15 +225,7 @@ public final class GmResources {
         return false;
     }
 
-    /**
-     * 递归为模块注入的视图树标注 GM 组件 tag。
-     * <p>
-     * engine 的视图遍历（{@code ViewTraversal} / {@code CompositeMatcher}）依赖该 tag
-     * 跳过自身 UI，防止面板被用户规则误屏蔽。统一在 inflate 后调用，
-     * 替代布局中逐节点手工标注，避免新增控件漏标。
-     *
-     * @param root 模块 inflate 出的根视图
-     */
+    /** Mark the complete injected view tree so engine traversal skips it. */
     public static void markAsGmComponent(View root) {
         if (root == null) return;
         root.setTag(GmConstants.TAG_GM_CMP);
@@ -183,24 +237,19 @@ public final class GmResources {
         }
     }
 
-    public static CharSequence getText(int id) throws Resources.NotFoundException {
-        return sModuleRes.getText(id);
-    }
-
-    public static String getString(int id) throws Resources.NotFoundException {
-        return sModuleRes.getString(id);
-    }
-
-    public static String getString(int id, Object... formatArgs) throws Resources.NotFoundException {
-        return sModuleRes.getString(id, formatArgs);
-    }
-
-    public static android.graphics.drawable.Drawable getDrawable(int id) throws Resources.NotFoundException {
-        return sModuleRes.getDrawable(id);
-    }
-
-    public static android.content.res.ColorStateList getColorStateList(int id)
+    /** UI strings are resolved through the current Activity configuration. */
+    public static CharSequence getUiText(Activity activity, int id)
             throws Resources.NotFoundException {
-        return sModuleRes.getColorStateList(id, null);
+        return createUiContext(activity).getResources().getText(id);
+    }
+
+    public static String getUiString(Activity activity, int id)
+            throws Resources.NotFoundException {
+        return createUiContext(activity).getResources().getString(id);
+    }
+
+    public static String getUiString(Activity activity, int id, Object... formatArgs)
+            throws Resources.NotFoundException {
+        return createUiContext(activity).getResources().getString(id, formatArgs);
     }
 }

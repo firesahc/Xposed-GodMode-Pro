@@ -2,8 +2,8 @@ package com.kaisar.xposed.godmode.editor.panel;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assume.assumeTrue;
 
 import com.kaisar.xposed.godmode.R;
 
@@ -20,6 +20,13 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import javax.xml.parsers.DocumentBuilderFactory;
+
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
+
 /**
  * 面板样式契约覆盖测试 — 布局新增可样式化 id 但忘记回填映射时失败。
  * <p>
@@ -30,7 +37,7 @@ import java.util.regex.Pattern;
  */
 public final class PanelStyleCoverageTest {
 
-    /** 布局解析失败时跳过而非失败（IDE 单测工作区与 Gradle 可能不同）。 */
+    /** Layout resources must be visible; an unavailable source is a test failure. */
     private static File findResDir() {
         String[] candidates = {
                 "src/main/res",
@@ -44,7 +51,9 @@ public final class PanelStyleCoverageTest {
         return null;
     }
 
-    private static final Pattern ID_PATTERN = Pattern.compile("@\\+id/([A-Za-z0-9_]+)");
+    private static final Pattern ID_PATTERN = Pattern.compile("@(?:\\+)?id/([A-Za-z0-9_]+)");
+    private static final Pattern FRAGILE_MODULE_REF_PATTERN =
+            Pattern.compile("@(drawable|dimen)/[A-Za-z0-9_]+");
 
     private static Set<String> layoutIds(File resDir, String... relativePaths) throws Exception {
         Set<String> ids = new HashSet<>();
@@ -77,10 +86,41 @@ public final class PanelStyleCoverageTest {
         return ids;
     }
 
+    private static Element findElementById(Node node, String idName) {
+        if (node instanceof Element) {
+            String id = ((Element) node).getAttribute("android:id");
+            if (id != null && id.endsWith("/" + idName)) return (Element) node;
+        }
+        NodeList children = node.getChildNodes();
+        for (int i = 0; i < children.getLength(); i++) {
+            Element found = findElementById(children.item(i), idName);
+            if (found != null) return found;
+        }
+        return null;
+    }
+
+    private static String toolbarOrientation(File layoutFile) throws Exception {
+        Document document = DocumentBuilderFactory.newInstance()
+                .newDocumentBuilder().parse(layoutFile);
+        Element topContent = findElementById(document.getDocumentElement(), "top_content");
+        assertNotNull("top_content missing in " + layoutFile, topContent);
+        NodeList children = topContent.getChildNodes();
+        for (int i = 0; i < children.getLength(); i++) {
+            Node child = children.item(i);
+            if (child instanceof Element) {
+                String orientation = ((Element) child).getAttribute("android:orientation");
+                assertTrue("toolbar orientation missing in " + layoutFile,
+                        orientation != null && !orientation.isEmpty());
+                return orientation;
+            }
+        }
+        throw new AssertionError("toolbar column missing in " + layoutFile);
+    }
+
     @Test
     public void nodeSelector_mapsCoverEveryStylableView() throws Exception {
         File resDir = findResDir();
-        assumeTrue("panel layouts not visible from unit-test working dir", resDir != null);
+        assertNotNull("panel layouts are not visible from unit-test working dir", resDir);
         Map<String, Integer> table = rIdTable();
         Set<String> layoutNames = layoutIds(resDir,
                 "layout/panel_node_selector.xml", "layout-land/panel_node_selector.xml");
@@ -117,7 +157,7 @@ public final class PanelStyleCoverageTest {
     @Test
     public void modifyPanel_mapsCoverEveryStylableView() throws Exception {
         File resDir = findResDir();
-        assumeTrue("panel layouts not visible from unit-test working dir", resDir != null);
+        assertNotNull("panel layouts are not visible from unit-test working dir", resDir);
         Map<String, Integer> table = rIdTable();
         Set<String> layoutNames = layoutIds(resDir, "layout/panel_modify.xml");
 
@@ -145,6 +185,34 @@ public final class PanelStyleCoverageTest {
         union.addAll(structural);
         assertEquals("layout ids without style coverage: " + difference(layoutIds, union),
                 layoutIds, union);
+    }
+
+    @Test
+    public void nodeSelector_layoutVariantsDeclareDifferentToolbarOrientations() throws Exception {
+        File resDir = findResDir();
+        assertNotNull("panel layouts are not visible from unit-test working dir", resDir);
+        assertEquals("vertical", toolbarOrientation(
+                new File(resDir, "layout/panel_node_selector.xml")));
+        assertEquals("horizontal", toolbarOrientation(
+                new File(resDir, "layout-land/panel_node_selector.xml")));
+    }
+
+    @Test
+    public void nodeSelector_variantsKeepSemanticIdsAndAvoidFragileModuleRefs() throws Exception {
+        File resDir = findResDir();
+        assertNotNull("panel layouts are not visible from unit-test working dir", resDir);
+        Set<String> portrait = layoutIds(resDir, "layout/panel_node_selector.xml");
+        Set<String> landscape = layoutIds(resDir, "layout-land/panel_node_selector.xml");
+        assertEquals("portrait/landscape semantic ids differ", portrait, landscape);
+
+        for (String relative : new String[] {
+                "layout/panel_node_selector.xml", "layout-land/panel_node_selector.xml"}) {
+            String text = new String(Files.readAllBytes(new File(resDir, relative).toPath()),
+                    "UTF-8");
+            String withoutComments = text.replaceAll("(?s)<!--.*?-->", "");
+            assertFalse("fragile module resource reference in " + relative,
+                    FRAGILE_MODULE_REF_PATTERN.matcher(withoutComments).find());
+        }
     }
 
     @Test

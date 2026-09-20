@@ -114,7 +114,7 @@ public final class ParticleEffectHelper {
                 }
                 if (!runtimeApplied[0]) {
                     recycleNullableBitmap(snapshot);
-                    if (completion != null) completion.onError(GmResources.getString(
+                    if (completion != null) completion.onError(GmResources.getUiString(activity,
                             R.string.toast_runtime_apply_failed));
                     return;
                 }
@@ -138,7 +138,8 @@ public final class ParticleEffectHelper {
                         if (completion != null) {
                             String reason = finalResult == null ? null : finalResult.message;
                             completion.onError(reason == null
-                                    ? GmResources.getString(R.string.toast_rule_service_rejected)
+                                    ? GmResources.getUiString(activity,
+                                            R.string.toast_rule_service_rejected)
                                     : reason);
                         }
                     });

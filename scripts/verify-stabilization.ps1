@@ -16,6 +16,27 @@ try {
         }
     }
 
+    function Get-RepositoryRelativePath {
+        param(
+            [Parameter(Mandatory)]
+            [string]$BasePath,
+            [Parameter(Mandatory)]
+            [string]$TargetPath
+        )
+
+        if ($PSVersionTable.PSVersion.Major -ge 6) {
+            return [System.IO.Path]::GetRelativePath($BasePath, $TargetPath)
+        }
+
+        # Windows PowerShell 5.1 does not provide Path.GetRelativePath. URI
+        # resolution keeps the same cross-directory semantics without relying
+        # on a PowerShell-Core-only API.
+        $baseUri = New-Object System.Uri(($BasePath.TrimEnd('\') + '\'))
+        $targetUri = New-Object System.Uri($TargetPath)
+        return [System.Uri]::UnescapeDataString(
+            $baseUri.MakeRelativeUri($targetUri).ToString()).Replace('/', '\')
+    }
+
     function Invoke-SourceSearch {
         param(
             [Parameter(Mandatory)]
@@ -50,7 +71,7 @@ try {
                         continue
                     }
 
-                    $relativePath = [System.IO.Path]::GetRelativePath($repositoryRoot, $candidateFile.FullName)
+                    $relativePath = Get-RepositoryRelativePath $repositoryRoot $candidateFile.FullName
                     $normalizedPath = $relativePath -replace "\\", "/"
                     if ($ExcludeBuildDirectories -and $normalizedPath -match "(^|/)build(/|$)") {
                         continue

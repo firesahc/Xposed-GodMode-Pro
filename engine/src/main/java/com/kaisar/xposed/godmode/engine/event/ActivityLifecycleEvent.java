@@ -30,12 +30,22 @@ public final class ActivityLifecycleEvent {
 
     private final Type mType;
     private final Activity mActivity;
+    private final ActivityConfigurationSnapshot mConfigurationSnapshot;
 
     public ActivityLifecycleEvent(Type type, Activity activity) {
+        this(type, activity, null);
+    }
+
+    public ActivityLifecycleEvent(Type type, Activity activity,
+            ActivityConfigurationSnapshot configurationSnapshot) {
         this.mType = type;
         this.mActivity = activity;
+        this.mConfigurationSnapshot = configurationSnapshot;
     }
 
     public Type getType() { return mType; }
     public Activity getActivity() { return mActivity; }
+    public ActivityConfigurationSnapshot getConfigurationSnapshot() {
+        return mConfigurationSnapshot;
+    }
 }

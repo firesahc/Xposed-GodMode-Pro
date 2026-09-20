@@ -1,8 +1,10 @@
 package com.kaisar.xposed.godmode.inject.hooks;
 
 import android.app.Activity;
+import android.content.res.Configuration;
 import android.os.Bundle;
 
+import com.kaisar.xposed.godmode.engine.event.ActivityConfigurationSnapshot;
 import com.kaisar.xposed.godmode.engine.event.ActivityLifecycleEvent;
 import com.kaisar.xposed.godmode.engine.event.EventBus;
 import com.kaisar.xposed.godmode.inject.ModuleBootstrap;
@@ -107,11 +109,29 @@ public final class LifecycleHooks extends XC_MethodHook {
                 mEventBus.post(new ActivityLifecycleEvent(
                         ActivityLifecycleEvent.Type.DESTROY, activity));
             } else if ("onConfigurationChanged".equals(methodName)) {
+                Configuration configuration = param.args != null && param.args.length > 0
+                        && param.args[0] instanceof Configuration
+                        ? (Configuration) param.args[0] : null;
                 mEventBus.post(new ActivityLifecycleEvent(
-                        ActivityLifecycleEvent.Type.CONFIG_CHANGED, activity));
+                        ActivityLifecycleEvent.Type.CONFIG_CHANGED, activity,
+                        snapshotOf(configuration)));
             }
         } catch (Throwable failure) {
             Logger.w(TAG, "lifecycle event hook failed", failure);
         }
+    }
+
+    /** Translate the mutable framework object at the hook boundary. */
+    private static ActivityConfigurationSnapshot snapshotOf(Configuration configuration) {
+        if (configuration == null) return null;
+        return new ActivityConfigurationSnapshot(
+                configuration.orientation,
+                configuration.screenWidthDp,
+                configuration.screenHeightDp,
+                configuration.smallestScreenWidthDp,
+                configuration.densityDpi,
+                configuration.screenLayout,
+                configuration.uiMode,
+                configuration.fontScale);
     }
 }

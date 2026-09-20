@@ -98,7 +98,7 @@ public final class KeyEventHandler {
         updateInfoFlowModeButton();
         Activity act = mCallback.getCurrentActivityRef().get();
         if (act != null) {
-            Toast.makeText(act, GmResources.getString(mInfoFlowMode
+            Toast.makeText(act, GmResources.getUiString(act, mInfoFlowMode
                             ? R.string.accessibility_info_flow_on : R.string.accessibility_info_flow_off),
                     Toast.LENGTH_SHORT).show();
         }
@@ -109,11 +109,13 @@ public final class KeyEventHandler {
         if (panelView == null) return;
         TextView btn = panelView.findViewById(R.id.info_flow_mode_btn);
         if (btn == null) return;
+        Activity activity = mCallback.getCurrentActivityRef().get();
+        if (activity == null) return;
         if (mInfoFlowMode) {
-            btn.setText(GmResources.getText(R.string.mode_info_flow_on));
+            btn.setText(GmResources.getUiText(activity, R.string.mode_info_flow_on));
             btn.setTextColor(android.graphics.Color.parseColor("#FFA500"));
         } else {
-            btn.setText(GmResources.getText(R.string.mode_info_flow_off));
+            btn.setText(GmResources.getUiText(activity, R.string.mode_info_flow_off));
             btn.setTextColor(android.graphics.Color.GRAY);
         }
     }

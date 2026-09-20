@@ -16,12 +16,12 @@ public final class ToolbarVisibilityController {
      * 将工具栏可见性偏好应用到节点选择面板。
      * 在面板 View 创建完毕后调用。
      */
-    public static void apply(View panel) {
-        if (panel == null) return;
+    public static void apply(View panel, String hostPackageName) {
+        if (panel == null || hostPackageName == null || hostPackageName.length() == 0) return;
 
         Set<String> hiddenItems = ToolbarPrefsManager.parseHiddenItems(
                 RuleEditorClient.getInstance().getToolbarHiddenItems(
-                        panel.getContext().getPackageName()));
+                        hostPackageName));
 
         if (hiddenItems.contains("pref_show_remove_mode")) {
             hideView(panel, R.id.remove_mode_toggle);

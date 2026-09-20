@@ -7,6 +7,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.animation.DecelerateInterpolator;
 import android.widget.ImageButton;
+import android.widget.LinearLayout;
 import android.widget.SeekBar;
 import android.widget.TextView;
 
@@ -14,6 +15,7 @@ import androidx.appcompat.widget.TooltipCompat;
 
 import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.engine.EditorInteractionMode;
+import com.kaisar.xposed.godmode.engine.event.ActivityConfigurationSnapshot;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.editor.overlay.MaskView;
 import com.kaisar.xposed.godmode.util.GmResources;
@@ -63,6 +65,11 @@ public class NodeSelectorPanel {
     private boolean mUndoAvailable;
     /** 面板导航区是否处于展开（向左让位）状态，由 exchange 按钮切换。 */
     private boolean mNavigationPaneExpanded;
+    /** The resource/configuration owner used by the current render. */
+    private GmResources.UiContext mUiContext;
+    private ActivityConfigurationSnapshot mRenderedConfiguration;
+    private boolean mRenderedWithFallback;
+    private int mRenderedToolbarOrientation = -1;
 
     // 面板导航区边距常量（dp），与布局初始 padding 保持一致
     /** 基线边距，对应布局 paddingLeft/Top/Bottom。 */
@@ -83,33 +90,49 @@ public class NodeSelectorPanel {
     public void show(List<WeakReference<View>> viewNodes, Activity activity,
             ViewGroup container, int overlayColor,
             SeekBar.OnSeekBarChangeListener seekBarListener) {
+        show(viewNodes, activity, container, overlayColor, seekBarListener, null);
+    }
+
+    /** Show the panel using the configuration that triggered the render. */
+    public void show(List<WeakReference<View>> viewNodes, Activity activity,
+            ViewGroup container, int overlayColor,
+            SeekBar.OnSeekBarChangeListener seekBarListener,
+            ActivityConfigurationSnapshot configurationSnapshot) {
         mViewNodes = viewNodes;
         mCurrentIndex = 0;
         mSelectionRevision = 0L;
         mHasUserSelection = false;
         mNavigationPaneExpanded = false;
+        mUiContext = null;
+        mRenderedConfiguration = null;
+        mRenderedWithFallback = false;
+        mRenderedToolbarOrientation = -1;
         try {
             mMaskView = MaskView.makeMaskView(activity);
             mMaskView.setMaskOverlay(overlayColor);
             mMaskView.attachToContainer(container);
             // 渲染上下文：资源/配置快照/主题三权收归模块，宿主仅提供窗口与容器。
             // 不再调用 injectInto（旧通路只污染宿主 AssetManager，对本面板无收益）。
-            android.content.Context uiContext = GmResources.createUiContext(activity);
-            mPanelView = GmResources.inflate(uiContext, activity,
+            mUiContext = GmResources.createUiContext(activity, configurationSnapshot);
+            mPanelView = GmResources.inflate(mUiContext, activity,
                     R.layout.panel_node_selector, container, false);
             GmResources.markAsGmComponent(mPanelView);
             // 确定性样式层：布局只承载结构，背景/图标/文字/颜色统一在此回填；
             // 逐项独立失败、结束汇总，任一失败不阻断面板显示。
-            patchModuleResources(activity, uiContext, mPanelView);
+            patchModuleResources(activity, mUiContext, mPanelView);
+            mRenderedConfiguration = mUiContext.getConfigurationSnapshot();
+            mRenderedWithFallback = mUiContext.isFallback();
+            mRenderedToolbarOrientation = resolveToolbarOrientation(mPanelView);
             mSeekBar = mPanelView.findViewById(R.id.slider);
             mSeekBar.setMax(Math.max(viewNodes.size() - 1, 0));
             mSeekBar.setOnSeekBarChangeListener(seekBarListener);
             updateUndoButton();
             container.addView(mPanelView);
             mPanelView.setAlpha(0);
-            mPanelView.post(() -> {
-                mPanelView.setTranslationX(mPanelView.getWidth() / 2.0f);
-                mPanelView.animate().alpha(1).translationX(0)
+            final View renderedPanel = mPanelView;
+            renderedPanel.post(() -> {
+                renderedPanel.setTranslationX(renderedPanel.getWidth() / 2.0f);
+                renderedPanel.animate().alpha(1).translationX(0)
                         .setDuration(300).setInterpolator(new DecelerateInterpolator(1.0f)).start();
             });
             mKeySelecting = true;
@@ -118,6 +141,11 @@ public class NodeSelectorPanel {
                     + " activity=" + (activity == null ? "null" : activity.getClass().getName()), e);
             if (mMaskView != null) { mMaskView.detachFromContainer(); mMaskView = null; }
             mKeySelecting = false;
+            mPanelView = null;
+            mUiContext = null;
+            mRenderedConfiguration = null;
+            mRenderedWithFallback = false;
+            mRenderedToolbarOrientation = -1;
         }
     }
 
@@ -136,6 +164,10 @@ public class NodeSelectorPanel {
             }).start();
         }
         mViewNodes = null;
+        mUiContext = null;
+        mRenderedConfiguration = null;
+        mRenderedWithFallback = false;
+        mRenderedToolbarOrientation = -1;
     }
 
     /**
@@ -156,7 +188,8 @@ public class NodeSelectorPanel {
 
         // 移除按钮
         View btnBlock = mPanelView.findViewById(R.id.block);
-        TooltipCompat.setTooltipText(btnBlock, GmResources.getText(R.string.accessibility_block));
+        TooltipCompat.setTooltipText(btnBlock, mUiContext.getResources()
+                .getText(R.string.accessibility_block));
         btnBlock.setOnClickListener(v -> {
             if (!mModifySessionLocked && mHasUserSelection && getSelectedView() != null) {
                 callbacks.onBlockRequested(activity, container);
@@ -165,7 +198,8 @@ public class NodeSelectorPanel {
 
         // 预览按钮
         View btnPreview = mPanelView.findViewById(R.id.preview);
-        TooltipCompat.setTooltipText(btnPreview, GmResources.getText(R.string.accessibility_preview));
+        TooltipCompat.setTooltipText(btnPreview, mUiContext.getResources()
+                .getText(R.string.accessibility_preview));
         btnPreview.setOnClickListener(v -> {
             if (!mModifySessionLocked && mHasUserSelection && getSelectedView() != null) {
                 callbacks.onPreviewRequested(activity);
@@ -190,7 +224,8 @@ public class NodeSelectorPanel {
         });
 
         View undoButton = mPanelView.findViewById(R.id.undo);
-        CharSequence undoDescription = GmResources.getText(R.string.accessibility_undo);
+        CharSequence undoDescription = mUiContext.getResources()
+                .getText(R.string.accessibility_undo);
         undoButton.setContentDescription(undoDescription);
         TooltipCompat.setTooltipText(undoButton, undoDescription);
         undoButton.setOnClickListener(v -> {
@@ -341,7 +376,7 @@ public class NodeSelectorPanel {
                     : android.R.drawable.ic_menu_view);
         }
         try {
-            TooltipCompat.setTooltipText(button, GmResources.getText(previewing
+            TooltipCompat.setTooltipText(button, mUiContext.getResources().getText(previewing
                     ? R.string.accessibility_modify_preview_exit
                     : R.string.accessibility_modify_preview));
         } catch (Exception ignored) {
@@ -350,6 +385,16 @@ public class NodeSelectorPanel {
     }
 
     public boolean isModifyPreviewing() { return mModifyPreviewing; }
+
+    /** Whether the current panel was rendered for a different configuration. */
+    public boolean isConfigurationStale(ActivityConfigurationSnapshot current) {
+        if (mPanelView == null || current == null) return false;
+        return mRenderedConfiguration == null || !mRenderedConfiguration.equals(current);
+    }
+
+    public int getRenderedToolbarOrientation() {
+        return mRenderedToolbarOrientation;
+    }
 
     /** Applies the authoritative undo projection and in-flight state to the toolbar button. */
     public void setUndoAvailable(boolean available) {
@@ -511,6 +556,46 @@ public class NodeSelectorPanel {
     };
     /** 样式契约映射：宿主自取自身框架图标的目标。 */
     static final int[] HOST_FRAMEWORK_SRC_IDS = {R.id.preview, R.id.modify_preview};
+    /** Tooltip/content-description resources are restored independently. */
+    private static final int[][] ACCESSIBILITY_BACKFILLS = {
+            {R.id.block, R.string.accessibility_block},
+            {R.id.preview, R.string.accessibility_preview},
+            {R.id.modify, R.string.accessibility_modify},
+            {R.id.modify_preview, R.string.accessibility_modify_preview},
+            {R.id.undo, R.string.accessibility_undo},
+            {R.id.exchange, R.string.accessibility_exchange},
+            {R.id.Up, R.string.accessibility_up},
+            {R.id.Down, R.string.accessibility_down},
+    };
+
+    private enum PatchResult {
+        APPLIED, ALREADY_PRESENT, OPTIONAL_SKIPPED, MISSING_REQUIRED, FAILED
+    }
+
+    private static final class StyleStats {
+        int expected;
+        int applied;
+        int alreadyPresent;
+        int optionalSkipped;
+        int missingRequired;
+        int failed;
+
+        void record(PatchResult result) {
+            expected++;
+            switch (result) {
+                case APPLIED: applied++; break;
+                case ALREADY_PRESENT: alreadyPresent++; break;
+                case OPTIONAL_SKIPPED: optionalSkipped++; break;
+                case MISSING_REQUIRED: missingRequired++; break;
+                case FAILED: failed++; break;
+                default: break;
+            }
+        }
+
+        boolean hasFailure() {
+            return missingRequired > 0 || failed > 0;
+        }
+    }
 
     /**
      * 程序化回填布局内 @null 化的背景/图标/文字/颜色，无条件调用。
@@ -520,29 +605,29 @@ public class NodeSelectorPanel {
      * @param panelView 已 inflate 的面板根视图
      */
     private static void patchModuleResources(Activity activity,
-            android.content.Context uiContext, View panelView) {
+            GmResources.UiContext uiContext, View panelView) {
         if (panelView == null || uiContext == null) return;
         final android.content.res.Resources uiRes = uiContext.getResources();
-        int ok = 0;
-        int fail = 0;
+        StyleStats stats = new StyleStats();
         try {
             // ── 主工具栏背景 rounded_bg_full ──
             // 布局: panel_view(FrameLayout) > top_content(LinearLayout) > toolbar_column
             View topContent = panelView.findViewById(R.id.top_content);
-            if (topContent instanceof ViewGroup) {
-                ViewGroup tc = (ViewGroup) topContent;
-                if (tc.getChildCount() > 0) {
-                    View toolbarColumn = tc.getChildAt(0);
-                    if (toolbarColumn != null && toolbarColumn.getBackground() == null) {
-                        try {
-                            toolbarColumn.setBackground(uiRes.getDrawable(
-                                    R.drawable.rounded_bg_full, uiContext.getTheme()));
-                            ok++;
-                        } catch (Exception e) {
-                            fail++;
-                            Logger.d(TAG, "toolbar resource fallback failed", e);
-                        }
-                    }
+            View toolbarColumn = topContent instanceof ViewGroup
+                    && ((ViewGroup) topContent).getChildCount() > 0
+                    ? ((ViewGroup) topContent).getChildAt(0) : null;
+            if (toolbarColumn == null) {
+                stats.record(PatchResult.MISSING_REQUIRED);
+            } else if (toolbarColumn.getBackground() != null) {
+                stats.record(PatchResult.ALREADY_PRESENT);
+            } else {
+                try {
+                    toolbarColumn.setBackground(uiRes.getDrawable(
+                            R.drawable.rounded_bg_full, uiContext.getContext().getTheme()));
+                    stats.record(PatchResult.APPLIED);
+                } catch (Exception e) {
+                    stats.record(PatchResult.FAILED);
+                    Logger.d(TAG, "toolbar background fallback failed", e);
                 }
             }
 
@@ -552,26 +637,33 @@ public class NodeSelectorPanel {
             // 改涟漪色只改主题一处，勿改 XML 颜色。
             for (int id : RIPPLE_VIEW_IDS) {
                 View v = panelView.findViewById(id);
-                if (v == null || v.getBackground() != null) continue;
+                if (v == null) {
+                    stats.record(PatchResult.MISSING_REQUIRED);
+                    continue;
+                }
+                if (v.getBackground() != null) {
+                    stats.record(PatchResult.ALREADY_PRESENT);
+                    continue;
+                }
                 try {
                     android.graphics.drawable.Drawable ripple =
                             uiRes.getDrawable(R.drawable.ripple_drawable_20dp,
-                                    uiContext.getTheme());
+                                    uiContext.getContext().getTheme());
                     if (ripple.getConstantState() != null) {
                         ripple = ripple.getConstantState().newDrawable(
-                                uiRes, uiContext.getTheme());
+                                uiRes, uiContext.getContext().getTheme());
                     }
                     v.setBackground(ripple);
-                    ok++;
+                    stats.record(PatchResult.APPLIED);
                 } catch (Exception e) {
-                    fail++;
+                    stats.record(PatchResult.FAILED);
                     Logger.d(TAG, "toolbar resource fallback failed", e);
                 }
             }
 
             // ── ImageButton src drawable ──
             for (int[] entry : SRC_BACKFILLS) {
-                if (patchImageButtonSrc(uiContext, panelView, entry[0], entry[1])) ok++;
+                stats.record(patchImageButtonSrc(uiContext, panelView, entry[0], entry[1]));
             }
 
             // ── 框架图标 preview/modify_preview（宿主自取自身框架图，必然可用）──
@@ -581,118 +673,151 @@ public class NodeSelectorPanel {
                             .getDrawable(android.R.drawable.ic_menu_view, activity.getTheme());
                     for (int id : HOST_FRAMEWORK_SRC_IDS) {
                         View v = panelView.findViewById(id);
-                        if (v instanceof ImageButton) {
+                        if (!(v instanceof ImageButton)) {
+                            stats.record(PatchResult.MISSING_REQUIRED);
+                        } else if (previewIcon == null) {
+                            stats.record(PatchResult.OPTIONAL_SKIPPED);
+                        } else {
                             ImageButton ib = (ImageButton) v;
-                            if (ib.getDrawable() == null && previewIcon != null) {
-                                if (previewIcon.getConstantState() != null) {
-                                    ib.setImageDrawable(previewIcon.getConstantState()
-                                            .newDrawable(activity.getResources(),
-                                                    activity.getTheme()));
-                                } else {
-                                    ib.setImageDrawable(previewIcon);
+                            if (ib.getDrawable() != null) {
+                                stats.record(PatchResult.ALREADY_PRESENT);
+                            } else {
+                                try {
+                                    if (previewIcon.getConstantState() != null) {
+                                        ib.setImageDrawable(previewIcon.getConstantState()
+                                                .newDrawable(activity.getResources(),
+                                                        activity.getTheme()));
+                                    } else {
+                                        ib.setImageDrawable(previewIcon);
+                                    }
+                                    stats.record(PatchResult.APPLIED);
+                                } catch (Exception e) {
+                                    stats.record(PatchResult.FAILED);
+                                    Logger.d(TAG, "host toolbar icon fallback failed", e);
                                 }
-                                ok++;
                             }
                         }
                     }
                 } catch (Exception e) {
-                    fail++;
+                    for (int ignored : HOST_FRAMEWORK_SRC_IDS) {
+                        stats.record(PatchResult.FAILED);
+                    }
                     Logger.d(TAG, "toolbar resource fallback failed", e);
+                }
+            } else {
+                for (int ignored : HOST_FRAMEWORK_SRC_IDS) {
+                    stats.record(PatchResult.OPTIONAL_SKIPPED);
                 }
             }
 
             // ── TextView text（空或 "@id" 占位符才覆盖）──
             for (int[] entry : TEXT_BACKFILLS) {
-                if (patchTextViewText(uiRes, panelView, entry[0], entry[1])) ok++;
+                stats.record(patchTextViewText(uiRes, panelView, entry[0], entry[1]));
             }
 
             // ── 信息流按钮文字颜色（布局内已摘除，失败保留主题默认）──
             try {
                 View infoFlowBtn = panelView.findViewById(R.id.info_flow_mode_btn);
-                if (infoFlowBtn instanceof TextView) {
+                if (!(infoFlowBtn instanceof TextView)) {
+                    stats.record(PatchResult.MISSING_REQUIRED);
+                } else {
                     ((TextView) infoFlowBtn).setTextColor(
                             uiRes.getColorStateList(R.color.info_flow_btn_text,
-                                    uiContext.getTheme()));
-                    ok++;
+                                    uiContext.getContext().getTheme()));
+                    stats.record(PatchResult.APPLIED);
                 }
             } catch (Exception e) {
-                fail++;
+                stats.record(PatchResult.FAILED);
                 Logger.d(TAG, "toolbar resource fallback failed", e);
             }
 
-            // ── Tooltip (accessibility descriptions) ──
-            try {
-                View previewBtn = panelView.findViewById(R.id.preview);
-                if (previewBtn != null) TooltipCompat.setTooltipText(previewBtn,
-                        uiRes.getText(R.string.accessibility_preview));
-                View modifyBtn = panelView.findViewById(R.id.modify);
-                if (modifyBtn != null) TooltipCompat.setTooltipText(modifyBtn,
-                        uiRes.getText(R.string.accessibility_modify));
-                View modifyPreviewBtn = panelView.findViewById(R.id.modify_preview);
-                if (modifyPreviewBtn != null) TooltipCompat.setTooltipText(modifyPreviewBtn,
-                        uiRes.getText(R.string.accessibility_modify_preview));
-                View undoBtn = panelView.findViewById(R.id.undo);
-                if (undoBtn != null) {
-                    CharSequence undoDescription = uiRes.getText(R.string.accessibility_undo);
-                    undoBtn.setContentDescription(undoDescription);
-                    TooltipCompat.setTooltipText(undoBtn, undoDescription);
-                }
-                ok++;
-            } catch (Exception e) {
-                fail++;
-                Logger.d(TAG, "toolbar resource fallback failed", e);
+            // ── Tooltip / ContentDescription：每个契约项独立统计 ──
+            for (int[] entry : ACCESSIBILITY_BACKFILLS) {
+                stats.record(patchAccessibility(uiRes, panelView, entry[0], entry[1]));
             }
         } catch (Exception e) {
-            // 回退设置失败不应阻止 toolbar 显示,静默处理
-            fail++;
+            stats.record(PatchResult.FAILED);
+            Logger.d(TAG, "toolbar style pass failed", e);
         } finally {
-            if (fail > 0) {
-                Logger.w(TAG, "toolbar style done ok=" + ok + " fail=" + fail);
-            }
+            String summary = "toolbar style complete"
+                    + " source=" + (uiContext.isFallback()
+                            ? "CONFIGURED_ASSET_FALLBACK" : "PACKAGE")
+                    + " orientation=" + (uiContext.getConfigurationSnapshot() == null
+                            ? "unknown" : uiContext.getConfigurationSnapshot().getOrientation())
+                    + " toolbarOrientation=" + resolveToolbarOrientation(panelView)
+                    + " expected=" + stats.expected
+                    + " applied=" + stats.applied
+                    + " alreadyPresent=" + stats.alreadyPresent
+                    + " optionalSkipped=" + stats.optionalSkipped
+                    + " missingRequired=" + stats.missingRequired
+                    + " failed=" + stats.failed;
+            if (stats.hasFailure()) Logger.w(TAG, summary);
+            else Logger.i(TAG, summary);
         }
     }
 
-    /** 成功回填返回 true；已具值或失败返回 false（计入汇总由调用方处理）。 */
-    private static boolean patchImageButtonSrc(android.content.Context uiContext,
+    private static PatchResult patchImageButtonSrc(GmResources.UiContext uiContext,
             View panelView, int viewId, int drawableResId) {
         View v = panelView.findViewById(viewId);
-        if (v instanceof ImageButton) {
-            ImageButton ib = (ImageButton) v;
-            if (ib.getDrawable() == null) {
-                try {
-                    android.graphics.drawable.Drawable d = uiContext.getResources()
-                            .getDrawable(drawableResId, uiContext.getTheme());
-                    if (d != null) {
-                        ib.setImageDrawable(d);
-                        return true;
-                    }
-                } catch (Exception e) {
-                    Logger.d(TAG, "toolbar resource fallback failed", e);
-                }
-            }
+        if (!(v instanceof ImageButton)) return PatchResult.MISSING_REQUIRED;
+        ImageButton ib = (ImageButton) v;
+        if (ib.getDrawable() != null) return PatchResult.ALREADY_PRESENT;
+        try {
+            android.graphics.drawable.Drawable d = uiContext.getResources()
+                    .getDrawable(drawableResId, uiContext.getContext().getTheme());
+            if (d == null) return PatchResult.FAILED;
+            ib.setImageDrawable(d);
+            return PatchResult.APPLIED;
+        } catch (Exception e) {
+            Logger.d(TAG, "toolbar resource fallback failed", e);
+            return PatchResult.FAILED;
         }
-        return false;
     }
 
-    /** 空或 "@id" 占位符（MIUI 解析失败产物）才覆盖；成功返回 true。 */
-    private static boolean patchTextViewText(android.content.res.Resources uiRes,
+    /** Empty or numeric @-placeholders are replaced from the current UiContext. */
+    private static PatchResult patchTextViewText(android.content.res.Resources uiRes,
             View panelView, int viewId, int stringResId) {
         View v = panelView.findViewById(viewId);
-        if (v instanceof TextView) {
-            TextView tv = (TextView) v;
-            if (isMissingText(tv.getText())) {
-                try {
-                    CharSequence text = uiRes.getText(stringResId);
-                    if (text != null) {
-                        tv.setText(text);
-                        return true;
-                    }
-                } catch (Exception e) {
-                    Logger.d(TAG, "toolbar resource fallback failed", e);
-                }
-            }
+        if (!(v instanceof TextView)) return PatchResult.MISSING_REQUIRED;
+        TextView tv = (TextView) v;
+        if (!isMissingText(tv.getText())) return PatchResult.ALREADY_PRESENT;
+        try {
+            CharSequence text = uiRes.getText(stringResId);
+            if (text == null) return PatchResult.FAILED;
+            tv.setText(text);
+            return PatchResult.APPLIED;
+        } catch (Exception e) {
+            Logger.d(TAG, "toolbar resource fallback failed", e);
+            return PatchResult.FAILED;
         }
-        return false;
+    }
+
+    private static PatchResult patchAccessibility(android.content.res.Resources uiRes,
+            View panelView, int viewId, int stringResId) {
+        View view = panelView.findViewById(viewId);
+        if (view == null) return PatchResult.MISSING_REQUIRED;
+        try {
+            CharSequence text = uiRes.getText(stringResId);
+            if (text == null) return PatchResult.FAILED;
+            boolean alreadyPresent = !isMissingText(view.getContentDescription());
+            view.setContentDescription(text);
+            TooltipCompat.setTooltipText(view, text);
+            return alreadyPresent ? PatchResult.ALREADY_PRESENT : PatchResult.APPLIED;
+        } catch (Exception e) {
+            Logger.d(TAG, "toolbar accessibility fallback failed", e);
+            return PatchResult.FAILED;
+        }
+    }
+
+    private static int resolveToolbarOrientation(View panelView) {
+        if (panelView == null) return -1;
+        View topContent = panelView.findViewById(R.id.top_content);
+        if (!(topContent instanceof ViewGroup)) return -1;
+        ViewGroup group = (ViewGroup) topContent;
+        if (group.getChildCount() == 0) return -1;
+        View toolbar = group.getChildAt(0);
+        return toolbar instanceof LinearLayout
+                ? ((LinearLayout) toolbar).getOrientation() : -1;
     }
 
     /**
