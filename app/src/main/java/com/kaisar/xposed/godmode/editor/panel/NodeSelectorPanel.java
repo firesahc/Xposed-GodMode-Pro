@@ -5,6 +5,7 @@ import android.graphics.Rect;
 import android.util.DisplayMetrics;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewParent;
 import android.view.animation.DecelerateInterpolator;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
@@ -68,8 +69,8 @@ public class NodeSelectorPanel {
     /** The resource/configuration owner used by the current render. */
     private GmResources.UiContext mUiContext;
     private ActivityConfigurationSnapshot mRenderedConfiguration;
-    private boolean mRenderedWithFallback;
     private int mRenderedToolbarOrientation = -1;
+    private Runnable mShowAnimationRunnable;
 
     // 面板导航区边距常量（dp），与布局初始 padding 保持一致
     /** 基线边距，对应布局 paddingLeft/Top/Bottom。 */
@@ -105,8 +106,9 @@ public class NodeSelectorPanel {
         mNavigationPaneExpanded = false;
         mUiContext = null;
         mRenderedConfiguration = null;
-        mRenderedWithFallback = false;
         mRenderedToolbarOrientation = -1;
+        mShowAnimationRunnable = null;
+        mSeekBar = null;
         try {
             mMaskView = MaskView.makeMaskView(activity);
             mMaskView.setMaskOverlay(overlayColor);
@@ -121,7 +123,6 @@ public class NodeSelectorPanel {
             // 逐项独立失败、结束汇总，任一失败不阻断面板显示。
             patchModuleResources(activity, mUiContext, mPanelView);
             mRenderedConfiguration = mUiContext.getConfigurationSnapshot();
-            mRenderedWithFallback = mUiContext.isFallback();
             mRenderedToolbarOrientation = resolveToolbarOrientation(mPanelView);
             mSeekBar = mPanelView.findViewById(R.id.slider);
             mSeekBar.setMax(Math.max(viewNodes.size() - 1, 0));
@@ -130,22 +131,30 @@ public class NodeSelectorPanel {
             container.addView(mPanelView);
             mPanelView.setAlpha(0);
             final View renderedPanel = mPanelView;
-            renderedPanel.post(() -> {
+            mShowAnimationRunnable = () -> {
+                if (mPanelView != renderedPanel || renderedPanel.getParent() == null) return;
                 renderedPanel.setTranslationX(renderedPanel.getWidth() / 2.0f);
                 renderedPanel.animate().alpha(1).translationX(0)
-                        .setDuration(300).setInterpolator(new DecelerateInterpolator(1.0f)).start();
-            });
+                        .setDuration(300)
+                        .setInterpolator(new DecelerateInterpolator(1.0f)).start();
+            };
+            if (!renderedPanel.post(mShowAnimationRunnable)) {
+                mShowAnimationRunnable = null;
+            }
             mKeySelecting = true;
         } catch (Exception e) {
             Logger.e(TAG, "show: failed to attach node selector panel"
                     + " activity=" + (activity == null ? "null" : activity.getClass().getName()), e);
             if (mMaskView != null) { mMaskView.detachFromContainer(); mMaskView = null; }
             mKeySelecting = false;
+            View failedPanel = mPanelView;
             mPanelView = null;
-            mUiContext = null;
-            mRenderedConfiguration = null;
-            mRenderedWithFallback = false;
-            mRenderedToolbarOrientation = -1;
+            cancelPanelAnimation(failedPanel);
+            if (failedPanel != null) {
+                ViewParent parent = failedPanel.getParent();
+                if (parent instanceof ViewGroup) ((ViewGroup) parent).removeView(failedPanel);
+            }
+            clearPanelRenderState();
         }
     }
 
@@ -158,15 +167,52 @@ public class NodeSelectorPanel {
         if (mPanelView != null) {
             View panel = mPanelView;
             mPanelView = null;
+            cancelPanelAnimation(panel);
             panel.animate().alpha(0).setDuration(200).withEndAction(() -> {
-                ViewGroup parent = (ViewGroup) panel.getParent();
-                if (parent != null) parent.removeView(panel);
+                ViewParent parent = panel.getParent();
+                if (parent instanceof ViewGroup) ((ViewGroup) parent).removeView(panel);
             }).start();
         }
+        clearPanelRenderState();
+    }
+
+    /**
+     * Synchronously removes the panel and mask for an atomic configuration rebuild.
+     * Normal user dismissal continues to use the animated {@link #dismiss()} path.
+     */
+    public void dismissImmediatelyForRebuild() {
+        mKeySelecting = false;
+        mModifySessionLocked = false;
+        mModifyPreviewing = false;
+        if (mMaskView != null) {
+            mMaskView.detachFromContainer();
+            mMaskView = null;
+        }
+        View panel = mPanelView;
+        mPanelView = null;
+        cancelPanelAnimation(panel);
+        if (panel != null) {
+            ViewParent parent = panel.getParent();
+            if (parent instanceof ViewGroup) ((ViewGroup) parent).removeView(panel);
+        }
+        clearPanelRenderState();
+    }
+
+    private void cancelPanelAnimation(View panel) {
+        if (panel != null) {
+            if (mShowAnimationRunnable != null) {
+                panel.removeCallbacks(mShowAnimationRunnable);
+            }
+            panel.animate().cancel();
+        }
+        mShowAnimationRunnable = null;
+    }
+
+    private void clearPanelRenderState() {
         mViewNodes = null;
+        mSeekBar = null;
         mUiContext = null;
         mRenderedConfiguration = null;
-        mRenderedWithFallback = false;
         mRenderedToolbarOrientation = -1;
     }
 
@@ -799,6 +845,8 @@ public class NodeSelectorPanel {
         try {
             CharSequence text = uiRes.getText(stringResId);
             if (text == null) return PatchResult.FAILED;
+            // The existing value is only a statistic: the module value is still
+            // assigned so accessibility follows the current UiContext contract.
             boolean alreadyPresent = !isMissingText(view.getContentDescription());
             view.setContentDescription(text);
             TooltipCompat.setTooltipText(view, text);

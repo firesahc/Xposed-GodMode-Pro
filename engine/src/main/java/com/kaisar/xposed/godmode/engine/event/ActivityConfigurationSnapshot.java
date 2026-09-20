@@ -2,7 +2,11 @@ package com.kaisar.xposed.godmode.engine.event;
 
 import java.util.Objects;
 
-/** Immutable, Android-independent configuration data carried by lifecycle events. */
+/**
+ * Immutable, Android-independent projection used by editor resource
+ * selection and panel measurement. It is not a complete Android
+ * {@code Configuration} replacement.
+ */
 public final class ActivityConfigurationSnapshot {
 
     private final int mOrientation;

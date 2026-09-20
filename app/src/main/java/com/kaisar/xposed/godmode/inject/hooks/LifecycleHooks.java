@@ -9,6 +9,7 @@ import com.kaisar.xposed.godmode.engine.event.ActivityLifecycleEvent;
 import com.kaisar.xposed.godmode.engine.event.EventBus;
 import com.kaisar.xposed.godmode.inject.ModuleBootstrap;
 import com.kaisar.xposed.godmode.engine.util.Logger;
+import com.kaisar.xposed.godmode.util.ActivityConfigurationSnapshotMapper;
 import com.kaisar.xposed.godmode.util.ModuleResources;
 
 import de.robv.android.xposed.XC_MethodHook;
@@ -112,26 +113,19 @@ public final class LifecycleHooks extends XC_MethodHook {
                 Configuration configuration = param.args != null && param.args.length > 0
                         && param.args[0] instanceof Configuration
                         ? (Configuration) param.args[0] : null;
+                ActivityConfigurationSnapshot snapshot =
+                        ActivityConfigurationSnapshotMapper.from(configuration);
+                if (snapshot == null) {
+                    Logger.w(TAG, "configuration change hook missing Configuration argument");
+                    return;
+                }
                 mEventBus.post(new ActivityLifecycleEvent(
                         ActivityLifecycleEvent.Type.CONFIG_CHANGED, activity,
-                        snapshotOf(configuration)));
+                        snapshot));
             }
         } catch (Throwable failure) {
             Logger.w(TAG, "lifecycle event hook failed", failure);
         }
     }
 
-    /** Translate the mutable framework object at the hook boundary. */
-    private static ActivityConfigurationSnapshot snapshotOf(Configuration configuration) {
-        if (configuration == null) return null;
-        return new ActivityConfigurationSnapshot(
-                configuration.orientation,
-                configuration.screenWidthDp,
-                configuration.screenHeightDp,
-                configuration.smallestScreenWidthDp,
-                configuration.densityDpi,
-                configuration.screenLayout,
-                configuration.uiMode,
-                configuration.fontScale);
-    }
 }

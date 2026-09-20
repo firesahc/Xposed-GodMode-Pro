@@ -92,6 +92,8 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     private View mObservedDecorView;
     private Activity mObservedPanelActivity;
     private boolean mPanelRebuildPosted;
+    private long mPanelObserverGeneration;
+    private Runnable mPendingPanelRebuild;
     private final View.OnLayoutChangeListener mPanelLayoutChangeListener =
             new View.OnLayoutChangeListener() {
                 @Override
@@ -107,13 +109,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
                     ActivityConfigurationSnapshot current =
                             GmResources.captureConfiguration(activity);
                     if (!mNodePanel.isConfigurationStale(current)) return;
-                    mPanelRebuildPosted = true;
-                    if (!view.post(() -> {
-                        mPanelRebuildPosted = false;
-                        reconcileNodePanelConfiguration(activity, null);
-                    })) {
-                        mPanelRebuildPosted = false;
-                    }
+                    postPanelConfigurationReconcile(activity, view);
                 }
             };
 
@@ -359,7 +355,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
      * 取舍：属性编辑中旋转则整单全关（复用 dismissNodeSelectPanel 的
      * cancel 回滚 + 保存挂起链，不重建），避免半吊子编辑态拿着旧截图
      * 或旧目标 View 继续写规则；纯节点选择态才走
-     * dismissNodePanelNow + showNodeSelectPanel 全流程重建，
+     * dismissNodePanelForRebuild + showNodeSelectPanel 全流程重建，
      * 由 GmResources.createUiContext 的宿主配置快照保证取到 layout-land。
      */
     private void reconcileNodePanelConfiguration(Activity activity,
@@ -377,7 +373,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
                 dismissNodeSelectPanel();
                 return;
             }
-            dismissNodePanelNow();
+            dismissNodePanelForRebuild();
             showNodeSelectPanel(activity, current);
         } catch (Throwable failure) {
             Logger.w(TAG, "configuration change rebuild failed", failure);
@@ -394,12 +390,50 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
         decorView.addOnLayoutChangeListener(mPanelLayoutChangeListener);
     }
 
+    /** Coalesces layout facts without allowing a stale callback to touch a new observer. */
+    private void postPanelConfigurationReconcile(final Activity activity,
+            final View decorView) {
+        if (mPanelRebuildPosted) return;
+        mPanelRebuildPosted = true;
+        final long generation = mPanelObserverGeneration;
+        final Runnable[] runnableHolder = new Runnable[1];
+        runnableHolder[0] = new Runnable() {
+            @Override
+            public void run() {
+                Runnable pending = runnableHolder[0];
+                if (mPendingPanelRebuild != pending) return;
+                mPendingPanelRebuild = null;
+                mPanelRebuildPosted = false;
+                if (generation != mPanelObserverGeneration
+                        || activity != mObservedPanelActivity
+                        || decorView != mObservedDecorView
+                        || !mNodePanel.isShowing()
+                        || mCurrentActivityRef.get() != activity) {
+                    return;
+                }
+                reconcileNodePanelConfiguration(activity, null);
+            }
+        };
+        mPendingPanelRebuild = runnableHolder[0];
+        if (!decorView.post(runnableHolder[0])) {
+            if (mPendingPanelRebuild == runnableHolder[0]) {
+                mPendingPanelRebuild = null;
+            }
+            mPanelRebuildPosted = false;
+        }
+    }
+
     private void removePanelLayoutObserver() {
+        mPanelObserverGeneration++;
         if (mObservedDecorView != null) {
+            if (mPendingPanelRebuild != null) {
+                mObservedDecorView.removeCallbacks(mPendingPanelRebuild);
+            }
             mObservedDecorView.removeOnLayoutChangeListener(mPanelLayoutChangeListener);
         }
         mObservedDecorView = null;
         mObservedPanelActivity = null;
+        mPendingPanelRebuild = null;
         mPanelRebuildPosted = false;
     }
 
@@ -571,6 +605,15 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
         mInteractionMode = EditorInteractionMode.INITIAL;
         mNodePanel.setModifySessionLocked(false);
         mNodePanel.dismiss();
+    }
+
+    /** Removes the selector synchronously so a configuration rebuild is atomic. */
+    private void dismissNodePanelForRebuild() {
+        removePanelLayoutObserver();
+        mPreviewHandler.restorePreview(mCurrentActivityRef.get(), null, null, null);
+        mInteractionMode = EditorInteractionMode.INITIAL;
+        mNodePanel.setModifySessionLocked(false);
+        mNodePanel.dismissImmediatelyForRebuild();
     }
 
     /** Invalidates pending editor work when the tracked Activity is destroyed. */

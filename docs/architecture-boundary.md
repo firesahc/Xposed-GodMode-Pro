@@ -77,6 +77,9 @@ ipc 门面    → ServiceConnection（唯一连接核）/ contract / rule
    开关判断、时机策略、导航、业务分支一律归订阅侧/端口实现。
 4. **注册顺序即语义**：依赖分发顺序的订阅（如 DESTROY 先 Editor 后 Runtime）
    必须在 `AppInjector` 集中注释写明，不得隐含。
+5. **配置事实单一来源**：`CONFIG_CHANGED` 是语义配置事件的唯一来源。
+   `DecorView` layout observer 仅用于观察事实并触发统一 reconcile 安全网，
+   不发布 EventBus 事件、不拥有重建策略，也不自动打开编辑器。
 
 ## 五、Xposed 层职责（9 进 10 禁）
 

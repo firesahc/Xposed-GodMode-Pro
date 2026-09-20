@@ -3,6 +3,7 @@ package com.kaisar.xposed.godmode.util;
 import android.app.Activity;
 import android.content.Context;
 import android.content.ContextWrapper;
+import android.content.pm.PackageManager;
 import android.content.res.AssetManager;
 import android.content.res.Configuration;
 import android.content.res.Resources;
@@ -67,7 +68,8 @@ public final class GmResources {
     public static ActivityConfigurationSnapshot captureConfiguration(Activity activity) {
         if (activity == null) return null;
         try {
-            return snapshotOf(activity.getResources().getConfiguration());
+            return ActivityConfigurationSnapshotMapper.from(
+                    activity.getResources().getConfiguration());
         } catch (RuntimeException failure) {
             Logger.d(TAG, "host configuration unavailable", failure);
             return null;
@@ -84,13 +86,17 @@ public final class GmResources {
             ActivityConfigurationSnapshot snapshot) {
         if (activity == null) throw new IllegalArgumentException("activity is required");
         Configuration effectiveConfiguration = effectiveConfiguration(activity, snapshot);
-        ActivityConfigurationSnapshot renderedSnapshot = snapshotOf(effectiveConfiguration);
+        ActivityConfigurationSnapshot renderedSnapshot =
+                ActivityConfigurationSnapshotMapper.from(effectiveConfiguration);
 
         try {
             Context packageContext = activity.createPackageContext(MODULE_PACKAGE, 0);
             return configuredUiContext(packageContext, effectiveConfiguration,
                     renderedSnapshot, false);
-        } catch (Exception first) {
+        } catch (PackageManager.NameNotFoundException
+                | SecurityException
+                | Resources.NotFoundException
+                | IllegalArgumentException first) {
             Logger.d(TAG, "package context flag=0 failed, try IGNORE_SECURITY", first);
         }
         try {
@@ -98,13 +104,27 @@ public final class GmResources {
                     MODULE_PACKAGE, Context.CONTEXT_IGNORE_SECURITY);
             return configuredUiContext(packageContext, effectiveConfiguration,
                     renderedSnapshot, false);
-        } catch (Exception second) {
+        } catch (PackageManager.NameNotFoundException
+                | SecurityException
+                | Resources.NotFoundException
+                | IllegalArgumentException second) {
             Logger.d(TAG, "package context IGNORE_SECURITY failed, hand-built fallback", second);
         }
 
         if (sModuleAssets == null) {
             throw new IllegalStateException("module resources not ready");
         }
+        return createConfiguredAssetFallback(activity, effectiveConfiguration, renderedSnapshot);
+    }
+
+    /**
+     * Legacy API 29-compatible resource fallback. Keep this isolated so it
+     * cannot become the normal package-context rendering path.
+     */
+    @SuppressWarnings("deprecation")
+    private static UiContext createConfiguredAssetFallback(Activity activity,
+            Configuration effectiveConfiguration,
+            ActivityConfigurationSnapshot renderedSnapshot) {
         try {
             DisplayMetrics metrics = new DisplayMetrics();
             metrics.setTo(activity.getResources().getDisplayMetrics());
@@ -112,8 +132,16 @@ public final class GmResources {
                     new Configuration(effectiveConfiguration));
             Context moduleContext = new ModuleContext(activity, configuredResources);
             Context themedContext = themedContext(moduleContext);
-            return new UiContext(themedContext, configuredResources, renderedSnapshot, true);
-        } catch (Exception fallbackFailure) {
+            UiContext result = new UiContext(themedContext, configuredResources,
+                    renderedSnapshot, true);
+            Logger.d(TAG, "configuration-scoped module resource fallback succeeded"
+                    + " source=CONFIGURED_ASSET_FALLBACK"
+                    + " orientation=" + (renderedSnapshot == null
+                            ? "unknown" : renderedSnapshot.getOrientation()));
+            return result;
+        } catch (Resources.NotFoundException
+                | SecurityException
+                | IllegalArgumentException fallbackFailure) {
             Logger.e(TAG, "configuration-scoped module resource fallback failed", fallbackFailure);
             throw new IllegalStateException("module UI resources unavailable", fallbackFailure);
         }
@@ -142,29 +170,7 @@ public final class GmResources {
             Logger.d(TAG, "host configuration unavailable, use empty base", failure);
             configuration = new Configuration();
         }
-        if (snapshot == null) return configuration;
-        configuration.orientation = snapshot.getOrientation();
-        configuration.screenWidthDp = snapshot.getScreenWidthDp();
-        configuration.screenHeightDp = snapshot.getScreenHeightDp();
-        configuration.smallestScreenWidthDp = snapshot.getSmallestScreenWidthDp();
-        configuration.densityDpi = snapshot.getDensityDpi();
-        configuration.screenLayout = snapshot.getScreenLayout();
-        configuration.uiMode = snapshot.getUiMode();
-        configuration.fontScale = snapshot.getFontScale();
-        return configuration;
-    }
-
-    private static ActivityConfigurationSnapshot snapshotOf(Configuration configuration) {
-        if (configuration == null) return null;
-        return new ActivityConfigurationSnapshot(
-                configuration.orientation,
-                configuration.screenWidthDp,
-                configuration.screenHeightDp,
-                configuration.smallestScreenWidthDp,
-                configuration.densityDpi,
-                configuration.screenLayout,
-                configuration.uiMode,
-                configuration.fontScale);
+        return ActivityConfigurationSnapshotMapper.overlay(configuration, snapshot);
     }
 
     /** Module resource Context used only by the configuration-scoped fallback. */
