@@ -9,4 +9,17 @@
         <item name="android:statusBarColor">@color/colorPrimary</item>
     </style>
 
+    <!-- GM 面板自有主题：编辑器面板视觉身份的唯一定义处。
+         背景：宿主主题曾把 ?android:attr/colorControlHighlight 解析成品红，
+         导致按钮涟漪呈游离品红圆盘；自有主题定死中性值后，面板外观不再随宿主变化。
+         父用框架 Material（面板部件全是框架 widget，无 AppCompat 依赖）。
+         注意：改动本主题需在微信 + 一个普通 App 双宿主截屏回归。 -->
+    <style name="GmPanelTheme" parent="android:Theme.Material.Light.NoActionBar">
+        <!-- 中性浅灰：取框架浅色主题默认值（12% 黑），点击反馈轻微可见即可；
+             此前 #61000000（38%）在微信下显得过深。换色只改这一处。 -->
+        <item name="android:colorControlHighlight">#1F000000</item>
+        <item name="android:textColorPrimary">#212121</item>
+        <item name="android:textColorSecondary">#757575</item>
+    </style>
+
 </resources>

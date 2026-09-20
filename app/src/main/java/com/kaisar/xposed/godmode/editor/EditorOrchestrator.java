@@ -330,7 +330,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
      * cancel 回滚 + 保存挂起链，不重建），避免半吊子编辑态拿着旧截图
      * 或旧目标 View 继续写规则；纯节点选择态才走
      * dismissNodePanelNow + showNodeSelectPanel 全流程重建，
-     * 由 NodeSelectorPanel.show 内 syncConfiguration 保证取到 layout-land。
+     * 由 GmResources.createUiContext 的宿主配置快照保证取到 layout-land。
      */
     private void onConfigurationChanged(Activity activity) {
         try {

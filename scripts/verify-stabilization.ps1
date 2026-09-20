@@ -401,6 +401,43 @@ try {
         $failures.Add("Device log format contract is missing from $logRulesDoc")
     }
 
+    # GM editor panels must render through GmResources (module-owned rendering
+    # context). Direct host inflation or host asset injection inside editor/panel
+    # reintroduces the WeChat/MIUI resource failures (0x95 package table gaps,
+    # themed TypedArray drops). Only GmResources.inflate() is allowed.
+    $panelRenderBypass = Invoke-SourceSearch `
+        -Pattern "LayoutInflater\.from\(activity\)|activity\.getLayoutInflater\(\)|ModuleResources\.injectInto\(" `
+        -SearchRoots @("app/src/main/java/com/kaisar/xposed/godmode/editor/panel") `
+        -IncludeFileName "*.java" `
+        -ExcludeBuildDirectories
+    if (!$panelRenderBypass.Succeeded) {
+        $failures.Add("Unable to scan editor panel render entry points: $($panelRenderBypass.Error)")
+    } elseif ($panelRenderBypass.Matches.Count -gt 0) {
+        $failures.Add("Editor panels must inflate only via GmResources.inflate():`n$($panelRenderBypass.Matches -join "`n")")
+    }
+
+    # Panel layouts carry structure only. Module drawables/dimens in
+    # backgrounds, srcs, sizes, or text colors crash inflation on hardened
+    # hosts (verified on WeChat/MIUI); styling is applied programmatically
+    # from the module rendering context instead. Strings/theme refs stay.
+    $panelFatalRefs = Invoke-SourceSearch `
+        -Pattern "android:(background|src)=`"@(drawable|android:drawable)/|android:layout_(width|height)=`"@dimen/|android:textColor=`"@color/" `
+        -SearchRoots @("app/src/main/res/layout/panel_node_selector.xml", "app/src/main/res/layout-land/panel_node_selector.xml", "app/src/main/res/layout/panel_modify.xml") `
+        -ExcludeBuildDirectories
+    if (!$panelFatalRefs.Succeeded) {
+        $failures.Add("Unable to scan panel layout resource contract: $($panelFatalRefs.Error)")
+    } elseif ($panelFatalRefs.Matches.Count -gt 0) {
+        $failures.Add("Panel layouts must not reference module drawables/dimens/colors:`n$($panelFatalRefs.Matches -join "`n")")
+    }
+
+    # Ripple must stay bounded: without the @android:id/mask item it degrades
+    # to an unbounded ripple whose ink floats outside buttons (magenta disc).
+    $rippleLayout = "app/src/main/res/drawable/ripple_drawable_20dp.xml"
+    if (!(Test-Path $rippleLayout) -or
+        (Get-Content -Raw $rippleLayout) -notmatch 'android:id="@android:id/mask"') {
+        $failures.Add("Ripple mask contract is missing: $rippleLayout must define @android:id/mask")
+    }
+
     if ($failures.Count -gt 0) {
         $failures | ForEach-Object { Write-Error $_ }
         exit 1

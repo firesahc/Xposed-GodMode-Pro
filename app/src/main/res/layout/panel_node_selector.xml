@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 注意：本布局刻意不直接引用模块 drawable（background/src 均为 @null，
+     程序化回填见 NodeSelectorPanel.patchModuleResources）。
+     宽高用字面量（镜像 values/dimens.xml：64/64/48/160），刻意不用 @dimen：
+     微信/MIUI 主题链会把 0x95 包引用消解为 null/占位符，inflate 期即崩。 -->
 <!-- 竖屏双区单卡：单工具列内套选择组/操作组两层透明 LinearLayout -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
@@ -21,10 +25,10 @@
 
         <!-- 单卡工具列：单背景 + translationZ 保留；marginTop/Bottom 14→0，改 paddingTop/Bottom 8 统一节奏 -->
         <LinearLayout
-            android:layout_width="@dimen/panel_selection_col_w"
+            android:layout_width="64dp"
             android:layout_height="wrap_content"
             android:layout_gravity="right"
-            android:background="@drawable/rounded_bg_full"
+            android:background="@null"
             android:clipChildren="false"
             android:clipToPadding="false"
             android:orientation="vertical"
@@ -43,12 +47,12 @@
 
                 <FrameLayout
                     android:layout_width="wrap_content"
-                    android:layout_height="@dimen/panel_seek_len">
+                    android:layout_height="160dp">
 
                     <SeekBar
                         android:id="@+id/slider"
-                        android:layout_width="@dimen/panel_seek_len"
-                        android:layout_height="@dimen/panel_selection_col_w"
+                        android:layout_width="160dp"
+                        android:layout_height="64dp"
                         android:layout_gravity="center"
                         android:clickable="true"
                         android:rotation="90" />
@@ -57,33 +61,33 @@
 
                 <ImageButton
                     android:id="@+id/exchange"
-                    android:layout_width="@dimen/panel_btn_size"
-                    android:layout_height="@dimen/panel_btn_size"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
                     android:layout_gravity="center"
                     android:layout_marginTop="4dp"
-                    android:background="@drawable/ripple_drawable_20dp"
+                    android:background="@null"
                     android:contentDescription="@string/accessibility_exchange"
-                    android:src="@drawable/exchange" />
+                    android:src="@null" />
 
                 <ImageButton
                     android:id="@+id/Up"
-                    android:layout_width="@dimen/panel_btn_size"
-                    android:layout_height="@dimen/panel_btn_size"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
                     android:layout_gravity="center"
                     android:layout_marginTop="4dp"
-                    android:background="@drawable/ripple_drawable_20dp"
+                    android:background="@null"
                     android:contentDescription="@string/accessibility_up"
-                    android:src="@drawable/up" />
+                    android:src="@null" />
 
                 <ImageButton
                     android:id="@+id/Down"
-                    android:layout_width="@dimen/panel_btn_size"
-                    android:layout_height="@dimen/panel_btn_size"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
                     android:layout_gravity="center"
                     android:layout_marginTop="4dp"
-                    android:background="@drawable/ripple_drawable_20dp"
+                    android:background="@null"
                     android:contentDescription="@string/accessibility_down"
-                    android:src="@drawable/down" />
+                    android:src="@null" />
 
             </LinearLayout>
 
@@ -91,30 +95,30 @@
             <!-- 组内节奏：首项 marginTop 0，其余直接子项 marginTop 4（含菜单容器与 undo）；菜单内首次 0、次 4 -->
             <LinearLayout
                 android:id="@+id/action_group"
-                android:layout_width="@dimen/panel_action_col_w"
+                android:layout_width="64dp"
                 android:layout_height="wrap_content"
                 android:orientation="vertical">
 
                 <FrameLayout
                     android:id="@+id/info_flow_mode_toggle"
                     android:layout_width="match_parent"
-                    android:layout_height="@dimen/panel_btn_size">
+                    android:layout_height="48dp">
                     <TextView
                         android:id="@+id/info_flow_mode_btn"
                         android:layout_width="match_parent"
                         android:layout_height="match_parent"
                         android:layout_gravity="center"
-                        android:background="@drawable/ripple_drawable_20dp"
+                        android:background="@null"
                         android:gravity="center"
                         android:text="@string/mode_info_flow_off"
-                        android:textColor="@color/info_flow_btn_text"
+                        
                         android:textSize="11sp" />
                 </FrameLayout>
 
                 <FrameLayout
                     android:id="@+id/remove_mode_toggle"
                     android:layout_width="match_parent"
-                    android:layout_height="@dimen/panel_btn_size"
+                    android:layout_height="48dp"
                     android:layout_marginTop="4dp">
 
                     <TextView
@@ -122,7 +126,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="match_parent"
                         android:layout_gravity="center"
-                        android:background="@drawable/ripple_drawable_20dp"
+                        android:background="@null"
                         android:gravity="center"
                         android:text="@string/mode_remove"
                         android:textColor="?android:textColorPrimary"
@@ -140,29 +144,29 @@
 
                     <ImageButton
                         android:id="@+id/block"
-                        android:layout_width="@dimen/panel_btn_size"
-                        android:layout_height="@dimen/panel_btn_size"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
                         android:layout_gravity="center"
-                        android:background="@drawable/ripple_drawable_20dp"
+                        android:background="@null"
                         android:contentDescription="@string/accessibility_block"
-                        android:src="@drawable/ic_block" />
+                        android:src="@null" />
 
                     <ImageButton
                         android:id="@+id/preview"
-                        android:layout_width="@dimen/panel_btn_size"
-                        android:layout_height="@dimen/panel_btn_size"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
                         android:layout_gravity="center"
                         android:layout_marginTop="4dp"
-                        android:background="@drawable/ripple_drawable_20dp"
+                        android:background="@null"
                         android:contentDescription="@string/accessibility_preview"
-                        android:src="@android:drawable/ic_menu_view" />
+                        android:src="@null" />
 
                 </LinearLayout>
 
                 <FrameLayout
                     android:id="@+id/modify_mode_toggle"
                     android:layout_width="match_parent"
-                    android:layout_height="@dimen/panel_btn_size"
+                    android:layout_height="48dp"
                     android:layout_marginTop="4dp">
 
                     <TextView
@@ -170,7 +174,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="match_parent"
                         android:layout_gravity="center"
-                        android:background="@drawable/ripple_drawable_20dp"
+                        android:background="@null"
                         android:gravity="center"
                         android:text="@string/mode_modify"
                         android:textColor="?android:textColorPrimary"
@@ -188,35 +192,35 @@
 
                     <ImageButton
                         android:id="@+id/modify"
-                        android:layout_width="@dimen/panel_btn_size"
-                        android:layout_height="@dimen/panel_btn_size"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
                         android:layout_gravity="center"
-                        android:background="@drawable/ripple_drawable_20dp"
+                        android:background="@null"
                         android:contentDescription="@string/accessibility_modify"
-                        android:src="@drawable/ic_modify" />
+                        android:src="@null" />
 
                     <ImageButton
                         android:id="@+id/modify_preview"
-                        android:layout_width="@dimen/panel_btn_size"
-                        android:layout_height="@dimen/panel_btn_size"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
                         android:layout_gravity="center"
                         android:layout_marginTop="4dp"
-                        android:background="@drawable/ripple_drawable_20dp"
+                        android:background="@null"
                         android:contentDescription="@string/accessibility_modify_preview"
-                        android:src="@android:drawable/ic_menu_view" />
+                        android:src="@null" />
 
                 </LinearLayout>
 
                 <ImageButton
                     android:id="@+id/undo"
-                    android:layout_width="@dimen/panel_btn_size"
-                    android:layout_height="@dimen/panel_btn_size"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
                     android:layout_gravity="center"
                     android:layout_marginTop="4dp"
-                    android:background="@drawable/ripple_drawable_20dp"
+                    android:background="@null"
                     android:contentDescription="@string/accessibility_undo"
                     android:enabled="false"
-                    android:src="@drawable/ic_undo" />
+                    android:src="@null" />
 
             </LinearLayout>
 

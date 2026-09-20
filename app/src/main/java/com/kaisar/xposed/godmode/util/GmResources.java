@@ -1,12 +1,20 @@
 package com.kaisar.xposed.godmode.util;
 
+import android.app.Activity;
+import android.content.Context;
+import android.content.ContextWrapper;
+import android.content.res.AssetManager;
 import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.content.res.XmlResourceParser;
+import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 
+import com.kaisar.xposed.godmode.BuildConfig;
+import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.engine.util.GmConstants;
+import com.kaisar.xposed.godmode.engine.util.Logger;
 
 /**
  * 模块资源访问器 — 被注入进程读取模块自带资源（布局/文本/图片）的统一入口。
@@ -17,6 +25,11 @@ import com.kaisar.xposed.godmode.engine.util.GmConstants;
  */
 public final class GmResources {
 
+    private static final String TAG = "GmResources";
+
+    /** 安装包名即模块包名（applicationId），createPackageContext 用它取模块资源。 */
+    private static final String MODULE_PACKAGE = BuildConfig.APPLICATION_ID;
+
     private static Resources sModuleRes;
 
     private GmResources() {}
@@ -25,27 +38,129 @@ public final class GmResources {
         sModuleRes = moduleRes;
     }
 
+    public static XmlResourceParser getLayout(int id) {
+        return sModuleRes.getLayout(id);
+    }
+
     /**
-     * 把宿主最新的 Configuration 同步给模块 Resources，使横屏 layout-land 生效。
+     * 创建面板渲染上下文：Resource Owner = Module，Configuration = 当前
+     * Activity 快照，Theme Owner = Module（{@code GmPanelTheme}）。
      * <p>
-     * 根因：sModuleRes 在 initZygote 阶段创建时冻结了一份 Configuration，
-     * 之后宿主旋转不再经过模块进程的资源刷新，getLayout 仍按竖屏限定符
-     * 取布局，导致横屏下面板错位。每次 show 前用宿主当前 Configuration
-     * 覆盖一次即可恢复系统按 orientation 选择布局的行为。
-     *
-     * @param config 宿主 Activity 当前 Configuration，为空时直接返回
+     * 降级链（有序，每级失败记 d 日志）：flag=0 的包上下文 →
+     * {@code CONTEXT_IGNORE_SECURITY} → 手写 ModuleContext 套模块主题 →
+     * 手写 ModuleContext（宿主主题，旧行为）。只取资源不取代码，
+     * 因此默认不申请 {@code CONTEXT_INCLUDE_CODE}。
      */
-    public static void syncConfiguration(Configuration config) {
-        if (config == null || sModuleRes == null) return;
+    public static Context createUiContext(Activity activity) {
+        if (activity == null) throw new IllegalArgumentException("activity is required");
+        Configuration hostConfig = null;
         try {
-            sModuleRes.updateConfiguration(new Configuration(config), null);
-        } catch (Throwable ignored) {
-            // 同步失败仅影响本次横竖屏布局选择，不阻断面板显示。
+            hostConfig = activity.getResources().getConfiguration();
+        } catch (RuntimeException e) {
+            Logger.d(TAG, "host configuration unavailable, use base", e);
+        }
+        try {
+            return themedUiContext(activity.createPackageContext(MODULE_PACKAGE, 0), hostConfig);
+        } catch (Throwable first) {
+            Logger.d(TAG, "package context flag=0 failed, try IGNORE_SECURITY", first);
+        }
+        try {
+            return themedUiContext(
+                    activity.createPackageContext(
+                            MODULE_PACKAGE, Context.CONTEXT_IGNORE_SECURITY),
+                    hostConfig);
+        } catch (Throwable second) {
+            Logger.d(TAG, "package context IGNORE_SECURITY failed, hand-rolled fallback", second);
+        }
+        if (sModuleRes == null) {
+            throw new IllegalStateException("module Resources not ready");
+        }
+        // 手写回退：资源走 sModuleRes；主题仍套模块主题（框架 ContextThemeWrapper
+        // 把主题挂在新实例上，绝不污染 base；若主题本身解析失败则保留宿主主题）。
+        try {
+            return new android.view.ContextThemeWrapper(
+                    new ModuleContext(activity, sModuleRes), R.style.GmPanelTheme);
+        } catch (Throwable third) {
+            Logger.d(TAG, "module theme on hand-rolled context failed, host theme kept", third);
+            return new ModuleContext(activity, sModuleRes);
         }
     }
 
-    public static XmlResourceParser getLayout(int id) {
-        return sModuleRes.getLayout(id);
+    /** 包上下文套宿主配置快照，再套模块主题；任一步失败由调用方降级。
+     * 颜色权威在此：面板涟漪/文字色一律取自 GmPanelTheme，与宿主主题无关；
+     * 换涟漪色只改主题一处，勿改 ripple XML 的颜色引用。 */
+    private static Context themedUiContext(Context packageContext, Configuration hostConfig) {
+        Context configured = packageContext;
+        if (hostConfig != null) {
+            configured = packageContext.createConfigurationContext(new Configuration(hostConfig));
+        }
+        return new android.view.ContextThemeWrapper(configured, R.style.GmPanelTheme);
+    }
+
+    /** 手写回退 Context：资源走模块，主题默认沿 base（仅在包上下文不可用时启用）。 */
+    private static final class ModuleContext extends ContextWrapper {
+        private final Resources mModuleRes;
+
+        ModuleContext(Context base, Resources moduleRes) {
+            super(base);
+            mModuleRes = moduleRes;
+        }
+
+        @Override
+        public Resources getResources() {
+            return mModuleRes;
+        }
+
+        @Override
+        public AssetManager getAssets() {
+            return mModuleRes.getAssets();
+        }
+    }
+
+    /**
+     * 统一 inflate 入口 — 模块优先，宿主兼容回退。
+     * <p>
+     * 宿主资源环境已被实证不可信（微信下 0x95 包名表缺失、MIUI 主题链丢引用），
+     * 因此主路径即模块 UI Context；host 仅作可选回退。parser 一次性消费，
+     * 重试前重新 {@link #getLayout}。
+     */
+    public static View inflate(Context uiContext, Activity hostActivity,
+            int layoutId, ViewGroup parent, boolean attach) {
+        if (uiContext == null) throw new IllegalArgumentException("uiContext is required");
+        try {
+            return LayoutInflater.from(uiContext)
+                    .inflate(uiContext.getResources().getLayout(layoutId), parent, attach);
+        } catch (RuntimeException moduleFailure) {
+            if (!isInflationCompatibilityFailure(moduleFailure)) throw moduleFailure;
+            Logger.w(TAG, "module inflate failed, host fallback"
+                    + " activity=" + (hostActivity == null
+                            ? "null" : hostActivity.getClass().getName())
+                    + " layout=0x" + Integer.toHexString(layoutId), moduleFailure);
+            try {
+                if (hostActivity == null) throw moduleFailure;
+                return LayoutInflater.from(hostActivity)
+                        .inflate(getLayout(layoutId), parent, attach);
+            } catch (RuntimeException hostFailure) {
+                hostFailure.addSuppressed(moduleFailure);
+                throw hostFailure;
+            }
+        }
+    }
+
+    /**
+     * 仅资源兼容性失败允许 fallback；真正的程序 bug（NPE 等）必须原样抛出，
+     * 否则会把编码错误伪装成宿主兼容问题。
+     */
+    private static boolean isInflationCompatibilityFailure(Throwable t) {
+        while (t != null) {
+            if (t instanceof Resources.NotFoundException
+                    || t instanceof android.view.InflateException
+                    || t instanceof UnsupportedOperationException) {
+                return true;
+            }
+            t = t.getCause();
+        }
+        return false;
     }
 
     /**
@@ -82,5 +197,10 @@ public final class GmResources {
 
     public static android.graphics.drawable.Drawable getDrawable(int id) throws Resources.NotFoundException {
         return sModuleRes.getDrawable(id);
+    }
+
+    public static android.content.res.ColorStateList getColorStateList(int id)
+            throws Resources.NotFoundException {
+        return sModuleRes.getColorStateList(id, null);
     }
 }

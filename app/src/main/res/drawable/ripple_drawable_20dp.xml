@@ -15,4 +15,9 @@
 -->
 <ripple xmlns:android="http://schemas.android.com/apk/res/android"
         android:radius="20dp"
-        android:color="?android:attr/colorControlHighlight" />
+        android:color="?android:attr/colorControlHighlight">
+    <!-- 有界化：无 mask 时为无界 ripple，点击涟漪会投射到按钮之外的游离圆圈；
+         在微信/MIUI 主题高亮色下观感即“阴影反馈错乱”。白色 mask 把涟漪约束在按钮内。
+         mask 用框架色（@android:color 经模块/宿主均可解析，已验证）。 -->
+    <item android:id="@android:id/mask" android:drawable="@android:color/white" />
+</ripple>

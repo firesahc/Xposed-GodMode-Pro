@@ -6,7 +6,6 @@ import android.app.Activity;
 import android.graphics.Bitmap;
 import android.text.Editable;
 import android.text.TextWatcher;
-import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.EditText;
@@ -18,7 +17,6 @@ import android.widget.Toast;
 
 import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.engine.util.Logger;
-import com.kaisar.xposed.godmode.util.ModuleResources;
 import com.kaisar.xposed.godmode.editor.IRuleEditor;
 import com.kaisar.xposed.godmode.editor.ImagePickPort;
 import com.kaisar.xposed.godmode.ipc.RuleServiceContract;
@@ -185,11 +183,15 @@ public class PropertyEditorPanel {
             mEditingRoot = new WeakReference<>(activity.getWindow() == null
                     ? null : activity.getWindow().getDecorView());
 
-            ModuleResources.injectInto(activity.getResources());
-            LayoutInflater inflater = LayoutInflater.from(activity);
-            mPanelView = inflater.inflate(
-                    GmResources.getLayout(R.layout.panel_modify), container, false);
+            // 渲染上下文：资源/配置快照/主题三权收归模块，宿主仅提供窗口与容器。
+            // 不再调用 injectInto（旧通路只污染宿主 AssetManager，对本面板无收益）。
+            android.content.Context uiContext = GmResources.createUiContext(activity);
+            mPanelView = GmResources.inflate(uiContext, activity,
+                    R.layout.panel_modify, container, false);
             GmResources.markAsGmComponent(mPanelView);
+            // 确定性样式层：根背景与标签文字统一在此回填（布局内对应项已 @null 化）；
+            // 逐项独立失败，任一失败不阻断属性编辑。
+            patchPanelStyle(activity, uiContext, mPanelView);
 
             setupSeekers(mPanelView, targetView);
             setupTextEdit(mPanelView, targetView);
@@ -212,6 +214,81 @@ public class PropertyEditorPanel {
             mGeneration++;
             notifySession();
             dismiss();
+        }
+    }
+
+    /** 样式契约映射：{viewId, stringRes}（输入框与字面符号按钮不在此列）。 */
+    static final int[][] TEXT_BACKFILLS = {
+            {R.id.mod_title_label, R.string.modify_title},
+            {R.id.mod_width_label, R.string.modify_width},
+            {R.id.mod_height_label, R.string.modify_height},
+            {R.id.mod_alpha_label, R.string.modify_alpha},
+            {R.id.mod_position_label, R.string.modify_position},
+            {R.id.mod_text_label, R.string.modify_text},
+            {R.id.mod_image_pick, R.string.modify_image_pick},
+            {R.id.mod_cancel, R.string.modify_cancel},
+            {R.id.mod_save, R.string.modify_save},
+    };
+
+    /**
+     * 确定性样式层：根背景与标签文字统一在此回填（布局内对应项已 @null 化）。
+     * 资源一律取自本次 show 的 uiContext，逐项独立失败，结束汇总报数。
+     */
+    private static void patchPanelStyle(Activity activity,
+            android.content.Context uiContext, View panelView) {
+        if (panelView == null || uiContext == null) return;
+        final android.content.res.Resources uiRes = uiContext.getResources();
+        int ok = 0;
+        int fail = 0;
+        try {
+            try {
+                panelView.setBackground(uiRes.getDrawable(
+                        R.drawable.rounded_bg_full, uiContext.getTheme()));
+                ok++;
+            } catch (Exception e) {
+                fail++;
+                Logger.d(MODIFY_TAG, "modify panel style failed", e);
+            }
+            for (int[] entry : TEXT_BACKFILLS) {
+                View v = panelView.findViewById(entry[0]);
+                if (!(v instanceof TextView) || v instanceof EditText) continue;
+                TextView tv = (TextView) v;
+                if (!isMissingText(tv.getText())) continue;
+                try {
+                    CharSequence text = uiRes.getText(entry[1]);
+                    if (text != null) {
+                        tv.setText(text);
+                        ok++;
+                    }
+                } catch (Exception e) {
+                    fail++;
+                    Logger.d(MODIFY_TAG, "modify panel style failed", e);
+                }
+            }
+        } catch (Exception e) {
+            fail++;
+        } finally {
+            if (fail > 0) {
+                Logger.w(MODIFY_TAG, "modify panel style done ok=" + ok + " fail=" + fail
+                        + " activity=" + (activity == null
+                                ? "null" : activity.getClass().getName()));
+            }
+        }
+    }
+
+    /**
+     * MIUI 下解析失败的字符串不会留空，而是被填成 "@&lt;resId&gt;" 占位符，
+     * 同样视为缺失予以覆盖。
+     */
+    static boolean isMissingText(CharSequence text) {
+        if (text == null || text.length() == 0) return true;
+        CharSequence raw = text;
+        if (raw == null || raw.length() < 2 || raw.charAt(0) != '@') return false;
+        try {
+            Long.parseLong(raw.subSequence(1, raw.length()).toString());
+            return true;
+        } catch (NumberFormatException ignored) {
+            return false;
         }
     }
 

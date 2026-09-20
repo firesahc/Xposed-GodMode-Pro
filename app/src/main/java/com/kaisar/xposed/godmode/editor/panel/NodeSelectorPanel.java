@@ -2,9 +2,7 @@ package com.kaisar.xposed.godmode.editor.panel;
 
 import android.app.Activity;
 import android.graphics.Rect;
-import android.graphics.drawable.Drawable;
 import android.util.DisplayMetrics;
-import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.animation.DecelerateInterpolator;
@@ -17,7 +15,6 @@ import androidx.appcompat.widget.TooltipCompat;
 import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.engine.EditorInteractionMode;
 import com.kaisar.xposed.godmode.engine.util.Logger;
-import com.kaisar.xposed.godmode.util.ModuleResources;
 import com.kaisar.xposed.godmode.editor.overlay.MaskView;
 import com.kaisar.xposed.godmode.util.GmResources;
 import com.kaisar.xposed.godmode.util.ViewUtils;
@@ -95,25 +92,15 @@ public class NodeSelectorPanel {
             mMaskView = MaskView.makeMaskView(activity);
             mMaskView.setMaskOverlay(overlayColor);
             mMaskView.attachToContainer(container);
-            // 尝试注入模块资源，记录是否成功
-            boolean moduleResInjected = ModuleResources.injectInto(activity.getResources());
-            try {
-                // 旋转后宿主 Configuration 已变，模块 Resources 仍冻结旧方向，
-                // 先同步一次再取布局，否则 layout-land 永远不生效。
-                GmResources.syncConfiguration(activity.getResources().getConfiguration());
-            } catch (Throwable ignored) {
-                // 同步失败不阻断面板显示，仅本次可能仍用旧方向布局。
-            }
-            LayoutInflater inflater = LayoutInflater.from(activity);
-            mPanelView = inflater.inflate(
-                    GmResources.getLayout(R.layout.panel_node_selector), container, false);
+            // 渲染上下文：资源/配置快照/主题三权收归模块，宿主仅提供窗口与容器。
+            // 不再调用 injectInto（旧通路只污染宿主 AssetManager，对本面板无收益）。
+            android.content.Context uiContext = GmResources.createUiContext(activity);
+            mPanelView = GmResources.inflate(uiContext, activity,
+                    R.layout.panel_node_selector, container, false);
             GmResources.markAsGmComponent(mPanelView);
-            // 如果注入失败（某些 APP 可能无法通过 addAssetPath 加载模块 APK），
-            // 通过 GmResources（模块自己的 Resources）回退设置模块资源，
-            // 否则 toolbar 的 ImageButton 无图、TextView 无字、背景透明
-            if (!moduleResInjected) {
-                patchModuleResources(mPanelView);
-            }
+            // 确定性样式层：布局只承载结构，背景/图标/文字/颜色统一在此回填；
+            // 逐项独立失败、结束汇总，任一失败不阻断面板显示。
+            patchModuleResources(activity, uiContext, mPanelView);
             mSeekBar = mPanelView.findViewById(R.id.slider);
             mSeekBar.setMax(Math.max(viewNodes.size() - 1, 0));
             mSeekBar.setOnSeekBarChangeListener(seekBarListener);
@@ -127,7 +114,8 @@ public class NodeSelectorPanel {
             });
             mKeySelecting = true;
         } catch (Exception e) {
-            Logger.e(TAG, "show: failed to attach node selector panel", e);
+            Logger.e(TAG, "show: failed to attach node selector panel"
+                    + " activity=" + (activity == null ? "null" : activity.getClass().getName()), e);
             if (mMaskView != null) { mMaskView.detachFromContainer(); mMaskView = null; }
             mKeySelecting = false;
         }
@@ -493,20 +481,53 @@ public class NodeSelectorPanel {
     }
 
     // =========================================================================
-    // 模块资源回退补丁 — 当 ModuleResources.injectInto() 失败时,
-    // 使用 GmResources (模块自己的 Resources 实例) 手动设置 drawable/string,
-    // 避免 toolbar 元素因资源无法解析而呈现空白
+    // 确定性样式层 — 布局只承载结构，背景/图标/文字/颜色统一在此回填。
+    // 资源一律取自本次 show 创建的 uiContext（模块资源＋模块主题＋宿主配置快照），
+    // 不碰宿主 Resources，不依赖 injectInto。逐项独立失败，结束汇总报数。
     // =========================================================================
 
+    /** 样式契约映射：涟漪背景目标（每 View 独立实例，见回填体）。 */
+    static final int[] RIPPLE_VIEW_IDS = {
+            R.id.exchange, R.id.info_flow_mode_btn,
+            R.id.remove_mode_btn, R.id.modify_mode_btn,
+            R.id.block, R.id.preview,
+            R.id.modify, R.id.modify_preview, R.id.undo,
+            R.id.Up, R.id.Down
+    };
+    /** 样式契约映射：{viewId, drawableRes}。 */
+    static final int[][] SRC_BACKFILLS = {
+            {R.id.exchange, R.drawable.exchange},
+            {R.id.block, R.drawable.ic_block},
+            {R.id.undo, R.drawable.ic_undo},
+            {R.id.Up, R.drawable.up},
+            {R.id.Down, R.drawable.down},
+            {R.id.modify, R.drawable.ic_modify},
+    };
+    /** 样式契约映射：{viewId, stringRes}。 */
+    static final int[][] TEXT_BACKFILLS = {
+            {R.id.remove_mode_btn, R.string.mode_remove},
+            {R.id.modify_mode_btn, R.string.mode_modify},
+            {R.id.info_flow_mode_btn, R.string.mode_info_flow_off},
+    };
+    /** 样式契约映射：宿主自取自身框架图标的目标。 */
+    static final int[] HOST_FRAMEWORK_SRC_IDS = {R.id.preview, R.id.modify_preview};
+
     /**
-     * 当模块资源注入失败时,回退设置所有依赖模块资源的 view 属性。
-     * 仅在 {@link ModuleResources#injectInto} 返回 false 时调用。
+     * 程序化回填布局内 @null 化的背景/图标/文字/颜色，无条件调用。
+     *
+     * @param activity  宿主 Activity（仅用于取宿主自身框架图标与日志定位）
+     * @param uiContext 本次 show 的渲染上下文（模块资源/主题/配置快照三权归属）
+     * @param panelView 已 inflate 的面板根视图
      */
-    private static void patchModuleResources(View panelView) {
-        if (panelView == null) return;
+    private static void patchModuleResources(Activity activity,
+            android.content.Context uiContext, View panelView) {
+        if (panelView == null || uiContext == null) return;
+        final android.content.res.Resources uiRes = uiContext.getResources();
+        int ok = 0;
+        int fail = 0;
         try {
             // ── 主工具栏背景 rounded_bg_full ──
-            // 布局: panel_view(FrameLayout) > top_content(LinearLayout) > toolbar_column(LinearLayout 64dp)
+            // 布局: panel_view(FrameLayout) > top_content(LinearLayout) > toolbar_column
             View topContent = panelView.findViewById(R.id.top_content);
             if (topContent instanceof ViewGroup) {
                 ViewGroup tc = (ViewGroup) topContent;
@@ -514,101 +535,179 @@ public class NodeSelectorPanel {
                     View toolbarColumn = tc.getChildAt(0);
                     if (toolbarColumn != null && toolbarColumn.getBackground() == null) {
                         try {
-                            toolbarColumn.setBackground(GmResources.getDrawable(R.drawable.rounded_bg_full));
+                            toolbarColumn.setBackground(uiRes.getDrawable(
+                                    R.drawable.rounded_bg_full, uiContext.getTheme()));
+                            ok++;
                         } catch (Exception e) {
+                            fail++;
                             Logger.d(TAG, "toolbar resource fallback failed", e);
                         }
                     }
                 }
             }
 
-            // ── 按钮背景 ripple_drawable_20dp (所有交互按钮) ──
-            Drawable rippleBg = null;
-            try { rippleBg = GmResources.getDrawable(R.drawable.ripple_drawable_20dp); } catch (Exception e) {
-                Logger.d(TAG, "toolbar resource fallback failed", e);
-            }
-            if (rippleBg != null) {
-                int[] rippleViewIds = {
-                        R.id.exchange, R.id.info_flow_mode_btn,
-                        R.id.remove_mode_btn, R.id.modify_mode_btn,
-                        R.id.block, R.id.preview,
-                        R.id.modify, R.id.modify_preview, R.id.undo,
-                        R.id.Up, R.id.Down
-                };
-                for (int id : rippleViewIds) {
-                    View v = panelView.findViewById(id);
-                    if (v != null && v.getBackground() == null) {
-                        v.setBackground(rippleBg);
+            // ── 按钮背景 ripple（每 View 独立实例：RippleDrawable 有状态，
+            // 共享同一实例会导致跨按钮状态串扰）──
+            // 颜色权威：GmPanelTheme.colorControlHighlight（中性灰），与宿主主题无关；
+            // 改涟漪色只改主题一处，勿改 XML 颜色。
+            for (int id : RIPPLE_VIEW_IDS) {
+                View v = panelView.findViewById(id);
+                if (v == null || v.getBackground() != null) continue;
+                try {
+                    android.graphics.drawable.Drawable ripple =
+                            uiRes.getDrawable(R.drawable.ripple_drawable_20dp,
+                                    uiContext.getTheme());
+                    if (ripple.getConstantState() != null) {
+                        ripple = ripple.getConstantState().newDrawable(
+                                uiRes, uiContext.getTheme());
                     }
+                    v.setBackground(ripple);
+                    ok++;
+                } catch (Exception e) {
+                    fail++;
+                    Logger.d(TAG, "toolbar resource fallback failed", e);
                 }
             }
 
             // ── ImageButton src drawable ──
-            patchImageButtonSrc(panelView, R.id.exchange, R.drawable.exchange);
-            patchImageButtonSrc(panelView, R.id.block, R.drawable.ic_block);
-            patchImageButtonSrc(panelView, R.id.undo, R.drawable.ic_undo);
-            patchImageButtonSrc(panelView, R.id.Up, R.drawable.up);
-            patchImageButtonSrc(panelView, R.id.Down, R.drawable.down);
-            patchImageButtonSrc(panelView, R.id.modify, R.drawable.ic_modify);
+            for (int[] entry : SRC_BACKFILLS) {
+                if (patchImageButtonSrc(uiContext, panelView, entry[0], entry[1])) ok++;
+            }
 
-            // ── TextView text ──
-            patchTextViewText(panelView, R.id.remove_mode_btn, R.string.mode_remove);
-            patchTextViewText(panelView, R.id.modify_mode_btn, R.string.mode_modify);
-            patchTextViewText(panelView, R.id.info_flow_mode_btn, R.string.mode_info_flow_off);
+            // ── 框架图标 preview/modify_preview（宿主自取自身框架图，必然可用）──
+            if (activity != null) {
+                try {
+                    android.graphics.drawable.Drawable previewIcon = activity.getResources()
+                            .getDrawable(android.R.drawable.ic_menu_view, activity.getTheme());
+                    for (int id : HOST_FRAMEWORK_SRC_IDS) {
+                        View v = panelView.findViewById(id);
+                        if (v instanceof ImageButton) {
+                            ImageButton ib = (ImageButton) v;
+                            if (ib.getDrawable() == null && previewIcon != null) {
+                                if (previewIcon.getConstantState() != null) {
+                                    ib.setImageDrawable(previewIcon.getConstantState()
+                                            .newDrawable(activity.getResources(),
+                                                    activity.getTheme()));
+                                } else {
+                                    ib.setImageDrawable(previewIcon);
+                                }
+                                ok++;
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    fail++;
+                    Logger.d(TAG, "toolbar resource fallback failed", e);
+                }
+            }
+
+            // ── TextView text（空或 "@id" 占位符才覆盖）──
+            for (int[] entry : TEXT_BACKFILLS) {
+                if (patchTextViewText(uiRes, panelView, entry[0], entry[1])) ok++;
+            }
+
+            // ── 信息流按钮文字颜色（布局内已摘除，失败保留主题默认）──
+            try {
+                View infoFlowBtn = panelView.findViewById(R.id.info_flow_mode_btn);
+                if (infoFlowBtn instanceof TextView) {
+                    ((TextView) infoFlowBtn).setTextColor(
+                            uiRes.getColorStateList(R.color.info_flow_btn_text,
+                                    uiContext.getTheme()));
+                    ok++;
+                }
+            } catch (Exception e) {
+                fail++;
+                Logger.d(TAG, "toolbar resource fallback failed", e);
+            }
 
             // ── Tooltip (accessibility descriptions) ──
             try {
                 View previewBtn = panelView.findViewById(R.id.preview);
                 if (previewBtn != null) TooltipCompat.setTooltipText(previewBtn,
-                        GmResources.getText(R.string.accessibility_preview));
+                        uiRes.getText(R.string.accessibility_preview));
                 View modifyBtn = panelView.findViewById(R.id.modify);
                 if (modifyBtn != null) TooltipCompat.setTooltipText(modifyBtn,
-                        GmResources.getText(R.string.accessibility_modify));
+                        uiRes.getText(R.string.accessibility_modify));
                 View modifyPreviewBtn = panelView.findViewById(R.id.modify_preview);
                 if (modifyPreviewBtn != null) TooltipCompat.setTooltipText(modifyPreviewBtn,
-                        GmResources.getText(R.string.accessibility_modify_preview));
+                        uiRes.getText(R.string.accessibility_modify_preview));
                 View undoBtn = panelView.findViewById(R.id.undo);
                 if (undoBtn != null) {
-                    CharSequence undoDescription = GmResources.getText(
-                            R.string.accessibility_undo);
+                    CharSequence undoDescription = uiRes.getText(R.string.accessibility_undo);
                     undoBtn.setContentDescription(undoDescription);
                     TooltipCompat.setTooltipText(undoBtn, undoDescription);
                 }
+                ok++;
             } catch (Exception e) {
+                fail++;
                 Logger.d(TAG, "toolbar resource fallback failed", e);
             }
         } catch (Exception e) {
             // 回退设置失败不应阻止 toolbar 显示,静默处理
+            fail++;
+        } finally {
+            if (fail > 0) {
+                Logger.w(TAG, "toolbar style done ok=" + ok + " fail=" + fail);
+            }
         }
     }
 
-    private static void patchImageButtonSrc(View panelView, int viewId, int drawableResId) {
+    /** 成功回填返回 true；已具值或失败返回 false（计入汇总由调用方处理）。 */
+    private static boolean patchImageButtonSrc(android.content.Context uiContext,
+            View panelView, int viewId, int drawableResId) {
         View v = panelView.findViewById(viewId);
         if (v instanceof ImageButton) {
             ImageButton ib = (ImageButton) v;
             if (ib.getDrawable() == null) {
                 try {
-                    Drawable d = GmResources.getDrawable(drawableResId);
-                    if (d != null) ib.setImageDrawable(d);
+                    android.graphics.drawable.Drawable d = uiContext.getResources()
+                            .getDrawable(drawableResId, uiContext.getTheme());
+                    if (d != null) {
+                        ib.setImageDrawable(d);
+                        return true;
+                    }
                 } catch (Exception e) {
                     Logger.d(TAG, "toolbar resource fallback failed", e);
                 }
             }
         }
+        return false;
     }
 
-    private static void patchTextViewText(View panelView, int viewId, int stringResId) {
+    /** 空或 "@id" 占位符（MIUI 解析失败产物）才覆盖；成功返回 true。 */
+    private static boolean patchTextViewText(android.content.res.Resources uiRes,
+            View panelView, int viewId, int stringResId) {
         View v = panelView.findViewById(viewId);
         if (v instanceof TextView) {
             TextView tv = (TextView) v;
-            if (tv.length() == 0) {
+            if (isMissingText(tv.getText())) {
                 try {
-                    CharSequence text = GmResources.getText(stringResId);
-                    if (text != null) tv.setText(text);
+                    CharSequence text = uiRes.getText(stringResId);
+                    if (text != null) {
+                        tv.setText(text);
+                        return true;
+                    }
                 } catch (Exception e) {
                     Logger.d(TAG, "toolbar resource fallback failed", e);
                 }
             }
+        }
+        return false;
+    }
+
+    /**
+     * MIUI 下解析失败的字符串不会留空，而是被填成 "@&lt;resId&gt;" 占位符
+     *（如移除模式按钮显示 "@-1793982322"），同样视为缺失予以覆盖。
+     */
+    static boolean isMissingText(CharSequence text) {
+        if (text == null || text.length() == 0) return true;
+        CharSequence raw = text;
+        if (raw == null || raw.length() < 2 || raw.charAt(0) != '@') return false;
+        try {
+            Long.parseLong(raw.subSequence(1, raw.length()).toString());
+            return true;
+        } catch (NumberFormatException ignored) {
+            return false;
         }
     }
 }
