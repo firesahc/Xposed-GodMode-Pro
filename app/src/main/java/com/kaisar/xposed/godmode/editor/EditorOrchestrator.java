@@ -93,6 +93,17 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     private Activity mObservedPanelActivity;
     private boolean mPanelRebuildPosted;
     private long mPanelObserverGeneration;
+    /**
+     * 当前 Activity 最近一次配置事件的语义快照。
+     *
+     * <p>布局观察只报告宿主发生了布局事实，不能用现场配置替换事件已经
+     * 确定的目标配置。快照与 Activity 一起绑定，避免后台 Activity 的事件
+     * 污染当前编辑会话；{@link #mPanelObserverGeneration} 仍只负责观察者
+     * 生命周期，不承担配置语义的排序。</p>
+     */
+    private WeakReference<Activity> mConfigurationEventActivityRef =
+            new WeakReference<>(null);
+    private ActivityConfigurationSnapshot mLatestEventSnapshot;
     private Runnable mPendingPanelRebuild;
     private final View.OnLayoutChangeListener mPanelLayoutChangeListener =
             new View.OnLayoutChangeListener() {
@@ -107,7 +118,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
                         return;
                     }
                     ActivityConfigurationSnapshot current =
-                            GmResources.captureConfiguration(activity);
+                            resolveConfigurationSnapshot(activity, null);
                     if (!mNodePanel.isConfigurationStale(current)) return;
                     postPanelConfigurationReconcile(activity, view);
                 }
@@ -344,9 +355,35 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
                 onActivityDestroyed(activity);
                 break;
             case CONFIG_CHANGED:
-                reconcileNodePanelConfiguration(activity, event.getConfigurationSnapshot());
+                // 只接受当前编辑会话的配置事件；事件快照是本次对账的目标，
+                // 后续布局观察必须复用它，不能退回宿主尚未同步的现场配置。
+                if (activity == null || activity != mCurrentActivityRef.get()) return;
+                ActivityConfigurationSnapshot snapshot = event.getConfigurationSnapshot();
+                if (snapshot != null) {
+                    mConfigurationEventActivityRef = new WeakReference<>(activity);
+                    mLatestEventSnapshot = snapshot;
+                }
+                reconcileNodePanelConfiguration(activity, snapshot);
                 break;
         }
+    }
+
+    /**
+     * Resolves the configuration target for one reconciliation.
+     *
+     * <p>An explicit event snapshot wins first. For observer and lifecycle
+     * calls without an explicit snapshot, the latest snapshot belonging to the
+     * same Activity remains authoritative. Only a session with no event
+     * snapshot falls back to the host's current resources.</p>
+     */
+    private ActivityConfigurationSnapshot resolveConfigurationSnapshot(Activity activity,
+            ActivityConfigurationSnapshot explicitSnapshot) {
+        if (explicitSnapshot != null) return explicitSnapshot;
+        if (activity != null && activity == mConfigurationEventActivityRef.get()
+                && mLatestEventSnapshot != null) {
+            return mLatestEventSnapshot;
+        }
+        return GmResources.captureConfiguration(activity);
     }
 
     /**
@@ -366,8 +403,8 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
             if (activity.getWindow() == null
                     || activity.getWindow().getDecorView() == null) return;
             if (!mNodePanel.isShowing()) return;
-            ActivityConfigurationSnapshot current = snapshot != null
-                    ? snapshot : GmResources.captureConfiguration(activity);
+            ActivityConfigurationSnapshot current =
+                    resolveConfigurationSnapshot(activity, snapshot);
             if (!mNodePanel.isConfigurationStale(current)) return;
             if (mPropertyEditor.isShowing()) {
                 dismissNodeSelectPanel();
@@ -411,6 +448,8 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
                         || mCurrentActivityRef.get() != activity) {
                     return;
                 }
+                // 重新解析，而不是使用观察发生时的现场快照：如果配置事件
+                // 在排队期间到达，这里必须以最新事件快照为准。
                 reconcileNodePanelConfiguration(activity, null);
             }
         };
@@ -466,6 +505,9 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
         Activity current = mCurrentActivityRef.get();
         if (current != a) {
             mSessionGeneration++;
+            // Activity 更替后旧事件快照失效，防止污染新会话的重建判断。
+            mConfigurationEventActivityRef = new WeakReference<>(null);
+            mLatestEventSnapshot = null;
         }
         if (current != null && current != a) {
             mPropertyEditor.abandon();
@@ -554,7 +596,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     // =========================================================================
 
     private void showNodeSelectPanel(final Activity activity) {
-        showNodeSelectPanel(activity, null);
+        showNodeSelectPanel(activity, resolveConfigurationSnapshot(activity, null));
     }
 
     private void showNodeSelectPanel(final Activity activity,
