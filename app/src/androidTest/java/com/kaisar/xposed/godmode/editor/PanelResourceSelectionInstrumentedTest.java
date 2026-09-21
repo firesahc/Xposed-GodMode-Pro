@@ -11,6 +11,7 @@ import android.content.Context;
 import android.content.res.Configuration;
 import android.content.Intent;
 import android.os.SystemClock;
+import android.os.LocaleList;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -35,6 +36,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.After;
@@ -91,6 +93,40 @@ public final class PanelResourceSelectionInstrumentedTest {
                         LinearLayout.VERTICAL);
                 assertProductionUiContext(activity, Configuration.ORIENTATION_LANDSCAPE,
                         LinearLayout.HORIZONTAL);
+        });
+    }
+
+    @Test
+    public void configurationOverlayPreservesNonProjectedQualifiers() throws Exception {
+        runOnMain(awaitInitialHost(), activity -> {
+            Configuration base = new Configuration();
+            base.setLocales(new LocaleList(Locale.US));
+            base.mcc = 310;
+            base.mnc = 260;
+            base.keyboard = Configuration.KEYBOARD_QWERTY;
+            base.keyboardHidden = Configuration.KEYBOARDHIDDEN_NO;
+            base.navigation = Configuration.NAVIGATION_DPAD;
+            base.touchscreen = Configuration.TOUCHSCREEN_FINGER;
+
+            ActivityConfigurationSnapshot snapshot = snapshotFor(
+                    activity, Configuration.ORIENTATION_LANDSCAPE);
+            Configuration overlaid = ActivityConfigurationSnapshotMapper.overlay(base, snapshot);
+
+            assertEquals("en-US", base.getLocales().toLanguageTags());
+            assertEquals(310, base.mcc);
+            assertEquals(260, base.mnc);
+            assertEquals(Configuration.KEYBOARD_QWERTY, base.keyboard);
+            assertEquals(Configuration.KEYBOARDHIDDEN_NO, base.keyboardHidden);
+            assertEquals(Configuration.NAVIGATION_DPAD, base.navigation);
+            assertEquals(Configuration.TOUCHSCREEN_FINGER, base.touchscreen);
+            assertEquals("en-US", overlaid.getLocales().toLanguageTags());
+            assertEquals(310, overlaid.mcc);
+            assertEquals(260, overlaid.mnc);
+            assertEquals(Configuration.KEYBOARD_QWERTY, overlaid.keyboard);
+            assertEquals(Configuration.KEYBOARDHIDDEN_NO, overlaid.keyboardHidden);
+            assertEquals(Configuration.NAVIGATION_DPAD, overlaid.navigation);
+            assertEquals(Configuration.TOUCHSCREEN_FINGER, overlaid.touchscreen);
+            assertEquals(snapshot.getOrientation(), overlaid.orientation);
         });
     }
 

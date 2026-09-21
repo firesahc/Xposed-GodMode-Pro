@@ -44,6 +44,12 @@ public final class ActivityConfigurationSnapshotMapperTest {
         base.screenWidthDp = 400;
         base.screenHeightDp = 800;
         base.densityDpi = 320;
+        base.mcc = 310;
+        base.mnc = 260;
+        base.keyboard = Configuration.KEYBOARD_QWERTY;
+        base.keyboardHidden = Configuration.KEYBOARDHIDDEN_NO;
+        base.navigation = Configuration.NAVIGATION_DPAD;
+        base.touchscreen = Configuration.TOUCHSCREEN_FINGER;
 
         ActivityConfigurationSnapshot snapshot = new ActivityConfigurationSnapshot(
                 Configuration.ORIENTATION_LANDSCAPE, 800, 400, 400, 420,
@@ -56,6 +62,12 @@ public final class ActivityConfigurationSnapshotMapperTest {
         assertEquals(400, base.screenWidthDp);
         assertEquals(800, base.screenHeightDp);
         assertEquals(320, base.densityDpi);
+        assertEquals(310, base.mcc);
+        assertEquals(260, base.mnc);
+        assertEquals(Configuration.KEYBOARD_QWERTY, base.keyboard);
+        assertEquals(Configuration.KEYBOARDHIDDEN_NO, base.keyboardHidden);
+        assertEquals(Configuration.NAVIGATION_DPAD, base.navigation);
+        assertEquals(Configuration.TOUCHSCREEN_FINGER, base.touchscreen);
         assertEquals(snapshot.getOrientation(), overlaid.orientation);
         assertEquals(snapshot.getScreenWidthDp(), overlaid.screenWidthDp);
         assertEquals(snapshot.getScreenHeightDp(), overlaid.screenHeightDp);
