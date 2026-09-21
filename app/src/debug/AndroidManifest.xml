@@ -1,8 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application>
+        <!-- 测试宿主 Activity 必须对外可启动：CI 前台化经 adb shell am start
+             直接拉起；非导出在 API 31+ 必抛 SecurityException，全矩阵陪葬。
+             仅 debug manifest，release 包无此声明。 -->
         <activity
             android:name="com.kaisar.xposed.godmode.orchestrator.ViewControllerTestActivity"
-            android:exported="false" />
+            android:exported="true" />
     </application>
 </manifest>

@@ -459,6 +459,22 @@ try {
         $failures.Add("Ripple mask contract is missing: $rippleLayout must define @android:id/mask")
     }
 
+    # Functional scripts must not wrap unprivileged commands in su:
+    # am/dumpsys/test/echo need no privilege on userdebug CI emulators (and CI
+    # images may lack su entirely). The optional `su -c true` capability probe
+    # is telemetry only and must never gate execution. su stays allowed for
+    # genuinely privileged operations (mkdir/stat/tail under /data/misc).
+    $privilegedBypass = Invoke-SourceSearch `
+        -Pattern 'su\s+-c\s+"(am|dumpsys|echo|test|ls|input|cmd)\b' `
+        -SearchRoots @("scripts") `
+        -IncludeFileName "*.ps1" `
+        -ExcludeBuildDirectories
+    if (!$privilegedBypass.Succeeded) {
+        $failures.Add("Unable to scan scripts for su usage: $($privilegedBypass.Error)")
+    } elseif ($privilegedBypass.Matches.Count -gt 0) {
+        $failures.Add("Scripts must not hard-depend on su for unprivileged commands:`n$($privilegedBypass.Matches -join "`n")")
+    }
+
     if ($failures.Count -gt 0) {
         $failures | ForEach-Object { Write-Error $_ }
         exit 1

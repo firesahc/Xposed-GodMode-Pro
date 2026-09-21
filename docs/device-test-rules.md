@@ -10,8 +10,13 @@
 必须在每个测试方法开始前由测试脚本显式执行：
 
 ```powershell
-adb shell su -c "am start -W -n <package>/<test-activity>"
+adb shell am start -W -n <package>/<test-activity>
 ```
+
+自有 debug/test 包的前台 Activity 不得依赖 `su` 启动；测试宿主应通过普通
+`adb shell am start` 显式拉起，并由脚本确认进入 `RESUMED`。`su` 只允许用于
+确实需要特权的持久化日志目录和日志文件操作，不能因为日志前置条件把特权依赖
+扩散到 Activity 启动或 instrumentation 执行。
 
 脚本还必须确认该 Activity 进入 `RESUMED`；仅看到 `Status: ok` 不足以证明
 宿主已经在前台。宿主未进入 `RESUMED` 时，测试应标记为基础设施失败，不能
@@ -31,6 +36,12 @@ adb shell su -c "am start -W -n <package>/<test-activity>"
 
 本项目当前源码常量和设备实际目录均为 `/data/misc/godmode/`，主日志为
 `/data/misc/godmode/godmodepro.log`。测试报告必须写明该路径。
+
+环境假设（CI 模拟器无 LSPosed，故 system_server 侧行为含系统侧日志写入
+不在 instrumentation 矩阵验证范围）：前检查只做 ensure（不存在则建，
+建不出则警告并跳过日志相关断言），不做存在性硬断言；硬门禁只在
+`-RequirePersistentLog` 下生效，该 flag 仅用于真机或有 root 且已注入
+LSPosed 的宿主。
 
 主日志每条记录使用以下单行格式：
 

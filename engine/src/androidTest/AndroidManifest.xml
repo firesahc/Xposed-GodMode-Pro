@@ -3,7 +3,7 @@
     <application>
         <activity
             android:name="com.kaisar.xposed.godmode.engine.applier.ModifyApplierTestActivity"
-            android:exported="false" />
+            android:exported="true" />
         <activity
             android:name="com.kaisar.xposed.godmode.engine.matcher.CompositeMatcherTestActivity"
             android:exported="false" />

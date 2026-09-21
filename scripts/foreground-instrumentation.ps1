@@ -3,7 +3,9 @@ function Bring-TestHostToForeground(
         [string]$packageName,
         [string]$activityName,
         [string]$testName) {
-    $start = & $Adb shell su -c "am start -W -n $packageName/$activityName" 2>&1
+    # 注意：自有可调试包的 am start 在 userdebug 模拟器上不需要任何特权，
+    # 此处刻意不用 su -c（CI 镜像不保证 su 存在；此前因此全矩阵失败）。
+    $start = & $Adb shell am start -W -n $packageName/$activityName 2>&1
     $startText = $start -join [Environment]::NewLine
     if ($LASTEXITCODE -ne 0 -or $startText -notmatch "Status: ok") {
         throw "Unable to foreground test host for $testName`n$startText"
@@ -128,7 +130,9 @@ function Invoke-ForegroundInstrumentationAttempt(
 
         return [pscustomobject]@{
             Passed = $passed
-            InfrastructureFailure = $null -ne $launchFailure
+            # 超时没有可靠的测试终态，同样属于设备/测试基础设施失败，
+            # 需要进入重试和 Infrastructure failures 分类，而不是伪装成断言失败。
+            InfrastructureFailure = $timedOut -or ($null -ne $launchFailure)
             Output = $outputText
         }
     } finally {
