@@ -3,7 +3,7 @@ package com.kaisar.xposed.godmode.editor.toolbar;
 import android.view.View;
 
 import com.kaisar.xposed.godmode.R;
-import com.kaisar.xposed.godmode.editor.RuleEditorClient;
+import com.kaisar.xposed.godmode.editor.IRuleEditor;
 
 import java.util.Set;
 
@@ -16,12 +16,12 @@ public final class ToolbarVisibilityController {
      * 将工具栏可见性偏好应用到节点选择面板。
      * 在面板 View 创建完毕后调用。
      */
-    public static void apply(View panel, String hostPackageName) {
-        if (panel == null || hostPackageName == null || hostPackageName.length() == 0) return;
+    public static void apply(View panel, String hostPackageName, IRuleEditor ruleEditor) {
+        if (panel == null || hostPackageName == null || hostPackageName.length() == 0
+                || ruleEditor == null) return;
 
         Set<String> hiddenItems = ToolbarPrefsManager.parseHiddenItems(
-                RuleEditorClient.getInstance().getToolbarHiddenItems(
-                        hostPackageName));
+                ruleEditor.getToolbarHiddenItems(hostPackageName));
 
         if (hiddenItems.contains("pref_show_remove_mode")) {
             hideView(panel, R.id.remove_mode_toggle);

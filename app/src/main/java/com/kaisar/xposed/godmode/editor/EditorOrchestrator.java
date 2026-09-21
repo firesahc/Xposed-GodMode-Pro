@@ -566,7 +566,8 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
         mNodePanel.show(viewNodes, activity, container, OVERLAY_COLOR, mSeekBarHandler,
                 configurationSnapshot);
         if (!mNodePanel.isKeySelecting()) return;
-        ToolbarVisibilityController.apply(mNodePanel.getPanelView(), activity.getPackageName());
+        ToolbarVisibilityController.apply(mNodePanel.getPanelView(), activity.getPackageName(),
+                mRuleEditor);
         installPanelLayoutObserver(activity);
         mNodePanel.wireButtons(activity, container, mNodePanelCallbacks);
         mKeyEventHandler.updateInfoFlowModeButton();
