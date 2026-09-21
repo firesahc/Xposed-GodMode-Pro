@@ -1,6 +1,7 @@
 package com.kaisar.xposed.godmode.editor.panel;
 
 import android.app.Activity;
+import android.content.res.Configuration;
 import android.graphics.Rect;
 import android.util.DisplayMetrics;
 import android.view.View;
@@ -618,6 +619,10 @@ public class NodeSelectorPanel {
         APPLIED, ALREADY_PRESENT, OPTIONAL_SKIPPED, MISSING_REQUIRED, FAILED
     }
 
+    /**
+     * Counts each declared style/accessibility patch operation; expected is
+     * not a count of every visual resource present in the toolbar.
+     */
     private static final class StyleStats {
         int expected;
         int applied;
@@ -788,9 +793,10 @@ public class NodeSelectorPanel {
             String summary = "toolbar style complete"
                     + " source=" + (uiContext.isFallback()
                             ? "CONFIGURED_ASSET_FALLBACK" : "PACKAGE")
-                    + " orientation=" + (uiContext.getConfigurationSnapshot() == null
-                            ? "unknown" : uiContext.getConfigurationSnapshot().getOrientation())
-                    + " toolbarOrientation=" + resolveToolbarOrientation(panelView)
+                    + " orientation=" + formatConfigurationOrientation(
+                            uiContext.getConfigurationSnapshot())
+                    + " toolbarOrientation=" + formatToolbarOrientation(
+                            resolveToolbarOrientation(panelView))
                     + " expected=" + stats.expected
                     + " applied=" + stats.applied
                     + " alreadyPresent=" + stats.alreadyPresent
@@ -866,6 +872,25 @@ public class NodeSelectorPanel {
         View toolbar = group.getChildAt(0);
         return toolbar instanceof LinearLayout
                 ? ((LinearLayout) toolbar).getOrientation() : -1;
+    }
+
+    private static String formatConfigurationOrientation(
+            ActivityConfigurationSnapshot snapshot) {
+        if (snapshot == null) return "UNKNOWN";
+        switch (snapshot.getOrientation()) {
+            case Configuration.ORIENTATION_PORTRAIT:
+                return "PORTRAIT";
+            case Configuration.ORIENTATION_LANDSCAPE:
+                return "LANDSCAPE";
+            default:
+                return "UNKNOWN";
+        }
+    }
+
+    private static String formatToolbarOrientation(int orientation) {
+        if (orientation == LinearLayout.VERTICAL) return "VERTICAL";
+        if (orientation == LinearLayout.HORIZONTAL) return "HORIZONTAL";
+        return "UNKNOWN";
     }
 
     /**

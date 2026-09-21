@@ -89,26 +89,53 @@ public final class GmResources {
         ActivityConfigurationSnapshot renderedSnapshot =
                 ActivityConfigurationSnapshotMapper.from(effectiveConfiguration);
 
+        Context packageContext = null;
         try {
-            Context packageContext = activity.createPackageContext(MODULE_PACKAGE, 0);
-            return configuredUiContext(packageContext, effectiveConfiguration,
-                    renderedSnapshot, false);
+            packageContext = activity.createPackageContext(MODULE_PACKAGE, 0);
         } catch (PackageManager.NameNotFoundException
                 | SecurityException
                 | Resources.NotFoundException
-                | IllegalArgumentException first) {
-            Logger.d(TAG, "package context flag=0 failed, try IGNORE_SECURITY", first);
+                | IllegalArgumentException
+                | UnsupportedOperationException first) {
+            Logger.d(TAG, "ui context stage=PACKAGE_CONTEXT flags=0 failed"
+                    + ", continue with IGNORE_SECURITY", first);
         }
+        if (packageContext != null) {
+            try {
+                return configuredUiContext(packageContext, effectiveConfiguration,
+                        renderedSnapshot, false);
+            } catch (Resources.NotFoundException
+                    | SecurityException
+                    | IllegalArgumentException
+                    | UnsupportedOperationException firstConfiguredFailure) {
+                Logger.d(TAG, "ui context stage=CONFIGURED_CONTEXT flags=0 failed"
+                        + ", continue with IGNORE_SECURITY", firstConfiguredFailure);
+            }
+        }
+
+        packageContext = null;
         try {
-            Context packageContext = activity.createPackageContext(
+            packageContext = activity.createPackageContext(
                     MODULE_PACKAGE, Context.CONTEXT_IGNORE_SECURITY);
-            return configuredUiContext(packageContext, effectiveConfiguration,
-                    renderedSnapshot, false);
         } catch (PackageManager.NameNotFoundException
                 | SecurityException
                 | Resources.NotFoundException
-                | IllegalArgumentException second) {
-            Logger.d(TAG, "package context IGNORE_SECURITY failed, hand-built fallback", second);
+                | IllegalArgumentException
+                | UnsupportedOperationException second) {
+            Logger.d(TAG, "ui context stage=PACKAGE_CONTEXT flags=IGNORE_SECURITY failed"
+                    + ", hand-built fallback", second);
+        }
+        if (packageContext != null) {
+            try {
+                return configuredUiContext(packageContext, effectiveConfiguration,
+                        renderedSnapshot, false);
+            } catch (Resources.NotFoundException
+                    | SecurityException
+                    | IllegalArgumentException
+                    | UnsupportedOperationException secondConfiguredFailure) {
+                Logger.d(TAG, "ui context stage=CONFIGURED_CONTEXT flags=IGNORE_SECURITY failed"
+                        + ", hand-built fallback", secondConfiguredFailure);
+            }
         }
 
         if (sModuleAssets == null) {
@@ -141,8 +168,10 @@ public final class GmResources {
             return result;
         } catch (Resources.NotFoundException
                 | SecurityException
-                | IllegalArgumentException fallbackFailure) {
-            Logger.e(TAG, "configuration-scoped module resource fallback failed", fallbackFailure);
+                | IllegalArgumentException
+                | UnsupportedOperationException fallbackFailure) {
+            Logger.e(TAG, "ui context stage=CONFIGURED_ASSET_FALLBACK failed",
+                    fallbackFailure);
             throw new IllegalStateException("module UI resources unavailable", fallbackFailure);
         }
     }
@@ -151,10 +180,27 @@ public final class GmResources {
             Configuration effectiveConfiguration,
             ActivityConfigurationSnapshot renderedSnapshot,
             boolean fallback) {
-        Context configured = packageContext.createConfigurationContext(
-                new Configuration(effectiveConfiguration));
-        Context themed = themedContext(configured);
-        return new UiContext(themed, themed.getResources(), renderedSnapshot, fallback);
+        Context configured;
+        try {
+            configured = packageContext.createConfigurationContext(
+                    new Configuration(effectiveConfiguration));
+        } catch (Resources.NotFoundException
+                | SecurityException
+                | IllegalArgumentException
+                | UnsupportedOperationException failure) {
+            Logger.d(TAG, "ui context stage=CONFIGURATION_CONTEXT failed", failure);
+            throw failure;
+        }
+        try {
+            Context themed = themedContext(configured);
+            return new UiContext(themed, themed.getResources(), renderedSnapshot, fallback);
+        } catch (Resources.NotFoundException
+                | SecurityException
+                | IllegalArgumentException
+                | UnsupportedOperationException failure) {
+            Logger.d(TAG, "ui context stage=THEME_CONTEXT failed", failure);
+            throw failure;
+        }
     }
 
     private static Context themedContext(Context base) {
