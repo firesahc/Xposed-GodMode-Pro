@@ -16,17 +16,40 @@ $targetPackage = "com.viewblocker.jrsen"
 $testPackage = "com.viewblocker.jrsen.test"
 $runner = "com.viewblocker.jrsen.test/androidx.test.runner.AndroidJUnitRunner"
 $activity = "com.kaisar.xposed.godmode.orchestrator.ViewControllerTestActivity"
-$testClass = "com.kaisar.xposed.godmode.orchestrator.ViewControllerInstrumentedTest"
 $deviceLogRoot = "/data/misc/godmode"
 . (Join-Path $PSScriptRoot "foreground-instrumentation.ps1")
-$tests = @(
-    "deletingVisibleModifyRuleRestoresOwnedProperties",
-    "deletingRemoveRuleRestoresViewHiddenByThatRule",
-    "recyclingDetachedItemClearsOwnerBeforeRebind",
-    "repeatedApplyStillRestoresFirstBaseline",
-    "revokePreservesHostValuesChangedAfterApply",
-    "recreatedActivityCanApplyAndRevokeWithoutOldOwnerState",
-    "deletingOneRuleDoesNotRevokeAnotherTargetWithSameAction"
+$testSuites = @(
+    @{
+        TestClass = "com.kaisar.xposed.godmode.orchestrator.ViewControllerInstrumentedTest"
+        Tests = @(
+            "deletingVisibleModifyRuleRestoresOwnedProperties",
+            "deletingRemoveRuleRestoresViewHiddenByThatRule",
+            "recyclingDetachedItemClearsOwnerBeforeRebind",
+            "repeatedApplyStillRestoresFirstBaseline",
+            "revokePreservesHostValuesChangedAfterApply",
+            "recreatedActivityCanApplyAndRevokeWithoutOldOwnerState",
+            "deletingOneRuleDoesNotRevokeAnotherTargetWithSameAction"
+        )
+    },
+    @{
+        TestClass = "com.kaisar.xposed.godmode.editor.PanelResourceSelectionInstrumentedTest"
+        Tests = @(
+            "portraitInflationUsesVerticalToolbarColumn",
+            "landscapeInflationUsesHorizontalToolbarColumn",
+            "productionUiContextInflationUsesRequestedConfiguration",
+            "immediateRebuildLeavesOnePanelAndOneMask",
+            "configurationOverlayPreservesNonProjectedQualifiers"
+        )
+    },
+    @{
+        TestClass = "com.kaisar.xposed.godmode.editor.EditorOrchestratorConfigurationInstrumentedTest"
+        Tests = @(
+            "configChangedRebuildsSelectorAcrossOrientations",
+            "layoutObservationAndConfigChangedConvergeToOnePanel",
+            "configurationChangedDoesNotOpenHiddenPanel",
+            "propertyEditorConfigurationChangedClosesCurrentSession"
+        )
+    }
 )
 
 function Assert-DeviceLogRoot {
@@ -57,33 +80,38 @@ foreach ($apk in @($appApk, $testApk)) {
 }
 
 $failed = @()
-foreach ($test in $tests) {
-    $passed = $false
-    for ($attempt = 1; $attempt -le 3 -and -not $passed; $attempt++) {
-        & $Adb shell am force-stop com.kaisar.xposed.godmode.engine.test | Out-Null
-        & $Adb shell am force-stop $targetPackage | Out-Null
-        & $Adb shell am force-stop $testPackage | Out-Null
-        Start-Sleep -Seconds 1
+$totalTests = 0
+foreach ($suite in $testSuites) {
+    $testClass = $suite.TestClass
+    foreach ($test in $suite.Tests) {
+        $totalTests++
+        $passed = $false
+        for ($attempt = 1; $attempt -le 3 -and -not $passed; $attempt++) {
+            & $Adb shell am force-stop com.kaisar.xposed.godmode.engine.test | Out-Null
+            & $Adb shell am force-stop $targetPackage | Out-Null
+            & $Adb shell am force-stop $testPackage | Out-Null
+            Start-Sleep -Seconds 1
 
-        $result = Invoke-ForegroundInstrumentationAttempt `
-            -Adb $Adb -Runner $runner -TestClass $testClass -TestName $test `
-            -ForegroundPackage $targetPackage -ActivityName $activity `
-            -CleanupPackages @($targetPackage, $testPackage)
-        $passed = $result.Passed
-        $outputText = $result.Output
-        $infrastructureFailure = $result.InfrastructureFailure
+            $result = Invoke-ForegroundInstrumentationAttempt `
+                -Adb $Adb -Runner $runner -TestClass $testClass -TestName $test `
+                -ForegroundPackage $targetPackage -ActivityName $activity `
+                -CleanupPackages @($targetPackage, $testPackage)
+            $passed = $result.Passed
+            $outputText = $result.Output
+            $infrastructureFailure = $result.InfrastructureFailure
 
-        if (-not $passed -and $infrastructureFailure -and $attempt -lt 3) {
-            Write-Host "RETRY $test after device infrastructure interruption ($attempt/3)"
-        } elseif (-not $passed) {
-            Write-Host $outputText
-            break
+            if (-not $passed -and $infrastructureFailure -and $attempt -lt 3) {
+                Write-Host "RETRY $testClass::$test after device infrastructure interruption ($attempt/3)"
+            } elseif (-not $passed) {
+                Write-Host $outputText
+                break
+            }
         }
-    }
-    if ($passed) {
-        Write-Host "PASS $test"
-    } else {
-        $failed += $test
+        if ($passed) {
+            Write-Host "PASS $testClass::$test"
+        } else {
+            $failed += "$testClass::$test"
+        }
     }
 }
 
@@ -98,4 +126,4 @@ if ($RequirePersistentLog) {
     Write-Host "PERSISTENT_LOG_CHECK not requested; pass -RequirePersistentLog for file/format validation."
 }
 
-Write-Host "All $($tests.Count) app instrumentation tests passed."
+Write-Host "All $totalTests app instrumentation tests passed."
