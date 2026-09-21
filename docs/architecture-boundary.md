@@ -80,6 +80,9 @@ ipc 门面    → ServiceConnection（唯一连接核）/ contract / rule
 5. **配置事实单一来源**：`CONFIG_CHANGED` 是语义配置事件的唯一来源。
    `DecorView` layout observer 仅用于观察事实并触发统一 reconcile 安全网，
    不发布 EventBus 事件、不拥有重建策略，也不自动打开编辑器。
+6. **配置快照是最小投影**：`ActivityConfigurationSnapshot` 只表达编辑器资源选择
+   和面板测量所需字段，不是完整 Android `Configuration` 替代品；locale、keyboard、
+   navigation、window 等未投影字段继续由 App 层基础 `Configuration` 保留。
 
 ## 五、Xposed 层职责（9 进 10 禁）
 
