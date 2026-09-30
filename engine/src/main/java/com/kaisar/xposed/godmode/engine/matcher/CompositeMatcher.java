@@ -62,8 +62,10 @@ public final class CompositeMatcher implements Matcher {
         // "首个同名 id 命中"正是稳定错配同类型首个元素缺陷的根源；
         // 错配宿主内容的代价高于暂时漏应用，漏应用由对账与后续 bind 兜底重试。
         // 忽略深度（用户在详情页显式开启）则跳过本分支，走下方 resourceName 单锚。
-        if (!spec.isIgnoreDepth() && spec.getDepth() != null && spec.getDepth().length > 0) {
-            View byDepth = ViewTraversal.findViewByDepth(root, spec.getDepth());
+        // depth 取一次局部复用：getDepth() 每次返回 clone()，条件+查找共用同一数组。
+        int[] depth = spec.getDepth();
+        if (!spec.isIgnoreDepth() && depth != null && depth.length > 0) {
+            View byDepth = ViewTraversal.findViewByDepth(root, depth);
             if (byDepth == null) {
                 logSingleElementFailure(spec, "depth_path_missing", null);
                 return null;
@@ -133,7 +135,8 @@ public final class CompositeMatcher implements Matcher {
 
         // 信息流规则：itemPath 导航 + AND 验证，无全树兜底
         List<View> results = new ArrayList<>();
-        if (spec.isRepeatable() && spec.getItemPath() != null && spec.getItemPath().length > 0
+        String[] itemPath = spec.getItemPath();
+        if (spec.isRepeatable() && itemPath != null && itemPath.length > 0
                 && spec.getItemRootClass() != null) {
             collectRecyclerMatches(root, spec, results);
             if (!results.isEmpty()) return results;
@@ -151,8 +154,9 @@ public final class CompositeMatcher implements Matcher {
         int eligibleCount = 0;
         for (int i = 0; i < specs.size(); i++) {
             MatchFields spec = specs.get(i);
-            if (spec != null && spec.isRepeatable() && spec.getItemPath() != null
-                    && spec.getItemPath().length > 0 && spec.getItemRootClass() != null) {
+            if (spec == null || !spec.isRepeatable()) continue;
+            String[] itemPath = spec.getItemPath();
+            if (itemPath != null && itemPath.length > 0 && spec.getItemRootClass() != null) {
                 results.put(i, new ArrayList<>());
                 eligibleCount++;
             }
@@ -386,9 +390,10 @@ public final class CompositeMatcher implements Matcher {
      * @return 验证通过的目标 View，导航失败或验证失败返回 null
      */
     private static View matchSingleItem(View itemRoot, MatchFields spec) {
-        View found = ViewTraversal.findViewByItemPath(itemRoot, spec.getItemPath(), 0);
+        String[] itemPath = spec.getItemPath();
+        View found = ViewTraversal.findViewByItemPath(itemRoot, itemPath, 0);
         if (found == null) {
-            found = ViewTraversal.findViewByClassChain(itemRoot, spec.getItemPath(), 0);
+            found = ViewTraversal.findViewByClassChain(itemRoot, itemPath, 0);
         }
         if (found != null && isStructuralMatch(found, spec, false)) {
             return found;
@@ -429,8 +434,9 @@ public final class CompositeMatcher implements Matcher {
 
         // Repeatable targets are located structurally. Their captured text/description
         // must not prevent cross-card matching.
-        boolean structuralRepeatable = spec.isRepeatable() && spec.getItemPath() != null
-                && spec.getItemPath().length > 0;
+        String[] itemPath = spec.getItemPath();
+        boolean structuralRepeatable = spec.isRepeatable() && itemPath != null
+                && itemPath.length > 0;
 
         if (!structuralRepeatable && hasContent(spec.getText())) {
             if (!(view instanceof TextView)) return "text_target_not_text_view";
@@ -461,30 +467,34 @@ public final class CompositeMatcher implements Matcher {
     }
 
     private void logSingleElementFailure(MatchFields spec, String reason, View actual) {
+        // 字段一次取齐复用：key 构造与日志行共用，避免重复 getter/clone。
         String actualResource = actualResourceName(actual);
+        String activity = valueOrEmpty(spec.getActivityClass());
+        String viewClass = valueOrEmpty(spec.getViewClass());
+        String resource = valueOrEmpty(spec.getResourceName());
+        String text = valueOrEmpty(spec.getText());
+        String description = valueOrEmpty(spec.getDescription());
+        String parent = valueOrEmpty(spec.getParentClass());
+        String depth = Arrays.toString(spec.getDepth());
+        String actualClass = actual == null ? "" : actual.getClass().getName();
+        int actualVisibility = actual == null ? -1 : actual.getVisibility();
         String key = (reason == null ? "unknown" : reason) + "|"
-                + valueOrEmpty(spec.getActivityClass()) + "|"
-                + valueOrEmpty(spec.getViewClass()) + "|"
-                + valueOrEmpty(spec.getResourceName()) + "|"
-                + valueOrEmpty(spec.getText()) + "|"
-                + valueOrEmpty(spec.getDescription()) + "|"
-                + valueOrEmpty(spec.getParentClass()) + "|"
-                + Arrays.toString(spec.getDepth()) + "|"
-                + (actual == null ? "" : actual.getClass().getName()) + "|"
-                + (actual == null ? -1 : actual.getVisibility()) + "|" + actualResource;
+                + activity + "|" + viewClass + "|" + resource + "|" + text + "|"
+                + description + "|" + parent + "|" + depth + "|"
+                + actualClass + "|" + actualVisibility + "|" + actualResource;
         // A static page may trigger repeated evaluations. Keep one line per unchanged
         // failure state while allowing a later structural change to be observed.
         if (key.equals(mLastSingleElementFailure)) return;
         mLastSingleElementFailure = key;
         Logger.d("CompositeMatcher", "single_element_match_failed"
                 + " reason=" + (reason == null ? "unknown" : reason)
-                + " activity=" + valueOrEmpty(spec.getActivityClass())
-                + " expectedClass=" + valueOrEmpty(spec.getViewClass())
-                + " actualClass=" + (actual == null ? "" : actual.getClass().getName())
-                + " actualVisibility=" + (actual == null ? -1 : actual.getVisibility())
-                + " resource=" + valueOrEmpty(spec.getResourceName())
+                + " activity=" + activity
+                + " expectedClass=" + viewClass
+                + " actualClass=" + actualClass
+                + " actualVisibility=" + actualVisibility
+                + " resource=" + resource
                 + " actualResource=" + actualResource
-                + " depth=" + Arrays.toString(spec.getDepth()));
+                + " depth=" + depth);
     }
 
     private static String actualResourceName(View view) {
