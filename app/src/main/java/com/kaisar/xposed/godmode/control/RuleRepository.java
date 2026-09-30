@@ -971,11 +971,12 @@ public final class RuleRepository {
 
         private static int findRuleIndex(List<RuleRecord> rules, RuleRecord target) {
             int match = -1;
+            // 目标槽一次算好：slotKey() 含数组 clone，勿在循环内对同一 target 重复构造。
+            RuleSlotKey targetSlot = target != null ? target.slotKey(target.packageName) : null;
             for (int i = 0; i < rules.size(); i++) {
                 RuleRecord candidate = rules.get(i);
-                if (candidate != null && target != null
-                        && candidate.slotKey(candidate.packageName)
-                        .equals(target.slotKey(target.packageName))) {
+                if (candidate != null && targetSlot != null
+                        && candidate.slotKey(candidate.packageName).equals(targetSlot)) {
                     // Historical snapshots can contain duplicate slots. Preserve their order and
                     // keep the last writer as the target for legacy replace/delete semantics.
                     match = i;
