@@ -55,6 +55,9 @@ public final class RuleServiceServer extends IRuleService.Stub {
     private final Logger mLogger;
     private final IncomingImageReader mIncomingImageReader;
     private final Gson mGson = new GsonBuilder().setPrettyPrinting().create();
+    // 快照走紧凑序列化：持久化保留 pretty 可读，快照只求小（8MiB 硬墙）与解析快。
+    // Gson 双向解析兼容，sha 随传输字节一起算，无协议破裂。
+    private final Gson mSnapshotGson = new Gson();
     private volatile boolean mStarted;
     private volatile String mToolbarHiddenItems = "";
     private volatile boolean mToolbarConfigurationPresent;
@@ -740,7 +743,7 @@ public final class RuleServiceServer extends IRuleService.Stub {
         SharedMemory memory = null;
         ByteBuffer buffer = null;
         try {
-            byte[] bytes = mGson.toJson(snapshot).getBytes(StandardCharsets.UTF_8);
+            byte[] bytes = mSnapshotGson.toJson(snapshot).getBytes(StandardCharsets.UTF_8);
             if (bytes.length > 8 * 1024 * 1024) {
                 throw new RemoteException("snapshot exceeds 8 MiB");
             }
