@@ -86,14 +86,14 @@ public final class CompositeMatcher implements Matcher {
         }
 
         // ── 无 depth 的旧规则：保留 resourceName 单锚行为 ──
+        // 单次查找后三分支：失败诊断复用同一锚点，避免双重 getIdentifier+findViewById。
         if (!TextUtils.isEmpty(spec.getResourceName())) {
-            View viewById = findByResourceId(root, spec);
-            if (viewById != null && isStructuralMatch(viewById, spec, true)) {
+            View resourceAnchor = findResourceAnchorIgnoringVisibility(root, spec);
+            if (resourceAnchor != null && isVisibleView(resourceAnchor)
+                    && isStructuralMatch(resourceAnchor, spec, true)) {
                 mLastSingleElementFailure = null;
-                return viewById;
+                return resourceAnchor;
             }
-            View resourceAnchor = viewById != null
-                    ? viewById : findResourceAnchorIgnoringVisibility(root, spec);
             String reason;
             if (resourceAnchor == null) {
                 reason = "resource_anchor_missing";
@@ -247,24 +247,7 @@ public final class CompositeMatcher implements Matcher {
 
     /**
      * 按 resourceName 锚定：解析为 int ID，通过 findViewById 精确查找。
-     * 不包含评分验证，由调用方负责 isStructuralMatch 检查。
-     */
-    private static View findByResourceId(View root, MatchFields spec) {
-        if (root == null || TextUtils.isEmpty(spec.getResourceName())) return null;
-        try {
-            int id = root.getResources().getIdentifier(spec.getResourceName(), "id", null);
-            if (id == 0 || id == View.NO_ID) return null;
-            View found = root.findViewById(id);
-            if (found == null || !isVisibleView(found)) return null;
-            return found;
-        } catch (Resources.NotFoundException e) {
-            return null;
-        }
-    }
-
-    /**
-     * Looks up the resource anchor without applying the visibility gate. This is used only to
-     * explain a failed resource-only match; the actual matching path remains fail-closed.
+     * 不含可见性门，由调用方依次做可见性与结构验证（成功与诊断共用同一次查找）。
      */
     private static View findResourceAnchorIgnoringVisibility(View root, MatchFields spec) {
         if (root == null || TextUtils.isEmpty(spec.getResourceName())) return null;
