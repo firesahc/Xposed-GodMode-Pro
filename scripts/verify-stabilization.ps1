@@ -482,7 +482,7 @@ try {
 
     Write-Host "Stabilization contract check passed."
     Write-Host "Baseline: $Baseline"
-    Write-Host "RuleRecord parcel ABI: unchanged"
+    Write-Host "RuleRecord parcel AIDL declaration: unchanged"
     Write-Host "IPC: canonical 6.10 contract present; retired AIDL absent"
     Write-Host "IPC: snapshot envelope, single-call input FDs, and no direct Bitmap transport"
     Write-Host "Storage: no world-writable production permissions"
