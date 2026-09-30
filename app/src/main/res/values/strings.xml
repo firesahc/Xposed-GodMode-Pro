@@ -162,6 +162,8 @@
     <string name="rule_details_field_view_bounds">控件边界</string>
     <string name="rule_details_field_view_type">控件类型</string>
     <string name="rule_details_field_view_depth">布局深度</string>
+    <string name="rule_details_field_ignore_depth">忽略深度</string>
+    <string name="rule_details_ignore_depth_summary">仅用资源名称匹配，可能误伤同名元素</string>
     <string name="rule_details_field_res_name">资源名称</string>
     <string name="rule_details_field_text">控件文本</string>
     <string name="rule_details_field_description">控件描述</string>
@@ -213,6 +215,7 @@
     <string name="pref_key_detail_view_bounds" translatable="false">view_bounds</string>
     <string name="pref_key_detail_view_type" translatable="false">view_type</string>
     <string name="pref_key_detail_view_depth" translatable="false">view_depth</string>
+    <string name="pref_key_detail_ignore_depth" translatable="false">ignore_depth</string>
     <string name="pref_key_detail_view_res_name" translatable="false">view_res_name</string>
     <string name="pref_key_detail_view_text" translatable="false">view_text</string>
     <string name="pref_key_detail_view_description" translatable="false">view_description</string>

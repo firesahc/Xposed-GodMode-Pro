@@ -151,6 +151,8 @@
     <string name="rule_details_field_view_bounds">Bounds</string>
     <string name="rule_details_field_view_type">Type</string>
     <string name="rule_details_field_view_depth">Depth</string>
+    <string name="rule_details_field_ignore_depth">Ignore depth</string>
+    <string name="rule_details_ignore_depth_summary">Match by resource name only, may hit same-id views</string>
     <string name="rule_details_field_res_name">Resource Name</string>
     <string name="rule_details_field_text">Text</string>
     <string name="rule_details_field_description">Description</string>

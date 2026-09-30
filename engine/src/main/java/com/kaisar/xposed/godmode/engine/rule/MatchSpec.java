@@ -57,6 +57,9 @@ public final class MatchSpec implements MatchFields {
     /** 匹配目标层级，默认 ELEMENT（向后兼容） */
     private final TargetLevel targetLevel;
 
+    /** 是否忽略深度路径（默认 false）；为 true 时 Matcher 跳过 depth 双锚，走 resourceName 单锚 */
+    private final boolean ignoreDepth;
+
     private MatchSpec(Builder builder) {
         this.depth = copy(builder.depth);
         this.activityClass = builder.activityClass;
@@ -71,6 +74,7 @@ public final class MatchSpec implements MatchFields {
         this.matchMode = builder.matchMode;
         this.viewType = builder.viewType;
         this.targetLevel = builder.targetLevel;
+        this.ignoreDepth = builder.ignoreDepth;
     }
 
     // ===== Getter =====
@@ -89,6 +93,8 @@ public final class MatchSpec implements MatchFields {
     @Override
     public int getInfoFlowViewType() { return viewType; }
     public TargetLevel getTargetLevel() { return targetLevel; }
+    @Override
+    public boolean isIgnoreDepth() { return ignoreDepth; }
 
     // ===== 工厂方法 =====
 
@@ -113,6 +119,7 @@ public final class MatchSpec implements MatchFields {
         b.matchMode = fields.getMatchMode();
         b.viewType = fields.getInfoFlowViewType();
         b.targetLevel = fields.getTargetLevel();
+        b.ignoreDepth = fields.isIgnoreDepth();
         return b.build();
     }
 
@@ -138,6 +145,7 @@ public final class MatchSpec implements MatchFields {
         b.matchMode = this.matchMode;
         b.viewType = this.viewType;
         b.targetLevel = this.targetLevel;
+        b.ignoreDepth = this.ignoreDepth;
         return b;
     }
 
@@ -169,7 +177,8 @@ public final class MatchSpec implements MatchFields {
                 && Objects.equals(effectiveDescription(), other.effectiveDescription())
                 && effectiveMatchMode() == other.effectiveMatchMode()
                 && viewType == other.viewType
-                && effectiveTargetLevel() == other.effectiveTargetLevel();
+                && effectiveTargetLevel() == other.effectiveTargetLevel()
+                && ignoreDepth == other.ignoreDepth;
     }
 
     /** Hash counterpart of {@link #hasSameRuntimeSemantics(MatchSpec)}. */
@@ -187,6 +196,7 @@ public final class MatchSpec implements MatchFields {
         result = 31 * result + effectiveMatchMode().hashCode();
         result = 31 * result + viewType;
         result = 31 * result + effectiveTargetLevel().hashCode();
+        result = 31 * result + Boolean.hashCode(ignoreDepth);
         return result;
     }
 
@@ -230,7 +240,8 @@ public final class MatchSpec implements MatchFields {
                 && Objects.equals(text, matchSpec.text)
                 && Objects.equals(description, matchSpec.description)
                 && matchMode == matchSpec.matchMode
-                && targetLevel == matchSpec.targetLevel;
+                && targetLevel == matchSpec.targetLevel
+                && ignoreDepth == matchSpec.ignoreDepth;
     }
 
     @Override
@@ -248,6 +259,7 @@ public final class MatchSpec implements MatchFields {
         result = 31 * result + Objects.hashCode(matchMode);
         result = 31 * result + viewType;
         result = 31 * result + Objects.hashCode(targetLevel);
+        result = 31 * result + Boolean.hashCode(ignoreDepth);
         return result;
     }
 
@@ -282,6 +294,7 @@ public final class MatchSpec implements MatchFields {
         MatchMode matchMode;
         int viewType;
         TargetLevel targetLevel;
+        boolean ignoreDepth;
 
         public Builder depth(int[] depth) { this.depth = depth != null ? depth.clone() : null; return this; }
         public Builder activityClass(String activityClass) { this.activityClass = activityClass; return this; }
@@ -301,6 +314,7 @@ public final class MatchSpec implements MatchFields {
         public Builder matchMode(MatchMode matchMode) { this.matchMode = matchMode; return this; }
         public Builder viewType(int viewType) { this.viewType = viewType; return this; }
         public Builder targetLevel(TargetLevel targetLevel) { this.targetLevel = targetLevel; return this; }
+        public Builder ignoreDepth(boolean ignoreDepth) { this.ignoreDepth = ignoreDepth; return this; }
 
         public MatchSpec build() {
             return new MatchSpec(this);

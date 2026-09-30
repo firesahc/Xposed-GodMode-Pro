@@ -53,6 +53,7 @@ public final class RuleRecordTypeAdapter
         add(object, "match_mode", match.getMatchMode() != null ? match.getMatchMode().name() : null);
         add(object, "view_type", match.getInfoFlowViewType());
         add(object, "target_level", match.getTargetLevel() != null ? match.getTargetLevel().name() : null);
+        add(object, "ignore_depth", match.isIgnoreDepth());
         add(object, "visibility", wire.getVisibility());
         add(object, "timestamp", rule.timestamp);
         add(object, "mod_width", wire.getModWidth());
@@ -90,6 +91,7 @@ public final class RuleRecordTypeAdapter
                 .matchMode(enumValue(string(object, "match_mode"), MatchMode.class))
                 .viewType(integer(object, object.has("view_type") ? "view_type" : "match_threshold", 0))
                 .targetLevel(enumValue(string(object, "target_level"), TargetLevel.class))
+                .ignoreDepth(bool(object, "ignore_depth", false))
                 .build();
         RuleEffect.WireValues wire = new RuleEffect.WireValues.Builder()
                 .ruleTag(string(object, "rule_tag"))

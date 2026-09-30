@@ -53,4 +53,7 @@ public interface MatchFields {
     /** 匹配目标层级，null 等价于 ELEMENT（向后兼容） */
     TargetLevel getTargetLevel();
 
+    /** 是否忽略深度路径，仅用 resourceName 单锚匹配（默认 false，保持 depth 双锚） */
+    boolean isIgnoreDepth();
+
 }

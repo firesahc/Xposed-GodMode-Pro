@@ -46,6 +46,25 @@ public final class RuleRecordTypeAdapterTest {
     }
 
     @Test
+    public void ignoreDepthRoundTripsAndLegacyJsonDefaultsFalse() {
+        MatchSpec ignored = new MatchSpec.Builder()
+                .depth(new int[] {1, 2}).activityClass("A").viewClass("V")
+                .resourceName("pkg:id/title").ignoreDepth(true).build();
+        RuleRecord record = new RuleRecord("l", "com.example", "1", 1, 69, null, null,
+                0, 0, 0, 0, 1L, 0, 0, 1f, null, ignored,
+                com.kaisar.xposed.godmode.engine.rule.RemoveEffect.of(4));
+
+        String json = gson.toJson(record);
+        JsonObject object = JsonParser.parseString(json).getAsJsonObject();
+        assertTrue(object.has("ignore_depth"));
+        assertTrue(gson.fromJson(json, RuleRecord.class).isIgnoreDepth());
+
+        // 老备份无该键，回读默认 false，保持 depth 双锚行为不变。
+        object.remove("ignore_depth");
+        assertFalse(gson.fromJson(object.toString(), RuleRecord.class).isIgnoreDepth());
+    }
+
+    @Test
     public void legacyMatchThresholdAliasAndRawRepeatableTextRemainCompatible() {
         String oldJson = "{"
                 + "'rule_tag':'modify','label':'L','package_name':'com.example',"

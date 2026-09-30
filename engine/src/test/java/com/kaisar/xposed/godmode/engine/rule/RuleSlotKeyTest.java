@@ -40,4 +40,18 @@ public final class RuleSlotKeyTest {
         assertEquals(null, key.getDepth());
         assertArrayEquals(new String[0], key.getItemPath());
     }
+
+    @Test
+    public void ignoreDepthIsMatcherRefinementExcludedFromSlotIdentity() {
+        MatchSpec strict = new MatchSpec.Builder()
+                .activityClass("Activity")
+                .viewClass("TextView")
+                .depth(new int[] {0, 2})
+                .resourceName("pkg:id/title")
+                .build();
+        MatchSpec ignored = strict.toBuilder().ignoreDepth(true).build();
+
+        // 开关切换原位替换：同槽，保证详情页 updateRule 不产生残留旧槽。
+        assertEquals(RuleSlotKey.from("pkg", strict), RuleSlotKey.from("pkg", ignored));
+    }
 }

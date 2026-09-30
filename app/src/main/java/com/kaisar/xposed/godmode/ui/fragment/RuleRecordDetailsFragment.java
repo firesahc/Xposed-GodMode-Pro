@@ -21,6 +21,7 @@ import androidx.preference.DropDownPreference;
 import androidx.preference.EditTextPreference;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceFragmentCompat;
+import androidx.preference.SwitchPreferenceCompat;
 
 import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.engine.applier.SafeBitmapDecoder;
@@ -55,6 +56,7 @@ public final class RuleRecordDetailsFragment extends PreferenceFragmentCompat im
     private SharedViewModel mSharedViewModel;
     private EditTextPreference mAliasPreference;
     private DropDownPreference mVisiblePreference;
+    private SwitchPreferenceCompat mIgnoreDepthPreference;
     private ImageViewPreference mImagePreference;
     private Handler mHandler;
     private long mImageLoadGeneration;
@@ -138,6 +140,17 @@ public final class RuleRecordDetailsFragment extends PreferenceFragmentCompat im
         preference = findPreference(getString(R.string.pref_key_detail_view_depth));
         preference.setTitle(R.string.rule_details_field_view_depth);
         preference.setSummary(Arrays.toString(mRuleRecord.getDepth()));
+
+        mIgnoreDepthPreference =
+                findPreference(getString(R.string.pref_key_detail_ignore_depth));
+        if (mIgnoreDepthPreference != null) {
+            mIgnoreDepthPreference.setChecked(mRuleRecord.isIgnoreDepth());
+            mIgnoreDepthPreference.setOnPreferenceChangeListener(this);
+            // 无 res_name 时单锚必 missing_locator，repeatable 走 itemPath，均不显示开关。
+            mIgnoreDepthPreference.setVisible(
+                    !TextUtils.isEmpty(mRuleRecord.getResourceName())
+                            && !mRuleRecord.isRepeatable());
+        }
 
         if (!TextUtils.isEmpty(mRuleRecord.getResourceName())) {
             preference = findPreference(getString(R.string.pref_key_detail_view_res_name));
@@ -334,6 +347,14 @@ public final class RuleRecordDetailsFragment extends PreferenceFragmentCompat im
             if (newVisibility != mRuleRecord.getVisibility()) {
                 mRuleRecord = mRuleRecord.withEffect(
                         com.kaisar.xposed.godmode.engine.rule.RemoveEffect.of(newVisibility));
+                mSharedViewModel.updateRule(mRuleRecord);
+            }
+        } else if (preference == mIgnoreDepthPreference) {
+            boolean ignoreDepth = (Boolean) newValue;
+            if (ignoreDepth != mRuleRecord.isIgnoreDepth()) {
+                // depth 原值保留在 MatchSpec 内，切回即恢复双锚，可逆。
+                mRuleRecord = mRuleRecord.withMatchSpec(
+                        mRuleRecord.getMatchSpec().toBuilder().ignoreDepth(ignoreDepth).build());
                 mSharedViewModel.updateRule(mRuleRecord);
             }
         }

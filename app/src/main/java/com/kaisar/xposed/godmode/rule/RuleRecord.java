@@ -129,11 +129,14 @@ public final class RuleRecord implements Parcelable, Cloneable {
         boolean repeatable = in.readByte() != 0;
         String levelName = in.readString();
         TargetLevel targetLevel = TargetLevel.fromName(levelName);
+        // 尾部追加字段：老 parcel 无此字节时 dataAvail()==0，默认 false 保持行为不变。
+        boolean ignoreDepth = in.dataAvail() > 0 ? in.readByte() != 0 : false;
 
         matchSpec = new MatchSpec.Builder().depth(depth).activityClass(activityClass).viewClass(viewClass)
                 .resourceName(resourceName).itemPath(itemPath).itemRootClass(itemRootClass)
                 .parentClass(parentClass).repeatable(repeatable).text(text).description(description)
-                .matchMode(matchMode).viewType(viewType).targetLevel(targetLevel).build();
+                .matchMode(matchMode).viewType(viewType).targetLevel(targetLevel)
+                .ignoreDepth(ignoreDepth).build();
         RuleEffect.WireValues wire = new RuleEffect.WireValues.Builder().ruleTag(ruleTag)
                 .visibility(visibility).modWidth(modWidth).modHeight(modHeight).modAlpha(modAlpha)
                 .modXOffset(modXOffset).modYOffset(modYOffset).modText(modText)
@@ -162,6 +165,7 @@ public final class RuleRecord implements Parcelable, Cloneable {
     public int getWidth() { return width; }
     public int getHeight() { return height; }
     public int[] getDepth() { return matchSpec.getDepth(); }
+    public boolean isIgnoreDepth() { return matchSpec.isIgnoreDepth(); }
     public String getActivityClass() { return matchSpec.getActivityClass(); }
     public String getViewClass() { return matchSpec.getViewClass(); }
     public String getResourceName() { return matchSpec.getResourceName(); }
@@ -288,6 +292,7 @@ public final class RuleRecord implements Parcelable, Cloneable {
         dest.writeString(matchSpec.getParentClass());
         dest.writeByte((byte) (matchSpec.isRepeatable() ? 1 : 0));
         dest.writeString(matchSpec.getTargetLevel() != null ? matchSpec.getTargetLevel().name() : null);
+        dest.writeByte((byte) (matchSpec.isIgnoreDepth() ? 1 : 0));
     }
 
     public int describeContents() { return 0; }

@@ -61,7 +61,8 @@ public final class CompositeMatcher implements Matcher {
         // 返回 null——布局模板复用使同一 id 存在多实例，
         // "首个同名 id 命中"正是稳定错配同类型首个元素缺陷的根源；
         // 错配宿主内容的代价高于暂时漏应用，漏应用由对账与后续 bind 兜底重试。
-        if (spec.getDepth() != null && spec.getDepth().length > 0) {
+        // 忽略深度（用户在详情页显式开启）则跳过本分支，走下方 resourceName 单锚。
+        if (!spec.isIgnoreDepth() && spec.getDepth() != null && spec.getDepth().length > 0) {
             View byDepth = ViewTraversal.findViewByDepth(root, spec.getDepth());
             if (byDepth == null) {
                 logSingleElementFailure(spec, "depth_path_missing", null);

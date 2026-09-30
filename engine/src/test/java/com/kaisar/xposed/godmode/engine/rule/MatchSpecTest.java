@@ -113,4 +113,27 @@ public final class MatchSpecTest {
         assertEquals(null, copy.getMatchMode());
         assertEquals(null, copy.getTargetLevel());
     }
+
+    @Test
+    public void ignoreDepthDefaultsFalseAndParticipatesInEquality() {
+        MatchSpec base = new MatchSpec.Builder()
+                .depth(new int[] {1, 2})
+                .resourceName("pkg:id/title")
+                .build();
+        assertFalse(base.isIgnoreDepth());
+
+        MatchSpec ignored = base.toBuilder().ignoreDepth(true).build();
+        assertTrue(ignored.isIgnoreDepth());
+        // depth 原值保留，切回可逆。
+        assertArrayEquals(new int[] {1, 2}, ignored.getDepth());
+
+        assertNotEquals(base, ignored);
+        assertFalse(base.hasSameRuntimeSemantics(ignored));
+        assertNotEquals(base.runtimeSemanticsHashCode(), ignored.runtimeSemanticsHashCode());
+        assertNotEquals(base.hashCode(), ignored.hashCode());
+
+        assertEquals(ignored, MatchSpec.from(ignored));
+        assertEquals(ignored, ignored.clone());
+        assertTrue(ignored.hasSameRuntimeSemantics(ignored.clone()));
+    }
 }
