@@ -2,7 +2,9 @@ package com.kaisar.xposed.godmode.rule;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 import android.os.Parcel;
 
@@ -68,6 +70,8 @@ public final class RuleRecordParcelInstrumentedTest {
             assertEquals("LinearLayout", parcel.readString());
             assertEquals(1, parcel.readByte());
             assertEquals("CARD", parcel.readString());
+            // 尾部追加槽：默认 false 落盘为 0，旧槽位顺序不变。
+            assertEquals(0, parcel.readByte());
         } finally {
             parcel.recycle();
         }
@@ -89,6 +93,8 @@ public final class RuleRecordParcelInstrumentedTest {
             assertEquals("replacement.png", record.getModImagePath());
             assertEquals(17, record.getOrigLeftMargin());
             assertEquals(18, record.getOrigTopMargin());
+            // 旧 parcel 无尾部字节，ignoreDepth 默认 false。
+            assertFalse(record.isIgnoreDepth());
         } finally {
             parcel.recycle();
         }
@@ -109,6 +115,28 @@ public final class RuleRecordParcelInstrumentedTest {
             assertEquals("modify", record.getRuleTag());
             assertEquals("ExampleActivity", record.getActivityClass());
             assertArrayEquals(new String[] {"row", "title"}, record.getItemPath());
+        } finally {
+            parcel.recycle();
+        }
+    }
+
+    /** 新尾槽读写闭环：false→0→false，true→1→true。 */
+    @Test
+    public void ignoreDepthParcelRoundTrip() {
+        Parcel parcel = Parcel.obtain();
+        try {
+            record(true).writeToParcel(parcel, 0);
+            parcel.setDataPosition(0);
+            assertTrue(RuleRecord.CREATOR.createFromParcel(parcel).isIgnoreDepth());
+        } finally {
+            parcel.recycle();
+        }
+
+        parcel = Parcel.obtain();
+        try {
+            record(false).writeToParcel(parcel, 0);
+            parcel.setDataPosition(0);
+            assertFalse(RuleRecord.CREATOR.createFromParcel(parcel).isIgnoreDepth());
         } finally {
             parcel.recycle();
         }
@@ -162,12 +190,16 @@ public final class RuleRecordParcelInstrumentedTest {
     }
 
     private static RuleRecord record() {
+        return record(false);
+    }
+
+    private static RuleRecord record(boolean ignoreDepth) {
         MatchSpec match = new MatchSpec.Builder()
                 .depth(new int[] {1, 2}).activityClass("ExampleActivity").viewClass("TextView")
                 .resourceName("com.example:id/title").itemPath(new String[] {"row", "title"})
                 .itemRootClass("FrameLayout").parentClass("LinearLayout").repeatable(true)
                 .text("raw text").description("raw description").matchMode(MatchMode.CONTAINS)
-                .viewType(7).targetLevel(TargetLevel.CARD).build();
+                .viewType(7).targetLevel(TargetLevel.CARD).ignoreDepth(ignoreDepth).build();
         ModifyEffect effect = new ModifyEffect.Builder().ruleTag("modify").visibility(4)
                 .modWidth(80).modHeight(81).modAlpha(.5f).modXOffset(3).modYOffset(4)
                 .modText("replacement").modImagePath("replacement.png")

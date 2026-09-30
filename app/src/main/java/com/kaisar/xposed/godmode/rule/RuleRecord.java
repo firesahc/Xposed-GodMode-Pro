@@ -20,8 +20,8 @@ import java.util.Objects;
  * 持久化/IPC 兼容聚合对象。
  *
  * <p>稳定的匹配和效果职责由不可变 {@link MatchSpec}/{@link RuleEffect} 持有；
- * 本类只保留兼容、展示和采集字段。Gson 仍通过 {@link RuleRecordTypeAdapter}
- * 输出 v6.9 的扁平 JSON，Parcelable 仍按 v6.9 的旧槽位顺序展开。</p>
+ * 本类只保留兼容、展示和采集字段。Gson 通过 {@link RuleRecordTypeAdapter}
+ * 保持 v6.9 扁平 JSON 结构并仅追加兼容字段，Parcelable 保持 v6.9 旧槽位顺序，并仅在尾部追加兼容字段。</p>
  */
 @Keep
 @JsonAdapter(RuleRecordTypeAdapter.class)
@@ -130,6 +130,9 @@ public final class RuleRecord implements Parcelable, Cloneable {
         String levelName = in.readString();
         TargetLevel targetLevel = TargetLevel.fromName(levelName);
         // 尾部追加字段：老 parcel 无此字节时 dataAvail()==0，默认 false 保持行为不变。
+        // 契约边界：尾部扩展仅在顶层单对象 parcel 中向后兼容；当前未做对象级 framing 的
+        // 复合载荷（如 typed list）要求读写同版本。全仓无 RuleRecord 复合 parcel 写入者
+        //（ActRules/AppRules 明确不实现 Parcelable，主通道为 JSON），故此边界即全部现实边界。
         boolean ignoreDepth = in.dataAvail() > 0 ? in.readByte() != 0 : false;
 
         matchSpec = new MatchSpec.Builder().depth(depth).activityClass(activityClass).viewClass(viewClass)
