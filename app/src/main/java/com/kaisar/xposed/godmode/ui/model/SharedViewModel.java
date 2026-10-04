@@ -18,7 +18,7 @@ import com.kaisar.xposed.godmode.ipc.RuleReader;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.AppRules;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
-import com.kaisar.xposed.godmode.control.RuleBackupManager;
+import com.kaisar.xposed.godmode.backup.RuleBackupManager;
 
 import java.util.ArrayList;
 import java.util.Collections;

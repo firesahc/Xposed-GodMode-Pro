@@ -1,5 +1,7 @@
 package com.kaisar.xposed.godmode.control;
 
+import com.kaisar.xposed.godmode.util.PackageNameValidator;
+
 import static com.kaisar.xposed.godmode.engine.util.FileUtils.S_IRWXU;
 import static com.kaisar.xposed.godmode.engine.util.GmConstants.DATA_DIR;
 

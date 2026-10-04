@@ -1,5 +1,7 @@
 package com.kaisar.xposed.godmode.control;
 
+import com.kaisar.xposed.godmode.util.PackageNameValidator;
+
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.os.Binder;

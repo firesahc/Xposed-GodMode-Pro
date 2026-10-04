@@ -1,5 +1,7 @@
 package com.kaisar.xposed.godmode.control;
 
+import com.kaisar.xposed.godmode.util.PackageNameValidator;
+
 import com.kaisar.xposed.godmode.ipc.RuleServiceContract;
 
 import java.util.HashMap;

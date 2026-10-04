@@ -20,6 +20,7 @@ import androidx.preference.SwitchPreferenceCompat;
 
 import com.google.android.material.snackbar.Snackbar;
 import com.kaisar.xposed.godmode.R;
+import com.kaisar.xposed.godmode.backup.RuleBackupManager;
 import com.kaisar.xposed.godmode.editor.RuleEditorClient;
 import com.kaisar.xposed.godmode.editor.toolbar.ToolbarPrefsManager;
 import com.kaisar.xposed.godmode.engine.util.Logger;
@@ -189,7 +190,7 @@ public final class SettingsFragment extends PreferenceFragmentCompat implements
         showProgressSnackbar(getString(R.string.menu_title_restore_rules) + "...");
         mSharedViewModel.restoreRules(uri, new SharedViewModel.RestoreCallback() {
             @Override
-            public void onSuccess(com.kaisar.xposed.godmode.control.RuleBackupManager.RestoreReport report) {
+            public void onSuccess(RuleBackupManager.RestoreReport report) {
                 if (!isAdded()) return;
                 dismissProgressSnackbar();
                 String message = getString(R.string.snack_bar_msg_restore_rules_success,

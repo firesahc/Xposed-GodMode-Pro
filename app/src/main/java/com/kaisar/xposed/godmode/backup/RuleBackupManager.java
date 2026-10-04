@@ -1,4 +1,4 @@
-package com.kaisar.xposed.godmode.control;
+package com.kaisar.xposed.godmode.backup;
 
 import static com.kaisar.xposed.godmode.engine.util.CommonUtils.recycleNullableBitmap;
 import static com.kaisar.xposed.godmode.engine.util.GmConstants.MAX_IMAGE_FILE_SIZE_BYTES;
@@ -25,6 +25,7 @@ import com.kaisar.xposed.godmode.ipc.LeaseHub;
 import com.kaisar.xposed.godmode.ipc.RuleReader;
 import com.kaisar.xposed.godmode.rule.ActRules;
 import com.kaisar.xposed.godmode.rule.RuleRecord;
+import com.kaisar.xposed.godmode.util.PackageNameValidator;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -42,7 +43,7 @@ import java.util.UUID;
 /**
  * 规则备份/恢复管理器 — 将规则及其关联图片导出为 ZIP 压缩包，或从 ZIP 导入恢复。
  * <p>
- * 从 {@code util/BackupUtils} 迁入 control/ 层，职责不变。
+ * 客户端侧规则备份/恢复工作流；权威规则读写仍经 IPC facade 交由 system_server 完成。
  * 依赖 {@link RuleReader}/{@link RuleEditorClient}/{@link ImageStore} 跨进程读写规则和图片，
  * 依赖 {@link RuleRecord} 序列化/反序列化规则数据。
  * <p>

@@ -1,4 +1,4 @@
-package com.kaisar.xposed.godmode.control;
+package com.kaisar.xposed.godmode.util;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
