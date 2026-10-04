@@ -15,6 +15,8 @@
 - [架构边界准则](architecture-boundary.md)：6.11.0 后重构沉淀的评审执行标准
   （依赖方向、状态所有权、职责归属与可 grep 验证口径）。
   只约束边界，不定义 wire/IPC/匹配语义；与上述合同冲突时以合同为准。
+- `scripts/verify-architecture-boundary.ps1`：检查 Editor/Runtime、control/backup
+  和 Xposed 平台适配边界；它与稳定性合同门禁一起运行。
 - [全项目设备测试规则](device-test-rules.md)：规定所有版本和测试目标的前台
   Activity 唤起、持久化日志目录核对以及设备证据记录顺序。
 

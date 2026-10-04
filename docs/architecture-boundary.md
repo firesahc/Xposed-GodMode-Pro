@@ -19,7 +19,7 @@
 ```text
 L0 Injection      进入进程、装 Hook、转译事件/端口、装配依赖、资源注入
 L1 Target Runtime 生命周期编排、规则快照消费、运行时投影、作用域隔离
-L2 Engine         match / diff / apply / revoke（纯规则语义，零 Android 设施依赖）
+L2 Engine         match / diff / apply / revoke（Android-aware runtime engine；rule/diff 子包保持纯语义）
 L3 Editor         会话、交互、UI 流程、变更草稿（经端口提能力，不直调设施）
 L4 IPC Client     职责门面群（连接/读/观察/租约/写入/图片/日志），真单例共享同一连接核
 L5 system_server  唯一写入权威（权限/租约/持久化/撤销/观察者/资产）
@@ -33,9 +33,16 @@ L6 Wire           扁平 JSON / Parcelable / ZIP V1（冻结，只读）
 ```text
 inject      → Port / Event / orchestrator（装配与转译所需）
 orchestrator→ Port（能力接口）/ rule / engine / ipc 门面（读/观察）
-editor      → Port / rule / ipc 门面（读/写）/ engine
+editor      → editor Port / rule / ipc 门面（读/写）/ engine
 ipc 门面    → ServiceConnection（唯一连接核）/ contract / rule
+backup      → ipc 门面 / rule / engine 工具（客户端备份/恢复工作流）
+control     → rule / engine / ipc contract（system_server 权威实现）
 ```
+
+当前过渡例外：`RuleEditorClient` 虽位于 `editor` 包，但它承担的是共享的 mutation
+IPC facade，`backup` 可以调用它完成逐条恢复；`backup` 不得因此依赖 Editor UI、
+`EditorOrchestrator` 或 Runtime 实现。待写入 facade 具备独立生命周期需求时，
+再评估将 `IRuleEditor`/`RuleEditorClient` 下沉到 `ipc` facade 包。
 
 ### 2.2 禁止（提交前必须 grep 自证）
 
@@ -43,6 +50,10 @@ ipc 门面    → ServiceConnection（唯一连接核）/ contract / rule
 |---|---|
 | `orchestrator/` 引 Xposed 或注入实现 | `grep -rn "de\.robv\|inject\.hooks\|inject\.HookRegistry" app/src/main/.../orchestrator` |
 | `editor/` 引 Xposed | `grep -rn "de\.robv\|XposedHelpers\|XC_MethodHook" app/src/main/.../editor` |
+| `editor/` 直引 Runtime 实现 | `grep -rn "RuleLifecycleManager\|ViewController" app/src/main/.../editor`（Port 实现和 Javadoc 例外） |
+| `control/` 反向引 Editor 工作流 | `grep -rn "import .*\.editor\." app/src/main/.../control` |
+| `backup/` 反向引 control 实现 | `grep -rn "import .*\.control\." app/src/main/.../backup` |
+| `engine/` 引 Xposed | `grep -rn "de\.robv" engine/src/main` |
 | Runtime 写规则快照 | `RuleLifecycleManager` 内 `replaceRules` 零命中（读 `viewRules` 仅允许投影读） |
 | 事件双源 | 同一语义事件全仓唯一 `post` 点（`new RulesChangedEvent` 仅 `RuleManager` 一处；`RESUME` 仅 `onPostResume` 一处） |
 | 已删类复活 | `import …RuleServiceClient` / `new RuleServiceClient` / 类型引用全仓零命中；`ActivityResumeHook` / `getViewId` 全仓零符号引用（javadoc 考古句除外） |
@@ -54,7 +65,7 @@ ipc 门面    → ServiceConnection（唯一连接核）/ contract / rule
 `inject → editor/orchestrator` 的实现边只允许出现在端口实现与
 `AppInjector` 装配点；普通业务类之间禁止跨层直接引用实现类。
 （先例：`RepeatableRuleGate`、`RecyclerBindingPort`、
-`ImagePickPort`、`EditorInteractionPort`。）
+`ImagePickPort`、`EditorInteractionPort`、`RuntimeRulePort`。）
 
 ## 三、状态所有权
 
@@ -93,7 +104,9 @@ system_server 服务注册；`AppInjector` 集中装配。
 **禁止**：规则匹配/diff/应用；ViewController；编辑器状态机；
 Undo/mutation 对账/Lease/SharedMemory/Observer/repository；
 业务 UI；UI 展示知识（Toast 文案归 Panel，经端口回调）；
-`engine/runtime/rule/ipc/editor` 反向依赖 Xposed。
+`engine/runtime/rule/ipc/editor` 直接反向依赖 Xposed。
+Xposed fallback 必须集中在 `platform/xposed` 或 `inject` 组合根，
+由 Port 或公共工具的装配入口提供。
 
 ## 六、IPC 层职责
 
