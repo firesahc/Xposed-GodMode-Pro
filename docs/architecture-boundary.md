@@ -54,6 +54,7 @@ IPC facade，`backup` 可以调用它完成逐条恢复；`backup` 不得因此�
 | `control/` 反向引 Editor 工作流 | `grep -rn "import .*\.editor\." app/src/main/.../control` |
 | `backup/` 反向引 control 实现 | `grep -rn "import .*\.control\." app/src/main/.../backup` |
 | `engine/` 引 Xposed | `grep -rn "de\.robv" engine/src/main` |
+| `app` 其他生产包引 Xposed | `de.robv.android.xposed` 仅允许出现在 `inject/**` 和 `platform/xposed/**`；架构门禁扫描整个 `app/src/main/java` |
 | Runtime 写规则快照 | `RuleLifecycleManager` 内 `replaceRules` 零命中（读 `viewRules` 仅允许投影读） |
 | 事件双源 | 同一语义事件全仓唯一 `post` 点（`new RulesChangedEvent` 仅 `RuleManager` 一处；`RESUME` 仅 `onPostResume` 一处） |
 | 已删类复活 | `import …RuleServiceClient` / `new RuleServiceClient` / 类型引用全仓零命中；`ActivityResumeHook` / `getViewId` 全仓零符号引用（javadoc 考古句除外） |
@@ -139,5 +140,6 @@ LSPosed 在 Zygote fork 期初始化入口类，此时主 Looper 尚未 prepare�
 ## 九、验证门禁（与修改同提交）
 
 `assembleDebug`（300s）+ `verify-stabilization.ps1` +
+`verify-architecture-boundary.ps1` +
 全量 JVM 单测 + engine/app 实测 + 持久化日志门禁；
 触及注入/生命周期/IPC 者须在重启后新注入链上复验。

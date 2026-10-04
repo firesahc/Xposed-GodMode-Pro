@@ -27,6 +27,9 @@ jobs:
     - name: Verify 6.10 IPC and storage contracts
       shell: pwsh
       run: ./scripts/verify-stabilization.ps1 -Baseline v6.8.0
+    - name: Verify architecture boundaries
+      shell: pwsh
+      run: ./scripts/verify-architecture-boundary.ps1
     - name: Run JVM tests
       run: ./gradlew :app:testDebugUnitTest :engine:testDebugUnitTest
     - name: Assemble all gated APKs

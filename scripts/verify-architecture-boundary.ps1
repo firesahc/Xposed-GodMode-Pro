@@ -40,6 +40,38 @@ try {
         }
     }
 
+    function Assert-XposedImportsConfined {
+        param(
+            [Parameter(Mandatory)][string]$SearchRoot,
+            [Parameter(Mandatory)][string[]]$AllowedRelativeRoots
+        )
+
+        $matches = [System.Collections.Generic.List[string]]::new()
+        $pattern = "^\s*import\s+de\.robv\.android\.xposed\."
+        foreach ($file in Get-JavaFiles @($SearchRoot)) {
+            $relative = $file.FullName.Substring($repositoryRoot.Length + 1) -replace "\\", "/"
+            $allowed = $false
+            foreach ($allowedRelativeRoot in $AllowedRelativeRoots) {
+                if ($relative.StartsWith($allowedRelativeRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+                    $allowed = $true
+                    break
+                }
+            }
+            if ($allowed) {
+                continue
+            }
+
+            Select-String -LiteralPath $file.FullName -Pattern $pattern |
+                ForEach-Object {
+                    $matches.Add("{0}:{1}:{2}" -f $relative, $_.LineNumber, $_.Line.Trim())
+                }
+        }
+        if ($matches.Count -gt 0) {
+            $failures.Add("Xposed imports must be confined to inject/** or platform/xposed/**`n$($matches -join "`n")")
+        }
+    }
+
+    $appProductionRoot = "app/src/main/java"
     $editorRoot = "app/src/main/java/com/kaisar/xposed/godmode/editor"
     $orchestratorRoot = "app/src/main/java/com/kaisar/xposed/godmode/orchestrator"
     $controlRoot = "app/src/main/java/com/kaisar/xposed/godmode/control"
@@ -71,6 +103,13 @@ try {
         -SearchRoots @($editorRoot, $orchestratorRoot) `
         -Pattern "^\s*import\s+de\.robv\.android\.xposed\."
 
+    Assert-XposedImportsConfined `
+        -SearchRoot $appProductionRoot `
+        -AllowedRelativeRoots @(
+            "app/src/main/java/com/kaisar/xposed/godmode/inject/",
+            "app/src/main/java/com/kaisar/xposed/godmode/platform/xposed/"
+        )
+
     foreach ($requiredPath in @(
         "app/src/main/java/com/kaisar/xposed/godmode/editor/RuntimeRulePort.java",
         "app/src/main/java/com/kaisar/xposed/godmode/inject/RuntimeRulePortAdapter.java",
@@ -101,7 +140,7 @@ try {
     Write-Host "Architecture boundary check passed."
     Write-Host "Editor -> Runtime uses RuntimeRulePort"
     Write-Host "Control authority and backup workflow are separated"
-    Write-Host "Xposed imports are confined to injection/platform adapters"
+    Write-Host "Xposed imports are confined to inject/** and platform/xposed/**"
 } finally {
     Pop-Location
 }
