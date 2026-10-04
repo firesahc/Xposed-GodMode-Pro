@@ -60,7 +60,7 @@ public final class EditorUndoController {
             dispatchAvailability(false);
             return false;
         }
-        if (isTransientFailure(state.status)) {
+        if (RuleServiceContract.isRetryableTransient(state.status)) {
             dispatchAvailability(false);
             return false;
         }
@@ -172,12 +172,6 @@ public final class EditorUndoController {
         if (!force && available == mLastAvailability) return;
         mLastAvailability = available;
         if (mListener != null) mListener.onAvailabilityChanged(available);
-    }
-
-    private static boolean isTransientFailure(int status) {
-        return status == RuleServiceContract.RESULT_BUSY
-                || status == RuleServiceContract.RESULT_WRITE_FAILED
-                || status == RuleServiceContract.RESULT_UNCERTAIN;
     }
 
     public static final class UndoAttempt {

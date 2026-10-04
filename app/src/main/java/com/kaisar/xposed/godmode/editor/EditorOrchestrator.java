@@ -85,6 +85,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
     final PropertyEditorPanel mPropertyEditor;
     private final SeekBarHandler mSeekBarHandler;
     private WeakReference<Activity> mCurrentActivityRef = new WeakReference<>(null);
+    private volatile RuntimeRulePort mRuntimeRulePort;
     private long mSessionGeneration;
     /** A whole-editor close requested while the property editor is saving. */
     private boolean mNodePanelDismissPending;
@@ -229,6 +230,16 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
         this.mTouchEventHandler = new TouchEventHandler(this);
         this.mSeekBarHandler = new SeekBarHandler(mNodePanel, mPropertyEditor);
         this.mUndoController.setListener(mNodePanel::setUndoAvailable);
+    }
+
+    /**
+     * Installs the runtime capability used by editor preview and optimistic local application.
+     * The concrete Activity-scoped controller remains owned by the runtime layer.
+     */
+    public void setRuntimeRulePort(RuntimeRulePort runtimeRulePort) {
+        mRuntimeRulePort = runtimeRulePort;
+        mPreviewHandler.setRuntimeRulePort(runtimeRulePort);
+        mPropertyEditor.setRuntimeRulePort(runtimeRulePort);
     }
 
     private View getModifyTargetView() {
@@ -735,7 +746,7 @@ public final class EditorOrchestrator implements Property.OnPropertyChangeListen
                                         Toast.LENGTH_SHORT).show();
                             }
                         }
-                    }, mRuleEditor, isInfoFlowMode());
+                    }, mRuleEditor, mRuntimeRulePort, isInfoFlowMode());
         } catch (Exception e) {
             if (startedMutationScope != EditorUndoController.INVALID_SCOPE) {
                 mUndoController.failForwardMutation(startedMutationScope);

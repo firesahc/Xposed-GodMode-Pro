@@ -385,8 +385,7 @@ public final class RuleEditorClient implements IRuleEditor {
     }
 
     private static boolean isAccepted(RuleMutationResult result) {
-        return result != null && (result.status == RuleServiceContract.RESULT_COMMITTED
-                || result.status == RuleServiceContract.RESULT_NO_CHANGE);
+        return result != null && RuleServiceContract.isTerminalSuccess(result.status);
     }
 
     private int reconcileUncertain(String packageName, int operation, RuleRecord rule,

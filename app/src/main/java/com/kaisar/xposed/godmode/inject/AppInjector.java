@@ -51,6 +51,7 @@ public final class AppInjector {
         assembleRepeatableGate();
         assembleRecyclerBindingPort();
         assembleImagePickPort();
+        assembleRuntimeRulePort();
         if (!registerRuleLifecycleManager(packageName)) {
             return;
         }
@@ -155,6 +156,19 @@ public final class AppInjector {
             }
         } catch (Throwable failure) {
             Logger.w(TAG, "image pick port assembly failed", failure);
+        }
+    }
+
+    /**
+     * 将目标进程运行时能力装配给编辑器；Editor 只依赖 RuntimeRulePort，
+     * 不直接持有 RuleLifecycleManager 或 ViewController 实现。
+     */
+    private static void assembleRuntimeRulePort() {
+        try {
+            ModuleBootstrap.getEditorOrchestrator()
+                    .setRuntimeRulePort(new RuntimeRulePortAdapter());
+        } catch (Throwable failure) {
+            Logger.w(TAG, "runtime rule port assembly failed", failure);
         }
     }
 

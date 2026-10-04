@@ -4,9 +4,8 @@ import android.app.Activity;
 import android.graphics.Rect;
 import android.view.View;
 
+import com.kaisar.xposed.godmode.editor.RuntimeRulePort;
 import com.kaisar.xposed.godmode.engine.util.Logger;
-import com.kaisar.xposed.godmode.orchestrator.RuleLifecycleManager;
-import com.kaisar.xposed.godmode.orchestrator.ViewController;
 import com.kaisar.xposed.godmode.rule.RuleRecordFactory;
 import com.kaisar.xposed.godmode.editor.overlay.MaskView;
 import com.kaisar.xposed.godmode.util.ViewUtils;
@@ -28,7 +27,8 @@ public final class PreviewHandler {
 
     private View mPreviewView;
     private RuleRecord mPreviewRule;
-    private ViewController mPreviewController;
+    private RuntimeRulePort mRuntimeRulePort;
+    private RuntimeRulePort.Session mPreviewSession;
     private boolean mIsPreviewing;
 
     /** 检查是否正在预览中 */
@@ -37,27 +37,10 @@ public final class PreviewHandler {
     }
 
     /**
-     * 按 Activity 解析作用域控制器：优先 Activity 级实例（applier 缓存隔离）。
-     * <p>
-     * Activity-scoped 收敛：activity 非空时仅返回 scoped 实例，缺失返回 null
-     * 不再回退进程单例，避免 apply 与 revoke 落到不同 applier 互踩；
-     * 仅 activity 为 null 时回退进程单例以保兼容。
+     * 注入编辑器使用的运行时规则端口。
      */
-    private static ViewController resolveController(Activity activity) {
-        if (activity == null) {
-            return ViewController.getDefault();
-        }
-        try {
-            ViewController scoped =
-                    RuleLifecycleManager.getInstance().getViewController(activity);
-            if (scoped == null) {
-                Logger.w(TAG, "resolve scoped controller missed: activity=" + activity);
-            }
-            return scoped;
-        } catch (Exception e) {
-            Logger.w(TAG, "resolve scoped controller failed: activity=" + activity, e);
-            return null;
-        }
+    public void setRuntimeRulePort(RuntimeRulePort runtimeRulePort) {
+        mRuntimeRulePort = runtimeRulePort;
     }
 
     /**
@@ -73,22 +56,32 @@ public final class PreviewHandler {
             Runnable onStateChanged, boolean infoFlowMode) {
         if (view == null) return;
         try {
-            ViewController controller = resolveController(activity);
-            if (controller == null) {
-                Logger.w(TAG, "startPreview skipped: no scoped controller activity=" + activity);
+            RuntimeRulePort port = mRuntimeRulePort;
+            if (port == null) {
+                Logger.w(TAG, "startPreview skipped: runtime port unavailable");
+                return;
+            }
+            RuntimeRulePort.Session session = port.open(activity);
+            if (session == null) {
+                Logger.w(TAG, "startPreview skipped: no runtime session activity=" + activity);
                 return;
             }
             mPreviewRule = RuleRecordFactory.makeRemoveRule(view, infoFlowMode);
             mPreviewRule = mPreviewRule.withEffect(RemoveEffect.of(View.GONE));
-            controller.applyRule(view, mPreviewRule);
+            if (!session.applyRule(view, mPreviewRule)) {
+                Logger.w(TAG, "startPreview skipped: runtime rejected apply activity=" + activity);
+                mPreviewRule = null;
+                return;
+            }
             mPreviewView = view;
-            mPreviewController = controller;
+            mPreviewSession = session;
             mIsPreviewing = true;
             if (onStateChanged != null) onStateChanged.run();
             if (maskView != null) maskView.updateOverlayBounds(new Rect());
         } catch (Exception e) {
             Logger.e(TAG, "startPreview fail", e);
-            mPreviewController = null;
+            mPreviewSession = null;
+            mPreviewRule = null;
         }
     }
 
@@ -107,19 +100,14 @@ public final class PreviewHandler {
             Runnable onStateChanged) {
         try {
             if (mPreviewView != null && mPreviewRule != null) {
-                ViewController controller = mPreviewController;
-                if (controller == null) {
-                    Logger.w(TAG, "restorePreview skipped: no cached controller activity=" + activity);
+                RuntimeRulePort.Session session = mPreviewSession;
+                if (session == null) {
+                    Logger.w(TAG, "restorePreview skipped: no cached runtime session activity="
+                            + activity);
                 } else {
-                    try {
-                        ViewController current = resolveController(activity);
-                        if (current != null && current != controller) {
-                            Logger.w(TAG, "restorePreview activity mismatch, use start controller activity=" + activity);
-                        }
-                    } catch (Exception e) {
-                        Logger.w(TAG, "restorePreview resolve current failed activity=" + activity, e);
-                    }
-                    controller.revokeRule(mPreviewView, mPreviewRule);
+                    // Revoke through the exact session that performed apply. Resolving a new
+                    // Activity-scoped owner here would risk crossing applier baselines.
+                    session.revokeRule(mPreviewView, mPreviewRule);
                 }
             }
         } catch (Exception e) {
@@ -127,7 +115,7 @@ public final class PreviewHandler {
         } finally {
             mPreviewView = null;
             mPreviewRule = null;
-            mPreviewController = null;
+            mPreviewSession = null;
         }
         mIsPreviewing = false;
         if (onStateChanged != null) onStateChanged.run();

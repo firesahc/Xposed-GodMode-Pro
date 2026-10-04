@@ -19,13 +19,12 @@ import com.kaisar.xposed.godmode.R;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.editor.IRuleEditor;
 import com.kaisar.xposed.godmode.editor.ImagePickPort;
+import com.kaisar.xposed.godmode.editor.RuntimeRulePort;
 import com.kaisar.xposed.godmode.ipc.RuleServiceContract;
 import com.kaisar.xposed.godmode.ipc.contract.RuleMutationResult;
 import com.kaisar.xposed.godmode.ipc.contract.UndoStateParcel;
 import com.kaisar.xposed.godmode.rule.RuleRecordFactory;
 import com.kaisar.xposed.godmode.rule.ViewSnapshot;
-import com.kaisar.xposed.godmode.orchestrator.RuleLifecycleManager;
-import com.kaisar.xposed.godmode.orchestrator.ViewController;
 import com.kaisar.xposed.godmode.util.BitmapUtils;
 import com.kaisar.xposed.godmode.util.GmResources;
 import com.kaisar.xposed.godmode.util.TaskExecutor;
@@ -134,6 +133,7 @@ public class PropertyEditorPanel {
     private final IRuleEditor mRuleEditor;
     private final SnapshotProvider mSnapshotProvider;
     private ImagePickPort mImagePickPort;
+    private RuntimeRulePort mRuntimeRulePort;
 
     public interface SnapshotProvider {
         Bitmap capture(View targetView);
@@ -158,6 +158,14 @@ public class PropertyEditorPanel {
      */
     public void setImagePickPort(ImagePickPort imagePickPort) {
         mImagePickPort = imagePickPort;
+    }
+
+    /**
+     * 注入运行时规则端口。Editor 只持有能力边界，不直接依赖 Activity-scoped
+     * {@code ViewController} 的实现。
+     */
+    public void setRuntimeRulePort(RuntimeRulePort runtimeRulePort) {
+        mRuntimeRulePort = runtimeRulePort;
     }
 
     /**
@@ -696,8 +704,11 @@ public class PropertyEditorPanel {
                 }
                 View target = mTargetView;
                 revertViewState();
-                ViewController controller = RuleLifecycleManager.getInstance().getViewController(activity);
-                if (!controller.applyRule(target, draftRule)) {
+                RuntimeRulePort port = mRuntimeRulePort;
+                RuntimeRulePort.Session runtimeSession = port == null
+                        ? null : port.open(activity);
+                if (runtimeSession == null || !runtimeSession.applyRule(target, draftRule)) {
+                    Logger.w(MODIFY_TAG, "runtime apply unavailable or rejected");
                     applyDraftToView(target, draftRule);
                     mInFlightImageBitmap = null;
                     finishSaveFailure(activity,
@@ -737,7 +748,7 @@ public class PropertyEditorPanel {
                                     R.string.toast_modifications_saved), Toast.LENGTH_SHORT).show();
                             dismiss();
                         } else {
-                            controller.revokeRule(target, draftRule);
+                            runtimeSession.revokeRule(target, draftRule);
                             applyDraftToView(target, draftRule);
                             mInFlightImageBitmap = null;
                             reportMutationFailed();
@@ -801,8 +812,7 @@ public class PropertyEditorPanel {
     }
 
     private static boolean isCommitted(RuleMutationResult result) {
-        return result != null && (result.status == RuleServiceContract.RESULT_COMMITTED
-                || result.status == RuleServiceContract.RESULT_NO_CHANGE);
+        return result != null && RuleServiceContract.isTerminalSuccess(result.status);
     }
 
     private void reportMutationSucceeded(UndoStateParcel undoState) {

@@ -9,13 +9,12 @@ import android.view.View;
 import android.view.ViewGroup;
 
 import com.kaisar.xposed.godmode.R;
+import com.kaisar.xposed.godmode.editor.RuntimeRulePort;
 import com.kaisar.xposed.godmode.ipc.RuleServiceContract;
 import com.kaisar.xposed.godmode.ipc.contract.RuleMutationResult;
 import com.kaisar.xposed.godmode.ipc.contract.UndoStateParcel;
 import com.kaisar.xposed.godmode.engine.util.GmConstants;
 import com.kaisar.xposed.godmode.engine.util.Logger;
-import com.kaisar.xposed.godmode.orchestrator.RuleLifecycleManager;
-import com.kaisar.xposed.godmode.orchestrator.ViewController;
 import com.kaisar.xposed.godmode.editor.IRuleEditor;
 import com.kaisar.xposed.godmode.editor.overlay.MaskView;
 import com.kaisar.xposed.godmode.editor.overlay.ParticleView;
@@ -67,13 +66,23 @@ public final class ParticleEffectHelper {
             final Bitmap snapshot,
             final String packageName,
             final MaskView maskView,
+            final RuntimeRulePort runtimeRulePort,
             final IRuleEditor ruleEditor,
             final Completion completion) {
         Logger.d(TAG, "execute: starting particle animation for " + packageName);
 
         final RuleRecord ruleToWrite = viewRule.withEffect(RemoveEffect.of(View.GONE));
-        final ViewController controller = RuleLifecycleManager.getInstance()
-                .getViewController(activity);
+        final RuntimeRulePort.Session runtimeSession = runtimeRulePort == null
+                ? null : runtimeRulePort.open(activity);
+        if (runtimeSession == null) {
+            Logger.w(TAG, "execute skipped: runtime session unavailable for " + packageName);
+            recycleNullableBitmap(snapshot);
+            if (completion != null) {
+                completion.onError(GmResources.getUiString(activity,
+                        R.string.toast_runtime_apply_failed));
+            }
+            return;
+        }
         final boolean[] runtimeApplied = { false };
         final ParticleView particleView = new ParticleView(activity);
         particleView.setDuration(GmConstants.PARTICLE_ANIM_DURATION_MS);
@@ -82,7 +91,7 @@ public final class ParticleEffectHelper {
             @Override
             public void onAnimationStart(View animView, Animator animation) {
                 try {
-                    runtimeApplied[0] = controller.applyRule(targetView, ruleToWrite);
+                    runtimeApplied[0] = runtimeSession.applyRule(targetView, ruleToWrite);
                     if (!runtimeApplied[0]) {
                         Logger.w(TAG, "activity controller rejected optimistic block apply");
                     }
@@ -134,7 +143,7 @@ public final class ParticleEffectHelper {
                             if (completion != null) completion.onCommitted(finalResult.undoState);
                             return;
                         }
-                        controller.revokeRule(targetView, ruleToWrite);
+                        runtimeSession.revokeRule(targetView, ruleToWrite);
                         if (completion != null) {
                             String reason = finalResult == null ? null : finalResult.message;
                             completion.onError(reason == null
@@ -150,7 +159,6 @@ public final class ParticleEffectHelper {
     }
 
     private static boolean isCommitted(RuleMutationResult result) {
-        return result != null && (result.status == RuleServiceContract.RESULT_COMMITTED
-                || result.status == RuleServiceContract.RESULT_NO_CHANGE);
+        return result != null && RuleServiceContract.isTerminalSuccess(result.status);
     }
 }

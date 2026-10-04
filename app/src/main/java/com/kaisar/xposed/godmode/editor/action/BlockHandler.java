@@ -6,6 +6,7 @@ import android.view.View;
 import android.view.ViewGroup;
 
 import com.kaisar.xposed.godmode.editor.IRuleEditor;
+import com.kaisar.xposed.godmode.editor.RuntimeRulePort;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.ipc.contract.UndoStateParcel;
 import com.kaisar.xposed.godmode.rule.RuleRecordFactory;
@@ -49,7 +50,8 @@ public final class BlockHandler {
     public static void execute(final Activity activity, final View view,
             final ViewGroup container, final Bitmap snapshot,
             final int blockedViewIndex, final OnBlockListener listener,
-            final IRuleEditor ruleEditor, final boolean infoFlowMode) {
+            final IRuleEditor ruleEditor, final RuntimeRulePort runtimeRulePort,
+            final boolean infoFlowMode) {
         Logger.i(TAG, "execute: blocking package=" + activity.getPackageName()
                 + " viewClass=" + (view == null ? "null" : view.getClass().getName())
                 + " viewId=" + (view == null ? -1 : view.getId())
@@ -58,7 +60,7 @@ public final class BlockHandler {
             final RuleRecord viewRule = RuleRecordFactory.makeRemoveRule(view, infoFlowMode);
             ParticleEffectHelper.execute(activity, view, container, viewRule, snapshot,
                     activity.getPackageName(), /* maskView */ null,
-                    ruleEditor, new ParticleEffectHelper.Completion() {
+                    runtimeRulePort, ruleEditor, new ParticleEffectHelper.Completion() {
                         @Override
                         public void onCommitted(UndoStateParcel undoState) {
                             if (listener != null) {
