@@ -8,6 +8,7 @@ import android.text.TextUtils;
 
 import com.kaisar.xposed.godmode.BuildConfig;
 import com.kaisar.xposed.godmode.engine.util.Logger;
+import com.kaisar.xposed.godmode.platform.xposed.XposedPackageManager;
 
 import java.util.List;
 
@@ -49,7 +50,7 @@ public final class BlockListChecker {
     private static boolean isLauncher(String packageName) {
         Intent homeIntent = new Intent(Intent.ACTION_MAIN);
         homeIntent.addCategory(Intent.CATEGORY_HOME);
-        List<ResolveInfo> resolveInfos = PackageManagerUtils.queryIntentActivities(homeIntent, null, PackageManager.MATCH_ALL, 0);
+        List<ResolveInfo> resolveInfos = XposedPackageManager.queryIntentActivities(homeIntent, null, PackageManager.MATCH_ALL, 0);
         if (resolveInfos != null) {
             for (ResolveInfo resolveInfo : resolveInfos) {
                 if (resolveInfo.activityInfo != null
@@ -64,7 +65,7 @@ public final class BlockListChecker {
 
     private static boolean isInputMethod(String packageName) {
         Intent keyboardIntent = new Intent("android.view.InputMethod");
-        List<ResolveInfo> resolveInfos = PackageManagerUtils.queryIntentServices(keyboardIntent, null, PackageManager.MATCH_ALL, 0);
+        List<ResolveInfo> resolveInfos = XposedPackageManager.queryIntentServices(keyboardIntent, null, PackageManager.MATCH_ALL, 0);
         if (resolveInfos != null) {
             for (ResolveInfo resolveInfo : resolveInfos) {
                 if (resolveInfo.serviceInfo != null
@@ -77,7 +78,7 @@ public final class BlockListChecker {
     }
 
     private static boolean hasNoActivities(String packageName) {
-        PackageInfo packageInfo = PackageManagerUtils.getPackageInfo(packageName, PackageManager.GET_ACTIVITIES, 0);
+        PackageInfo packageInfo = XposedPackageManager.getPackageInfo(packageName, PackageManager.GET_ACTIVITIES, 0);
         return packageInfo == null || packageInfo.activities == null || packageInfo.activities.length == 0;
     }
 }

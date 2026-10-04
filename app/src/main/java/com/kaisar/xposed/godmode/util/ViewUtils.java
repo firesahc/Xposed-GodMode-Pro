@@ -14,8 +14,6 @@ import com.kaisar.xposed.godmode.engine.util.Logger;
 import java.lang.ref.WeakReference;
 import java.util.List;
 
-import de.robv.android.xposed.XposedHelpers;
-
 /**
  * View utility methods — view context resolution, position query,
  * hierarchy depth calculation and other shared logic.
@@ -26,7 +24,35 @@ public final class ViewUtils {
 
     private static final String TAG = "ViewUtils";
 
+    /**
+     * Platform hook used only when a ContextWrapper's public base-context API cannot unwrap it.
+     * The default implementation uses the Android public API and is suitable for unit tests.
+     */
+    public interface ContextBaseAccessor {
+        Context getBaseContext(ContextWrapper context);
+    }
+
+    private static final ContextBaseAccessor PUBLIC_CONTEXT_BASE_ACCESSOR =
+            new ContextBaseAccessor() {
+                @Override
+                public Context getBaseContext(ContextWrapper context) {
+                    return context.getBaseContext();
+                }
+            };
+
+    private static volatile ContextBaseAccessor sContextBaseAccessor =
+            PUBLIC_CONTEXT_BASE_ACCESSOR;
+
     private ViewUtils() {}
+
+    /**
+     * Installs the optional platform accessor from the composition root. Generic View helpers do
+     * not import Xposed APIs directly; the default remains the public Android implementation.
+     */
+    public static void setContextBaseAccessor(ContextBaseAccessor accessor) {
+        sContextBaseAccessor = accessor == null
+                ? PUBLIC_CONTEXT_BASE_ACCESSOR : accessor;
+    }
 
     /**
      * Recursively find the Activity hosting the given view.
@@ -54,15 +80,14 @@ public final class ViewUtils {
         if (context instanceof Activity) {
             return (Activity) context;
         } else if (context instanceof ContextWrapper) {
-            Context baseContext = ((ContextWrapper) context).getBaseContext();
-            if (baseContext == context) {
-                try {
-                    baseContext = (Context) XposedHelpers.getObjectField(context, "mBase");
-                } catch (Exception e) {
-                    Logger.w(TAG, "getActivityFromViewContext reflection failed for context", e);
-                    return null;
-                }
+            Context baseContext;
+            try {
+                baseContext = sContextBaseAccessor.getBaseContext((ContextWrapper) context);
+            } catch (Exception e) {
+                Logger.w(TAG, "getActivityFromViewContext base-context accessor failed", e);
+                return null;
             }
+            if (baseContext == null || baseContext == context) return null;
             return getActivityFromViewContext(baseContext, depth + 1);
         }
         return null;

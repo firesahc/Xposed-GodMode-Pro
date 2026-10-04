@@ -15,8 +15,10 @@ import com.kaisar.xposed.godmode.engine.event.EventBus;
 import com.kaisar.xposed.godmode.engine.util.Logger;
 import com.kaisar.xposed.godmode.editor.RuleEditorClient;
 import com.kaisar.xposed.godmode.editor.EditorOrchestrator;
+import com.kaisar.xposed.godmode.platform.xposed.XposedContextBaseAccessor;
 import com.kaisar.xposed.godmode.util.BlockListChecker;
 import com.kaisar.xposed.godmode.util.ModuleResources;
+import com.kaisar.xposed.godmode.util.ViewUtils;
 
 import java.lang.reflect.Method;
 
@@ -38,6 +40,12 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage;
 public final class ModuleBootstrap implements IXposedHookLoadPackage, IXposedHookZygoteInit {
 
     private static final String TAG = "ModuleBootstrap";
+
+    static {
+        // Keep the Xposed fallback at the composition root; generic View helpers remain free of
+        // direct Xposed imports and can use the public Android accessor in JVM tests.
+        ViewUtils.setContextBaseAccessor(new XposedContextBaseAccessor());
+    }
 
     // ===== 静态开关和编辑器 =====
     private final static Property<Boolean> switchProp = new Property<>(false);

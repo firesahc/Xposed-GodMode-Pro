@@ -1,4 +1,4 @@
-package com.kaisar.xposed.godmode.util;
+package com.kaisar.xposed.godmode.platform.xposed;
 
 import android.annotation.SuppressLint;
 import android.content.Intent;
@@ -12,7 +12,11 @@ import java.util.List;
 
 import de.robv.android.xposed.XposedHelpers;
 
-public final class PackageManagerUtils {
+/** Hidden package-manager bridge used only by the Xposed-side block-list check. */
+public final class XposedPackageManager {
+
+    private XposedPackageManager() {
+    }
 
     private static IInterface packageService;
 
