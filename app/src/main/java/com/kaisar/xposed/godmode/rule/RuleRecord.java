@@ -137,8 +137,9 @@ public final class RuleRecord implements Parcelable, Cloneable {
         //（ActRules/AppRules 明确不实现 Parcelable，主通道为 JSON），故此边界即全部现实边界。
         boolean ignoreDepth = in.dataAvail() > 0 ? in.readByte() != 0 : false;
         // modTextSize / origTextSize 同为尾部追加，逐个 dataAvail 守卫，老 parcel 缺省 -1f（未修改）。
+        // 注意 origTextSize 是本类字段（与 origWidth 同列），必须直接赋值，不能用局部变量承接。
         float modTextSize = in.dataAvail() > 0 ? in.readFloat() : -1f;
-        float origTextSize = in.dataAvail() > 0 ? in.readFloat() : -1f;
+        origTextSize = in.dataAvail() > 0 ? in.readFloat() : -1f;
 
         matchSpec = new MatchSpec.Builder().depth(depth).activityClass(activityClass).viewClass(viewClass)
                 .resourceName(resourceName).itemPath(itemPath).itemRootClass(itemRootClass)
