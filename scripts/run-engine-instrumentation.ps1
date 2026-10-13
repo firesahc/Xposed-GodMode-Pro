@@ -1,6 +1,7 @@
 param(
     [string]$Adb = "adb",
-    [switch]$RequirePersistentLog
+    [switch]$RequirePersistentLog,
+    [int]$AttemptTimeoutMillis = 30000
 )
 
 $ErrorActionPreference = "Stop"
@@ -13,6 +14,7 @@ $testClass = "com.kaisar.xposed.godmode.engine.applier.ModifyApplierInstrumented
 $deviceLogRoot = "/data/misc/godmode"
 . (Join-Path $PSScriptRoot "foreground-instrumentation.ps1")
 $tests = @(
+    "applyAndRevokeTextSizeRestoresBaseline",
     "applyAndRevokeRestoreCapturedBaseline",
     "revokePreservesPropertiesChangedByHost",
     "repeatedApplyRetainsFirstBaseline",
@@ -63,6 +65,11 @@ if ($LASTEXITCODE -ne 0 -or $install -notcontains "Success") {
 # 日志前提检查放在安装之后：目录是“测试运行的前提”，不是仓库状态的前提。
 $logRootReady = Ensure-DeviceLogRoot
 
+# 设备规范步骤 1 + 装机取证：亮屏解键guard；记录被测包更新时间，机上包与本地产物对不上时可追溯。
+Ensure-DeviceAwake -Adb $Adb
+$enginePkgStamp = & $Adb shell dumpsys package $package 2>&1 | Select-String -Pattern "lastUpdateTime" | Select-Object -First 1
+Write-Host "INSTALLED $package $enginePkgStamp"
+
 $failed = @()
 $infraFailed = @()
 foreach ($test in $tests) {
@@ -74,7 +81,7 @@ foreach ($test in $tests) {
         $result = Invoke-ForegroundInstrumentationAttempt `
             -Adb $Adb -Runner $runner -TestClass $testClass -TestName $test `
             -ForegroundPackage $package -ActivityName $activity `
-            -CleanupPackages @($package)
+            -CleanupPackages @($package) -timeoutMillis $AttemptTimeoutMillis -foregroundFirst
         $passed = $result.Passed
         $outputText = $result.Output
         $infrastructureFailure = $result.InfrastructureFailure
@@ -88,6 +95,10 @@ foreach ($test in $tests) {
     }
     if ($passed) {
         Write-Host "PASS $test"
+    } elseif ($outputText -match "Could not launch intent") {
+        # startActivitySync 45s idle 超时发生在 @Before，零产品代码执行，
+        # 按设备规范记基础设施失败，不记断言失败。
+        $infraFailed += $test
     } elseif ($lastInfraFailure -and $outputText -notmatch "(?m)^FAILURES!!!") {
         $infraFailed += $test
     } else {

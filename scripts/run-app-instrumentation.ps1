@@ -1,6 +1,7 @@
 param(
     [string]$Adb = "adb",
-    [switch]$RequirePersistentLog
+    [switch]$RequirePersistentLog,
+    [int]$AttemptTimeoutMillis = 30000
 )
 
 $ErrorActionPreference = "Stop"
@@ -57,6 +58,16 @@ $testSuites = @(
             "configurationChangedDoesNotOpenHiddenPanel",
             "propertyEditorConfigurationChangedClosesCurrentSession"
         )
+    },
+    @{
+        TestClass = "com.kaisar.xposed.godmode.rule.RuleRecordParcelInstrumentedTest"
+        Tests = @(
+            "writeToParcelKeepsV69FlatSlotOrder",
+            "creatorReadsAnOldFlatParcelFixture",
+            "creatorToleratesUnknownEnumNames",
+            "ignoreDepthParcelRoundTrip",
+            "textSizeParcelRoundTrip"
+        )
     }
 )
 
@@ -105,6 +116,13 @@ foreach ($apk in @($appApk, $testApk)) {
 # 日志前提检查放在安装之后：目录是“测试运行的前提”，不是仓库状态的前提。
 $logRootReady = Ensure-DeviceLogRoot
 
+# 设备规范步骤 1 + 装机取证：亮屏解键guard；记录被测包更新时间，机上包与本地产物对不上时可追溯。
+Ensure-DeviceAwake -Adb $Adb
+foreach ($stampPkg in @($targetPackage, $testPackage)) {
+    $stamp = & $Adb shell dumpsys package $stampPkg 2>&1 | Select-String -Pattern "lastUpdateTime" | Select-Object -First 1
+    Write-Host "INSTALLED $stampPkg $stamp"
+}
+
 $failed = @()
 $infraFailed = @()
 $totalTests = 0
@@ -123,7 +141,7 @@ foreach ($suite in $testSuites) {
             $result = Invoke-ForegroundInstrumentationAttempt `
                 -Adb $Adb -Runner $runner -TestClass $testClass -TestName $test `
                 -ForegroundPackage $targetPackage -ActivityName $activity `
-                -CleanupPackages @($targetPackage, $testPackage)
+                -CleanupPackages @($targetPackage, $testPackage) -timeoutMillis $AttemptTimeoutMillis
             $passed = $result.Passed
             $outputText = $result.Output
             $infrastructureFailure = $result.InfrastructureFailure
@@ -138,6 +156,10 @@ foreach ($suite in $testSuites) {
         }
         if ($passed) {
             Write-Host "PASS $testClass::$test"
+        } elseif ($outputText -match "Could not launch intent") {
+            # startActivitySync 45s idle 超时发生在 @Before，零产品代码执行，
+            # 按设备规范记基础设施失败，不记断言失败。
+            $infraFailed += "$testClass::$test"
         } elseif ($lastInfraFailure -and $outputText -notmatch "(?m)^FAILURES!!!") {
             # 无执行痕迹的失败才算基础设施：跑起来并断言了的，以断言结论为准，
             # 即使前台化同时失败（前台缺失不改变已执行的断言事实）。

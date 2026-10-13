@@ -1,3 +1,10 @@
+function Ensure-DeviceAwake(
+        [string]$Adb) {
+    # 设备规范步骤 1：亮屏并解除键guard。失败不阻断（CI 模拟器常已就绪）。
+    & $Adb shell input keyevent KEYCODE_WAKEUP 2>&1 | Out-Null
+    & $Adb shell wm dismiss-keyguard 2>&1 | Out-Null
+}
+
 function Bring-TestHostToForeground(
         [string]$Adb,
         [string]$packageName,
@@ -10,16 +17,33 @@ function Bring-TestHostToForeground(
     if ($LASTEXITCODE -ne 0 -or $startText -notmatch "Status: ok") {
         throw "Unable to foreground test host for $testName`n$startText"
     }
-    for ($check = 0; $check -lt 20; $check++) {
-        $activities = ((& $Adb shell dumpsys activity activities 2>&1) -join "`n") `
-            -replace "\s+", " "
-        if ($activities -match "topResumedActivity=.*$packageName/$activityName" -or
-            $activities -match "ResumedActivity:.*$packageName/$activityName") {
+    # dumpsys 长组件名会被折行，先删全部空白再比对（组件名本身不含空白，
+    # 模拟器行为不变，只容忍折行）。
+    Confirm-TestHostResumed $Adb $packageName $activityName $testName 5000 `
+        $startText
+}
+
+function Confirm-TestHostResumed(
+        [string]$Adb,
+        [string]$packageName,
+        [string]$activityName,
+        [string]$testName,
+        [int]$budgetMillis,
+        [string]$diagnostics = "") {
+    # 只轮询不拉起：用于 instrument 启动后复核（自管前台的用例自己会拉起，
+    # 此时再 am start 只会与用例的生命周期竞态）。
+    $wanted = ("$packageName/$activityName") -replace "\s+", ""
+    $timer = [System.Diagnostics.Stopwatch]::StartNew()
+    while ($timer.ElapsedMilliseconds -lt $budgetMillis) {
+        $dump = ((& $Adb shell dumpsys activity activities 2>&1) -join "`n") `
+            -replace "\s+", ""
+        if ($dump -match "topResumedActivity=.*$wanted" -or
+            $dump -match "ResumedActivity:.*$wanted") {
             return
         }
-        Start-Sleep -Milliseconds 250
+        Start-Sleep -Milliseconds 500
     }
-    throw "Test host did not reach RESUMED for $testName`n$startText"
+    throw "Test host did not reach RESUMED for $testName`n$diagnostics"
 }
 
 function Stop-InstrumentationAttempt(
@@ -72,7 +96,8 @@ function Invoke-ForegroundInstrumentationAttempt(
         [string]$foregroundPackage,
         [string]$activityName,
         [string[]]$cleanupPackages,
-        [int]$timeoutMillis = 30000) {
+        [int]$timeoutMillis = 30000,
+        [switch]$foregroundFirst) {
     $arguments = @(
         "shell", "am", "instrument", "-r", "-w", "-e", "class",
         "$testClass#$testName", $runner
@@ -93,9 +118,11 @@ function Invoke-ForegroundInstrumentationAttempt(
         $timedOut = $false
         $cleanupPerformed = $false
         try {
-            # am instrument restarts the target process, so the host must be foregrounded afterwards.
-            Start-Sleep -Seconds 3
-            Bring-TestHostToForeground $Adb $foregroundPackage $activityName $testName
+            if ($foregroundFirst) {
+                # 自管前台的套件（@Before 内 requireResumed）：先前台，instrument
+                # 重启进程后只轮询复核、不再 am start，避免与用例生命周期竞态。
+                Bring-TestHostToForeground $Adb $foregroundPackage $activityName $testName
+            }
             $remainingMillis = $timeoutMillis - [int]$attemptTimer.ElapsedMilliseconds
             $timedOut = $remainingMillis -le 0 `
                 -or -not $process.WaitForExit($remainingMillis)
