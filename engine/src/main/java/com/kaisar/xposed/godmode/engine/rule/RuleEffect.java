@@ -54,6 +54,7 @@ public abstract class RuleEffect {
         private final int modWidth;
         private final int modHeight;
         private final float modAlpha;
+        private final float modTextSize;
         private final int modXOffset;
         private final int modYOffset;
         private final String modText;
@@ -67,6 +68,7 @@ public abstract class RuleEffect {
             modWidth = builder.modWidth;
             modHeight = builder.modHeight;
             modAlpha = builder.modAlpha;
+            modTextSize = builder.modTextSize;
             modXOffset = builder.modXOffset;
             modYOffset = builder.modYOffset;
             modText = builder.modText;
@@ -80,6 +82,7 @@ public abstract class RuleEffect {
         public int getModWidth() { return modWidth; }
         public int getModHeight() { return modHeight; }
         public float getModAlpha() { return modAlpha; }
+        public float getModTextSize() { return modTextSize; }
         public int getModXOffset() { return modXOffset; }
         public int getModYOffset() { return modYOffset; }
         public String getModText() { return modText; }
@@ -94,6 +97,7 @@ public abstract class RuleEffect {
                     .modWidth(modWidth)
                     .modHeight(modHeight)
                     .modAlpha(modAlpha)
+                    .modTextSize(modTextSize)
                     .modXOffset(modXOffset)
                     .modYOffset(modYOffset)
                     .modText(modText)
@@ -117,6 +121,7 @@ public abstract class RuleEffect {
                     && modWidth == other.modWidth
                     && modHeight == other.modHeight
                     && Float.compare(modAlpha, other.modAlpha) == 0
+                    && Float.compare(modTextSize, other.modTextSize) == 0
                     && modXOffset == other.modXOffset
                     && modYOffset == other.modYOffset
                     && origLeftMargin == other.origLeftMargin
@@ -129,7 +134,7 @@ public abstract class RuleEffect {
         @Override
         public int hashCode() {
             return Objects.hash(ruleTag, visibility, modWidth, modHeight, modAlpha,
-                    modXOffset, modYOffset, modText, modImagePath,
+                    modTextSize, modXOffset, modYOffset, modText, modImagePath,
                     origLeftMargin, origTopMargin);
         }
 
@@ -139,6 +144,7 @@ public abstract class RuleEffect {
             private int modWidth = -1;
             private int modHeight = -1;
             private float modAlpha = -1f;
+            private float modTextSize = -1f;
             private int modXOffset;
             private int modYOffset;
             private String modText;
@@ -151,6 +157,7 @@ public abstract class RuleEffect {
             public Builder modWidth(int value) { modWidth = value; return this; }
             public Builder modHeight(int value) { modHeight = value; return this; }
             public Builder modAlpha(float value) { modAlpha = value; return this; }
+            public Builder modTextSize(float value) { modTextSize = value; return this; }
             public Builder modXOffset(int value) { modXOffset = value; return this; }
             public Builder modYOffset(int value) { modYOffset = value; return this; }
             public Builder modText(String value) { modText = value; return this; }

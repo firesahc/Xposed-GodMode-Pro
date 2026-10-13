@@ -182,6 +182,10 @@ public final class ModifyApplier implements RuleApplier<ModifyEffect> {
             ((TextView) view).setText(action.modText);
             state.appliedText = ((TextView) view).getText();
         }
+        if (action.modTextSize >= 0f && view instanceof TextView) {
+            ((TextView) view).setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, action.modTextSize);
+            state.appliedTextSize = ((TextView) view).getTextSize();
+        }
     }
 
     private void applyImage(View view, AppliedState state) {
@@ -249,6 +253,7 @@ public final class ModifyApplier implements RuleApplier<ModifyEffect> {
         final int baselineLeftMargin;
         final int baselineTopMargin;
         final float baselineAlpha;
+        final float baselineTextSize;
         final CharSequence baselineText;
         final Drawable baselineDrawable;
         final ImageLoadState imageLoad = new ImageLoadState();
@@ -258,13 +263,14 @@ public final class ModifyApplier implements RuleApplier<ModifyEffect> {
         Integer appliedLeftMargin;
         Integer appliedTopMargin;
         Float appliedAlpha;
+        Float appliedTextSize;
         CharSequence appliedText;
         Drawable appliedDrawable;
 
         AppliedState(ActionSnapshot action, long bindingEpoch,
                 int baselineWidth, int baselineHeight,
                 int baselineLeftMargin, int baselineTopMargin, float baselineAlpha,
-                CharSequence baselineText, Drawable baselineDrawable) {
+                float baselineTextSize, CharSequence baselineText, Drawable baselineDrawable) {
             this.action = action;
             this.bindingEpoch = bindingEpoch;
             this.baselineWidth = baselineWidth;
@@ -272,6 +278,7 @@ public final class ModifyApplier implements RuleApplier<ModifyEffect> {
             this.baselineLeftMargin = baselineLeftMargin;
             this.baselineTopMargin = baselineTopMargin;
             this.baselineAlpha = baselineAlpha;
+            this.baselineTextSize = baselineTextSize;
             this.baselineText = baselineText;
             this.baselineDrawable = baselineDrawable;
         }
@@ -288,10 +295,12 @@ public final class ModifyApplier implements RuleApplier<ModifyEffect> {
             }
             CharSequence text = view instanceof TextView
                     ? ((TextView) view).getText() : null;
+            float textSize = view instanceof TextView
+                    ? ((TextView) view).getTextSize() : -1f;
             Drawable drawable = view instanceof ImageView
                     ? ((ImageView) view).getDrawable() : null;
             return new AppliedState(action, bindingEpoch, width, height, left, top,
-                    view.getAlpha(), text, drawable);
+                    view.getAlpha(), textSize, text, drawable);
         }
 
         boolean isEffectPresent(View view) {
@@ -307,6 +316,8 @@ public final class ModifyApplier implements RuleApplier<ModifyEffect> {
             }
             if (appliedAlpha != null
                     && Float.compare(view.getAlpha(), appliedAlpha) != 0) return false;
+            if (appliedTextSize != null && (!(view instanceof TextView)
+                    || Float.compare(((TextView) view).getTextSize(), appliedTextSize) != 0)) return false;
             if (appliedText != null && (!(view instanceof TextView)
                     || !textEquals(((TextView) view).getText(), appliedText))) return false;
             if (action.modImagePath != null && view instanceof ImageView) {
@@ -348,6 +359,11 @@ public final class ModifyApplier implements RuleApplier<ModifyEffect> {
                     && Float.compare(view.getAlpha(), appliedAlpha) == 0) {
                 view.setAlpha(baselineAlpha);
             }
+            if (appliedTextSize != null && view instanceof TextView
+                    && Float.compare(((TextView) view).getTextSize(), appliedTextSize) == 0) {
+                ((TextView) view).setTextSize(
+                        android.util.TypedValue.COMPLEX_UNIT_PX, baselineTextSize);
+            }
             if (appliedText != null && view instanceof TextView
                     && textEquals(((TextView) view).getText(), appliedText)) {
                 ((TextView) view).setText(baselineText);
@@ -368,6 +384,7 @@ public final class ModifyApplier implements RuleApplier<ModifyEffect> {
         final int modWidth;
         final int modHeight;
         final float modAlpha;
+        final float modTextSize;
         final boolean positionModified;
         final int appliedLeftMargin;
         final int appliedTopMargin;
@@ -376,10 +393,11 @@ public final class ModifyApplier implements RuleApplier<ModifyEffect> {
 
         ActionSnapshot(int modWidth, int modHeight, float modAlpha,
                 boolean positionModified, int appliedLeftMargin,
-                int appliedTopMargin, String modText, String modImagePath) {
+                int appliedTopMargin, String modText, String modImagePath, float modTextSize) {
             this.modWidth = modWidth;
             this.modHeight = modHeight;
             this.modAlpha = modAlpha;
+            this.modTextSize = modTextSize;
             this.positionModified = positionModified;
             this.appliedLeftMargin = appliedLeftMargin;
             this.appliedTopMargin = appliedTopMargin;
@@ -394,7 +412,7 @@ public final class ModifyApplier implements RuleApplier<ModifyEffect> {
                     positionModified ? spec.getOrigLeftMargin() + spec.getModXOffset() : 0,
                     positionModified ? spec.getOrigTopMargin() + spec.getModYOffset() : 0,
                     spec.getModText(),
-                    spec.getModImagePath());
+                    spec.getModImagePath(), spec.getModTextSize());
         }
 
         @Override
@@ -404,6 +422,7 @@ public final class ModifyApplier implements RuleApplier<ModifyEffect> {
             ActionSnapshot other = (ActionSnapshot) value;
             return modWidth == other.modWidth && modHeight == other.modHeight
                     && Float.compare(modAlpha, other.modAlpha) == 0
+                    && Float.compare(modTextSize, other.modTextSize) == 0
                     && positionModified == other.positionModified
                     && appliedLeftMargin == other.appliedLeftMargin
                     && appliedTopMargin == other.appliedTopMargin
@@ -413,7 +432,7 @@ public final class ModifyApplier implements RuleApplier<ModifyEffect> {
 
         @Override
         public int hashCode() {
-            return Objects.hash(modWidth, modHeight, modAlpha, positionModified,
+            return Objects.hash(modWidth, modHeight, modAlpha, modTextSize, positionModified,
                     appliedLeftMargin, appliedTopMargin, modText, modImagePath);
         }
     }

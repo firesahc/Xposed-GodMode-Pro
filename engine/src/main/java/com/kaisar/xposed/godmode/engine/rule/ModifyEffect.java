@@ -20,6 +20,7 @@ public final class ModifyEffect extends RuleEffect {
     public int getModWidth() { return toWireValues().getModWidth(); }
     public int getModHeight() { return toWireValues().getModHeight(); }
     public float getModAlpha() { return toWireValues().getModAlpha(); }
+    public float getModTextSize() { return toWireValues().getModTextSize(); }
     public int getModXOffset() { return toWireValues().getModXOffset(); }
     public int getModYOffset() { return toWireValues().getModYOffset(); }
     public String getModText() { return toWireValues().getModText(); }
@@ -30,6 +31,7 @@ public final class ModifyEffect extends RuleEffect {
     public boolean isWidthModified() { return getModWidth() >= 0; }
     public boolean isHeightModified() { return getModHeight() >= 0; }
     public boolean isAlphaModified() { return getModAlpha() >= 0f; }
+    public boolean isTextSizeModified() { return getModTextSize() >= 0f; }
     public boolean isPositionModified() { return getModXOffset() != 0 || getModYOffset() != 0; }
     public boolean isTextModified() { return getModText() != null; }
     public boolean isImageModified() { return getModImagePath() != null; }
@@ -47,6 +49,7 @@ public final class ModifyEffect extends RuleEffect {
         return getModWidth() == other.getModWidth()
                 && getModHeight() == other.getModHeight()
                 && Float.compare(getModAlpha(), other.getModAlpha()) == 0
+                && Float.compare(getModTextSize(), other.getModTextSize()) == 0
                 && getModXOffset() == other.getModXOffset()
                 && getModYOffset() == other.getModYOffset()
                 && getOrigLeftMargin() == other.getOrigLeftMargin()
@@ -58,7 +61,7 @@ public final class ModifyEffect extends RuleEffect {
     @Override
     public int hashCode() {
         return Objects.hash(getModWidth(), getModHeight(), getModAlpha(),
-                getModXOffset(), getModYOffset(), getModText(), getModImagePath(),
+                getModTextSize(), getModXOffset(), getModYOffset(), getModText(), getModImagePath(),
                 getOrigLeftMargin(), getOrigTopMargin());
     }
 
@@ -68,6 +71,7 @@ public final class ModifyEffect extends RuleEffect {
         private int modWidth = -1;
         private int modHeight = -1;
         private float modAlpha = -1f;
+        private float modTextSize = -1f;
         private int modXOffset;
         private int modYOffset;
         private String modText;
@@ -80,6 +84,7 @@ public final class ModifyEffect extends RuleEffect {
         public Builder modWidth(int value) { modWidth = value; return this; }
         public Builder modHeight(int value) { modHeight = value; return this; }
         public Builder modAlpha(float value) { modAlpha = value; return this; }
+        public Builder modTextSize(float value) { modTextSize = value; return this; }
         public Builder modXOffset(int value) { modXOffset = value; return this; }
         public Builder modYOffset(int value) { modYOffset = value; return this; }
         public Builder modText(String value) { modText = value; return this; }
@@ -94,6 +99,7 @@ public final class ModifyEffect extends RuleEffect {
                     .modWidth(modWidth)
                     .modHeight(modHeight)
                     .modAlpha(modAlpha)
+                    .modTextSize(modTextSize)
                     .modXOffset(modXOffset)
                     .modYOffset(modYOffset)
                     .modText(modText)
