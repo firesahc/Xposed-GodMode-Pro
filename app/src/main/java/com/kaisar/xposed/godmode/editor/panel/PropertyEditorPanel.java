@@ -8,6 +8,7 @@ import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.inputmethod.EditorInfo;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -207,6 +208,7 @@ public class PropertyEditorPanel {
             setupSeekers(mPanelView, targetView);
             setupTextEdit(mPanelView, targetView);
             setupTextSizeSeek(mPanelView, targetView);
+            setupSeekTextInputs(mPanelView, targetView);
             setupImageReplacement(mPanelView, targetView, activity);
             setupPositionNudge(mPanelView, targetView);
             setupConfirmCancel(mPanelView, targetView);
@@ -518,35 +520,106 @@ public class PropertyEditorPanel {
         seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override public void onProgressChanged(SeekBar sb, int val, boolean fromUser) {
                 if (!fromUser) return;
-                text.setText(String.valueOf(val));
-                switch (type) {
-                    case WIDTH:
-                        mPendingSeekWidth = val;
-                        scheduleSeekLayoutApply(target);
-                        break;
-                    case HEIGHT:
-                        mPendingSeekHeight = val;
-                        scheduleSeekLayoutApply(target);
-                        break;
-                    case ALPHA:
-                        target.setAlpha(val / 255f);
-                        break;
-                    case TEXT_SIZE:
-                        if (mTextSizeOrigPx > 0 && target instanceof TextView) {
-                            float px = mTextSizeOrigPx * (50 + val) / 100f;
-                            // 显示换算后绝对 px，与初始化一致；不显示相对进度。
-                            text.setText(String.valueOf(Math.round(px)));
-                            ((TextView) target).setTextSize(
-                                    android.util.TypedValue.COMPLEX_UNIT_PX, px);
-                        }
-                        break;
-                    default:
-                        throw new IllegalArgumentException("Unknown SeekerType: " + type);
-                }
+                applyMappedValue(type, val, target, text);
             }
             @Override public void onStartTrackingTouch(SeekBar sb) {}
             @Override public void onStopTrackingTouch(SeekBar sb) {}
         });
+    }
+
+    /**
+     * 滑块进度到视图的唯一映射：拖动与手输提交共用，数据源头恒为进度。
+     * 显示亦在此统一（字号显示换算后绝对 px，其余显示进度本身）。
+     */
+    private void applyMappedValue(SeekerType type, int val, View target, EditText text) {
+        switch (type) {
+            case WIDTH:
+                setDisplayText(text, String.valueOf(val));
+                mPendingSeekWidth = val;
+                scheduleSeekLayoutApply(target);
+                break;
+            case HEIGHT:
+                setDisplayText(text, String.valueOf(val));
+                mPendingSeekHeight = val;
+                scheduleSeekLayoutApply(target);
+                break;
+            case ALPHA:
+                setDisplayText(text, String.valueOf(val));
+                target.setAlpha(val / 255f);
+                break;
+            case TEXT_SIZE:
+                if (mTextSizeOrigPx > 0 && target instanceof TextView) {
+                    float px = mTextSizeOrigPx * (50 + val) / 100f;
+                    setDisplayText(text, String.valueOf(Math.round(px)));
+                    ((TextView) target).setTextSize(
+                            android.util.TypedValue.COMPLEX_UNIT_PX, px);
+                } else {
+                    setDisplayText(text, String.valueOf(val));
+                }
+                break;
+            default:
+                throw new IllegalArgumentException("Unknown SeekerType: " + type);
+        }
+    }
+
+    /** 仅内容变化时写显示。提交通路无 TextWatcher 在线，写显示不可能互激。 */
+    private static void setDisplayText(EditText text, String canonical) {
+        if (text != null && !canonical.contentEquals(text.getText())) text.setText(canonical);
+    }
+
+    /**
+     * 数字框提交通路：IME DONE 或失焦时执行一次，输入全程零干预。
+     * 空/非法输入回显当前值；钳制只在提交点执行，不吃中间值。
+     */
+    private void bindSeekTextCommit(View panel, int textId, int seekId,
+            View target, SeekerType type) {
+        EditText text = panel.findViewById(textId);
+        SeekBar seekBar = panel.findViewById(seekId);
+        if (text == null || seekBar == null) return;
+        text.setOnEditorActionListener((v, actionId, event) -> {
+            if (actionId == EditorInfo.IME_ACTION_DONE
+                    || actionId == EditorInfo.IME_ACTION_GO
+                    || actionId == EditorInfo.IME_ACTION_SEARCH
+                    || actionId == EditorInfo.IME_ACTION_SEND) {
+                commitSeekTextInput(type, text, seekBar, target);
+                return true;
+            }
+            return false;
+        });
+        text.setOnFocusChangeListener((v, hasFocus) -> {
+            if (!hasFocus) commitSeekTextInput(type, text, seekBar, target);
+        });
+    }
+
+    private void commitSeekTextInput(SeekerType type, EditText text,
+            SeekBar seekBar, View target) {
+        int parsed;
+        try {
+            parsed = Integer.parseInt(text.getText().toString().trim());
+        } catch (NumberFormatException e) {
+            applyMappedValue(type, seekBar.getProgress(), target, text);
+            return;
+        }
+        int progress = (type == SeekerType.TEXT_SIZE && mTextSizeOrigPx > 0
+                && target instanceof TextView)
+                ? Math.round(parsed / mTextSizeOrigPx * 100) - 50
+                : parsed;
+        progress = Math.max(0, Math.min(progress, seekBar.getMax()));
+        if (progress != seekBar.getProgress()) seekBar.setProgress(progress);
+        applyMappedValue(type, progress, target, text);
+    }
+
+    /** 四个数字框统一接提交通路；字号框仅在其分区可见时接入（门与 setupTextSizeSeek 同源）。 */
+    private void setupSeekTextInputs(View panel, View target) {
+        bindSeekTextCommit(panel, R.id.mod_width_text, R.id.mod_width_seek, target, SeekerType.WIDTH);
+        bindSeekTextCommit(panel, R.id.mod_height_text, R.id.mod_height_seek, target, SeekerType.HEIGHT);
+        bindSeekTextCommit(panel, R.id.mod_alpha_text, R.id.mod_alpha_seek, target, SeekerType.ALPHA);
+        View sizeSection = panel.findViewById(R.id.mod_text_size_section);
+        if (sizeSection != null && sizeSection.getVisibility() == View.VISIBLE
+                && target instanceof TextView) {
+            bindSeekTextCommit(panel, R.id.mod_text_size_text, R.id.mod_text_size_seek,
+                    target, SeekerType.TEXT_SIZE);
+        }
     }
 
     /**
@@ -696,6 +769,8 @@ public class PropertyEditorPanel {
         if (mSaving || mTargetView == null) return;
         Activity activity = ViewUtils.getAttachedActivityFromView(mTargetView);
         if (activity == null || !verifyViewIdentity(mTargetView)) return;
+        // 先刷出框内 pending 输入（同步触发失焦提交），再读视图做 diff。
+        if (mPanelView != null) mPanelView.clearFocus();
         mApplySeekLayoutRunnable.run();
         final RuleRecord draftRule = buildCurrentRule(mTargetView);
         if (draftRule == null || !draftRule.hasModifications()) {
