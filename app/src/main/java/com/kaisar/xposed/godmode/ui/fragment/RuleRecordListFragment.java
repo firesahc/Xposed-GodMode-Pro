@@ -341,6 +341,7 @@ public final class RuleRecordListFragment extends Fragment {
                 if (rule.isAlphaModified()) mods.add(getString(R.string.modify_detail_alpha, String.format(Locale.getDefault(), "%.1f", rule.getModAlpha())));
                 if (rule.isPositionModified()) mods.add(getString(R.string.modify_detail_position, rule.getModXOffset(), rule.getModYOffset()));
                 if (rule.isTextModified()) mods.add(getString(R.string.modify_detail_text));
+                if (rule.isTextSizeModified()) mods.add(getString(R.string.modify_detail_text_size, rule.getModTextSize()));
                 if (rule.isImageModified()) mods.add(getString(R.string.modify_detail_image));
                 if (!mods.isEmpty()) {
                     summaryBuilder.append(TextUtils.join("\n", mods));

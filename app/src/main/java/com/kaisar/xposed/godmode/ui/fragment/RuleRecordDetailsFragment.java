@@ -225,6 +225,11 @@ public final class RuleRecordDetailsFragment extends PreferenceFragmentCompat im
             pref.setVisible(true);
             pref.setSummary(mRuleRecord.getModText());
         }
+        if (mRuleRecord.isTextSizeModified()) {
+            pref = findPreference(getString(R.string.pref_key_detail_mod_text_size));
+            pref.setVisible(true);
+            pref.setSummary(String.format(Locale.getDefault(), "%.1fpx", mRuleRecord.getModTextSize()));
+        }
         if (mRuleRecord.isImageModified() && !TextUtils.isEmpty(mRuleRecord.getModImagePath())) {
             pref = findPreference(getString(R.string.pref_key_detail_mod_image));
             pref.setVisible(true);

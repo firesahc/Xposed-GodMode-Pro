@@ -89,6 +89,11 @@
             app:isPreferenceVisible="false" />
 
     <Preference
+            android:key="@string/pref_key_detail_mod_text_size"
+            android:title="@string/modify_text_size"
+            app:isPreferenceVisible="false" />
+
+    <Preference
             android:key="@string/pref_key_detail_mod_image"
             android:title="@string/modify_image_pick"
             app:isPreferenceVisible="false" />

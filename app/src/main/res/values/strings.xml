@@ -122,6 +122,7 @@
     <string name="modify_detail_alpha">透明度: %1$s</string>
     <string name="modify_detail_position">位置 (%1$d, %2$d)</string>
     <string name="modify_detail_text">已修改文本</string>
+    <string name="modify_detail_text_size">文字大小: %1$.1fpx</string>
     <string name="modify_detail_image">已替换图片</string>
 
     <string name="hey_guy">嘿 伙计</string>
@@ -189,6 +190,7 @@
     <string name="modify_alpha">透明度</string>
     <string name="modify_position">位置微调</string>
     <string name="modify_text">文本内容</string>
+    <string name="modify_text_size">文字大小</string>
     <string name="modify_image_pick">选择图片</string>
     <string name="modify_cancel">取消</string>
     <string name="modify_save">保存</string>
@@ -226,6 +228,7 @@
     <string name="pref_key_detail_mod_alpha" translatable="false">mod_alpha</string>
     <string name="pref_key_detail_mod_position" translatable="false">mod_position</string>
     <string name="pref_key_detail_mod_text" translatable="false">mod_text</string>
+    <string name="pref_key_detail_mod_text_size" translatable="false">mod_text_size</string>
     <string name="pref_key_detail_mod_image" translatable="false">mod_image</string>
     <string name="res_inject_success" translatable="false">Resources injection success</string>
 

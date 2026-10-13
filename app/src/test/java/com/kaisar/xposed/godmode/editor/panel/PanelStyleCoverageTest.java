@@ -170,6 +170,7 @@ public final class PanelStyleCoverageTest {
                 "mod_height_seek", "mod_height_text",
                 "mod_alpha_seek", "mod_alpha_text",
                 "mod_text_section", "mod_text_input",
+                "mod_text_size_section", "mod_text_size_seek", "mod_text_size_text",
                 "mod_image_section",
                 "mod_pos_left", "mod_pos_up", "mod_pos_down", "mod_pos_right",
         };

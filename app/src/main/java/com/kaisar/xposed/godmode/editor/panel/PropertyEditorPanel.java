@@ -73,6 +73,8 @@ public class PropertyEditorPanel {
     // SeekBar 拖动帧级合并：避免每次 onProgressChanged 触发 setLayoutParams → requestLayout
     private int mPendingSeekWidth = -1;
     private int mPendingSeekHeight = -1;
+    /** SeekBar 换算基准：字号滑块以该 px 值为 100%。 */
+    private float mTextSizeOrigPx = -1f;
     private boolean mSeekLayoutPending = false;
     private final Runnable mApplySeekLayoutRunnable = new Runnable() {
         @Override
@@ -118,6 +120,7 @@ public class PropertyEditorPanel {
     private int mSavedWidth = -1;
     private int mSavedHeight = -1;
     private float mSavedAlpha;
+    private float mSavedTextSize = -1f;
     private CharSequence mSavedText;
 
     /** Snapshot of the view state before editing. */
@@ -203,6 +206,7 @@ public class PropertyEditorPanel {
 
             setupSeekers(mPanelView, targetView);
             setupTextEdit(mPanelView, targetView);
+            setupTextSizeSeek(mPanelView, targetView);
             setupImageReplacement(mPanelView, targetView, activity);
             setupPositionNudge(mPanelView, targetView);
             setupConfirmCancel(mPanelView, targetView);
@@ -233,6 +237,7 @@ public class PropertyEditorPanel {
             {R.id.mod_alpha_label, R.string.modify_alpha},
             {R.id.mod_position_label, R.string.modify_position},
             {R.id.mod_text_label, R.string.modify_text},
+            {R.id.mod_text_size_label, R.string.modify_text_size},
             {R.id.mod_image_pick, R.string.modify_image_pick},
             {R.id.mod_cancel, R.string.modify_cancel},
             {R.id.mod_save, R.string.modify_save},
@@ -405,6 +410,27 @@ public class PropertyEditorPanel {
 
     // ---- 文本修改处理（编辑文本）----
 
+    /**
+     * 字号滑块：以原字号为 100%，50%~200% 映射到 SeekBar 0~150。
+     * 宿主 AutoSize 接管时隐藏入口，避免 setTextSize 被宿主覆盖造成静默失效。
+     */
+    private void setupTextSizeSeek(View panel, View selectedView) {
+        LinearLayout section = panel.findViewById(R.id.mod_text_size_section);
+        if (!(selectedView instanceof TextView)) return;
+        TextView target = (TextView) selectedView;
+        if (target.getAutoSizeTextType() != TextView.AUTO_SIZE_TEXT_TYPE_NONE) return;
+        float orig = mSnapshot != null && mSnapshot.origTextSize > 0
+                ? mSnapshot.origTextSize : target.getTextSize();
+        if (orig <= 0) return;
+        mTextSizeOrigPx = orig;
+        section.setVisibility(View.VISIBLE);
+        SeekBar sizeSeek = panel.findViewById(R.id.mod_text_size_seek);
+        EditText sizeText = panel.findViewById(R.id.mod_text_size_text);
+        sizeSeek.setProgress(50);
+        sizeText.setText(String.valueOf(Math.round(orig)));
+        bindSeek(sizeSeek, sizeText, target, SeekerType.TEXT_SIZE);
+    }
+
     private void setupImageReplacement(View panel, View selectedView, Activity activity) {
         LinearLayout imageSection = panel.findViewById(R.id.mod_image_section);
         if (!(selectedView instanceof ImageView)) return;
@@ -505,6 +531,15 @@ public class PropertyEditorPanel {
                     case ALPHA:
                         target.setAlpha(val / 255f);
                         break;
+                    case TEXT_SIZE:
+                        if (mTextSizeOrigPx > 0 && target instanceof TextView) {
+                            float px = mTextSizeOrigPx * (50 + val) / 100f;
+                            // 显示换算后绝对 px，与初始化一致；不显示相对进度。
+                            text.setText(String.valueOf(Math.round(px)));
+                            ((TextView) target).setTextSize(
+                                    android.util.TypedValue.COMPLEX_UNIT_PX, px);
+                        }
+                        break;
                     default:
                         throw new IllegalArgumentException("Unknown SeekerType: " + type);
                 }
@@ -525,7 +560,7 @@ public class PropertyEditorPanel {
         }
     }
 
-    private enum SeekerType { WIDTH, HEIGHT, ALPHA }
+    private enum SeekerType { WIDTH, HEIGHT, ALPHA, TEXT_SIZE }
 
     // ---- 修改状态保存与恢复 — 缓存修改前的视图值以便撤销 ----
 
@@ -537,6 +572,8 @@ public class PropertyEditorPanel {
         mSavedHeight = -1;
         mSavedAlpha = view.getAlpha();
         mSavedText = null;
+        mSavedTextSize = -1f;
+        mTextSizeOrigPx = -1f;
         mOriginalImageBitmap = null;
         mPendingImageBitmap = null;
         mModifyingViewDepth = ViewUtils.getViewHierarchyDepth(view);
@@ -557,6 +594,7 @@ public class PropertyEditorPanel {
 
         if (view instanceof TextView) {
             mSavedText = ((TextView) view).getText();
+            mSavedTextSize = ((TextView) view).getTextSize();
         }
         if (view instanceof ImageView) {
             android.graphics.drawable.Drawable drawable = ((ImageView) view).getDrawable();
@@ -594,6 +632,10 @@ public class PropertyEditorPanel {
 
         if (mTargetView instanceof TextView && mSavedText != null) {
             ((TextView) mTargetView).setText(mSavedText);
+        }
+        if (mTargetView instanceof TextView && mSavedTextSize >= 0f) {
+            ((TextView) mTargetView).setTextSize(
+                    android.util.TypedValue.COMPLEX_UNIT_PX, mSavedTextSize);
         }
 
         if (mTargetView instanceof ImageView) {
@@ -635,6 +677,10 @@ public class PropertyEditorPanel {
         if (view instanceof TextView
                 && !Objects.equals(mOriginalRule.origText, ((TextView) view).getText().toString())) {
             draft.modText(((TextView) view).getText().toString());
+        }
+        if (view instanceof TextView && mOriginalRule.origTextSize > 0
+                && Math.abs(((TextView) view).getTextSize() - mOriginalRule.origTextSize) > 0.5f) {
+            draft.modTextSize(((TextView) view).getTextSize());
         }
         if (view instanceof ImageView && mPendingImageBitmap != null) draft.modImagePath("pending");
         ViewGroup.LayoutParams current = view.getLayoutParams();
@@ -778,6 +824,10 @@ public class PropertyEditorPanel {
         }
         if (rule.isAlphaModified()) target.setAlpha(rule.getModAlpha());
         if (target instanceof TextView && rule.isTextModified()) ((TextView) target).setText(rule.getModText());
+        if (target instanceof TextView && rule.isTextSizeModified()) {
+            ((TextView) target).setTextSize(
+                    android.util.TypedValue.COMPLEX_UNIT_PX, rule.getModTextSize());
+        }
         if (target instanceof ImageView && mPendingImageBitmap != null && !mPendingImageBitmap.isRecycled()) {
             ((ImageView) target).setImageBitmap(mPendingImageBitmap);
         }
