@@ -34,6 +34,9 @@ public class ViewSnapshot {
     /** 原始透明度 */
     public final float origAlpha;
 
+    /** 原始字号（px，仅 TextView 有效，否则 -1f） */
+    public final float origTextSize;
+
     /** 原始左边距（用于偏移量计算基准） */
     public final int origLeftMargin;
 
@@ -42,12 +45,13 @@ public class ViewSnapshot {
 
     public ViewSnapshot(String text, String origText,
                         int origWidth, int origHeight, float origAlpha,
-                        int origLeftMargin, int origTopMargin) {
+                        float origTextSize, int origLeftMargin, int origTopMargin) {
         this.text = text;
         this.origText = origText;
         this.origWidth = origWidth;
         this.origHeight = origHeight;
         this.origAlpha = origAlpha;
+        this.origTextSize = origTextSize;
         this.origLeftMargin = origLeftMargin;
         this.origTopMargin = origTopMargin;
     }
@@ -87,15 +91,17 @@ public class ViewSnapshot {
 
         float origAlpha = view.getAlpha();
 
+        float origTextSize = -1f;
         String text;
         if (view instanceof TextView) {
             CharSequence t = ((TextView) view).getText();
             text = t != null ? t.toString() : "";
+            origTextSize = ((TextView) view).getTextSize();
         } else {
             text = "";
         }
 
         return new ViewSnapshot(text, text, origWidth, origHeight, origAlpha,
-                leftMargin, topMargin);
+                origTextSize, leftMargin, topMargin);
     }
 }

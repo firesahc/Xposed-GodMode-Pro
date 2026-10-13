@@ -205,6 +205,6 @@ public final class RuleRecordParcelInstrumentedTest {
                 .modText("replacement").modImagePath("replacement.png")
                 .origLeftMargin(17).origTopMargin(18).build();
         return new RuleRecord("label", "com.example", "1", 1, 69, "preview.png", "alias",
-                1, 2, 3, 4, 5L, 30, 40, .7f, "original", match, effect);
+                1, 2, 3, 4, 5L, 30, 40, .7f, "original", -1f, match, effect);
     }
 }

@@ -45,7 +45,7 @@ public final class RuleRecordFactory {
         return new RuleRecord(info.applicationInfo.loadLabel(context.getPackageManager()).toString(),
                 context.getPackageName(), info.versionName, info.versionCode, BuildConfig.VERSION_CODE,
                 "", alias, location[0], location[1], view.getWidth(), view.getHeight(),
-                System.currentTimeMillis(), 0, 0, 1f, null,
+                System.currentTimeMillis(), 0, 0, 1f, null, -1f,
                 captureMatchSpec(view, activity, text, description, isInfoFlowMode),
                 RemoveEffect.of(View.INVISIBLE));
     }
@@ -65,7 +65,7 @@ public final class RuleRecordFactory {
                     base.matchVersionCode, base.versionCode, base.imagePath, alias,
                     base.x, base.y, base.width, base.height, base.timestamp,
                     snapshot.origWidth, snapshot.origHeight, snapshot.origAlpha, snapshot.origText,
-                    match, new ModifyEffect.Builder().ruleTag("modify")
+                    snapshot.origTextSize, match, new ModifyEffect.Builder().ruleTag("modify")
                             .visibility(base.getVisibility())
                             .origLeftMargin(snapshot.origLeftMargin)
                             .origTopMargin(snapshot.origTopMargin)

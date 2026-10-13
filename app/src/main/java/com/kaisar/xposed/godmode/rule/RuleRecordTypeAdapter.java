@@ -59,6 +59,7 @@ public final class RuleRecordTypeAdapter
         add(object, "mod_width", wire.getModWidth());
         add(object, "mod_height", wire.getModHeight());
         add(object, "mod_alpha", wire.getModAlpha());
+        add(object, "mod_text_size", wire.getModTextSize());
         add(object, "mod_x_offset", wire.getModXOffset());
         add(object, "mod_y_offset", wire.getModYOffset());
         add(object, "mod_text", wire.getModText());
@@ -66,6 +67,7 @@ public final class RuleRecordTypeAdapter
         add(object, "orig_width", rule.origWidth);
         add(object, "orig_height", rule.origHeight);
         add(object, "orig_alpha", rule.origAlpha);
+        add(object, "orig_text_size", rule.origTextSize);
         add(object, "orig_text", rule.origText);
         add(object, "orig_left_margin", wire.getOrigLeftMargin());
         add(object, "orig_top_margin", wire.getOrigTopMargin());
@@ -99,6 +101,7 @@ public final class RuleRecordTypeAdapter
                 .modWidth(integer(object, "mod_width", -1))
                 .modHeight(integer(object, "mod_height", -1))
                 .modAlpha(floating(object, "mod_alpha", -1f))
+                .modTextSize(floating(object, "mod_text_size", -1f))
                 .modXOffset(integer(object, "mod_x_offset", 0))
                 .modYOffset(integer(object, "mod_y_offset", 0))
                 .modText(string(object, "mod_text"))
@@ -112,7 +115,8 @@ public final class RuleRecordTypeAdapter
                 integer(object, "x", 0), integer(object, "y", 0), integer(object, "width", 0),
                 integer(object, "height", 0), longValue(object, "timestamp", 0L),
                 integer(object, "orig_width", 0), integer(object, "orig_height", 0),
-                floating(object, "orig_alpha", 1f), string(object, "orig_text"), match,
+                floating(object, "orig_alpha", 1f), string(object, "orig_text"),
+                floating(object, "orig_text_size", -1f), match,
                 RuleEffect.fromWireValues(wire));
     }
 

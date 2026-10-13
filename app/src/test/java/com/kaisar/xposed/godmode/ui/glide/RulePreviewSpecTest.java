@@ -26,7 +26,7 @@ public final class RulePreviewSpecTest {
         MatchSpec match = new MatchSpec.Builder().depth(new int[] {1})
                 .activityClass("Activity").viewClass("TextView").build();
         return new RuleRecord("label", "com.example", "1", 1, 69, imagePath, "alias",
-                x, y, width, height, 1L, width, height, 1f, "host", match,
+                x, y, width, height, 1L, width, height, 1f, "host", -1f, match,
                 RemoveEffect.of(4));
     }
 }

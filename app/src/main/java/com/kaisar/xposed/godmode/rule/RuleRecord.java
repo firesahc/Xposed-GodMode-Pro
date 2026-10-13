@@ -44,6 +44,7 @@ public final class RuleRecord implements Parcelable, Cloneable {
     @SerializedName("orig_height") public int origHeight;
     @SerializedName("orig_alpha") public float origAlpha = 1f;
     @SerializedName("orig_text") public String origText;
+    @SerializedName("orig_text_size") public float origTextSize = -1f;
 
     private final MatchSpec matchSpec;
     private final RuleEffect effect;
@@ -53,7 +54,7 @@ public final class RuleRecord implements Parcelable, Cloneable {
                       int matchVersionCode, int versionCode, String imagePath, String alias,
                       int x, int y, int width, int height, long timestamp,
                       int origWidth, int origHeight, float origAlpha, String origText,
-                      MatchSpec matchSpec, RuleEffect effect) {
+                      float origTextSize, MatchSpec matchSpec, RuleEffect effect) {
         this.label = label;
         this.packageName = packageName;
         this.matchVersionName = matchVersionName;
@@ -70,6 +71,7 @@ public final class RuleRecord implements Parcelable, Cloneable {
         this.origHeight = origHeight;
         this.origAlpha = origAlpha;
         this.origText = origText;
+        this.origTextSize = origTextSize;
         this.matchSpec = Objects.requireNonNull(matchSpec, "matchSpec must not be null");
         this.effect = Objects.requireNonNull(effect, "effect must not be null");
     }
@@ -80,7 +82,7 @@ public final class RuleRecord implements Parcelable, Cloneable {
                       int[] depth, String activityClass, String viewClass, String resourceName,
                       String text, String description, int visibility, long timestamp) {
         this(label, packageName, matchVersionName, matchVersionCode, versionCode, imagePath, alias,
-                x, y, width, height, timestamp, 0, 0, 1f, null,
+                x, y, width, height, timestamp, 0, 0, 1f, null, -1f,
                 new MatchSpec.Builder().depth(depth).activityClass(activityClass).viewClass(viewClass)
                         .resourceName(resourceName).text(text).description(description).build(),
                 com.kaisar.xposed.godmode.engine.rule.RemoveEffect.of(visibility));
@@ -134,6 +136,9 @@ public final class RuleRecord implements Parcelable, Cloneable {
         // 复合载荷（如 typed list）要求读写同版本。全仓无 RuleRecord 复合 parcel 写入者
         //（ActRules/AppRules 明确不实现 Parcelable，主通道为 JSON），故此边界即全部现实边界。
         boolean ignoreDepth = in.dataAvail() > 0 ? in.readByte() != 0 : false;
+        // modTextSize / origTextSize 同为尾部追加，逐个 dataAvail 守卫，老 parcel 缺省 -1f（未修改）。
+        float modTextSize = in.dataAvail() > 0 ? in.readFloat() : -1f;
+        float origTextSize = in.dataAvail() > 0 ? in.readFloat() : -1f;
 
         matchSpec = new MatchSpec.Builder().depth(depth).activityClass(activityClass).viewClass(viewClass)
                 .resourceName(resourceName).itemPath(itemPath).itemRootClass(itemRootClass)
@@ -142,6 +147,7 @@ public final class RuleRecord implements Parcelable, Cloneable {
                 .ignoreDepth(ignoreDepth).build();
         RuleEffect.WireValues wire = new RuleEffect.WireValues.Builder().ruleTag(ruleTag)
                 .visibility(visibility).modWidth(modWidth).modHeight(modHeight).modAlpha(modAlpha)
+                .modTextSize(modTextSize)
                 .modXOffset(modXOffset).modYOffset(modYOffset).modText(modText)
                 .modImagePath(modImagePath).origLeftMargin(origLeftMargin).origTopMargin(origTopMargin)
                 .build();
@@ -186,6 +192,7 @@ public final class RuleRecord implements Parcelable, Cloneable {
     public int getModWidth() { return effect.toWireValues().getModWidth(); }
     public int getModHeight() { return effect.toWireValues().getModHeight(); }
     public float getModAlpha() { return effect.toWireValues().getModAlpha(); }
+    public float getModTextSize() { return effect.toWireValues().getModTextSize(); }
     public int getModXOffset() { return effect.toWireValues().getModXOffset(); }
     public int getModYOffset() { return effect.toWireValues().getModYOffset(); }
     public String getModText() { return effect.toWireValues().getModText(); }
@@ -194,6 +201,7 @@ public final class RuleRecord implements Parcelable, Cloneable {
     public int getOrigHeight() { return origHeight; }
     public float getOrigAlpha() { return origAlpha; }
     public String getOrigText() { return origText; }
+    public float getOrigTextSize() { return origTextSize; }
     public int getOrigLeftMargin() { return effect.toWireValues().getOrigLeftMargin(); }
     public int getOrigTopMargin() { return effect.toWireValues().getOrigTopMargin(); }
 
@@ -202,11 +210,13 @@ public final class RuleRecord implements Parcelable, Cloneable {
     public boolean isWidthModified() { return getModWidth() >= 0; }
     public boolean isHeightModified() { return getModHeight() >= 0; }
     public boolean isAlphaModified() { return getModAlpha() >= 0f; }
+    public boolean isTextSizeModified() { return getModTextSize() >= 0f; }
     public boolean isPositionModified() { return getModXOffset() != 0 || getModYOffset() != 0; }
     public boolean isTextModified() { return getModText() != null; }
     public boolean isImageModified() { return getModImagePath() != null; }
     public boolean hasModifications() {
         return isWidthModified() || isHeightModified() || isAlphaModified()
+                || isTextSizeModified()
                 || isPositionModified() || isTextModified() || isImageModified();
     }
 
@@ -250,7 +260,7 @@ public final class RuleRecord implements Parcelable, Cloneable {
                                 int newVersionCode, String newImagePath, String newAlias) {
         return new RuleRecord(newLabel, newPackage, newVersionName, newMatchVersionCode,
                 newVersionCode, newImagePath, newAlias, x, y, width, height, timestamp,
-                origWidth, origHeight, origAlpha, origText, spec, newEffect);
+                origWidth, origHeight, origAlpha, origText, origTextSize, spec, newEffect);
     }
 
     public void writeToParcel(Parcel dest, int flags) {
@@ -296,6 +306,8 @@ public final class RuleRecord implements Parcelable, Cloneable {
         dest.writeByte((byte) (matchSpec.isRepeatable() ? 1 : 0));
         dest.writeString(matchSpec.getTargetLevel() != null ? matchSpec.getTargetLevel().name() : null);
         dest.writeByte((byte) (matchSpec.isIgnoreDepth() ? 1 : 0));
+        dest.writeFloat(wire.getModTextSize());
+        dest.writeFloat(origTextSize);
     }
 
     public int describeContents() { return 0; }
@@ -309,7 +321,7 @@ public final class RuleRecord implements Parcelable, Cloneable {
     public RuleRecord clone() {
         return new RuleRecord(label, packageName, matchVersionName, matchVersionCode,
                 versionCode, imagePath, alias, x, y, width, height, timestamp, origWidth,
-                origHeight, origAlpha, origText, matchSpec.clone(), effect);
+                origHeight, origAlpha, origText, origTextSize, matchSpec.clone(), effect);
     }
 
     /**

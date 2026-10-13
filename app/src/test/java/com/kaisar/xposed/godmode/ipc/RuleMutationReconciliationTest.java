@@ -48,7 +48,7 @@ public final class RuleMutationReconciliationTest {
                 .modImagePath(modifiedImagePath).build();
         return new RuleRecord("label", "com.example", "1.0", 1, 68,
                 imagePath, "alias", 10, 20, 100, 200, 123L,
-                100, 200, 1f, "original", match, effect);
+                100, 200, 1f, "original", -1f, match, effect);
     }
 
     private static ActRules rulesOf(RuleRecord rule) {

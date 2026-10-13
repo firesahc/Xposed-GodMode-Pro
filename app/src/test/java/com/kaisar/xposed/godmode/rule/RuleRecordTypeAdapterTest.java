@@ -51,7 +51,7 @@ public final class RuleRecordTypeAdapterTest {
                 .depth(new int[] {1, 2}).activityClass("A").viewClass("V")
                 .resourceName("pkg:id/title").ignoreDepth(true).build();
         RuleRecord record = new RuleRecord("l", "com.example", "1", 1, 69, null, null,
-                0, 0, 0, 0, 1L, 0, 0, 1f, null, ignored,
+                0, 0, 0, 0, 1L, 0, 0, 1f, null, -1f, ignored,
                 com.kaisar.xposed.godmode.engine.rule.RemoveEffect.of(4));
 
         String json = gson.toJson(record);
@@ -121,6 +121,6 @@ public final class RuleRecordTypeAdapterTest {
                 .modText("replacement").modImagePath("replacement.png")
                 .origLeftMargin(17).origTopMargin(18).build();
         return new RuleRecord("label", "com.example", "1", 1, 69, "preview.png", "alias",
-                1, 2, 3, 4, 5L, 30, 40, .7f, "original", match, effect);
+                1, 2, 3, 4, 5L, 30, 40, .7f, "original", -1f, match, effect);
     }
 }

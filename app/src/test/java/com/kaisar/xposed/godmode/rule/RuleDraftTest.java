@@ -41,6 +41,6 @@ public final class RuleDraftTest {
         ModifyEffect effect = new ModifyEffect.Builder().ruleTag("modify")
                 .modWidth(80).modText("original").build();
         return new RuleRecord("label", "com.example", "1", 1, 69, null, "alias",
-                0, 0, 10, 10, 1L, 10, 10, 1f, "host", match, effect);
+                0, 0, 10, 10, 1L, 10, 10, 1f, "host", -1f, match, effect);
     }
 }

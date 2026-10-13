@@ -23,6 +23,7 @@ public final class RuleDraft {
     public RuleDraft modWidth(int value) { effect.modWidth(value); return this; }
     public RuleDraft modHeight(int value) { effect.modHeight(value); return this; }
     public RuleDraft modAlpha(float value) { effect.modAlpha(value); return this; }
+    public RuleDraft modTextSize(float value) { effect.modTextSize(value); return this; }
     public RuleDraft modXOffset(int value) { effect.modXOffset(value); return this; }
     public RuleDraft modYOffset(int value) { effect.modYOffset(value); return this; }
     public RuleDraft modText(String value) { effect.modText(value); return this; }
