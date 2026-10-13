@@ -119,6 +119,24 @@ public final class ModifyApplierInstrumentedTest {
     }
 
     @Test
+    public void applyAndRevokeTextSizeRestoresBaseline() throws Exception {
+        withActivity(activity -> {
+                TextView view = attachText(activity, "host");
+                float baseline = view.getTextSize();
+
+                ModifyApplier applier = directApplier();
+                ModifyEffect action = new ModifyEffect.Builder().ruleTag("modify")
+                        .modTextSize(baseline * 1.5f).build();
+
+                assertTrue(applier.apply(view, action));
+                assertEquals(baseline * 1.5f, view.getTextSize(), 0.01f);
+
+                assertTrue(applier.revoke(view, action));
+                assertEquals(baseline, view.getTextSize(), 0.01f);
+        });
+    }
+
+    @Test
     public void safeDecoderRejectsMalformedImage() throws Exception {
         withActivity(activity -> {
                 File file = new File(activity.getCacheDir(), "malformed-image.bin");

@@ -62,4 +62,26 @@ public final class RuleEffectTest {
         assertEquals("modify-b", second.getRuleTag());
         assertFalse(first.isRemove());
     }
+
+    @Test
+    public void modifyEffectTextSizeParticipatesInRuntimeEquality() {
+        ModifyEffect base = new ModifyEffect.Builder()
+                .ruleTag("modify")
+                .modTextSize(21f)
+                .build();
+        assertTrue(base.isTextSizeModified());
+        assertEquals(21f, base.getModTextSize(), 0f);
+
+        ModifyEffect same = (ModifyEffect) RuleEffect.fromWireValues(
+                base.toWireValues().toBuilder().build());
+        assertEquals(base, same);
+
+        ModifyEffect different = (ModifyEffect) RuleEffect.fromWireValues(
+                base.toWireValues().toBuilder().modTextSize(24f).build());
+        assertFalse(base.equals(different));
+
+        ModifyEffect unset = new ModifyEffect.Builder().ruleTag("modify").build();
+        assertFalse(unset.isTextSizeModified());
+        assertFalse(base.equals(unset));
+    }
 }

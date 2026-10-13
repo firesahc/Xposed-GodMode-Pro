@@ -93,6 +93,10 @@ public final class RuleRecordParcelInstrumentedTest {
             assertEquals("replacement.png", record.getModImagePath());
             assertEquals(17, record.getOrigLeftMargin());
             assertEquals(18, record.getOrigTopMargin());
+            // 旧 parcel 无新尾部字节，字号默认未修改。
+            assertEquals(-1f, record.getModTextSize(), 0f);
+            assertEquals(-1f, record.getOrigTextSize(), 0f);
+            assertFalse(record.isTextSizeModified());
             // 旧 parcel 无尾部字节，ignoreDepth 默认 false。
             assertFalse(record.isIgnoreDepth());
         } finally {
@@ -137,6 +141,29 @@ public final class RuleRecordParcelInstrumentedTest {
             record(false).writeToParcel(parcel, 0);
             parcel.setDataPosition(0);
             assertFalse(RuleRecord.CREATOR.createFromParcel(parcel).isIgnoreDepth());
+        } finally {
+            parcel.recycle();
+        }
+    }
+
+    /** 字号尾槽读写闭环：21f→21f，16f→16f。 */
+    @Test
+    public void textSizeParcelRoundTrip() {
+        MatchSpec match = new MatchSpec.Builder()
+                .depth(new int[] {1, 2}).activityClass("ExampleActivity").viewClass("TextView")
+                .resourceName("com.example:id/title").build();
+        ModifyEffect effect = new ModifyEffect.Builder().ruleTag("modify").visibility(4)
+                .modTextSize(21f).build();
+        RuleRecord source = new RuleRecord("label", "com.example", "1", 1, 69, null, null,
+                0, 0, 0, 0, 1L, 0, 0, 1f, null, 16f, match, effect);
+        Parcel parcel = Parcel.obtain();
+        try {
+            source.writeToParcel(parcel, 0);
+            parcel.setDataPosition(0);
+            RuleRecord restored = RuleRecord.CREATOR.createFromParcel(parcel);
+            assertEquals(21f, restored.getModTextSize(), 0f);
+            assertEquals(16f, restored.getOrigTextSize(), 0f);
+            assertTrue(restored.isTextSizeModified());
         } finally {
             parcel.recycle();
         }

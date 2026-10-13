@@ -65,6 +65,34 @@ public final class RuleRecordTypeAdapterTest {
     }
 
     @Test
+    public void textSizeRoundTripsAndLegacyJsonDefaultsUnmodified() {
+        MatchSpec match = new MatchSpec.Builder()
+                .depth(new int[] {1}).activityClass("A").viewClass("TextView")
+                .resourceName("pkg:id/title").build();
+        ModifyEffect effect = new ModifyEffect.Builder().ruleTag("modify")
+                .modTextSize(21f).build();
+        RuleRecord record = new RuleRecord("l", "com.example", "1", 1, 69, null, null,
+                0, 0, 0, 0, 1L, 0, 0, 1f, null, 16f, match, effect);
+
+        String json = gson.toJson(record);
+        JsonObject object = JsonParser.parseString(json).getAsJsonObject();
+        assertTrue(object.has("mod_text_size"));
+        assertTrue(object.has("orig_text_size"));
+        RuleRecord restored = gson.fromJson(json, RuleRecord.class);
+        assertEquals(21f, restored.getModTextSize(), 0f);
+        assertEquals(16f, restored.getOrigTextSize(), 0f);
+        assertTrue(restored.isTextSizeModified());
+
+        // 老备份无两键，回读默认 -1f（未修改）。
+        object.remove("mod_text_size");
+        object.remove("orig_text_size");
+        RuleRecord legacy = gson.fromJson(object.toString(), RuleRecord.class);
+        assertEquals(-1f, legacy.getModTextSize(), 0f);
+        assertEquals(-1f, legacy.getOrigTextSize(), 0f);
+        assertFalse(legacy.isTextSizeModified());
+    }
+
+    @Test
     public void legacyMatchThresholdAliasAndRawRepeatableTextRemainCompatible() {
         String oldJson = "{"
                 + "'rule_tag':'modify','label':'L','package_name':'com.example',"
