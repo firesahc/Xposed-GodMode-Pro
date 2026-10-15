@@ -32,7 +32,7 @@ try {
             Select-String -LiteralPath $file.FullName -Pattern $Pattern |
                 ForEach-Object {
                     $relative = $file.FullName.Substring($repositoryRoot.Length + 1) -replace "\\", "/"
-                    $matches.Add("{0}:{1}:{2}" -f $relative, $_.LineNumber, $_.Line.Trim())
+                    $matches.Add(("{0}:{1}:{2}" -f $relative, $_.LineNumber, $_.Line.Trim()))
                 }
         }
         if ($matches.Count -gt 0) {
@@ -63,7 +63,7 @@ try {
 
             Select-String -LiteralPath $file.FullName -Pattern $pattern |
                 ForEach-Object {
-                    $matches.Add("{0}:{1}:{2}" -f $relative, $_.LineNumber, $_.Line.Trim())
+                    $matches.Add(("{0}:{1}:{2}" -f $relative, $_.LineNumber, $_.Line.Trim()))
                 }
         }
         if ($matches.Count -gt 0) {
@@ -76,6 +76,8 @@ try {
     $orchestratorRoot = "app/src/main/java/com/kaisar/xposed/godmode/orchestrator"
     $controlRoot = "app/src/main/java/com/kaisar/xposed/godmode/control"
     $backupRoot = "app/src/main/java/com/kaisar/xposed/godmode/backup"
+    $uiRoot = "app/src/main/java/com/kaisar/xposed/godmode/ui"
+    $ipcRoot = "app/src/main/java/com/kaisar/xposed/godmode/ipc"
     $engineRoot = "engine/src/main/java"
 
     Assert-NoImport `
@@ -102,6 +104,11 @@ try {
         -Description "Editor and runtime must not directly depend on Xposed" `
         -SearchRoots @($editorRoot, $orchestratorRoot) `
         -Pattern "^\s*import\s+de\.robv\.android\.xposed\."
+
+    Assert-NoImport `
+        -Description "RuleRecord body fields must only be written via construction, deserialization, or withXxx copies" `
+        -SearchRoots @($uiRoot, $editorRoot, $orchestratorRoot, $controlRoot, $ipcRoot, $backupRoot) `
+        -Pattern "(?<!this)\.(alias|imagePath|timestamp|origWidth|origHeight|origAlpha|origText|origTextSize|label|matchVersionName|matchVersionCode|versionCode)\s*(?<![=!])=(?![=])"
 
     Assert-XposedImportsConfined `
         -SearchRoot $appProductionRoot `

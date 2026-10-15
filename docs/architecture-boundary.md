@@ -143,3 +143,49 @@ LSPosed 在 Zygote fork 期初始化入口类，此时主 Looper 尚未 prepare�
 `verify-architecture-boundary.ps1` +
 全量 JVM 单测 + engine/app 实测 + 持久化日志门禁；
 触及注入/生命周期/IPC 者须在重启后新注入链上复验。
+
+## 十、规则聚合访问与比较纪律（L6 内部）
+
+`RuleRecord` 本体字段是 struct 风格：直接读合法（全仓 27 处直接访问是事实标准），
+`private` 组件（`matchSpec`/`effect`）只许走 getter，effect 派生值只许走 getter。
+读用哪条路只是风格；**写用哪条路决定有没有竞态**，故本节只约束写与比较。
+
+### 10.1 写路径（唯三，零命中为准）
+
+本体字段（label/alias/imagePath/timestamp/`orig*`/版本/`x/y/宽高`）的写入只允许：
+
+1. 构造（`RuleRecordFactory`）；
+2. 反序列化（`RuleRecordTypeAdapter`、Parcel 构造器）；
+3. `withXxx` 不可变拷贝；`fillCoordinates` 更新残留坐标除外（职责内写入）。
+
+判定命令（白名单外出现即违规；`this.` 自写除外）：
+
+```text
+grep -rn "\.(alias|imagePath|timestamp|origWidth|origHeight|origAlpha|origText|origTextSize|label|matchVersionName|matchVersionCode|versionCode) *=" app/src/main/java/.../{ui,editor,orchestrator,control,ipc,backup}
+```
+（人工评审时排除 `this.` 自写与 `==`/`!=` 比较；脚本内的精确正则以 `verify-architecture-boundary.ps1` 为准。）
+
+（`x/y/width/height` 易撞 `LayoutParams`，不进通用门禁；其唯一合法写点是
+`RuleRecordFactory.fillCoordinates`，评审时人工确认。）
+
+### 10.2 比较归属（只做映射，不重复立法）
+
+| 场景 | 唯一合法比较器 |
+|---|---|
+| 槽位身份 | `equals`/`hashCode`（经 `slotKey`） |
+| 列表刷新 | `contentEquals`（仅 UI 线程 DiffUtil） |
+| 运行时 diff | `RuntimeRuleComparator.contentEquals` |
+| 服务端对账/图片保活 | canonical 扁平 JSON |
+
+`ipc/`、`orchestrator/` 内禁裸 `.contentEquals(`（§二.61 已有门禁）。
+
+### 10.3 新字段三问（加字段前回答，答不上来就不加）
+
+1. 它是匹配、效果、槽位，还是快照/元数据？（答不上来 → 放本体当留念字段，并声明禁读禁比）
+2. 它进 10.2 四层中的哪一层？（答不上来 → 哪层都不进）
+3. 读者和比较策略是什么？（精确比较还是阈值比较？写下来）
+
+### 10.4 审计方法
+
+字段影响面审计必须同时 grep `getX()` 与 `.x` 两种形式：
+本体字段读法以直接访问为主，单写法零结果不得下“无读者”结论。
