@@ -344,7 +344,7 @@ public final class RuleRecordDetailsFragment extends PreferenceFragmentCompat im
     @Override
     public boolean onPreferenceChange(Preference preference, Object newValue) {
         if (preference == mAliasPreference) {
-            mRuleRecord.alias = (String) newValue;
+            mRuleRecord = mRuleRecord.withAlias((String) newValue);
             preference.setSummary(mRuleRecord.alias);
             mSharedViewModel.updateRule(mRuleRecord);
         } else if (preference == mVisiblePreference) {
